@@ -17,53 +17,101 @@ export type Database = {
       clients: {
         Row: {
           address: string | null
+          business_segment: string | null
+          company_description: string | null
           company_name: string
           contact_email: string | null
           contact_name: string | null
           contact_phone: string | null
           created_at: string
           created_by: string | null
+          digital_certificate_expiry: string | null
+          digital_certificate_type: string | null
           document: string | null
+          employee_count: number | null
           end_date: string | null
+          foundation_date: string | null
           id: string
+          main_activity: string | null
           monthly_value: number | null
+          municipal_registration: string | null
           notes: string | null
+          partners_info: string | null
+          payroll_notes: string | null
+          payroll_type: string | null
+          permits: string | null
+          secondary_activities: string | null
           start_date: string | null
+          state_registration: string | null
           status: Database["public"]["Enums"]["client_status"]
+          success_notes: string | null
+          tax_regime: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          business_segment?: string | null
+          company_description?: string | null
           company_name: string
           contact_email?: string | null
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          digital_certificate_expiry?: string | null
+          digital_certificate_type?: string | null
           document?: string | null
+          employee_count?: number | null
           end_date?: string | null
+          foundation_date?: string | null
           id?: string
+          main_activity?: string | null
           monthly_value?: number | null
+          municipal_registration?: string | null
           notes?: string | null
+          partners_info?: string | null
+          payroll_notes?: string | null
+          payroll_type?: string | null
+          permits?: string | null
+          secondary_activities?: string | null
           start_date?: string | null
+          state_registration?: string | null
           status?: Database["public"]["Enums"]["client_status"]
+          success_notes?: string | null
+          tax_regime?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          business_segment?: string | null
+          company_description?: string | null
           company_name?: string
           contact_email?: string | null
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          digital_certificate_expiry?: string | null
+          digital_certificate_type?: string | null
           document?: string | null
+          employee_count?: number | null
           end_date?: string | null
+          foundation_date?: string | null
           id?: string
+          main_activity?: string | null
           monthly_value?: number | null
+          municipal_registration?: string | null
           notes?: string | null
+          partners_info?: string | null
+          payroll_notes?: string | null
+          payroll_type?: string | null
+          permits?: string | null
+          secondary_activities?: string | null
           start_date?: string | null
+          state_registration?: string | null
           status?: Database["public"]["Enums"]["client_status"]
+          success_notes?: string | null
+          tax_regime?: string | null
           updated_at?: string
         }
         Relationships: []
