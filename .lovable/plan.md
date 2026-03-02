@@ -1,35 +1,24 @@
 
 
-## Plano: Seletor de CNAE com dados do IBGE
+## Plano: Busca automática de dados do cliente pelo CNPJ
 
 ### Abordagem
-Criar um componente de busca/seleção de CNAE que consulta a API pública do IBGE (`servicodados.ibge.gov.br/api/v2/cnae/subclasses`) e permite ao usuário pesquisar e selecionar atividades por código ou descrição.
+Usar a API pública **BrasilAPI** (`https://brasilapi.com.br/api/cnpj/v1/{cnpj}`) para consultar dados da empresa quando o usuário digitar/colar um CNPJ no campo de documento. A API retorna razão social, endereço, telefone, email, atividades CNAE, sócios, etc.
 
-### 1. Componente `CnaeCombobox`
+### Implementação
 
-Novo componente em `src/components/CnaeCombobox.tsx`:
-- Usa o Popover + Command (cmdk) já existentes no projeto para criar um combobox com busca
-- Carrega todas as subclasses CNAE da API do IBGE na primeira abertura (~1300 itens)
-- Cache local via React state para não recarregar a cada abertura
-- Exibe formato: `0111301 - CULTIVO DE ARROZ`
-- Filtragem client-side pelo código ou descrição
-- Props: `value`, `onChange`, `placeholder`
+1. **Botão de busca ao lado do campo CNPJ** — ao clicar (ou ao sair do campo com 14 dígitos), dispara a consulta à BrasilAPI.
 
-### 2. Componente `CnaeMultiSelect`
+2. **Preencher automaticamente os campos** com os dados retornados:
+   - **Geral**: `company_name` (razão social), `address` (logradouro + número + bairro + município/UF), `contact_phone` (telefone), `contact_email` (email)
+   - **Fiscal**: `main_activity` (CNAE principal: código + descrição), `secondary_activities` (CNAEs secundários), `tax_regime` (porte/natureza jurídica como indicativo)
+   - **Societário**: `partners_info` (lista de sócios da resposta)
+   - **Sucesso**: `foundation_date` (data de abertura), `business_segment` (descrição da atividade principal)
 
-Para atividades secundárias, permitir selecionar múltiplos CNAEs:
-- Mesmo padrão do combobox, mas armazena array de códigos
-- Exibe badges com os CNAEs selecionados e botão de remover
-- Valor salvo no banco como texto separado por vírgula (campo `secondary_activities` já existente)
-
-### 3. Alterações em `Clients.tsx`
-
-- Substituir o `<Input>` de "Atividade Principal (CNAE)" pelo `CnaeCombobox`
-- Substituir o `<Textarea>` de "Atividades Secundárias" pelo `CnaeMultiSelect`
-- Formato salvo: `"código - descrição"` para manter legibilidade
+3. **UX**: loading spinner no botão durante a busca, toast de erro se CNPJ inválido ou não encontrado, formatação automática do CNPJ (##.###.###/####-##).
 
 ### Detalhes Técnicos
-- API pública IBGE: `https://servicodados.ibge.gov.br/api/v2/cnae/subclasses` (sem autenticação, CORS habilitado)
-- Sem necessidade de edge function ou migration
-- Dados cacheados em memória durante a sessão
+- API pública, sem autenticação, CORS habilitado — chamada direta do frontend
+- Sem necessidade de edge function, migration ou secrets
+- Apenas alterações em `src/pages/Clients.tsx`
 
