@@ -1,24 +1,44 @@
 
 
-## Plano: Busca automática de dados do cliente pelo CNPJ
+## Plano: Alvarás com checkbox e data de vencimento
 
-### Abordagem
-Usar a API pública **BrasilAPI** (`https://brasilapi.com.br/api/cnpj/v1/{cnpj}`) para consultar dados da empresa quando o usuário digitar/colar um CNPJ no campo de documento. A API retorna razão social, endereço, telefone, email, atividades CNAE, sócios, etc.
+### Problema atual
+O campo "Alvarás" é um Textarea de texto livre. O usuário precisa selecionar quais alvarás controlar e informar o vencimento de cada um.
 
-### Implementação
+### Solução
 
-1. **Botão de busca ao lado do campo CNPJ** — ao clicar (ou ao sair do campo com 14 dígitos), dispara a consulta à BrasilAPI.
+**Sem migration** — o campo `permits` (text) já existe. Armazenaremos os dados como JSON string.
 
-2. **Preencher automaticamente os campos** com os dados retornados:
-   - **Geral**: `company_name` (razão social), `address` (logradouro + número + bairro + município/UF), `contact_phone` (telefone), `contact_email` (email)
-   - **Fiscal**: `main_activity` (CNAE principal: código + descrição), `secondary_activities` (CNAEs secundários), `tax_regime` (porte/natureza jurídica como indicativo)
-   - **Societário**: `partners_info` (lista de sócios da resposta)
-   - **Sucesso**: `foundation_date` (data de abertura), `business_segment` (descrição da atividade principal)
+### Alterações em `src/pages/Clients.tsx`
 
-3. **UX**: loading spinner no botão durante a busca, toast de erro se CNPJ inválido ou não encontrado, formatação automática do CNPJ (##.###.###/####-##).
+1. **Substituir o campo `permits`** (Textarea) por uma lista de 4 alvarás com checkbox + input de data:
+
+   - Alvará de Funcionamento
+   - Alvará Sanitário
+   - Alvará dos Bombeiros
+   - Registro de Classe
+
+2. **Cada alvará** terá:
+   - Um `Checkbox` para ativar/desativar o controle
+   - Um `Input type="date"` para o vencimento (visível apenas quando marcado)
+
+3. **Formato de armazenamento** no campo `permits` (JSON string):
+   ```json
+   [
+     {"name":"Alvará de Funcionamento","enabled":true,"expiry":"2025-06-15"},
+     {"name":"Alvará Sanitário","enabled":false,"expiry":""},
+     {"name":"Alvará dos Bombeiros","enabled":true,"expiry":"2025-12-01"},
+     {"name":"Registro de Classe","enabled":false,"expiry":""}
+   ]
+   ```
+
+4. **Ao abrir para edição**, parsear o JSON de `permits` para popular os checkboxes e datas. Se o valor antigo for texto livre (legado), mostrar sem quebrar.
+
+5. **No form state**, trocar `permits: string` por `permits: PermitItem[]` internamente, serializando para JSON string no `handleSave`.
 
 ### Detalhes Técnicos
-- API pública, sem autenticação, CORS habilitado — chamada direta do frontend
-- Sem necessidade de edge function, migration ou secrets
-- Apenas alterações em `src/pages/Clients.tsx`
+- Sem migration necessária (campo `permits` text já existe e suporta JSON)
+- Tipo `PermitItem = { name: string; enabled: boolean; expiry: string }`
+- Constante com os 4 nomes de alvarás predefinidos
+- Parsing seguro com try/catch ao carregar dados existentes
 
