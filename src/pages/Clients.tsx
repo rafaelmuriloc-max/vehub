@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck } from 'lucide-react';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -54,6 +54,7 @@ type Client = {
   payroll_type: string | null; employee_count: number | null; payroll_notes: string | null;
   // Societário
   permits: string | null; digital_certificate_expiry: string | null; digital_certificate_type: string | null;
+  digital_certificate_url: string | null;
   partners_info: string | null;
   // Sucesso do Cliente
   company_description: string | null; business_segment: string | null; foundation_date: string | null;
@@ -90,6 +91,8 @@ export default function Clients() {
   const [form, setForm] = useState({ ...emptyForm });
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
+  const [certificateUploading, setCertificateUploading] = useState(false);
+  const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
   function formatCnpj(value: string) {
     const digits = value.replace(/\D/g, '').slice(0, 14);
     return digits
@@ -164,6 +167,7 @@ export default function Clients() {
     setEditing(null);
     setForm({ ...emptyForm, start_date: new Date().toISOString().split('T')[0] });
     setPermits(defaultPermits.map(p => ({ ...p })));
+    setCertificateUrl(null);
     setDialogOpen(true);
   }
 
@@ -185,7 +189,59 @@ export default function Clients() {
       foundation_date: c.foundation_date || '', success_notes: c.success_notes || '',
     });
     setPermits(parsePermits(c.permits));
+    setCertificateUrl(c.digital_certificate_url || null);
     setDialogOpen(true);
+  }
+
+  async function handleCertificateUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!editing) {
+      toast({ title: 'Salve o cliente primeiro', description: 'É necessário salvar o cliente antes de fazer upload do certificado.', variant: 'destructive' });
+      return;
+    }
+    setCertificateUploading(true);
+    try {
+      const filePath = `${editing.id}/${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      // Save the path to the client record
+      const { error: updateError } = await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', editing.id);
+      if (updateError) throw updateError;
+      setCertificateUrl(filePath);
+      toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo com sucesso.` });
+    } catch (err: any) {
+      toast({ title: 'Erro no upload', description: err.message, variant: 'destructive' });
+    } finally {
+      setCertificateUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleCertificateDownload() {
+    if (!certificateUrl) return;
+    const { data, error } = await supabase.storage.from('certificates').createSignedUrl(certificateUrl, 60);
+    if (error || !data?.signedUrl) {
+      toast({ title: 'Erro ao baixar', description: error?.message || 'Não foi possível gerar o link.', variant: 'destructive' });
+      return;
+    }
+    window.open(data.signedUrl, '_blank');
+  }
+
+  async function handleCertificateRemove() {
+    if (!certificateUrl || !editing) return;
+    const { error: removeError } = await supabase.storage.from('certificates').remove([certificateUrl]);
+    if (removeError) {
+      toast({ title: 'Erro ao remover', description: removeError.message, variant: 'destructive' });
+      return;
+    }
+    const { error: updateError } = await supabase.from('clients').update({ digital_certificate_url: null } as any).eq('id', editing.id);
+    if (updateError) {
+      toast({ title: 'Erro ao atualizar', description: updateError.message, variant: 'destructive' });
+      return;
+    }
+    setCertificateUrl(null);
+    toast({ title: 'Certificado removido' });
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -440,6 +496,28 @@ export default function Clients() {
                     </Select>
                   </div>
                   <div className="space-y-2"><Label>Vencimento Certificado</Label><Input type="date" {...f('digital_certificate_expiry')} /></div>
+                  <div className="col-span-2 space-y-2">
+                    <Label>Arquivo do Certificado A1 (.pfx / .p12)</Label>
+                    {certificateUrl ? (
+                      <div className="flex items-center gap-2 p-3 rounded-md border border-input bg-muted/50">
+                        <FileCheck className="h-4 w-4 text-primary" />
+                        <span className="text-sm flex-1 truncate">{certificateUrl.split('/').pop()}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={handleCertificateDownload}><Download className="h-4 w-4" /></Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={handleCertificateRemove}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="file"
+                          accept=".pfx,.p12"
+                          onChange={handleCertificateUpload}
+                          disabled={!editing || certificateUploading}
+                        />
+                        {certificateUploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                      </div>
+                    )}
+                    {!editing && <p className="text-xs text-muted-foreground">Salve o cliente primeiro para fazer upload do certificado.</p>}
+                  </div>
                   <div className="col-span-2 space-y-2"><Label>Informações dos Sócios</Label><Textarea {...f('partners_info')} /></div>
                 </div>
               </TabsContent>
