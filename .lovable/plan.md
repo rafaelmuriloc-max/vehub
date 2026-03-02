@@ -1,46 +1,35 @@
 
 
-## Sistema de Gestão de Escritório de Contabilidade
+## Plano: Cadastro do Escritório (Empresa, Departamentos, Sócios, Usuários)
 
-### 1. Autenticação e Perfis
-- Login/cadastro com email e senha
-- Perfis de usuário com nome, avatar e cargo
-- Sistema de permissões: **Admin** (acesso total) e **Funcionário** (acesso restrito às próprias tarefas e dados limitados)
-- Tabela separada de roles para segurança
+### 1. Novas Tabelas no Supabase (Migration)
 
-### 2. Gestão de Clientes
-- Cadastro completo de clientes (razão social, CNPJ/CPF, contato, endereço, responsável)
-- Status do cliente: Ativo, Inativo, Churned
-- Histórico de entrada/saída de clientes com datas
-- Indicadores tipo SaaS: **taxa de churn**, **MRR**, **clientes ativos vs. inativos**, **crescimento líquido**
+- **`company_settings`** — dados do escritório (razão social, CNPJ, endereço, telefone, email, logo_url, etc.). Tabela singleton (uma linha).
+- **`departments`** — id, name, description, created_at. Vinculado ao escritório.
+- **`partners`** — id, name, document (CPF), email, phone, role/title, ownership_percentage, active, created_at.
+- RLS: somente admins podem gerenciar; todos autenticados podem visualizar.
 
-### 3. Módulo Financeiro
-- **Contas a pagar/receber**: lançamentos com valor, vencimento, categoria, status (pendente/pago/vencido), cliente vinculado
-- **Fluxo de caixa**: visão de entradas e saídas por período com gráficos (Recharts)
-- **Relatórios financeiros**: dashboard com resumo mensal, receita recorrente, inadimplência, indicadores SaaS
-- Categorias financeiras personalizáveis
+### 2. Nova Página: `/settings`
 
-### 4. Gestão de Tarefas
-- **Kanban**: quadro com colunas "A fazer", "Em andamento", "Em revisão", "Concluído"
-- **Lista com filtros**: por status, responsável, prazo, cliente vinculado
-- **Calendário**: visualização mensal/semanal das tarefas com prazos
-- Atribuição a membros da equipe
-- Prazos com indicação visual de atrasos (cores vermelho/amarelo/verde)
-- Prioridade (baixa, média, alta, urgente)
+Página com **Tabs** (usando o componente Tabs existente):
 
-### 5. Dashboard Principal
-- Cards com métricas: receita do mês, despesas, saldo, tarefas pendentes
-- Gráficos de fluxo de caixa e evolução de clientes
-- Tarefas vencendo hoje/atrasadas
-- Indicadores SaaS: churn rate, MRR, crescimento líquido
+- **Empresa** — formulário para editar dados do escritório (razão social, CNPJ, endereço, telefone, email)
+- **Departamentos** — CRUD simples com tabela + dialog para adicionar/editar
+- **Sócios** — CRUD com tabela + dialog (nome, CPF, email, telefone, % participação)
+- **Usuários** — lista de profiles + user_roles existentes, com possibilidade de alterar role (admin/employee) e editar cargo
 
-### 6. Estrutura do Banco (Supabase)
-- Tabelas: profiles, user_roles, clients, financial_entries, financial_categories, tasks, task_assignments
-- RLS em todas as tabelas com controle admin/funcionário
-- Triggers para criação automática de perfil no cadastro
+### 3. Sidebar
 
-### 7. Layout e Navegação
-- Sidebar com menu: Dashboard, Clientes, Financeiro, Tarefas, Calendário
-- Design limpo e profissional com tema claro
-- Responsivo para uso em desktop e tablets
+Adicionar item "Cadastro" com ícone `Building2` no menu, apontando para `/settings`. Agrupar como seção "Administração" separada.
+
+### 4. Permissões
+
+- Apenas admins podem editar dados da empresa, departamentos, sócios e gerenciar usuários
+- Funcionários podem visualizar mas não editar
+
+### Detalhes Técnicos
+
+- Profiles já linkados a `user_id` serão listados na aba Usuários via join com `user_roles`
+- `company_settings` usa upsert (insert or update) já que é singleton
+- Departments podem ser vinculados opcionalmente aos profiles (coluna `department_id` adicionada a profiles)
 
