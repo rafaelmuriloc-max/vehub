@@ -27,6 +27,7 @@ export type Database = {
           created_by: string | null
           digital_certificate_expiry: string | null
           digital_certificate_type: string | null
+          digital_certificate_url: string | null
           document: string | null
           employee_count: number | null
           end_date: string | null
@@ -60,6 +61,7 @@ export type Database = {
           created_by?: string | null
           digital_certificate_expiry?: string | null
           digital_certificate_type?: string | null
+          digital_certificate_url?: string | null
           document?: string | null
           employee_count?: number | null
           end_date?: string | null
@@ -93,6 +95,7 @@ export type Database = {
           created_by?: string | null
           digital_certificate_expiry?: string | null
           digital_certificate_type?: string | null
+          digital_certificate_url?: string | null
           document?: string | null
           employee_count?: number | null
           end_date?: string | null
