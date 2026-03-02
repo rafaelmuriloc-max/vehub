@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN digital_certificate_password text;

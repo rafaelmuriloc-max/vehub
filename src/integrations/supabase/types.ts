@@ -26,6 +26,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           digital_certificate_expiry: string | null
+          digital_certificate_password: string | null
           digital_certificate_type: string | null
           digital_certificate_url: string | null
           document: string | null
@@ -60,6 +61,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           digital_certificate_expiry?: string | null
+          digital_certificate_password?: string | null
           digital_certificate_type?: string | null
           digital_certificate_url?: string | null
           document?: string | null
@@ -94,6 +96,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           digital_certificate_expiry?: string | null
+          digital_certificate_password?: string | null
           digital_certificate_type?: string | null
           digital_certificate_url?: string | null
           document?: string | null
