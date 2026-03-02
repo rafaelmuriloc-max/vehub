@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Loader2 } from 'lucide-react';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 
@@ -62,6 +62,70 @@ export default function Clients() {
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState({ ...emptyForm });
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+
+  function formatCnpj(value: string) {
+    const digits = value.replace(/\D/g, '').slice(0, 14);
+    return digits
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+
+  function handleDocumentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setForm({ ...form, document: formatCnpj(e.target.value) });
+  }
+
+  async function fetchCnpjData() {
+    const digits = form.document.replace(/\D/g, '');
+    if (digits.length !== 14) {
+      toast({ title: 'CNPJ inválido', description: 'Digite um CNPJ com 14 dígitos.', variant: 'destructive' });
+      return;
+    }
+    setCnpjLoading(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+      if (!res.ok) throw new Error('CNPJ não encontrado');
+      const data = await res.json();
+
+      const address = [data.logradouro, data.numero, data.complemento, data.bairro, `${data.municipio}/${data.uf}`, data.cep]
+        .filter(Boolean).join(', ');
+
+      const mainCnae = data.cnae_fiscal
+        ? `${String(data.cnae_fiscal).padStart(7, '0')} - ${data.cnae_fiscal_descricao}`
+        : '';
+
+      const secondaryCnaes = (data.cnaes_secundarios || [])
+        .filter((c: any) => c.codigo && c.codigo !== 0)
+        .map((c: any) => `${String(c.codigo).padStart(7, '0')} - ${c.descricao}`)
+        .join(', ');
+
+      const partners = (data.qsa || [])
+        .map((s: any) => `${s.nome_socio} (${s.qualificacao_socio})`)
+        .join('\n');
+
+      setForm(prev => ({
+        ...prev,
+        company_name: data.razao_social || prev.company_name,
+        address: address || prev.address,
+        contact_phone: data.ddd_telefone_1 ? `(${data.ddd_telefone_1.slice(0, 2)}) ${data.ddd_telefone_1.slice(2)}` : prev.contact_phone,
+        contact_email: data.email || prev.contact_email,
+        main_activity: mainCnae || prev.main_activity,
+        secondary_activities: secondaryCnaes || prev.secondary_activities,
+        tax_regime: data.porte ? data.porte.toLowerCase().replace(/ /g, '_') : prev.tax_regime,
+        partners_info: partners || prev.partners_info,
+        foundation_date: data.data_inicio_atividade || prev.foundation_date,
+        business_segment: data.cnae_fiscal_descricao || prev.business_segment,
+      }));
+
+      toast({ title: 'Dados carregados', description: `Dados de ${data.razao_social} preenchidos automaticamente.` });
+    } catch (err: any) {
+      toast({ title: 'Erro na busca', description: err.message || 'Não foi possível consultar o CNPJ.', variant: 'destructive' });
+    } finally {
+      setCnpjLoading(false);
+    }
+  }
 
   useEffect(() => { loadClients(); }, []);
 
@@ -224,7 +288,15 @@ export default function Clients() {
               <TabsContent value="geral" className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 space-y-2"><Label>Razão Social *</Label><Input {...f('company_name')} required /></div>
-                  <div className="space-y-2"><Label>CNPJ/CPF</Label><Input {...f('document')} /></div>
+                  <div className="space-y-2">
+                    <Label>CNPJ/CPF</Label>
+                    <div className="flex gap-2">
+                      <Input value={form.document} onChange={handleDocumentChange} placeholder="00.000.000/0000-00" />
+                      <Button type="button" variant="outline" size="icon" onClick={fetchCnpjData} disabled={cnpjLoading} title="Buscar dados pelo CNPJ">
+                        {cnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
                   <div className="space-y-2"><Label>Contato</Label><Input {...f('contact_name')} /></div>
                   <div className="space-y-2"><Label>Email</Label><Input type="email" {...f('contact_email')} /></div>
                   <div className="space-y-2"><Label>Telefone</Label><Input {...f('contact_phone')} /></div>
