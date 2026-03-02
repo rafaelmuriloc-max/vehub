@@ -1,34 +1,37 @@
 
 
-## Plano: Upload de Certificado Digital A1
+## Plano: Senha do certificado + extração automática do vencimento
 
-### Contexto
-O formulário de clientes já tem campos para tipo e vencimento do certificado digital na aba Societário. Precisamos adicionar um campo para upload do arquivo `.pfx`/`.p12` do certificado A1.
+### O que muda
+
+1. **Campo de senha do certificado** — novo campo `digital_certificate_password` (text) na tabela `clients` + input de senha na aba Societário.
+
+2. **Extração automática do vencimento** — ao fazer upload do `.pfx/.p12`, usar a biblioteca `node-forge` (JS puro, roda no browser) para abrir o arquivo com a senha informada e extrair a data de validade do certificado X.509 contido nele. O campo de vencimento será preenchido automaticamente.
 
 ### Implementação
 
-#### 1. Criar bucket de storage no Supabase
-- Criar bucket `certificates` (privado) via migration
-- Criar políticas RLS: admins podem upload/delete, autenticados podem visualizar
+#### 1. Migration
+- `ALTER TABLE clients ADD COLUMN digital_certificate_password text;`
 
-#### 2. Adicionar coluna `digital_certificate_url` na tabela `clients`
-- Migration: `ALTER TABLE clients ADD COLUMN digital_certificate_url text;`
+#### 2. Instalar dependência
+- `node-forge` — biblioteca JS para parsing de PKCS#12 (PFX) no browser, sem necessidade de backend.
 
 #### 3. Alterar `src/pages/Clients.tsx`
-- Adicionar campo de upload de arquivo (input type="file", accept=".pfx,.p12") ao lado dos campos de certificado digital na aba Societário
-- Ao selecionar arquivo, fazer upload para `storage.certificates/{client_id}/{filename}`
-- Salvar a URL no campo `digital_certificate_url`
-- Exibir link para download quando já houver arquivo salvo, com botão para remover
-- Incluir `digital_certificate_url` no form state, openEdit e handleSave
+- Adicionar campo `digital_certificate_password` ao form state, openEdit e handleSave
+- Adicionar input type="password" na aba Societário (antes do upload)
+- No `handleCertificateUpload`: antes de enviar ao storage, ler o arquivo como ArrayBuffer, usar `forge.pkcs12.pkcs12FromAsn1()` com a senha para extrair o certificado e pegar `cert.validity.notAfter`, preenchendo automaticamente `digital_certificate_expiry`
+- Se a senha estiver errada ou vazia, mostrar toast de erro pedindo a senha correta
+- O campo de vencimento passa a ser read-only (preenchido automaticamente)
 
-#### 4. UX
-- Indicador de loading durante upload
-- Toast de sucesso/erro
-- Exibir nome do arquivo atual com opção de baixar ou substituir
+#### 4. Fluxo do usuário
+1. Preenche a senha do certificado
+2. Seleciona o arquivo .pfx/.p12
+3. Sistema valida a senha, extrai o vencimento e faz o upload
+4. Se senha incorreta: toast de erro, upload cancelado
 
 ### Detalhes Técnicos
-- Bucket privado com URLs assinadas para download seguro
-- Aceitar apenas `.pfx` e `.p12` (formatos padrão de certificado A1)
-- Upload via `supabase.storage.from('certificates').upload()`
-- Download via `supabase.storage.from('certificates').createSignedUrl()`
+- `node-forge` parseia PKCS#12 no browser sem backend
+- `forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(binary), password)` retorna bags com certificados
+- `certBag.cert.validity.notAfter` → Date do vencimento
+- Senha armazenada em texto na coluna (considerar criptografia futura se necessário)
 
