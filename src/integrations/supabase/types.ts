@@ -68,6 +68,63 @@ export type Database = {
         }
         Relationships: []
       }
+      company_settings: {
+        Row: {
+          address: string | null
+          cnpj: string | null
+          company_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          logo_url: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      departments: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       financial_categories: {
         Row: {
           created_at: string
@@ -149,10 +206,47 @@ export type Database = {
           },
         ]
       }
+      partners: {
+        Row: {
+          active: boolean
+          created_at: string
+          document: string | null
+          email: string | null
+          id: string
+          name: string
+          ownership_percentage: number | null
+          phone: string | null
+          title: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          document?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          ownership_percentage?: number | null
+          phone?: string | null
+          title?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          document?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          ownership_percentage?: number | null
+          phone?: string | null
+          title?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
+          department_id: string | null
           full_name: string | null
           id: string
           job_title: string | null
@@ -162,6 +256,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          department_id?: string | null
           full_name?: string | null
           id?: string
           job_title?: string | null
@@ -171,13 +266,22 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          department_id?: string | null
           full_name?: string | null
           id?: string
           job_title?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       task_assignments: {
         Row: {

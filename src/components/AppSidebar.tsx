@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, Building2, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -13,6 +13,10 @@ const menuItems = [
   { title: 'Financeiro', icon: DollarSign, path: '/financial' },
   { title: 'Tarefas', icon: CheckSquare, path: '/tasks' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
+];
+
+const adminItems = [
+  { title: 'Cadastro', icon: Building2, path: '/settings' },
 ];
 
 export function AppSidebar() {
@@ -31,6 +35,21 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map(item => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton isActive={location.pathname === item.path} onClick={() => navigate(item.path)}>
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Administração</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {adminItems.map(item => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton isActive={location.pathname === item.path} onClick={() => navigate(item.path)}>
                     <item.icon className="h-4 w-4" />
