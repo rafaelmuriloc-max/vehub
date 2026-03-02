@@ -15,6 +15,32 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Loader2 } from 'lucide-react';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
+import { Checkbox } from '@/components/ui/checkbox';
+
+type PermitItem = { name: string; enabled: boolean; expiry: string };
+
+const PERMIT_NAMES = [
+  'Alvará de Funcionamento',
+  'Alvará Sanitário',
+  'Alvará dos Bombeiros',
+  'Registro de Classe',
+];
+
+const defaultPermits: PermitItem[] = PERMIT_NAMES.map(name => ({ name, enabled: false, expiry: '' }));
+
+function parsePermits(raw: string | null): PermitItem[] {
+  if (!raw) return defaultPermits.map(p => ({ ...p }));
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return PERMIT_NAMES.map(name => {
+        const found = parsed.find((p: any) => p.name === name);
+        return found ? { name, enabled: !!found.enabled, expiry: found.expiry || '' } : { name, enabled: false, expiry: '' };
+      });
+    }
+  } catch {}
+  return defaultPermits.map(p => ({ ...p }));
+}
 
 type Client = {
   id: string; company_name: string; document: string | null; contact_name: string | null;
@@ -63,7 +89,7 @@ export default function Clients() {
   const { toast } = useToast();
   const [form, setForm] = useState({ ...emptyForm });
   const [cnpjLoading, setCnpjLoading] = useState(false);
-
+  const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   function formatCnpj(value: string) {
     const digits = value.replace(/\D/g, '').slice(0, 14);
     return digits
@@ -137,6 +163,7 @@ export default function Clients() {
   function openNew() {
     setEditing(null);
     setForm({ ...emptyForm, start_date: new Date().toISOString().split('T')[0] });
+    setPermits(defaultPermits.map(p => ({ ...p })));
     setDialogOpen(true);
   }
 
@@ -152,11 +179,12 @@ export default function Clients() {
       municipal_registration: c.municipal_registration || '',
       payroll_type: c.payroll_type || '', employee_count: String(c.employee_count || ''),
       payroll_notes: c.payroll_notes || '',
-      permits: c.permits || '', digital_certificate_expiry: c.digital_certificate_expiry || '',
+      permits: '', digital_certificate_expiry: c.digital_certificate_expiry || '',
       digital_certificate_type: c.digital_certificate_type || '', partners_info: c.partners_info || '',
       company_description: c.company_description || '', business_segment: c.business_segment || '',
       foundation_date: c.foundation_date || '', success_notes: c.success_notes || '',
     });
+    setPermits(parsePermits(c.permits));
     setDialogOpen(true);
   }
 
@@ -175,7 +203,7 @@ export default function Clients() {
       payroll_type: form.payroll_type || null, employee_count: Number(form.employee_count) || 0,
       payroll_notes: form.payroll_notes || null,
       // Societário
-      permits: form.permits || null, digital_certificate_expiry: form.digital_certificate_expiry || null,
+      permits: JSON.stringify(permits), digital_certificate_expiry: form.digital_certificate_expiry || null,
       digital_certificate_type: form.digital_certificate_type || null, partners_info: form.partners_info || null,
       // Sucesso do Cliente
       company_description: form.company_description || null, business_segment: form.business_segment || null,
@@ -369,7 +397,38 @@ export default function Clients() {
               {/* ── Societário ── */}
               <TabsContent value="societario" className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 space-y-2"><Label>Alvarás</Label><Textarea {...f('permits')} /></div>
+                  <div className="col-span-2 space-y-3">
+                    <Label>Alvarás</Label>
+                    {permits.map((permit, idx) => (
+                      <div key={permit.name} className="flex items-center gap-3">
+                        <Checkbox
+                          checked={permit.enabled}
+                          onCheckedChange={(checked) => {
+                            const updated = [...permits];
+                            updated[idx] = { ...updated[idx], enabled: !!checked };
+                            if (!checked) updated[idx].expiry = '';
+                            setPermits(updated);
+                          }}
+                        />
+                        <span className="text-sm min-w-[200px]">{permit.name}</span>
+                        {permit.enabled && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Vencimento:</span>
+                            <Input
+                              type="date"
+                              className="w-40"
+                              value={permit.expiry}
+                              onChange={(e) => {
+                                const updated = [...permits];
+                                updated[idx] = { ...updated[idx], expiry: e.target.value };
+                                setPermits(updated);
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                   <div className="space-y-2">
                     <Label>Tipo Certificado Digital</Label>
                     <Select value={form.digital_certificate_type} onValueChange={v => setForm({ ...form, digital_certificate_type: v })}>
