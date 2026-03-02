@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import * as forge from 'node-forge';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,7 +55,7 @@ type Client = {
   payroll_type: string | null; employee_count: number | null; payroll_notes: string | null;
   // Societário
   permits: string | null; digital_certificate_expiry: string | null; digital_certificate_type: string | null;
-  digital_certificate_url: string | null;
+  digital_certificate_url: string | null; digital_certificate_password: string | null;
   partners_info: string | null;
   // Sucesso do Cliente
   company_description: string | null; business_segment: string | null; foundation_date: string | null;
@@ -75,7 +76,7 @@ const emptyForm = {
   // Pessoal
   payroll_type: '', employee_count: '', payroll_notes: '',
   // Societário
-  permits: '', digital_certificate_expiry: '', digital_certificate_type: '', partners_info: '',
+  permits: '', digital_certificate_expiry: '', digital_certificate_type: '', digital_certificate_password: '', partners_info: '',
   // Sucesso do Cliente
   company_description: '', business_segment: '', foundation_date: '', success_notes: '',
 };
@@ -184,7 +185,9 @@ export default function Clients() {
       payroll_type: c.payroll_type || '', employee_count: String(c.employee_count || ''),
       payroll_notes: c.payroll_notes || '',
       permits: '', digital_certificate_expiry: c.digital_certificate_expiry || '',
-      digital_certificate_type: c.digital_certificate_type || '', partners_info: c.partners_info || '',
+      digital_certificate_type: c.digital_certificate_type || '',
+      digital_certificate_password: c.digital_certificate_password || '',
+      partners_info: c.partners_info || '',
       company_description: c.company_description || '', business_segment: c.business_segment || '',
       foundation_date: c.foundation_date || '', success_notes: c.success_notes || '',
     });
@@ -200,16 +203,54 @@ export default function Clients() {
       toast({ title: 'Salve o cliente primeiro', description: 'É necessário salvar o cliente antes de fazer upload do certificado.', variant: 'destructive' });
       return;
     }
+    const password = form.digital_certificate_password;
+    if (!password) {
+      toast({ title: 'Senha necessária', description: 'Informe a senha do certificado antes de fazer o upload.', variant: 'destructive' });
+      e.target.value = '';
+      return;
+    }
     setCertificateUploading(true);
     try {
+      // Read file and extract expiry using node-forge
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const asn1 = forge.asn1.fromDer(binary);
+      let p12: any;
+      try {
+        p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
+      } catch {
+        toast({ title: 'Senha incorreta', description: 'A senha informada não corresponde ao certificado. Verifique e tente novamente.', variant: 'destructive' });
+        e.target.value = '';
+        setCertificateUploading(false);
+        return;
+      }
+      // Extract certificate expiry
+      const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+      const certs = certBags[forge.pki.oids.certBag] || [];
+      let expiryDate: Date | null = null;
+      for (const bag of certs) {
+        if (bag.cert) {
+          expiryDate = bag.cert.validity.notAfter;
+          break;
+        }
+      }
+      if (expiryDate) {
+        const formatted = expiryDate.toISOString().split('T')[0];
+        setForm(prev => ({ ...prev, digital_certificate_expiry: formatted }));
+      }
+
+      // Upload to storage
       const filePath = `${editing.id}/${file.name}`;
       const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
-      // Save the path to the client record
       const { error: updateError } = await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', editing.id);
       if (updateError) throw updateError;
       setCertificateUrl(filePath);
-      toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo com sucesso.` });
+      toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo. Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}.` });
     } catch (err: any) {
       toast({ title: 'Erro no upload', description: err.message, variant: 'destructive' });
     } finally {
@@ -260,7 +301,9 @@ export default function Clients() {
       payroll_notes: form.payroll_notes || null,
       // Societário
       permits: JSON.stringify(permits), digital_certificate_expiry: form.digital_certificate_expiry || null,
-      digital_certificate_type: form.digital_certificate_type || null, partners_info: form.partners_info || null,
+      digital_certificate_type: form.digital_certificate_type || null,
+      digital_certificate_password: form.digital_certificate_password || null,
+      partners_info: form.partners_info || null,
       // Sucesso do Cliente
       company_description: form.company_description || null, business_segment: form.business_segment || null,
       foundation_date: form.foundation_date || null, success_notes: form.success_notes || null,
@@ -495,7 +538,8 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label>Vencimento Certificado</Label><Input type="date" {...f('digital_certificate_expiry')} /></div>
+                  <div className="space-y-2"><Label>Senha do Certificado</Label><Input type="password" value={form.digital_certificate_password} onChange={e => setForm({ ...form, digital_certificate_password: e.target.value })} placeholder="Informe a senha do certificado" /></div>
+                  <div className="space-y-2"><Label>Vencimento Certificado</Label><Input type="date" value={form.digital_certificate_expiry} readOnly className="bg-muted/50" /></div>
                   <div className="col-span-2 space-y-2">
                     <Label>Arquivo do Certificado A1 (.pfx / .p12)</Label>
                     {certificateUrl ? (
