@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search } from 'lucide-react';
+import { CnaeCombobox } from '@/components/CnaeCombobox';
+import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 
 type Client = {
   id: string; company_name: string; document: string | null; contact_name: string | null;
@@ -260,8 +262,14 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="col-span-2 space-y-2"><Label>Atividade Principal (CNAE)</Label><Input {...f('main_activity')} /></div>
-                  <div className="col-span-2 space-y-2"><Label>Atividades Secundárias</Label><Textarea {...f('secondary_activities')} /></div>
+                  <div className="col-span-2 space-y-2">
+                    <Label>Atividade Principal (CNAE)</Label>
+                    <CnaeCombobox value={form.main_activity} onChange={v => setForm({ ...form, main_activity: v })} />
+                  </div>
+                  <div className="col-span-2 space-y-2">
+                    <Label>Atividades Secundárias</Label>
+                    <CnaeMultiSelect value={form.secondary_activities} onChange={v => setForm({ ...form, secondary_activities: v })} />
+                  </div>
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
                   <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...f('municipal_registration')} /></div>
                 </div>
