@@ -1,53 +1,35 @@
 
 
-## Plano: Abas no Cadastro de Cliente
+## Plano: Seletor de CNAE com dados do IBGE
 
-### Visão Geral
-Transformar o formulário de cadastro/edição de cliente em um dialog com abas, adicionando campos específicos para cada área do escritório contábil.
+### Abordagem
+Criar um componente de busca/seleção de CNAE que consulta a API pública do IBGE (`servicodados.ibge.gov.br/api/v2/cnae/subclasses`) e permite ao usuário pesquisar e selecionar atividades por código ou descrição.
 
-### 1. Novos campos no banco (Migration)
+### 1. Componente `CnaeCombobox`
 
-Adicionar colunas à tabela `clients`:
+Novo componente em `src/components/CnaeCombobox.tsx`:
+- Usa o Popover + Command (cmdk) já existentes no projeto para criar um combobox com busca
+- Carrega todas as subclasses CNAE da API do IBGE na primeira abertura (~1300 itens)
+- Cache local via React state para não recarregar a cada abertura
+- Exibe formato: `0111301 - CULTIVO DE ARROZ`
+- Filtragem client-side pelo código ou descrição
+- Props: `value`, `onChange`, `placeholder`
 
-**Fiscal:**
-- `tax_regime` (text) — Regime tributário (Simples Nacional, Lucro Presumido, Lucro Real, MEI)
-- `main_activity` (text) — Atividade principal (CNAE)
-- `secondary_activities` (text) — Atividades secundárias
-- `state_registration` (text) — Inscrição estadual
-- `municipal_registration` (text) — Inscrição municipal
+### 2. Componente `CnaeMultiSelect`
 
-**Pessoal:**
-- `payroll_type` (text) — Tipo de folha (Normal, Pró-labore apenas, Sem folha)
-- `employee_count` (integer, default 0) — Quantidade de funcionários
-- `payroll_notes` (text) — Observações sobre folha
+Para atividades secundárias, permitir selecionar múltiplos CNAEs:
+- Mesmo padrão do combobox, mas armazena array de códigos
+- Exibe badges com os CNAEs selecionados e botão de remover
+- Valor salvo no banco como texto separado por vírgula (campo `secondary_activities` já existente)
 
-**Societário:**
-- `permits` (text) — Alvarás (descrição livre ou JSON)
-- `digital_certificate_expiry` (date) — Vencimento do certificado digital
-- `digital_certificate_type` (text) — Tipo (A1, A3)
-- `partners_info` (text) — Informações dos sócios da empresa cliente
+### 3. Alterações em `Clients.tsx`
 
-**Sucesso do Cliente:**
-- `company_description` (text) — Descrição da empresa
-- `business_segment` (text) — Segmento de atuação
-- `foundation_date` (date) — Data de fundação
-- `success_notes` (text) — Observações sobre a empresa e sócios
+- Substituir o `<Input>` de "Atividade Principal (CNAE)" pelo `CnaeCombobox`
+- Substituir o `<Textarea>` de "Atividades Secundárias" pelo `CnaeMultiSelect`
+- Formato salvo: `"código - descrição"` para manter legibilidade
 
-### 2. Reformular o Dialog de Cliente
-
-Substituir o formulário atual por um com **Tabs** (5 abas):
-
-- **Geral** — campos existentes (razão social, CNPJ, contato, endereço, valor, status, datas)
-- **Fiscal** — regime tributário (select), atividade, inscrições
-- **Pessoal** — tipo de folha (select), qtd funcionários, observações
-- **Societário** — alvarás, certificado digital (tipo + vencimento), info sócios
-- **Sucesso do Cliente** — descrição da empresa, segmento, fundação, observações
-
-O dialog será ampliado (`max-w-2xl`) para acomodar as abas.
-
-### 3. Detalhes Técnicos
-- Todos os novos campos são nullable, sem impacto nos registros existentes
-- O form state será expandido com os novos campos
-- O payload de save incluirá todos os campos das abas
-- Componente permanece em `src/pages/Clients.tsx` (refatorado)
+### Detalhes Técnicos
+- API pública IBGE: `https://servicodados.ibge.gov.br/api/v2/cnae/subclasses` (sem autenticação, CORS habilitado)
+- Sem necessidade de edge function ou migration
+- Dados cacheados em memória durante a sessão
 
