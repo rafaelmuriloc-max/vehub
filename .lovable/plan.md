@@ -1,44 +1,34 @@
 
 
-## Plano: Alvarás com checkbox e data de vencimento
+## Plano: Upload de Certificado Digital A1
 
-### Problema atual
-O campo "Alvarás" é um Textarea de texto livre. O usuário precisa selecionar quais alvarás controlar e informar o vencimento de cada um.
+### Contexto
+O formulário de clientes já tem campos para tipo e vencimento do certificado digital na aba Societário. Precisamos adicionar um campo para upload do arquivo `.pfx`/`.p12` do certificado A1.
 
-### Solução
+### Implementação
 
-**Sem migration** — o campo `permits` (text) já existe. Armazenaremos os dados como JSON string.
+#### 1. Criar bucket de storage no Supabase
+- Criar bucket `certificates` (privado) via migration
+- Criar políticas RLS: admins podem upload/delete, autenticados podem visualizar
 
-### Alterações em `src/pages/Clients.tsx`
+#### 2. Adicionar coluna `digital_certificate_url` na tabela `clients`
+- Migration: `ALTER TABLE clients ADD COLUMN digital_certificate_url text;`
 
-1. **Substituir o campo `permits`** (Textarea) por uma lista de 4 alvarás com checkbox + input de data:
+#### 3. Alterar `src/pages/Clients.tsx`
+- Adicionar campo de upload de arquivo (input type="file", accept=".pfx,.p12") ao lado dos campos de certificado digital na aba Societário
+- Ao selecionar arquivo, fazer upload para `storage.certificates/{client_id}/{filename}`
+- Salvar a URL no campo `digital_certificate_url`
+- Exibir link para download quando já houver arquivo salvo, com botão para remover
+- Incluir `digital_certificate_url` no form state, openEdit e handleSave
 
-   - Alvará de Funcionamento
-   - Alvará Sanitário
-   - Alvará dos Bombeiros
-   - Registro de Classe
-
-2. **Cada alvará** terá:
-   - Um `Checkbox` para ativar/desativar o controle
-   - Um `Input type="date"` para o vencimento (visível apenas quando marcado)
-
-3. **Formato de armazenamento** no campo `permits` (JSON string):
-   ```json
-   [
-     {"name":"Alvará de Funcionamento","enabled":true,"expiry":"2025-06-15"},
-     {"name":"Alvará Sanitário","enabled":false,"expiry":""},
-     {"name":"Alvará dos Bombeiros","enabled":true,"expiry":"2025-12-01"},
-     {"name":"Registro de Classe","enabled":false,"expiry":""}
-   ]
-   ```
-
-4. **Ao abrir para edição**, parsear o JSON de `permits` para popular os checkboxes e datas. Se o valor antigo for texto livre (legado), mostrar sem quebrar.
-
-5. **No form state**, trocar `permits: string` por `permits: PermitItem[]` internamente, serializando para JSON string no `handleSave`.
+#### 4. UX
+- Indicador de loading durante upload
+- Toast de sucesso/erro
+- Exibir nome do arquivo atual com opção de baixar ou substituir
 
 ### Detalhes Técnicos
-- Sem migration necessária (campo `permits` text já existe e suporta JSON)
-- Tipo `PermitItem = { name: string; enabled: boolean; expiry: string }`
-- Constante com os 4 nomes de alvarás predefinidos
-- Parsing seguro com try/catch ao carregar dados existentes
+- Bucket privado com URLs assinadas para download seguro
+- Aceitar apenas `.pfx` e `.p12` (formatos padrão de certificado A1)
+- Upload via `supabase.storage.from('certificates').upload()`
+- Download via `supabase.storage.from('certificates').createSignedUrl()`
 
