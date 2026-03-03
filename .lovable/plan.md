@@ -1,34 +1,23 @@
 
 
-## Plano: Campos adicionais na aba Geral
+## Diagnóstico: Campos estão no código mas não visíveis
 
-### Novas colunas na tabela `clients`
-Migration para adicionar:
-- `opening_date` (date) — data de abertura da empresa (preenchida automaticamente pela busca do CNPJ via campo `data_inicio_atividade`)
-- `from_another_office` (boolean, default false) — se o cliente veio de outro escritório
-- `previous_office_name` (text) — nome do escritório anterior
-- `exit_reason` (text) — motivo da saída: `office_change`, `company_closure`, `mei_change`
-- `destination_office_name` (text) — escritório de destino (quando motivo = troca de escritório)
-- `exit_reason_notes` (text) — motivo detalhado da troca de escritório
+Analisei o código e os campos **estão implementados corretamente** no `Clients.tsx` (linhas 530-576):
+- Data de Abertura (linha 532)
+- Veio de outro escritório? + Nome do escritório anterior (linhas 564-576)
+- Motivo da Saída + campos condicionais (linhas 535-561)
 
-### Alterações em `src/pages/Clients.tsx`
+O problema é que esses campos ficam **abaixo da área visível** na aba "Geral" do dialog. O dialog tem `max-h-[90vh] overflow-y-auto`, mas a aba Geral tem muitos campos e o usuário precisa rolar para baixo para vê-los.
 
-**Form state / emptyForm / Client type / openEdit / handleSave:**
-- Incluir os 5 novos campos
+### Plano de correção
 
-**Busca CNPJ (`fetchCnpjData`):**
-- Preencher `opening_date` com `data.data_inicio_atividade` (já existe como `foundation_date`, mas este será o campo específico na aba Geral)
+**Reorganizar a aba Geral** para melhor visibilidade:
 
-**Aba Geral — novos campos após "Data Saída":**
-1. **Data de Abertura** — input date, preenchido pela busca CNPJ
-2. **Veio de outro escritório?** — checkbox; ao marcar, exibe campo "Nome do escritório anterior"
-3. **Quando `end_date` preenchida** — exibe select com motivo da saída:
-   - "Troca de escritório" → exibe campos adicionais: nome do escritório destino + motivo da troca
-   - "Fechamento da empresa"
-   - "Mudança para MEI"
+1. **Mover os campos novos para uma posição mais visível** — colocar "Data de Abertura" ao lado de "Data Início" e "Data Saída" (na mesma linha do grid), e mover "Veio de outro escritório?" para logo depois das datas, antes das observações.
 
-### Lógica condicional na UI
-- `from_another_office === true` → mostra input `previous_office_name`
-- `end_date` preenchida → mostra select `exit_reason`
-- `exit_reason === 'office_change'` → mostra `destination_office_name` + `exit_reason_notes`
+2. **Agrupar com separadores visuais** — adicionar subtítulos (ex: "Datas", "Origem/Saída") para organizar melhor os campos dentro da aba Geral, tornando claro onde cada informação está.
+
+3. **Garantir scroll visível** — adicionar padding ou indicador visual para que o usuário saiba que há mais campos abaixo.
+
+Alteração em: `src/pages/Clients.tsx` — reorganização do layout da aba Geral.
 
