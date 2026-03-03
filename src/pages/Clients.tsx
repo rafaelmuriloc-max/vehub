@@ -638,7 +638,7 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label>Quantidade de Funcionários</Label><Input type="number" {...f('employee_count')} /></div>
+                  
                   <div className="col-span-2 space-y-2"><Label>Observações sobre Folha</Label><Textarea {...f('payroll_notes')} /></div>
                 </div>
               </TabsContent>
