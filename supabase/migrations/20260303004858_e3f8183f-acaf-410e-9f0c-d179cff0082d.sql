@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN sci_code text;

@@ -96,6 +96,7 @@ export type Database = {
           payroll_type: string | null
           permits: string | null
           previous_office_name: string | null
+          sci_code: string | null
           secondary_activities: string | null
           start_date: string | null
           state_registration: string | null
@@ -137,6 +138,7 @@ export type Database = {
           payroll_type?: string | null
           permits?: string | null
           previous_office_name?: string | null
+          sci_code?: string | null
           secondary_activities?: string | null
           start_date?: string | null
           state_registration?: string | null
@@ -178,6 +180,7 @@ export type Database = {
           payroll_type?: string | null
           permits?: string | null
           previous_office_name?: string | null
+          sci_code?: string | null
           secondary_activities?: string | null
           start_date?: string | null
           state_registration?: string | null

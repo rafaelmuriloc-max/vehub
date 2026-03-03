@@ -45,7 +45,7 @@ function parsePermits(raw: string | null): PermitItem[] {
 }
 
 type Client = {
-  id: string; company_name: string; document: string | null; contact_name: string | null;
+  id: string; company_name: string; sci_code: string | null; document: string | null; contact_name: string | null;
   contact_email: string | null; contact_phone: string | null; address: string | null;
   status: 'active' | 'inactive' | 'churned'; monthly_value: number; start_date: string | null;
   end_date: string | null; notes: string | null;
@@ -73,7 +73,7 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = { active: 'Ativo', inactive: 'Inativo', churned: 'Churned' };
 
 const emptyForm = {
-  company_name: '', document: '', contact_name: '', contact_email: '',
+  company_name: '', sci_code: '', document: '', contact_name: '', contact_email: '',
   contact_phone: '', address: '', status: 'active' as 'active' | 'inactive' | 'churned', monthly_value: '',
   start_date: '', end_date: '', notes: '',
   // Fiscal
@@ -223,7 +223,7 @@ export default function Clients() {
   async function openEdit(c: Client) {
     setEditing(c);
     setForm({
-      company_name: c.company_name, document: c.document || '', contact_name: c.contact_name || '',
+      company_name: c.company_name, sci_code: c.sci_code || '', document: c.document || '', contact_name: c.contact_name || '',
       contact_email: c.contact_email || '', contact_phone: c.contact_phone || '', address: c.address || '',
       status: c.status, monthly_value: String(c.monthly_value || ''), start_date: c.start_date || '',
       end_date: c.end_date || '', notes: c.notes || '',
@@ -341,7 +341,7 @@ export default function Clients() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     const payload: any = {
-      company_name: form.company_name, document: form.document || null, contact_name: form.contact_name || null,
+      company_name: form.company_name, sci_code: form.sci_code || null, document: form.document || null, contact_name: form.contact_name || null,
       contact_email: form.contact_email || null, contact_phone: form.contact_phone || null, address: form.address || null,
       status: form.status, monthly_value: Number(form.monthly_value) || 0,
       start_date: form.start_date || null, end_date: form.end_date || null, notes: form.notes || null,
@@ -503,6 +503,7 @@ export default function Clients() {
               <TabsContent value="geral" className="space-y-4">
                 {/* Dados Básicos */}
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>Código SCI</Label><Input {...f('sci_code')} placeholder="Código no SCI Sistemas" /></div>
                   <div className="col-span-2 space-y-2"><Label>Razão Social *</Label><Input {...f('company_name')} required /></div>
                   <div className="space-y-2">
                     <Label>CNPJ/CPF</Label>
