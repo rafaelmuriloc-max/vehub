@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, ClipboardList, FileText } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -12,6 +12,7 @@ const menuItems = [
   { title: 'Clientes', icon: Users, path: '/clients' },
   { title: 'Financeiro', icon: DollarSign, path: '/financial' },
   { title: 'Obrigações', icon: ClipboardList, path: '/obligations' },
+  { title: 'Documentos', icon: FileText, path: '/documents' },
   { title: 'Tarefas', icon: CheckSquare, path: '/tasks' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
 ];

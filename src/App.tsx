@@ -12,6 +12,7 @@ import Financial from "./pages/Financial";
 import Tasks from "./pages/Tasks";
 import CalendarView from "./pages/CalendarView";
 import Obligations from "./pages/Obligations";
+import Documents from "./pages/Documents";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -31,6 +32,7 @@ const App = () => (
               <Route path="/clients" element={<Clients />} />
               <Route path="/financial" element={<Financial />} />
               <Route path="/obligations" element={<Obligations />} />
+              <Route path="/documents" element={<Documents />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />

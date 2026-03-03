@@ -19,6 +19,7 @@ import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import ContractTab from '@/components/ContractTab';
+import ClientObligationsTab from '@/components/ClientObligationsTab';
 
 type PermitItem = { name: string; enabled: boolean; expiry: string };
 
@@ -493,13 +494,14 @@ export default function Clients() {
           <DialogHeader><DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle></DialogHeader>
           <form onSubmit={handleSave}>
             <Tabs defaultValue="geral" className="w-full">
-              <TabsList className={`grid w-full mb-4 ${editing ? 'grid-cols-7' : 'grid-cols-6'}`}>
+              <TabsList className={`grid w-full mb-4 ${editing ? 'grid-cols-8' : 'grid-cols-6'}`}>
                 <TabsTrigger value="geral">Geral</TabsTrigger>
                 <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
                 <TabsTrigger value="pessoal">Pessoal</TabsTrigger>
                 <TabsTrigger value="societario">Societário</TabsTrigger>
                 <TabsTrigger value="sucesso">Sucesso</TabsTrigger>
                 <TabsTrigger value="contatos">Contatos</TabsTrigger>
+                {editing && <TabsTrigger value="obrigacoes">Obrigações</TabsTrigger>}
                 {editing && <TabsTrigger value="contrato">Contrato</TabsTrigger>}
               </TabsList>
 
@@ -779,6 +781,13 @@ export default function Clients() {
                   ))
                 )}
               </TabsContent>
+
+              {/* ── Obrigações ── */}
+              {editing && (
+                <TabsContent value="obrigacoes">
+                  <ClientObligationsTab clientId={editing.id} />
+                </TabsContent>
+              )}
 
               {/* ── Contrato ── */}
               {editing && (
