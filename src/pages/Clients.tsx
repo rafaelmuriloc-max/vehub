@@ -81,6 +81,9 @@ const emptyForm = {
   company_description: '', business_segment: '', foundation_date: '', success_notes: '',
 };
 
+type Department = { id: string; name: string };
+type DeptContact = { contact_name: string; contact_phone: string; contact_email: string };
+
 export default function Clients() {
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState('');
@@ -94,6 +97,39 @@ export default function Clients() {
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact>>({});
+
+  async function loadDepartments() {
+    const { data } = await supabase.from('departments').select('id, name').order('name');
+    const deps = (data || []) as Department[];
+    setDepartments(deps);
+    return deps;
+  }
+
+  async function loadDeptContacts(clientId: string, deps: Department[]) {
+    const { data } = await (supabase as any)
+      .from('client_department_contacts')
+      .select('department_id, contact_name, contact_phone, contact_email')
+      .eq('client_id', clientId);
+    const contacts: Record<string, DeptContact> = {};
+    for (const dep of deps) {
+      const existing = (data || []).find((d: any) => d.department_id === dep.id);
+      contacts[dep.id] = existing
+        ? { contact_name: existing.contact_name || '', contact_phone: existing.contact_phone || '', contact_email: existing.contact_email || '' }
+        : { contact_name: '', contact_phone: '', contact_email: '' };
+    }
+    setDeptContacts(contacts);
+  }
+
+  function initEmptyDeptContacts(deps: Department[]) {
+    const contacts: Record<string, DeptContact> = {};
+    for (const dep of deps) {
+      contacts[dep.id] = { contact_name: '', contact_phone: '', contact_email: '' };
+    }
+    setDeptContacts(contacts);
+  }
+
   function formatCnpj(value: string) {
     const digits = value.replace(/\D/g, '').slice(0, 14);
     return digits
@@ -164,15 +200,17 @@ export default function Clients() {
     setClients((data as unknown as Client[]) || []);
   }
 
-  function openNew() {
+  async function openNew() {
     setEditing(null);
     setForm({ ...emptyForm, start_date: new Date().toISOString().split('T')[0] });
     setPermits(defaultPermits.map(p => ({ ...p })));
     setCertificateUrl(null);
+    const deps = await loadDepartments();
+    initEmptyDeptContacts(deps);
     setDialogOpen(true);
   }
 
-  function openEdit(c: Client) {
+  async function openEdit(c: Client) {
     setEditing(c);
     setForm({
       company_name: c.company_name, document: c.document || '', contact_name: c.contact_name || '',
@@ -193,6 +231,8 @@ export default function Clients() {
     });
     setPermits(parsePermits(c.permits));
     setCertificateUrl(c.digital_certificate_url || null);
+    const deps = await loadDepartments();
+    await loadDeptContacts(c.id, deps);
     setDialogOpen(true);
   }
 
@@ -309,13 +349,43 @@ export default function Clients() {
       foundation_date: form.foundation_date || null, success_notes: form.success_notes || null,
     };
     let error;
+    let clientId = editing?.id;
     if (editing) {
       ({ error } = await supabase.from('clients').update(payload).eq('id', editing.id));
     } else {
-      ({ error } = await supabase.from('clients').insert({ ...payload, created_by: user?.id }));
+      const result = await supabase.from('clients').insert({ ...payload, created_by: user?.id }).select('id').single();
+      error = result.error;
+      if (result.data) clientId = result.data.id;
     }
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else { setDialogOpen(false); loadClients(); toast({ title: editing ? 'Cliente atualizado' : 'Cliente criado' }); }
+    if (error) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    // Upsert department contacts
+    if (clientId && Object.keys(deptContacts).length > 0) {
+      const contactRows = Object.entries(deptContacts)
+        .filter(([, c]) => c.contact_name || c.contact_phone || c.contact_email)
+        .map(([depId, c]) => ({
+          client_id: clientId,
+          department_id: depId,
+          contact_name: c.contact_name || null,
+          contact_phone: c.contact_phone || null,
+          contact_email: c.contact_email || null,
+        }));
+      if (contactRows.length > 0) {
+        const { error: contactError } = await (supabase as any)
+          .from('client_department_contacts')
+          .upsert(contactRows, { onConflict: 'client_id,department_id' });
+        if (contactError) {
+          toast({ title: 'Erro ao salvar contatos', description: contactError.message, variant: 'destructive' });
+        }
+      }
+    }
+
+    setDialogOpen(false);
+    loadClients();
+    toast({ title: editing ? 'Cliente atualizado' : 'Cliente criado' });
   }
 
   const f = (field: keyof typeof form) => ({
@@ -403,12 +473,13 @@ export default function Clients() {
           <DialogHeader><DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle></DialogHeader>
           <form onSubmit={handleSave}>
             <Tabs defaultValue="geral" className="w-full">
-              <TabsList className="grid w-full grid-cols-5 mb-4">
+              <TabsList className="grid w-full grid-cols-6 mb-4">
                 <TabsTrigger value="geral">Geral</TabsTrigger>
                 <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
                 <TabsTrigger value="pessoal">Pessoal</TabsTrigger>
                 <TabsTrigger value="societario">Societário</TabsTrigger>
                 <TabsTrigger value="sucesso">Sucesso</TabsTrigger>
+                <TabsTrigger value="contatos">Contatos</TabsTrigger>
               </TabsList>
 
               {/* ── Geral ── */}
@@ -574,6 +645,55 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Data de Fundação</Label><Input type="date" {...f('foundation_date')} /></div>
                   <div className="col-span-2 space-y-2"><Label>Observações</Label><Textarea {...f('success_notes')} /></div>
                 </div>
+              </TabsContent>
+
+              {/* ── Contatos por Departamento ── */}
+              <TabsContent value="contatos" className="space-y-4">
+                {departments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum departamento cadastrado.</p>
+                ) : (
+                  departments.map(dep => (
+                    <div key={dep.id} className="space-y-2 rounded-md border border-border p-4">
+                      <h4 className="font-medium text-foreground">{dep.name}</h4>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Nome</Label>
+                          <Input
+                            placeholder="Nome do contato"
+                            value={deptContacts[dep.id]?.contact_name || ''}
+                            onChange={e => setDeptContacts(prev => ({
+                              ...prev,
+                              [dep.id]: { ...prev[dep.id], contact_name: e.target.value }
+                            }))}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Telefone</Label>
+                          <Input
+                            placeholder="Telefone"
+                            value={deptContacts[dep.id]?.contact_phone || ''}
+                            onChange={e => setDeptContacts(prev => ({
+                              ...prev,
+                              [dep.id]: { ...prev[dep.id], contact_phone: e.target.value }
+                            }))}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">E-mail</Label>
+                          <Input
+                            type="email"
+                            placeholder="E-mail"
+                            value={deptContacts[dep.id]?.contact_email || ''}
+                            onChange={e => setDeptContacts(prev => ({
+                              ...prev,
+                              [dep.id]: { ...prev[dep.id], contact_email: e.target.value }
+                            }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </TabsContent>
             </Tabs>
 
