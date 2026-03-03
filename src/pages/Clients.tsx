@@ -17,6 +17,7 @@ import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck } from 'luci
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 
 type PermitItem = { name: string; enabled: boolean; expiry: string };
 
@@ -500,6 +501,7 @@ export default function Clients() {
 
               {/* ── Geral ── */}
               <TabsContent value="geral" className="space-y-4">
+                {/* Dados Básicos */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 space-y-2"><Label>Razão Social *</Label><Input {...f('company_name')} required /></div>
                   <div className="space-y-2">
@@ -527,40 +529,53 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                {/* Datas */}
+                <Separator />
+                <h4 className="text-sm font-semibold text-muted-foreground">Datas</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2"><Label>Data de Abertura</Label><Input type="date" {...f('opening_date')} /></div>
                   <div className="space-y-2"><Label>Data Início</Label><Input type="date" {...f('start_date')} /></div>
                   <div className="space-y-2"><Label>Data Saída</Label><Input type="date" {...f('end_date')} /></div>
-                  <div className="space-y-2"><Label>Data de Abertura</Label><Input type="date" {...f('opening_date')} /></div>
+                </div>
 
-                  {/* Conditional: exit reason when end_date is filled */}
-                  {form.end_date && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Motivo da Saída</Label>
-                        <Select value={form.exit_reason} onValueChange={v => setForm({ ...form, exit_reason: v })}>
-                          <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="office_change">Troca de escritório</SelectItem>
-                            <SelectItem value="company_closure">Fechamento da empresa</SelectItem>
-                            <SelectItem value="mei_change">Mudança para MEI</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {form.exit_reason === 'office_change' && (
-                        <>
-                          <div className="space-y-2">
-                            <Label>Escritório de Destino</Label>
-                            <Input value={form.destination_office_name} onChange={e => setForm({ ...form, destination_office_name: e.target.value })} placeholder="Nome do escritório de destino" />
-                          </div>
-                          <div className="col-span-2 space-y-2">
-                            <Label>Motivo da Troca</Label>
-                            <Textarea value={form.exit_reason_notes} onChange={e => setForm({ ...form, exit_reason_notes: e.target.value })} placeholder="Descreva o motivo da troca de escritório" />
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
+                {/* Conditional: exit reason when end_date is filled */}
+                {form.end_date && (
+                  <div className="grid grid-cols-2 gap-4 rounded-md border border-border p-4">
+                    <div className="col-span-2">
+                      <h4 className="text-sm font-semibold text-muted-foreground">Motivo da Saída</h4>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Motivo</Label>
+                      <Select value={form.exit_reason} onValueChange={v => setForm({ ...form, exit_reason: v })}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="office_change">Troca de escritório</SelectItem>
+                          <SelectItem value="company_closure">Fechamento da empresa</SelectItem>
+                          <SelectItem value="mei_change">Mudança para MEI</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.exit_reason === 'office_change' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Escritório de Destino</Label>
+                          <Input value={form.destination_office_name} onChange={e => setForm({ ...form, destination_office_name: e.target.value })} placeholder="Nome do escritório de destino" />
+                        </div>
+                        <div className="col-span-2 space-y-2">
+                          <Label>Motivo da Troca</Label>
+                          <Textarea value={form.exit_reason_notes} onChange={e => setForm({ ...form, exit_reason_notes: e.target.value })} placeholder="Descreva o motivo da troca de escritório" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
-                  {/* From another office */}
+                {/* Origem */}
+                <Separator />
+                <h4 className="text-sm font-semibold text-muted-foreground">Origem</h4>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 flex items-center gap-3">
                     <Checkbox
                       checked={form.from_another_office}
@@ -574,9 +589,11 @@ export default function Clients() {
                       <Input value={form.previous_office_name} onChange={e => setForm({ ...form, previous_office_name: e.target.value })} placeholder="Nome do escritório anterior" />
                     </div>
                   )}
-
-                  <div className="col-span-2 space-y-2"><Label>Observações</Label><Textarea {...f('notes')} /></div>
                 </div>
+
+                {/* Observações */}
+                <Separator />
+                <div className="space-y-2"><Label>Observações</Label><Textarea {...f('notes')} /></div>
               </TabsContent>
 
               {/* ── Fiscal ── */}
