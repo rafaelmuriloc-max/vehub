@@ -60,6 +60,10 @@ type Client = {
   // Sucesso do Cliente
   company_description: string | null; business_segment: string | null; foundation_date: string | null;
   success_notes: string | null;
+  // Geral extras
+  opening_date: string | null; from_another_office: boolean;
+  previous_office_name: string | null; exit_reason: string | null;
+  destination_office_name: string | null; exit_reason_notes: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -79,6 +83,10 @@ const emptyForm = {
   permits: '', digital_certificate_expiry: '', digital_certificate_type: '', digital_certificate_password: '', partners_info: '',
   // Sucesso do Cliente
   company_description: '', business_segment: '', foundation_date: '', success_notes: '',
+  // Geral extras
+  opening_date: '', from_another_office: false as boolean,
+  previous_office_name: '', exit_reason: '',
+  destination_office_name: '', exit_reason_notes: '',
 };
 
 type Department = { id: string; name: string };
@@ -182,6 +190,7 @@ export default function Clients() {
         tax_regime: data.porte ? data.porte.toLowerCase().replace(/ /g, '_') : prev.tax_regime,
         partners_info: partners || prev.partners_info,
         foundation_date: data.data_inicio_atividade || prev.foundation_date,
+        opening_date: data.data_inicio_atividade || prev.opening_date,
         business_segment: data.cnae_fiscal_descricao || prev.business_segment,
       }));
 
@@ -228,6 +237,9 @@ export default function Clients() {
       partners_info: c.partners_info || '',
       company_description: c.company_description || '', business_segment: c.business_segment || '',
       foundation_date: c.foundation_date || '', success_notes: c.success_notes || '',
+      opening_date: (c as any).opening_date || '', from_another_office: !!(c as any).from_another_office,
+      previous_office_name: (c as any).previous_office_name || '', exit_reason: (c as any).exit_reason || '',
+      destination_office_name: (c as any).destination_office_name || '', exit_reason_notes: (c as any).exit_reason_notes || '',
     });
     setPermits(parsePermits(c.permits));
     setCertificateUrl(c.digital_certificate_url || null);
@@ -347,6 +359,10 @@ export default function Clients() {
       // Sucesso do Cliente
       company_description: form.company_description || null, business_segment: form.business_segment || null,
       foundation_date: form.foundation_date || null, success_notes: form.success_notes || null,
+      // Geral extras
+      opening_date: form.opening_date || null, from_another_office: form.from_another_office,
+      previous_office_name: form.previous_office_name || null, exit_reason: form.exit_reason || null,
+      destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
     };
     let error;
     let clientId = editing?.id;
@@ -389,7 +405,7 @@ export default function Clients() {
   }
 
   const f = (field: keyof typeof form) => ({
-    value: form[field],
+    value: form[field] as string,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [field]: e.target.value }),
   });
 
@@ -513,6 +529,52 @@ export default function Clients() {
                   </div>
                   <div className="space-y-2"><Label>Data Início</Label><Input type="date" {...f('start_date')} /></div>
                   <div className="space-y-2"><Label>Data Saída</Label><Input type="date" {...f('end_date')} /></div>
+                  <div className="space-y-2"><Label>Data de Abertura</Label><Input type="date" {...f('opening_date')} /></div>
+
+                  {/* Conditional: exit reason when end_date is filled */}
+                  {form.end_date && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Motivo da Saída</Label>
+                        <Select value={form.exit_reason} onValueChange={v => setForm({ ...form, exit_reason: v })}>
+                          <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="office_change">Troca de escritório</SelectItem>
+                            <SelectItem value="company_closure">Fechamento da empresa</SelectItem>
+                            <SelectItem value="mei_change">Mudança para MEI</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {form.exit_reason === 'office_change' && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Escritório de Destino</Label>
+                            <Input value={form.destination_office_name} onChange={e => setForm({ ...form, destination_office_name: e.target.value })} placeholder="Nome do escritório de destino" />
+                          </div>
+                          <div className="col-span-2 space-y-2">
+                            <Label>Motivo da Troca</Label>
+                            <Textarea value={form.exit_reason_notes} onChange={e => setForm({ ...form, exit_reason_notes: e.target.value })} placeholder="Descreva o motivo da troca de escritório" />
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {/* From another office */}
+                  <div className="col-span-2 flex items-center gap-3">
+                    <Checkbox
+                      checked={form.from_another_office}
+                      onCheckedChange={(checked) => setForm({ ...form, from_another_office: !!checked, previous_office_name: checked ? form.previous_office_name : '' })}
+                    />
+                    <Label>Veio de outro escritório?</Label>
+                  </div>
+                  {form.from_another_office && (
+                    <div className="col-span-2 space-y-2">
+                      <Label>Nome do Escritório Anterior</Label>
+                      <Input value={form.previous_office_name} onChange={e => setForm({ ...form, previous_office_name: e.target.value })} placeholder="Nome do escritório anterior" />
+                    </div>
+                  )}
+
                   <div className="col-span-2 space-y-2"><Label>Observações</Label><Textarea {...f('notes')} /></div>
                 </div>
               </TabsContent>
