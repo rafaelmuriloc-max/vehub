@@ -248,6 +248,75 @@ export type Database = {
         }
         Relationships: []
       }
+      document_types: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      documents: {
+        Row: {
+          client_id: string
+          created_at: string
+          document_type_id: string
+          file_name: string
+          file_url: string
+          id: string
+          reference_month: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          document_type_id: string
+          file_name: string
+          file_url: string
+          id?: string
+          reference_month: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          document_type_id?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          reference_month?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_categories: {
         Row: {
           created_at: string
@@ -333,6 +402,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          document_type_id: string | null
           id: string
           obligation_id: string
           order: number
@@ -342,6 +412,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          document_type_id?: string | null
           id?: string
           obligation_id: string
           order?: number
@@ -351,6 +422,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          document_type_id?: string | null
           id?: string
           obligation_id?: string
           order?: number
@@ -358,6 +430,13 @@ export type Database = {
           type?: Database["public"]["Enums"]["activity_type"]
         }
         Relationships: [
+          {
+            foreignKeyName: "obligation_activities_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "obligation_activities_obligation_id_fkey"
             columns: ["obligation_id"]
