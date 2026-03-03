@@ -1,54 +1,74 @@
 
 
-## Plano: Reestruturar controle de tarefas em Obrigações e Tarefas
+## Plano: Reestruturar Obrigações e adicionar Gestão de Documentos
 
-### Conceito
-Dividir o sistema atual em duas áreas distintas:
-1. **Obrigações** — atividades recorrentes vinculadas a departamentos, com sub-atividades tipadas
-2. **Tarefas** — solicitações esporádicas (mantém a estrutura atual)
+### 3 mudanças principais
 
-### Novas tabelas (migrações SQL)
+---
 
-**`obligations`** — Obrigações por departamento
-- `id` uuid PK, `department_id` uuid FK→departments, `name` text, `description` text, `recurrence` text (mensal/trimestral/anual), `created_at` timestamp, `updated_at` timestamp
+### 1. Eliminar instâncias e mover obrigações para aba no cadastro do cliente
 
-**`obligation_activities`** — Atividades de cada obrigação
-- `id` uuid PK, `obligation_id` uuid FK→obligations, `title` text, `type` enum (`document`, `checklist`, `whatsapp`, `email`), `description` text, `order` int, `created_at` timestamp
+A página `/obligations` passa a ser apenas o **cadastro de obrigações e atividades** (definições). O acompanhamento por empresa vai para uma nova aba **"Obrigações"** dentro do Dialog de edição do cliente em `Clients.tsx`.
 
-**`obligation_instances`** — Instâncias geradas (competência/período)
-- `id` uuid PK, `obligation_id` uuid FK→obligations, `client_id` uuid FK→clients, `reference_month` date, `status` enum (pending/in_progress/done), `assigned_to` uuid, `due_date` date, `created_at` timestamp
+**Tabela `obligation_instances`** — será substituída por uma abordagem mais simples:
+- Nova tabela `client_obligations` com `client_id`, `obligation_id`, `reference_month`, `status`, `due_date`
+- Reutiliza `obligation_activity_completions` vinculada a `client_obligation_id` em vez de `instance_id`
 
-**`obligation_activity_completions`** — Conclusão de cada atividade numa instância
-- `id` uuid PK, `instance_id` uuid FK→obligation_instances, `activity_id` uuid FK→obligation_activities, `completed` boolean default false, `completed_by` uuid, `completed_at` timestamp, `file_url` text (para tipo document), `notes` text
+Ou mais simples: **manter as tabelas existentes** (`obligation_instances` e `obligation_activity_completions`), mas a gestão passa a ser feita dentro do cadastro do cliente, não na página Obligations.
 
-**Enums**: `activity_type` (document, checklist, whatsapp, email), `obligation_status` (pending, in_progress, done)
+**Mudanças:**
+- **`src/pages/Obligations.tsx`**: Remover a aba "Acompanhamento" e toda a lógica de instâncias. Manter apenas o cadastro de obrigações + atividades.
+- **`src/pages/Clients.tsx`**: Adicionar aba "Obrigações" (grid-cols passa de 7 para 8 com contrato, ou reorganizar). Dentro dessa aba, o admin pode gerar competências mensais para aquele cliente e marcar atividades como concluídas. Atividades do tipo `document` terão botão de upload/download de arquivo.
+- **Novo componente `src/components/ClientObligationsTab.tsx`**: Recebe `clientId`, carrega obrigações/atividades/completions daquele cliente, permite criar competência, marcar conclusões, anexar documentos.
 
-**RLS**: Mesma lógica existente — admin gerencia, authenticated visualiza.
+---
 
-### Alterações no frontend
+### 2. Cadastro de Tipo de Documento
 
-**1. Sidebar (`AppSidebar.tsx`)**
-- Renomear "Tarefas" para "Tarefas" (manter)
-- Adicionar "Obrigações" com ícone `ClipboardList` apontando para `/obligations`
+Nova tabela `document_types`:
+- `id` uuid PK, `name` text, `description` text, `created_at` timestamp
 
-**2. Nova página `src/pages/Obligations.tsx`**
-- Cadastro de obrigações vinculadas a departamento
-- Para cada obrigação, CRUD de atividades com tipo (Document/Checklist/WhatsApp/Email)
-- Visualização das instâncias por cliente/competência
-- Para tipo "Document": upload de arquivo
-- Para tipo "Checklist": checkbox de conclusão
-- Para tipo "WhatsApp"/"Email": botão de confirmação de envio
+Nova página `src/pages/DocumentTypes.tsx` (ou dentro de Settings) com CRUD simples de tipos de documento.
 
-**3. Rota em `App.tsx`**
-- Adicionar `<Route path="/obligations" element={<Obligations />} />`
+Adicionar link no sidebar ou em Settings.
 
-**4. Página `Tasks.tsx`**
-- Mantém como está — passa a representar apenas as tarefas esporádicas
-- Atualizar título para "Tarefas (Solicitações)" para diferenciar
+---
 
-### Fluxo de uso
-1. Admin cadastra obrigações por departamento (ex: "Fechamento Fiscal") com atividades (ex: "Enviar DCTF" tipo checklist, "Anexar guia" tipo document)
-2. Instâncias são criadas por cliente/competência
-3. Usuários marcam atividades como concluídas conforme o tipo
-4. Tarefas esporádicas continuam sendo criadas normalmente na página Tarefas
+### 3. Importação de Documentos
+
+Nova tabela `documents`:
+- `id` uuid PK, `document_type_id` uuid FK→document_types, `client_id` uuid FK→clients, `reference_month` date, `file_url` text, `file_name` text, `uploaded_by` uuid, `created_at` timestamp
+
+Nova página `src/pages/Documents.tsx`:
+- Upload de documentos com seleção de tipo, cliente e competência
+- Na importação, o sistema busca a obrigação que tem uma atividade do tipo `document` correspondente ao tipo de documento e à competência, e marca automaticamente como concluída (cria/atualiza `obligation_activity_completions`).
+
+Adicionar "Documentos" e "Tipos de Documento" no sidebar.
+
+---
+
+### Storage
+
+Criar bucket `documents` (público: não) para armazenar os arquivos importados.
+
+---
+
+### Resumo de alterações
+
+| Arquivo | Ação |
+|---|---|
+| Migration SQL | Criar `document_types`, `documents`; adicionar `document_type_id` em `obligation_activities`; criar bucket `documents` |
+| `src/pages/Obligations.tsx` | Remover aba Acompanhamento e lógica de instâncias |
+| `src/components/ClientObligationsTab.tsx` | Novo — aba de obrigações dentro do cliente |
+| `src/pages/Clients.tsx` | Adicionar aba "Obrigações" com o novo componente |
+| `src/pages/Documents.tsx` | Novo — importação de documentos com auto-associação |
+| `src/components/AppSidebar.tsx` | Adicionar "Documentos" no menu |
+| `src/pages/Settings.tsx` | Adicionar aba "Tipos de Documento" |
+| `src/App.tsx` | Adicionar rota `/documents` |
+
+### Fluxo de auto-associação na importação
+1. Usuário seleciona tipo de documento, cliente e competência e faz upload
+2. Sistema salva na tabela `documents`
+3. Sistema busca atividades do tipo `document` com `document_type_id` correspondente, e instâncias daquele cliente/competência
+4. Marca o `obligation_activity_completions` como concluído com `file_url`
 
