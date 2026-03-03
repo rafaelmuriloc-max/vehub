@@ -458,6 +458,7 @@ export default function Clients() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Código SCI</TableHead>
                 <TableHead>Empresa</TableHead>
                 <TableHead>Documento</TableHead>
                 <TableHead>Contato</TableHead>
@@ -469,6 +470,7 @@ export default function Clients() {
             <TableBody>
               {filtered.map(c => (
                 <TableRow key={c.id}>
+                  <TableCell>{c.sci_code || '-'}</TableCell>
                   <TableCell className="font-medium">{c.company_name}</TableCell>
                   <TableCell>{c.document || '-'}</TableCell>
                   <TableCell>{c.contact_name || '-'}</TableCell>
@@ -479,7 +481,7 @@ export default function Clients() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
