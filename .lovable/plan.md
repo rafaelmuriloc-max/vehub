@@ -1,55 +1,39 @@
 
 
-## Plano: Aba "Contrato" no cadastro do cliente
+## Plano: Adicionar papel timbrado ao PDF do contrato
 
-### Resumo
-Adicionar uma aba "Contrato" ao formulário de cliente que gera um contrato de prestação de serviços contábeis baseado no modelo PDF fornecido, preenchido automaticamente com dados do cliente. As cláusulas serão editáveis e haverá um botão para gerar PDF.
+### Elementos do papel timbrado (baseado no PDF de exemplo)
 
-### Estrutura do contrato (baseada no PDF)
-O contrato possui placeholders que serão preenchidos com dados do cliente:
-- `[data]` → data atual
-- `[Nome]` → `company_name`
-- `[Cnpj]` → `document`
-- `[Rua], [Número], [Bairro], [Cidade]/[UF]` → `address`
-- `[Representante]` → `contact_name`
-- `[Cpf]` → campo a definir (partners_info ou novo campo)
-- `[Honorários]` → `monthly_value`
+Cada pagina do PDF gerado deve ter:
 
-Dados da CONTRATADA são fixos (Velocità Gestão Contábil).
+1. **Header (topo de cada pagina)**:
+   - Barra preta cobrindo ~60% da largura a esquerda (altura ~8mm)
+   - Barra laranja cobrindo ~40% da largura a direita (altura ~8mm, levemente mais baixa)
 
-### Alterações
+2. **Footer (rodape de cada pagina)**:
+   - Barra preta arredondada com fundo escuro ocupando quase toda a largura
+   - Texto branco com: email (atendimento@velocitacontabilidade.com.br), Instagram (@velocitacontabildiade), telefone (47) 3842 0299
+   - Detalhe laranja no canto direito
 
-**1. Dependência: jsPDF**
-Instalar `jspdf` para geração de PDF no client-side.
+3. **Formatacao do conteudo**:
+   - Linha separadora horizontal antes de cada clausula
+   - Titulos de clausula em fonte grande e negrito
+   - Subtitulos (1.2.1, 1.2.2 etc.) em negrito menor
+   - Margem superior ajustada para comecar abaixo do header (~18mm)
+   - Margem inferior ajustada para nao sobrepor o footer (~35mm)
 
-**2. Novo componente `src/components/ContractTab.tsx`**
-- Recebe os dados do cliente como props
-- Exibe o contrato com 10 cláusulas pré-preenchidas, cada uma em um `<Textarea>` editável
-- Cabeçalho com dados da CONTRATANTE (do cliente) e CONTRATADA (fixos)
-- Botão "Gerar PDF" que monta o documento usando jsPDF
-- Estado local para o texto de cada cláusula (inicializado com texto padrão do modelo)
+4. **Pagina de assinaturas (ultima pagina)**:
+   - Assinaturas empilhadas verticalmente (Contratante em cima, Contratada embaixo), nao lado a lado
 
-**3. Alteração em `src/pages/Clients.tsx`**
-- Adicionar aba "Contrato" na `TabsList` (mudar grid de 6 para 7 colunas)
-- Adicionar `<TabsContent value="contrato">` com o componente `ContractTab`
-- A aba só aparece no modo edição (quando já existe um cliente salvo)
+### Alteracoes
 
-### Geração do PDF
-- Usar `jspdf` para criar documento A4
-- Cabeçalho com dados das partes
-- Cada cláusula renderizada sequencialmente
-- Paginação automática com quebra de página
-- Assinaturas no final
-
-### Cláusulas editáveis (10 cláusulas do modelo)
-1. Do Objeto
-2. Das Obrigações da Contratante
-3. Das Obrigações da Contratada
-4. Do Envio de Documentos Digitais
-5. Dos Honorários
-6. Da Vigência
-7. Da Rescisão
-8. Da Responsabilidade Técnica
-9. Do Tratamento de Dados (LGPD)
-10. Do Foro
+**Arquivo: `src/components/ContractTab.tsx`** - Refatorar a funcao `generatePDF`:
+- Criar funcao `drawHeader(doc)` que desenha as barras preta e laranja no topo
+- Criar funcao `drawFooter(doc)` que desenha a barra de rodape com contatos
+- Aplicar header/footer em cada pagina (inclusive ao chamar `addPage`)
+- Ajustar `y` inicial para 22mm (abaixo do header)
+- Ajustar limite de quebra de pagina para 265mm (acima do footer)
+- Adicionar linha separadora (`doc.line()`) antes de cada clausula
+- Usar fonte maior (14pt bold) para titulos de clausula
+- Reformatar assinaturas para layout vertical
 
