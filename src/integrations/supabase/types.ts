@@ -329,6 +329,178 @@ export type Database = {
           },
         ]
       }
+      obligation_activities: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          obligation_id: string
+          order: number
+          title: string
+          type: Database["public"]["Enums"]["activity_type"]
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          obligation_id: string
+          order?: number
+          title: string
+          type?: Database["public"]["Enums"]["activity_type"]
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          obligation_id?: string
+          order?: number
+          title?: string
+          type?: Database["public"]["Enums"]["activity_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obligation_activities_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      obligation_activity_completions: {
+        Row: {
+          activity_id: string
+          completed: boolean
+          completed_at: string | null
+          completed_by: string | null
+          file_url: string | null
+          id: string
+          instance_id: string
+          notes: string | null
+        }
+        Insert: {
+          activity_id: string
+          completed?: boolean
+          completed_at?: string | null
+          completed_by?: string | null
+          file_url?: string | null
+          id?: string
+          instance_id: string
+          notes?: string | null
+        }
+        Update: {
+          activity_id?: string
+          completed?: boolean
+          completed_at?: string | null
+          completed_by?: string | null
+          file_url?: string | null
+          id?: string
+          instance_id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obligation_activity_completions_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "obligation_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_activity_completions_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "obligation_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      obligation_instances: {
+        Row: {
+          assigned_to: string | null
+          client_id: string
+          created_at: string
+          due_date: string | null
+          id: string
+          obligation_id: string
+          reference_month: string
+          status: Database["public"]["Enums"]["obligation_status"]
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_id: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          obligation_id: string
+          reference_month: string
+          status?: Database["public"]["Enums"]["obligation_status"]
+        }
+        Update: {
+          assigned_to?: string | null
+          client_id?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          obligation_id?: string
+          reference_month?: string
+          status?: Database["public"]["Enums"]["obligation_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obligation_instances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_instances_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      obligations: {
+        Row: {
+          created_at: string
+          department_id: string
+          description: string | null
+          id: string
+          name: string
+          recurrence: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          description?: string | null
+          id?: string
+          name: string
+          recurrence?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          description?: string | null
+          id?: string
+          name?: string
+          recurrence?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obligations_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           active: boolean
@@ -514,10 +686,12 @@ export type Database = {
       }
     }
     Enums: {
+      activity_type: "document" | "checklist" | "whatsapp" | "email"
       app_role: "admin" | "employee"
       client_status: "active" | "inactive" | "churned"
       financial_entry_status: "pending" | "paid" | "overdue"
       financial_entry_type: "receivable" | "payable"
+      obligation_status: "pending" | "in_progress" | "done"
       task_priority: "low" | "medium" | "high" | "urgent"
       task_status: "todo" | "in_progress" | "in_review" | "done"
     }
@@ -647,10 +821,12 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_type: ["document", "checklist", "whatsapp", "email"],
       app_role: ["admin", "employee"],
       client_status: ["active", "inactive", "churned"],
       financial_entry_status: ["pending", "paid", "overdue"],
       financial_entry_type: ["receivable", "payable"],
+      obligation_status: ["pending", "in_progress", "done"],
       task_priority: ["low", "medium", "high", "urgent"],
       task_status: ["todo", "in_progress", "in_review", "done"],
     },
