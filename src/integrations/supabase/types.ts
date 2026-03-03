@@ -73,6 +73,7 @@ export type Database = {
           contact_phone: string | null
           created_at: string
           created_by: string | null
+          destination_office_name: string | null
           digital_certificate_expiry: string | null
           digital_certificate_password: string | null
           digital_certificate_type: string | null
@@ -80,16 +81,21 @@ export type Database = {
           document: string | null
           employee_count: number | null
           end_date: string | null
+          exit_reason: string | null
+          exit_reason_notes: string | null
           foundation_date: string | null
+          from_another_office: boolean
           id: string
           main_activity: string | null
           monthly_value: number | null
           municipal_registration: string | null
           notes: string | null
+          opening_date: string | null
           partners_info: string | null
           payroll_notes: string | null
           payroll_type: string | null
           permits: string | null
+          previous_office_name: string | null
           secondary_activities: string | null
           start_date: string | null
           state_registration: string | null
@@ -108,6 +114,7 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          destination_office_name?: string | null
           digital_certificate_expiry?: string | null
           digital_certificate_password?: string | null
           digital_certificate_type?: string | null
@@ -115,16 +122,21 @@ export type Database = {
           document?: string | null
           employee_count?: number | null
           end_date?: string | null
+          exit_reason?: string | null
+          exit_reason_notes?: string | null
           foundation_date?: string | null
+          from_another_office?: boolean
           id?: string
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
           notes?: string | null
+          opening_date?: string | null
           partners_info?: string | null
           payroll_notes?: string | null
           payroll_type?: string | null
           permits?: string | null
+          previous_office_name?: string | null
           secondary_activities?: string | null
           start_date?: string | null
           state_registration?: string | null
@@ -143,6 +155,7 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           created_by?: string | null
+          destination_office_name?: string | null
           digital_certificate_expiry?: string | null
           digital_certificate_password?: string | null
           digital_certificate_type?: string | null
@@ -150,16 +163,21 @@ export type Database = {
           document?: string | null
           employee_count?: number | null
           end_date?: string | null
+          exit_reason?: string | null
+          exit_reason_notes?: string | null
           foundation_date?: string | null
+          from_another_office?: boolean
           id?: string
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
           notes?: string | null
+          opening_date?: string | null
           partners_info?: string | null
           payroll_notes?: string | null
           payroll_type?: string | null
           permits?: string | null
+          previous_office_name?: string | null
           secondary_activities?: string | null
           start_date?: string | null
           state_registration?: string | null
