@@ -1,39 +1,54 @@
 
 
-## Plano: Adicionar papel timbrado ao PDF do contrato
+## Plano: Reestruturar controle de tarefas em Obrigações e Tarefas
 
-### Elementos do papel timbrado (baseado no PDF de exemplo)
+### Conceito
+Dividir o sistema atual em duas áreas distintas:
+1. **Obrigações** — atividades recorrentes vinculadas a departamentos, com sub-atividades tipadas
+2. **Tarefas** — solicitações esporádicas (mantém a estrutura atual)
 
-Cada pagina do PDF gerado deve ter:
+### Novas tabelas (migrações SQL)
 
-1. **Header (topo de cada pagina)**:
-   - Barra preta cobrindo ~60% da largura a esquerda (altura ~8mm)
-   - Barra laranja cobrindo ~40% da largura a direita (altura ~8mm, levemente mais baixa)
+**`obligations`** — Obrigações por departamento
+- `id` uuid PK, `department_id` uuid FK→departments, `name` text, `description` text, `recurrence` text (mensal/trimestral/anual), `created_at` timestamp, `updated_at` timestamp
 
-2. **Footer (rodape de cada pagina)**:
-   - Barra preta arredondada com fundo escuro ocupando quase toda a largura
-   - Texto branco com: email (atendimento@velocitacontabilidade.com.br), Instagram (@velocitacontabildiade), telefone (47) 3842 0299
-   - Detalhe laranja no canto direito
+**`obligation_activities`** — Atividades de cada obrigação
+- `id` uuid PK, `obligation_id` uuid FK→obligations, `title` text, `type` enum (`document`, `checklist`, `whatsapp`, `email`), `description` text, `order` int, `created_at` timestamp
 
-3. **Formatacao do conteudo**:
-   - Linha separadora horizontal antes de cada clausula
-   - Titulos de clausula em fonte grande e negrito
-   - Subtitulos (1.2.1, 1.2.2 etc.) em negrito menor
-   - Margem superior ajustada para comecar abaixo do header (~18mm)
-   - Margem inferior ajustada para nao sobrepor o footer (~35mm)
+**`obligation_instances`** — Instâncias geradas (competência/período)
+- `id` uuid PK, `obligation_id` uuid FK→obligations, `client_id` uuid FK→clients, `reference_month` date, `status` enum (pending/in_progress/done), `assigned_to` uuid, `due_date` date, `created_at` timestamp
 
-4. **Pagina de assinaturas (ultima pagina)**:
-   - Assinaturas empilhadas verticalmente (Contratante em cima, Contratada embaixo), nao lado a lado
+**`obligation_activity_completions`** — Conclusão de cada atividade numa instância
+- `id` uuid PK, `instance_id` uuid FK→obligation_instances, `activity_id` uuid FK→obligation_activities, `completed` boolean default false, `completed_by` uuid, `completed_at` timestamp, `file_url` text (para tipo document), `notes` text
 
-### Alteracoes
+**Enums**: `activity_type` (document, checklist, whatsapp, email), `obligation_status` (pending, in_progress, done)
 
-**Arquivo: `src/components/ContractTab.tsx`** - Refatorar a funcao `generatePDF`:
-- Criar funcao `drawHeader(doc)` que desenha as barras preta e laranja no topo
-- Criar funcao `drawFooter(doc)` que desenha a barra de rodape com contatos
-- Aplicar header/footer em cada pagina (inclusive ao chamar `addPage`)
-- Ajustar `y` inicial para 22mm (abaixo do header)
-- Ajustar limite de quebra de pagina para 265mm (acima do footer)
-- Adicionar linha separadora (`doc.line()`) antes de cada clausula
-- Usar fonte maior (14pt bold) para titulos de clausula
-- Reformatar assinaturas para layout vertical
+**RLS**: Mesma lógica existente — admin gerencia, authenticated visualiza.
+
+### Alterações no frontend
+
+**1. Sidebar (`AppSidebar.tsx`)**
+- Renomear "Tarefas" para "Tarefas" (manter)
+- Adicionar "Obrigações" com ícone `ClipboardList` apontando para `/obligations`
+
+**2. Nova página `src/pages/Obligations.tsx`**
+- Cadastro de obrigações vinculadas a departamento
+- Para cada obrigação, CRUD de atividades com tipo (Document/Checklist/WhatsApp/Email)
+- Visualização das instâncias por cliente/competência
+- Para tipo "Document": upload de arquivo
+- Para tipo "Checklist": checkbox de conclusão
+- Para tipo "WhatsApp"/"Email": botão de confirmação de envio
+
+**3. Rota em `App.tsx`**
+- Adicionar `<Route path="/obligations" element={<Obligations />} />`
+
+**4. Página `Tasks.tsx`**
+- Mantém como está — passa a representar apenas as tarefas esporádicas
+- Atualizar título para "Tarefas (Solicitações)" para diferenciar
+
+### Fluxo de uso
+1. Admin cadastra obrigações por departamento (ex: "Fechamento Fiscal") com atividades (ex: "Enviar DCTF" tipo checklist, "Anexar guia" tipo document)
+2. Instâncias são criadas por cliente/competência
+3. Usuários marcam atividades como concluídas conforme o tipo
+4. Tarefas esporádicas continuam sendo criadas normalmente na página Tarefas
 
