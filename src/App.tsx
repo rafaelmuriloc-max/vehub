@@ -14,6 +14,7 @@ import CalendarView from "./pages/CalendarView";
 import Obligations from "./pages/Obligations";
 import Documents from "./pages/Documents";
 import Settings from "./pages/Settings";
+import DocumentTypes from "./pages/DocumentTypes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/settings/document-types" element={<DocumentTypes />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
