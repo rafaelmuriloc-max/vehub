@@ -625,21 +625,66 @@ async function requestTextWithMTLS(
     }
   }
 
-  // If DNS failed, try resolving via DoH and connecting by IP with Host header
-  if (lastError && (lastError.message.includes("lookup") || lastError.message.includes("not known"))) {
-    console.log("Tentando resolver hostname via DNS-over-HTTPS...");
-    const ip = await resolveHostname(url.hostname);
-    if (ip) {
-      const originalHost = url.hostname;
-      const ipUrl = new URL(url.toString());
-      ipUrl.hostname = ip;
+  // If connection failed (DNS or connection reset), try resolving via DoH and connecting by IP
+  if (lastError) {
+    const errMsg = lastError.message || "";
+    const isDns = errMsg.includes("lookup") || errMsg.includes("not known") || errMsg.includes("NXDOMAIN");
+    const isReset = errMsg.includes("reset") || errMsg.includes("refused") || errMsg.includes("peer");
+    
+    if (isDns || isReset) {
+      console.log(`Tentando resolver hostname via DNS-over-HTTPS (motivo: ${isDns ? "DNS" : "connection reset"})...`);
+      const ip = await resolveHostname(url.hostname);
+      if (ip) {
+        const originalHost = url.hostname;
+        const ipUrl = new URL(url.toString());
+        ipUrl.hostname = ip;
 
-      // Use raw connection with SNI/Host header pointing to original hostname
-      try {
-        return await sendRawHttpRequestWithSNI(ipUrl, originalHost, init, certPem, keyPem, "doh-raw");
-      } catch (error) {
-        lastError = error as Error;
-        console.error(`Falha DoH raw:`, (error as Error).message);
+        // Try raw connection with SNI/Host header pointing to original hostname
+        for (let retry = 0; retry < 2; retry++) {
+          try {
+            if (retry > 0) {
+              await new Promise((r) => setTimeout(r, 3000));
+              console.log(`Retry DoH ${retry}/2...`);
+            }
+            return await sendRawHttpRequestWithSNI(ipUrl, originalHost, init, certPem, keyPem, "doh-raw");
+          } catch (error) {
+            lastError = error as Error;
+            console.error(`Falha DoH raw (tentativa ${retry + 1}):`, (error as Error).message);
+          }
+        }
+
+        // Also try fetch with IP-based URL
+        try {
+          const httpClient = Deno.createHttpClient({
+            cert: certPem,
+            http1: true,
+            http2: false,
+            key: keyPem,
+          });
+          try {
+            const response = await fetch(ipUrl, {
+              body: init.body,
+              // @ts-expect-error Deno fetch supports client
+              client: httpClient,
+              headers: { ...(init.headers as Record<string, string>), Host: originalHost },
+              method: init.method,
+            });
+            const bodyText = await response.text();
+            return {
+              bodyText,
+              headers: response.headers,
+              status: response.status,
+              statusText: response.statusText,
+              strategy: "doh-fetch",
+              url: url.toString(),
+            };
+          } finally {
+            httpClient.close();
+          }
+        } catch (error) {
+          lastError = error as Error;
+          console.error(`Falha DoH fetch:`, (error as Error).message);
+        }
       }
     }
   }
