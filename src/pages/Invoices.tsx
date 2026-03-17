@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2 } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen } from 'lucide-react';
 
 type Client = { id: string; company_name: string; document: string | null };
 type Invoice = {
