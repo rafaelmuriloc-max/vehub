@@ -32,6 +32,7 @@ type Invoice = {
 };
 
 export default function Invoices() {
+  const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
