@@ -266,9 +266,9 @@ Deno.serve(async (req) => {
             method: "POST",
             body: payload,
             headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json, application/xml, */*",
-              "User-Agent": "VeloGestao-NFSe/1.0",
+              "Content-Type": "application/json; charset=utf-8",
+              Accept: "application/json",
+              "User-Agent": "Cloudger-NFSe-Client/1.0",
             },
           },
           certPem,
