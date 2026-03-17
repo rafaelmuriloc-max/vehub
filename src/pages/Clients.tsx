@@ -255,10 +255,6 @@ export default function Clients() {
   async function handleCertificateUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!editing) {
-      toast({ title: 'Salve o cliente primeiro', description: 'É necessário salvar o cliente antes de fazer upload do certificado.', variant: 'destructive' });
-      return;
-    }
     const password = form.digital_certificate_password;
     if (!password) {
       toast({ title: 'Senha necessária', description: 'Informe a senha do certificado antes de fazer o upload.', variant: 'destructive' });
@@ -299,14 +295,20 @@ export default function Clients() {
         setForm(prev => ({ ...prev, digital_certificate_expiry: formatted }));
       }
 
-      // Upload to storage
-      const filePath = `${editing.id}/${file.name}`;
-      const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { error: updateError } = await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', editing.id);
-      if (updateError) throw updateError;
-      setCertificateUrl(filePath);
-      toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo. Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}.` });
+      if (editing) {
+        // Upload to storage immediately
+        const filePath = `${editing.id}/${file.name}`;
+        const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, file, { upsert: true });
+        if (uploadError) throw uploadError;
+        const { error: updateError } = await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', editing.id);
+        if (updateError) throw updateError;
+        setCertificateUrl(filePath);
+        toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo. Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}.` });
+      } else {
+        // Store file for upload after save
+        setPendingCertFile(file);
+        toast({ title: 'Certificado carregado', description: `Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}. Será salvo ao criar o cliente.` });
+      }
     } catch (err: any) {
       toast({ title: 'Erro no upload', description: err.message, variant: 'destructive' });
     } finally {
