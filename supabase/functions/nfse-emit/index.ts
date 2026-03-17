@@ -791,6 +791,7 @@ async function sendRawHttpRequestWithSNI(
   } finally {
     conn.close();
   }
+}
 
 async function readAll(conn: Deno.Conn, timeoutMs: number): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
