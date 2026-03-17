@@ -1,47 +1,42 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Plano: Separar categorias de serviços por abas
 
-### Mudanças
+## Mudança
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+Substituir o dropdown "Categoria" por um componente `Tabs` horizontal com scroll, onde cada aba representa uma categoria do `SERVICE_CATALOG`. Ao clicar numa aba, os serviços daquela categoria aparecem diretamente no seletor de serviço abaixo.
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+## Implementação em `src/pages/IntegraContador.tsx`
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+1. **Importar** `Tabs, TabsList, TabsTrigger, TabsContent` de `@/components/ui/tabs`
+2. **Remover** o `Select` de "Categoria" (linhas 337-351)
+3. **Substituir** por um `<Tabs>` com:
+   - `<TabsList>` com overflow horizontal (`flex-wrap` ou `overflow-x-auto`) contendo um `<TabsTrigger>` por categoria (ícone + label)
+   - Cada `<TabsContent>` renderiza o seletor de serviço + campos de parâmetros da categoria selecionada
+4. **Conectar** ao estado existente: `onValueChange` do `Tabs` chama `handleCategoryChange`, `value` usa `selectedCategory`
+5. **Mover** o seletor de "Serviço", card de "Parâmetros" e botão "Enviar" para dentro de cada `TabsContent` (reutilizando o mesmo JSX, sem duplicar)
 
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
-
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
-
-### Estrutura do menu resultante
+### Estrutura visual
 
 ```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
+Card "Serviço"
+┌──────────────────────────────────────────────┐
+│ [SN] [MEI] [DCTFWeb] [Sicalc] [Caixa] ...  │  ← abas com scroll
+├──────────────────────────────────────────────┤
+│ Serviço: [dropdown dos serviços da aba]      │
+│ Descrição do serviço selecionado             │
+│                                              │
+│ Parâmetros:                                  │
+│ CNPJ Básico: [________]                     │
+│ PA:          [________]                     │
+│                                              │
+│ [       Enviar Consulta        ]             │
+└──────────────────────────────────────────────┘
 ```
+
+### Arquivo
+
+| Ação | Arquivo |
+|------|---------|
+| Editar | `src/pages/IntegraContador.tsx` — substituir Select de categoria por Tabs |
 
