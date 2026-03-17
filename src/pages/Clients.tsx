@@ -405,6 +405,18 @@ export default function Clients() {
       }
     }
 
+    // Upload pending certificate for new clients
+    if (clientId && pendingCertFile) {
+      try {
+        const filePath = `${clientId}/${pendingCertFile.name}`;
+        const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, pendingCertFile, { upsert: true });
+        if (!uploadError) {
+          await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', clientId);
+        }
+      } catch {}
+      setPendingCertFile(null);
+    }
+
     setDialogOpen(false);
     loadClients();
     toast({ title: editing ? 'Cliente atualizado' : 'Cliente criado' });
