@@ -1,54 +1,47 @@
 
 
-# Fix: IBGE code not auto-filling (API doesn't return `ibge` field)
+## Plano: Reorganizar menu Cadastro com submenus
 
-## Root Cause
+### Mudanças
 
-The BrasilAPI `/cep/v2/` endpoint uses multiple backend services (ViaCEP, open-cep, etc.). Some services like `open-cep` do NOT return the `ibge` field in the response. This is visible in the network logs where `service: "open-cep"` is used and no `ibge` property exists.
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-## Solution
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-Change `fetchIbgeFromCep` to use **ViaCEP** (`viacep.com.br/ws/{cep}/json/`) as the primary source, which always returns `ibge`. Use BrasilAPI as a fallback.
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-ViaCEP response format:
-```json
-{
-  "cep": "88385-000",
-  "ibge": "4212502",
-  "localidade": "Penha",
-  ...
-}
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
+
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
+
+### Estrutura do menu resultante
+
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
+
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
 ```
-
-## Implementation in `src/pages/InvoiceEmit.tsx`
-
-Replace `fetchIbgeFromCep` (lines 144-153):
-
-```typescript
-async function fetchIbgeFromCep(cep: string): Promise<string | null> {
-  try {
-    // ViaCEP always returns ibge
-    const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.ibge) return data.ibge;
-    }
-    // Fallback to BrasilAPI
-    const res2 = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-    if (res2.ok) {
-      const data2 = await res2.json();
-      return data2.ibge || null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-```
-
-## File
-
-| Action | File |
-|--------|------|
-| Edit | `src/pages/InvoiceEmit.tsx` -- replace `fetchIbgeFromCep` function |
 
