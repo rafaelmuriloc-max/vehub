@@ -186,7 +186,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
 };
 
 export default function IntegraContador() {
-  const { admin } = useAuth();
+  const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
