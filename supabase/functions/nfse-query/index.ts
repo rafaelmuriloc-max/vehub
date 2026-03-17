@@ -158,70 +158,47 @@ Deno.serve(async (req) => {
       console.error("ADN NFS-e connection error:", apiError);
       return jsonResponse(
         {
-          error:
-            "Erro ao consultar o ADN da NFS-e. A integração anterior usava uma rota legado incompatível; agora a função consulta a API oficial do contribuinte por NSU.",
+          error: "Erro ao consultar o ADN da NFS-e.",
           details: (apiError as Error).message,
         },
         502,
       );
     }
 
-    const savedInvoices = [];
-    for (const invoice of invoicesData) {
-      let xmlUrl = null;
-      if (invoice.xml) {
-        const xmlPath = `nfse/${cnpj}/${reference_month}/${invoice.accessKey || invoice.invoiceNumber || crypto.randomUUID()}.xml`;
-        const { error: uploadError } = await adminClient.storage
-          .from("documents")
-          .upload(xmlPath, new TextEncoder().encode(invoice.xml), {
-            contentType: "application/xml",
-            upsert: true,
-          });
+    // Cap at 20 invoices per sync to avoid timeout
+    const MAX_SAVE_PER_SYNC = 20;
+    const invoicesToSave = invoicesData.slice(0, MAX_SAVE_PER_SYNC);
 
-        if (!uploadError) {
-          xmlUrl = xmlPath;
-        }
+    // Batch upsert: build all records first, then save in one call
+    const invoiceRecords = invoicesToSave.map((invoice) => ({
+      access_key: invoice.accessKey,
+      client_id,
+      gross_value: invoice.grossValue || 0,
+      invoice_number: invoice.invoiceNumber,
+      issue_date: invoice.issueDate,
+      issuer_cnpj: invoice.issuerCnpj || cnpj,
+      municipality_code: invoice.municipalityCode,
+      net_value: invoice.netValue || 0,
+      pdf_url: null,
+      raw_data: invoice.rawData,
+      service_description: invoice.serviceDescription,
+      status: invoice.status || "normal",
+      taker_cnpj: invoice.takerCnpj,
+      tax_value: invoice.taxValue || 0,
+      xml_url: null,
+    }));
+
+    let savedInvoices: unknown[] = [];
+    if (invoiceRecords.length > 0) {
+      const { data: saved, error: saveError } = await adminClient
+        .from("invoices")
+        .upsert(invoiceRecords, { onConflict: "access_key" })
+        .select();
+
+      if (saveError) {
+        console.error("Erro ao salvar invoices em lote:", saveError);
       }
-
-      const invoiceRecord = {
-        access_key: invoice.accessKey,
-        client_id,
-        gross_value: invoice.grossValue || 0,
-        invoice_number: invoice.invoiceNumber,
-        issue_date: invoice.issueDate,
-        issuer_cnpj: invoice.issuerCnpj || cnpj,
-        municipality_code: invoice.municipalityCode,
-        net_value: invoice.netValue || 0,
-        pdf_url: null,
-        raw_data: invoice.rawData,
-        service_description: invoice.serviceDescription,
-        status: invoice.status || "normal",
-        taker_cnpj: invoice.takerCnpj,
-        tax_value: invoice.taxValue || 0,
-        xml_url: xmlUrl,
-      };
-
-      if (invoice.accessKey) {
-        const { data: saved, error: saveError } = await adminClient
-          .from("invoices")
-          .upsert(invoiceRecord, { onConflict: "access_key" })
-          .select()
-          .single();
-
-        if (!saveError && saved) {
-          savedInvoices.push(saved);
-        }
-      } else {
-        const { data: saved, error: saveError } = await adminClient
-          .from("invoices")
-          .insert(invoiceRecord)
-          .select()
-          .single();
-
-        if (!saveError && saved) {
-          savedInvoices.push(saved);
-        }
-      }
+      savedInvoices = saved || [];
     }
 
     return jsonResponse({
@@ -230,6 +207,7 @@ Deno.serve(async (req) => {
       invoices: savedInvoices,
       sync_meta: syncMeta,
       total: invoicesData.length,
+      truncated: invoicesData.length > MAX_SAVE_PER_SYNC,
     });
   } catch (error) {
     console.error("Unexpected error:", error);
@@ -332,6 +310,11 @@ async function fetchAdnDfeByNsu(
         keyPem,
       );
 
+      // DIAGNOSTIC: log raw response shape
+      const ct = response.headers.get("content-type") || "unknown";
+      console.log(`[DIAG] NSU=${nsu} status=${response.status} content-type=${ct} bodyLen=${response.bodyText.length}`);
+      console.log(`[DIAG] body preview: ${response.bodyText.slice(0, 1000)}`);
+
       if (response.status >= 400) {
         throw new Error(
           `HTTP ${response.status} ao consultar ${response.url}: ${response.bodyText.slice(0, 500) || response.statusText}`,
@@ -423,25 +406,39 @@ async function requestTextWithMTLS(
     { label: "raw-http1-no-alpn", type: "raw" as const },
   ];
 
+  const MAX_RETRIES = 3;
   let lastError: Error | null = null;
 
   for (const attempt of attempts) {
-    try {
-      console.log(`Tentando conexão mTLS com estratégia ${attempt.label} para ${url.toString()}`);
+    for (let retry = 0; retry < MAX_RETRIES; retry++) {
+      try {
+        if (retry > 0) {
+          const delay = Math.pow(2, retry) * 1000; // 2s, 4s
+          console.log(`Retry ${retry}/${MAX_RETRIES} para ${attempt.label} após ${delay}ms`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+        console.log(`Tentando conexão mTLS com estratégia ${attempt.label} para ${url.toString()}`);
 
-      if (attempt.type === "fetch") {
-        return await requestWithFetchHttp1(url, init, certPem, keyPem, attempt.label);
+        if (attempt.type === "fetch") {
+          return await requestWithFetchHttp1(url, init, certPem, keyPem, attempt.label);
+        }
+
+        return await sendRawHttpRequestOverTls(url, init, certPem, keyPem, attempt.label, attempt.alpnProtocols);
+      } catch (error) {
+        lastError = error as Error;
+        const msg = (error as Error).message || "";
+        console.error(`Falha na estratégia ${attempt.label} (tentativa ${retry + 1}):`, msg);
+        // Only retry on connection reset / network errors
+        if (!msg.includes("reset") && !msg.includes("refused") && !msg.includes("timeout")) {
+          break; // Don't retry on non-transient errors
+        }
       }
-
-      return await sendRawHttpRequestOverTls(url, init, certPem, keyPem, attempt.label, attempt.alpnProtocols);
-    } catch (error) {
-      lastError = error as Error;
-      console.error(`Falha na estratégia ${attempt.label}:`, error);
     }
   }
 
   throw lastError || new Error("Falha ao conectar via mTLS");
 }
+
 
 async function requestWithFetchHttp1(
   url: URL,
