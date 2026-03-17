@@ -280,24 +280,28 @@ async function fetchWithMTLS(
   certPem: string,
   keyPem: string
 ): Promise<Response> {
-  // Use Deno.createHttpClient for mTLS
   const httpClient = Deno.createHttpClient({
-    certChain: certPem,
-    privateKey: keyPem,
+    cert: certPem,
+    key: keyPem,
+    http1: true,
+    http2: false,
   });
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/xml",
-      Accept: "application/xml",
-    },
-    body,
-    // @ts-ignore - Deno specific
-    client: httpClient,
-  });
-
-  return response;
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/xml",
+        Accept: "application/xml",
+        Connection: "keep-alive",
+      },
+      body,
+      // @ts-ignore - Deno specific
+      client: httpClient,
+    });
+  } finally {
+    httpClient.close();
+  }
 }
 
 function parseNfseResponse(xmlText: string): any[] {
