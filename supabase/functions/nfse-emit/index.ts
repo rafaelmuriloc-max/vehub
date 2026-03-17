@@ -715,6 +715,82 @@ async function sendRawHttpRequest(
   }
 }
 
+// Same as sendRawHttpRequest but connects to IP while using original hostname for TLS SNI and Host header
+async function sendRawHttpRequestWithSNI(
+  ipUrl: URL,
+  originalHost: string,
+  init: { body?: string; headers?: HeadersInit; method: string },
+  certPem: string,
+  keyPem: string,
+  strategy: string,
+): Promise<MtlsTextResponse> {
+  const encoder = new TextEncoder();
+  const bodyBytes = encoder.encode(init.body ?? "");
+  
+  console.log(`Connecting to IP ${ipUrl.hostname}:${ipUrl.port || 443} with SNI ${originalHost}`);
+  
+  const conn = await Deno.connectTls({
+    hostname: ipUrl.hostname,
+    port: Number(ipUrl.port || 443),
+    cert: certPem,
+    key: keyPem,
+    alpnProtocols: ["http/1.1"],
+  });
+
+  try {
+    const headers = new Headers(init.headers || {});
+    headers.set("Host", originalHost);
+    if (!headers.has("Connection")) headers.set("Connection", "close");
+    if (bodyBytes.byteLength > 0 && !headers.has("Content-Length")) {
+      headers.set("Content-Length", String(bodyBytes.byteLength));
+    }
+
+    const originalUrl = new URL(ipUrl.toString());
+    originalUrl.hostname = originalHost;
+
+    const requestHead = [
+      `${init.method} ${originalUrl.pathname}${originalUrl.search} HTTP/1.1`,
+      ...Array.from(headers.entries()).map(([n, v]) => `${n}: ${v}`),
+      "",
+      "",
+    ].join("\r\n");
+
+    await conn.write(encoder.encode(requestHead));
+    if (bodyBytes.byteLength > 0) {
+      await conn.write(bodyBytes);
+    }
+
+    const responseBytes = await readAll(conn, 30000);
+    const rawResponse = new TextDecoder().decode(responseBytes);
+    const sepIdx = rawResponse.indexOf("\r\n\r\n");
+    if (sepIdx === -1) throw new Error("Resposta HTTP inválida");
+
+    const headerSection = rawResponse.slice(0, sepIdx);
+    const bodySection = rawResponse.slice(sepIdx + 4);
+    const lines = headerSection.split("\r\n");
+    const statusLine = lines.shift() || "";
+    const statusMatch = statusLine.match(/^HTTP\/\d\.\d\s+(\d{3})\s*(.*)$/i);
+    if (!statusMatch) throw new Error("Status HTTP inválido");
+
+    const respHeaders = new Headers();
+    for (const line of lines) {
+      const sep = line.indexOf(":");
+      if (sep === -1) continue;
+      respHeaders.append(line.slice(0, sep).trim(), line.slice(sep + 1).trim());
+    }
+
+    return {
+      bodyText: bodySection,
+      headers: respHeaders,
+      status: Number(statusMatch[1]),
+      statusText: statusMatch[2],
+      strategy,
+      url: originalUrl.toString(),
+    };
+  } finally {
+    conn.close();
+  }
+
 async function readAll(conn: Deno.Conn, timeoutMs: number): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   let totalLength = 0;
