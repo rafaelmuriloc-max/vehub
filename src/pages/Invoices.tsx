@@ -240,9 +240,10 @@ export default function Invoices() {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
   }
 
-  const filteredInvoices = filterClient === 'all'
-    ? invoices
-    : invoices.filter(i => i.client_id === filterClient);
+  let filteredInvoices = invoices;
+  if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
+  if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
+  if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
