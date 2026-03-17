@@ -406,17 +406,37 @@ async function requestTextWithMTLS(
     { label: "raw-http1-no-alpn", type: "raw" as const },
   ];
 
+  const MAX_RETRIES = 3;
   let lastError: Error | null = null;
 
   for (const attempt of attempts) {
-    try {
-      console.log(`Tentando conexão mTLS com estratégia ${attempt.label} para ${url.toString()}`);
+    for (let retry = 0; retry < MAX_RETRIES; retry++) {
+      try {
+        if (retry > 0) {
+          const delay = Math.pow(2, retry) * 1000; // 2s, 4s
+          console.log(`Retry ${retry}/${MAX_RETRIES} para ${attempt.label} após ${delay}ms`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+        console.log(`Tentando conexão mTLS com estratégia ${attempt.label} para ${url.toString()}`);
 
-      if (attempt.type === "fetch") {
-        return await requestWithFetchHttp1(url, init, certPem, keyPem, attempt.label);
+        if (attempt.type === "fetch") {
+          return await requestWithFetchHttp1(url, init, certPem, keyPem, attempt.label);
+        }
+
+        return await sendRawHttpRequestOverTls(url, init, certPem, keyPem, attempt.label, attempt.alpnProtocols);
+      } catch (error) {
+        lastError = error as Error;
+        const msg = (error as Error).message || "";
+        console.error(`Falha na estratégia ${attempt.label} (tentativa ${retry + 1}):`, msg);
+        // Only retry on connection reset / network errors
+        if (!msg.includes("reset") && !msg.includes("refused") && !msg.includes("timeout")) {
+          break; // Don't retry on non-transient errors
+        }
       }
+    }
+  }
 
-      return await sendRawHttpRequestOverTls(url, init, certPem, keyPem, attempt.label, attempt.alpnProtocols);
+  throw lastError || new Error("Falha ao conectar via mTLS");
     } catch (error) {
       lastError = error as Error;
       console.error(`Falha na estratégia ${attempt.label}:`, error);
