@@ -237,26 +237,26 @@ Deno.serve(async (req) => {
 // ---- Helper functions ----
 
 async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certPem: string; keyPem: string }> {
-  // Use Web Crypto + ASN.1 parsing for PFX
-  // For Deno, we use the built-in node:crypto compatibility
-  const { createPrivateKey, createPublicKey, X509Certificate } = await import("node:crypto");
-  const { Buffer } = await import("node:buffer");
+  // Convert Uint8Array to binary string for node-forge
+  const binary = String.fromCharCode(...pfxBytes);
+  const asn1 = forge.asn1.fromDer(binary);
+  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
 
-  const pfxBuffer = Buffer.from(pfxBytes);
-
-  // Parse PKCS12 using node:crypto (available in Deno)
-  const key = createPrivateKey({
-    key: pfxBuffer,
-    format: "der",
-    type: "pkcs12",
-    passphrase: password,
-  });
-
-  const keyPem = key.export({ type: "pkcs8", format: "pem" }) as string;
+  // Extract private key
+  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+  const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
+  if (!keyBag?.key) {
+    throw new Error("Chave privada não encontrada no certificado");
+  }
+  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
 
   // Extract certificate
-  const cert = new X509Certificate(pfxBuffer);
-  const certPem = cert.toString();
+  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+  const certBag = (certBags[forge.pki.oids.certBag] || [])[0];
+  if (!certBag?.cert) {
+    throw new Error("Certificado não encontrado no arquivo PFX");
+  }
+  const certPem = forge.pki.certificateToPem(certBag.cert);
 
   return { certPem, keyPem };
 }
