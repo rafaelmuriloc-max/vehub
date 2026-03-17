@@ -18,6 +18,7 @@ import Settings from "./pages/Settings";
 import DocumentTypes from "./pages/DocumentTypes";
 import InvoiceEmit from "./pages/InvoiceEmit";
 import Fiscal from "./pages/Fiscal";
+import IntegraContador from "./pages/IntegraContador";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/invoices/emit" element={<InvoiceEmit />} />
               <Route path="/fiscal" element={<Fiscal />} />
+              <Route path="/integra-contador" element={<IntegraContador />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />
