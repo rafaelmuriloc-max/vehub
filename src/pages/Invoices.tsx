@@ -145,6 +145,12 @@ export default function Invoices() {
           <h1 className="text-3xl font-bold text-foreground">Notas Fiscais de Serviço</h1>
           <p className="text-muted-foreground">Consulta e download de NFS-e do Portal Nacional</p>
         </div>
+        {isAdmin && (
+          <Button onClick={() => navigate('/invoices/emit')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Emitir NFS-e
+          </Button>
+        )}
       </div>
 
       {/* Sync Card */}
