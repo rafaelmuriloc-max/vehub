@@ -7,15 +7,15 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Multiple SEFIN endpoints to try (some may have different TLS configs)
+// SEFIN endpoints for NFS-e emission
+// Primary: sefin.nfse.gov.br (may not resolve from all environments)
+// Fallback: try direct IP or alternative hostnames
 const SEFIN_ENDPOINTS = {
   producao: [
     "https://sefin.nfse.gov.br/SefinNacional/nfse",
-    "https://cnc.nfse.gov.br/SefinNacional/nfse",
   ],
   homologacao: [
     "https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse",
-    "https://cnc.producaorestrita.nfse.gov.br/SefinNacional/nfse",
   ],
 };
 
@@ -134,8 +134,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Erro ao processar certificado: ${(error as Error).message}` }, 500);
     }
 
-    // Validate required municipality code
-    if (!dps_data.codigoMunicipioIncidencia || dps_data.codigoMunicipioIncidencia.length < 7) {
+    // Trim and validate required municipality code
+    dps_data.codigoMunicipioIncidencia = (dps_data.codigoMunicipioIncidencia || "").trim();
+    if (!dps_data.codigoMunicipioIncidencia || !/^\d{7}$/.test(dps_data.codigoMunicipioIncidencia)) {
       return jsonResponse({ error: "Código do município de incidência (IBGE) é obrigatório (7 dígitos)" }, 400);
     }
 
@@ -536,6 +537,22 @@ type MtlsTextResponse = {
   url: string;
 };
 
+// Resolve hostname via DNS-over-HTTPS (Google) as fallback when system DNS fails
+async function resolveHostname(hostname: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`https://dns.google/resolve?name=${hostname}&type=A`);
+    const data = await resp.json();
+    if (data.Answer && data.Answer.length > 0) {
+      const ip = data.Answer.find((a: { type: number; data: string }) => a.type === 1)?.data;
+      console.log(`DNS-over-HTTPS resolved ${hostname} -> ${ip}`);
+      return ip || null;
+    }
+  } catch (e) {
+    console.error(`DNS-over-HTTPS failed for ${hostname}:`, (e as Error).message);
+  }
+  return null;
+}
+
 async function requestTextWithMTLS(
   url: URL,
   init: { body?: string; headers?: HeadersInit; method: string },
@@ -550,6 +567,7 @@ async function requestTextWithMTLS(
   const MAX_RETRIES = 3;
   let lastError: Error | null = null;
 
+  // First try with original hostname
   for (const attempt of attempts) {
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
       try {
@@ -595,9 +613,33 @@ async function requestTextWithMTLS(
         lastError = error as Error;
         const msg = (error as Error).message || "";
         console.error(`Falha ${attempt.label} (tentativa ${retry + 1}):`, msg);
+
+        // DNS failure - don't retry, try IP-based approach instead
+        if (msg.includes("lookup") || msg.includes("not known") || msg.includes("NXDOMAIN")) {
+          break;
+        }
         if (!msg.includes("reset") && !msg.includes("refused") && !msg.includes("timeout")) {
           break;
         }
+      }
+    }
+  }
+
+  // If DNS failed, try resolving via DoH and connecting by IP with Host header
+  if (lastError && (lastError.message.includes("lookup") || lastError.message.includes("not known"))) {
+    console.log("Tentando resolver hostname via DNS-over-HTTPS...");
+    const ip = await resolveHostname(url.hostname);
+    if (ip) {
+      const originalHost = url.hostname;
+      const ipUrl = new URL(url.toString());
+      ipUrl.hostname = ip;
+
+      // Use raw connection with SNI/Host header pointing to original hostname
+      try {
+        return await sendRawHttpRequestWithSNI(ipUrl, originalHost, init, certPem, keyPem, "doh-raw");
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`Falha DoH raw:`, (error as Error).message);
       }
     }
   }
@@ -668,6 +710,83 @@ async function sendRawHttpRequest(
       statusText: statusMatch[2],
       strategy,
       url: url.toString(),
+    };
+  } finally {
+    conn.close();
+  }
+}
+
+// Same as sendRawHttpRequest but connects to IP while using original hostname for TLS SNI and Host header
+async function sendRawHttpRequestWithSNI(
+  ipUrl: URL,
+  originalHost: string,
+  init: { body?: string; headers?: HeadersInit; method: string },
+  certPem: string,
+  keyPem: string,
+  strategy: string,
+): Promise<MtlsTextResponse> {
+  const encoder = new TextEncoder();
+  const bodyBytes = encoder.encode(init.body ?? "");
+  
+  console.log(`Connecting to IP ${ipUrl.hostname}:${ipUrl.port || 443} with SNI ${originalHost}`);
+  
+  const conn = await Deno.connectTls({
+    hostname: ipUrl.hostname,
+    port: Number(ipUrl.port || 443),
+    cert: certPem,
+    key: keyPem,
+    alpnProtocols: ["http/1.1"],
+  });
+
+  try {
+    const headers = new Headers(init.headers || {});
+    headers.set("Host", originalHost);
+    if (!headers.has("Connection")) headers.set("Connection", "close");
+    if (bodyBytes.byteLength > 0 && !headers.has("Content-Length")) {
+      headers.set("Content-Length", String(bodyBytes.byteLength));
+    }
+
+    const originalUrl = new URL(ipUrl.toString());
+    originalUrl.hostname = originalHost;
+
+    const requestHead = [
+      `${init.method} ${originalUrl.pathname}${originalUrl.search} HTTP/1.1`,
+      ...Array.from(headers.entries()).map(([n, v]) => `${n}: ${v}`),
+      "",
+      "",
+    ].join("\r\n");
+
+    await conn.write(encoder.encode(requestHead));
+    if (bodyBytes.byteLength > 0) {
+      await conn.write(bodyBytes);
+    }
+
+    const responseBytes = await readAll(conn, 30000);
+    const rawResponse = new TextDecoder().decode(responseBytes);
+    const sepIdx = rawResponse.indexOf("\r\n\r\n");
+    if (sepIdx === -1) throw new Error("Resposta HTTP inválida");
+
+    const headerSection = rawResponse.slice(0, sepIdx);
+    const bodySection = rawResponse.slice(sepIdx + 4);
+    const lines = headerSection.split("\r\n");
+    const statusLine = lines.shift() || "";
+    const statusMatch = statusLine.match(/^HTTP\/\d\.\d\s+(\d{3})\s*(.*)$/i);
+    if (!statusMatch) throw new Error("Status HTTP inválido");
+
+    const respHeaders = new Headers();
+    for (const line of lines) {
+      const sep = line.indexOf(":");
+      if (sep === -1) continue;
+      respHeaders.append(line.slice(0, sep).trim(), line.slice(sep + 1).trim());
+    }
+
+    return {
+      bodyText: bodySection,
+      headers: respHeaders,
+      status: Number(statusMatch[1]),
+      statusText: statusMatch[2],
+      strategy,
+      url: originalUrl.toString(),
     };
   } finally {
     conn.close();
