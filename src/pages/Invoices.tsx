@@ -146,7 +146,7 @@ export default function Invoices() {
       </div>
 
       {/* Sync Card */}
-      {admin && (
+      {isAdmin && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">

@@ -14,6 +14,7 @@ const menuItems = [
   { title: 'Clientes', icon: Users, path: '/clients' },
   { title: 'Financeiro', icon: DollarSign, path: '/financial' },
   { title: 'Documentos', icon: FileText, path: '/documents' },
+  { title: 'Notas Fiscais', icon: Receipt, path: '/invoices' },
   { title: 'Tarefas', icon: CheckSquare, path: '/tasks' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
 ];

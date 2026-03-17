@@ -35,6 +35,7 @@ const App = () => (
               <Route path="/financial" element={<Financial />} />
               <Route path="/obligations" element={<Obligations />} />
               <Route path="/documents" element={<Documents />} />
+              <Route path="/invoices" element={<Invoices />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />
