@@ -639,51 +639,19 @@ async function requestTextWithMTLS(
         const ipUrl = new URL(url.toString());
         ipUrl.hostname = ip;
 
-        // Try raw connection with SNI/Host header pointing to original hostname
-        for (let retry = 0; retry < 2; retry++) {
+        // Try raw connection with TCP→startTls (proper SNI)
+        for (let retry = 0; retry < 3; retry++) {
           try {
             if (retry > 0) {
-              await new Promise((r) => setTimeout(r, 3000));
-              console.log(`Retry DoH ${retry}/2...`);
+              const delay = Math.pow(2, retry) * 1000;
+              await new Promise((r) => setTimeout(r, delay));
+              console.log(`Retry DoH ${retry}/3...`);
             }
             return await sendRawHttpRequestWithSNI(ipUrl, originalHost, init, certPem, keyPem, "doh-raw");
           } catch (error) {
             lastError = error as Error;
             console.error(`Falha DoH raw (tentativa ${retry + 1}):`, (error as Error).message);
           }
-        }
-
-        // Also try fetch with IP-based URL
-        try {
-          const httpClient = Deno.createHttpClient({
-            cert: certPem,
-            http1: true,
-            http2: false,
-            key: keyPem,
-          });
-          try {
-            const response = await fetch(ipUrl, {
-              body: init.body,
-              // @ts-expect-error Deno fetch supports client
-              client: httpClient,
-              headers: { ...(init.headers as Record<string, string>), Host: originalHost },
-              method: init.method,
-            });
-            const bodyText = await response.text();
-            return {
-              bodyText,
-              headers: response.headers,
-              status: response.status,
-              statusText: response.statusText,
-              strategy: "doh-fetch",
-              url: url.toString(),
-            };
-          } finally {
-            httpClient.close();
-          }
-        } catch (error) {
-          lastError = error as Error;
-          console.error(`Falha DoH fetch:`, (error as Error).message);
         }
       }
     }
@@ -761,7 +729,8 @@ async function sendRawHttpRequest(
   }
 }
 
-// Same as sendRawHttpRequest but connects to IP while using original hostname for TLS SNI and Host header
+// Connects via plain TCP to IP, then upgrades to TLS with SNI set to original hostname
+// This ensures certificate validation uses the real hostname, not the IP
 async function sendRawHttpRequestWithSNI(
   ipUrl: URL,
   originalHost: string,
@@ -772,12 +741,19 @@ async function sendRawHttpRequestWithSNI(
 ): Promise<MtlsTextResponse> {
   const encoder = new TextEncoder();
   const bodyBytes = encoder.encode(init.body ?? "");
+  const port = Number(ipUrl.port || 443);
   
-  console.log(`Connecting to IP ${ipUrl.hostname}:${ipUrl.port || 443} with SNI ${originalHost}`);
+  console.log(`Connecting TCP to ${ipUrl.hostname}:${port}, then startTls with SNI=${originalHost}`);
   
-  const conn = await Deno.connectTls({
+  // Step 1: Plain TCP connection to IP
+  const tcpConn = await Deno.connect({
     hostname: ipUrl.hostname,
-    port: Number(ipUrl.port || 443),
+    port,
+  });
+
+  // Step 2: Upgrade to TLS with original hostname for SNI + client cert
+  const conn = await Deno.startTls(tcpConn, {
+    hostname: originalHost, // SNI = real hostname, cert validation passes
     cert: certPem,
     key: keyPem,
     alpnProtocols: ["http/1.1"],
@@ -791,11 +767,8 @@ async function sendRawHttpRequestWithSNI(
       headers.set("Content-Length", String(bodyBytes.byteLength));
     }
 
-    const originalUrl = new URL(ipUrl.toString());
-    originalUrl.hostname = originalHost;
-
     const requestHead = [
-      `${init.method} ${originalUrl.pathname}${originalUrl.search} HTTP/1.1`,
+      `${init.method} ${ipUrl.pathname}${ipUrl.search} HTTP/1.1`,
       ...Array.from(headers.entries()).map(([n, v]) => `${n}: ${v}`),
       "",
       "",
@@ -831,7 +804,7 @@ async function sendRawHttpRequestWithSNI(
       status: Number(statusMatch[1]),
       statusText: statusMatch[2],
       strategy,
-      url: originalUrl.toString(),
+      url: `https://${originalHost}${ipUrl.pathname}${ipUrl.search}`,
     };
   } finally {
     conn.close();
