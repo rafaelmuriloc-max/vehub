@@ -339,19 +339,16 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-// ─── XML Digital Signature (XMLDSig Enveloped) ───
+// ─── XML Digital Signature (XMLDSig Enveloped) using WebCrypto ───
 
-function signXml(infDpsXml: string, referenceId: string, keyPem: string, certPem: string): string {
-  // 1. Canonicalize (simplified: just the infDPS content as-is)
-  const canonicalXml = infDpsXml;
+async function signXml(infDpsXml: string, referenceId: string, keyPem: string, certPem: string): Promise<string> {
+  const encoder = new TextEncoder();
 
-  // 2. SHA-256 digest of infDPS
-  const md = forge.md.sha256.create();
-  md.update(canonicalXml, "utf8");
-  const digestBytes = md.digest();
-  const digestB64 = forge.util.encode64(digestBytes.getBytes());
+  // 1. SHA-256 digest of infDPS
+  const digestBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(infDpsXml));
+  const digestB64 = uint8ArrayToBase64(new Uint8Array(digestBuffer));
 
-  // 3. Build SignedInfo
+  // 2. Build SignedInfo
   const signedInfo =
     `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>` +
@@ -366,22 +363,22 @@ function signXml(infDpsXml: string, referenceId: string, keyPem: string, certPem
     `</Reference>` +
     `</SignedInfo>`;
 
-  // 4. Sign the SignedInfo
-  const privateKey = forge.pki.privateKeyFromPem(keyPem);
-  const sigMd = forge.md.sha256.create();
-  sigMd.update(signedInfo, "utf8");
-  const signatureBytes = privateKey.sign(sigMd);
-  const signatureB64 = forge.util.encode64(signatureBytes);
+  // 3. Import private key via WebCrypto
+  const keyDer = pemToDer(keyPem, "PRIVATE KEY");
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8",
+    keyDer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
 
-  // 5. Extract certificate (just the leaf) for KeyInfo
-  const certPemLines = certPem.split("-----");
-  let certB64 = "";
-  for (let i = 0; i < certPemLines.length; i++) {
-    if (certPemLines[i].includes("BEGIN CERTIFICATE")) {
-      certB64 = certPemLines[i + 1]?.replace(/\s/g, "") || "";
-      break;
-    }
-  }
+  // 4. Sign the SignedInfo
+  const signatureBuffer = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, encoder.encode(signedInfo));
+  const signatureB64 = uint8ArrayToBase64(new Uint8Array(signatureBuffer));
+
+  // 5. Extract leaf certificate for KeyInfo
+  const certB64 = extractFirstCertBase64(certPem);
 
   // 6. Build full Signature node
   const signatureXml =
@@ -395,8 +392,61 @@ function signXml(infDpsXml: string, referenceId: string, keyPem: string, certPem
     `</KeyInfo>` +
     `</Signature>`;
 
-  // 7. Insert Signature into infDPS (enveloped)
+  // 7. Append Signature (enveloped)
   return infDpsXml + signatureXml;
+}
+
+function pemToDer(pem: string, label: string): ArrayBuffer {
+  // Handle both "RSA PRIVATE KEY" (PKCS#1) and "PRIVATE KEY" (PKCS#8)
+  const lines = pem.split("\n").filter((l) => !l.startsWith("-----") && l.trim().length > 0);
+  const b64 = lines.join("");
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  // If it's PKCS#1 (RSA PRIVATE KEY), wrap it in PKCS#8 envelope
+  if (pem.includes("RSA PRIVATE KEY")) {
+    return wrapPkcs1InPkcs8(bytes).buffer;
+  }
+  return bytes.buffer;
+}
+
+function wrapPkcs1InPkcs8(pkcs1Bytes: Uint8Array): Uint8Array {
+  // ASN.1 DER encoding: wrap PKCS#1 key in PKCS#8 PrivateKeyInfo structure
+  const rsaOid = new Uint8Array([0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]);
+  const octetString = encodeAsn1(0x04, pkcs1Bytes);
+  const version = new Uint8Array([0x02, 0x01, 0x00]); // version 0
+  const algorithmId = encodeAsn1(0x30, rsaOid);
+  const inner = concatBytes(version, algorithmId, octetString);
+  return encodeAsn1(0x30, inner);
+}
+
+function encodeAsn1(tag: number, content: Uint8Array): Uint8Array {
+  const len = content.length;
+  let header: Uint8Array;
+  if (len < 128) {
+    header = new Uint8Array([tag, len]);
+  } else if (len < 256) {
+    header = new Uint8Array([tag, 0x81, len]);
+  } else if (len < 65536) {
+    header = new Uint8Array([tag, 0x82, (len >> 8) & 0xff, len & 0xff]);
+  } else {
+    header = new Uint8Array([tag, 0x83, (len >> 16) & 0xff, (len >> 8) & 0xff, len & 0xff]);
+  }
+  return concatBytes(header, content);
+}
+
+function concatBytes(...arrays: Uint8Array[]): Uint8Array {
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const a of arrays) { result.set(a, offset); offset += a.length; }
+  return result;
+}
+
+function extractFirstCertBase64(certPem: string): string {
+  const match = certPem.match(/-----BEGIN CERTIFICATE-----\s*([\s\S]*?)\s*-----END CERTIFICATE-----/);
+  return match ? match[1].replace(/\s/g, "") : "";
 }
 
 // ─── Gzip Compression ───
