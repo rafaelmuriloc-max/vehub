@@ -378,7 +378,7 @@ export default function IntegraContador() {
 
                 <Button
                   onClick={handleSubmit}
-                  disabled={loading || !selectedClientId || !admin}
+                  disabled={loading || !selectedClientId || !isAdmin}
                   className="w-full mt-2"
                 >
                   {loading ? (
