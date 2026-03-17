@@ -266,9 +266,9 @@ Deno.serve(async (req) => {
             method: "POST",
             body: payload,
             headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json, application/xml, */*",
-              "User-Agent": "VeloGestao-NFSe/1.0",
+              "Content-Type": "application/json; charset=utf-8",
+              Accept: "application/json",
+              "User-Agent": "Cloudger-NFSe-Client/1.0",
             },
           },
           certPem,
@@ -561,13 +561,13 @@ async function requestTextWithMTLS(
 ): Promise<MtlsTextResponse> {
   const attempts = [
     { label: "fetch-http1", type: "fetch" as const },
-    { label: "raw-http1", type: "raw" as const },
+    { alpnProtocols: ["http/1.1"], label: "raw-http1-alpn", type: "raw" as const },
+    { label: "raw-http1-no-alpn", type: "raw" as const },
   ];
 
   const MAX_RETRIES = 3;
   let lastError: Error | null = null;
 
-  // First try with original hostname
   for (const attempt of attempts) {
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
       try {
@@ -577,60 +577,33 @@ async function requestTextWithMTLS(
           await new Promise((r) => setTimeout(r, delay));
         }
 
-        if (attempt.type === "fetch") {
-          const httpClient = Deno.createHttpClient({
-            cert: certPem,
-            http1: true,
-            http2: false,
-            key: keyPem,
-          });
+        console.log(`Tentando conexão mTLS com estratégia ${attempt.label} para ${url.toString()}`);
 
-          try {
-            const response = await fetch(url, {
-              body: init.body,
-              // @ts-expect-error Deno fetch supports client
-              client: httpClient,
-              headers: init.headers,
-              method: init.method,
-            });
-            const bodyText = await response.text();
-            return {
-              bodyText,
-              headers: response.headers,
-              status: response.status,
-              statusText: response.statusText,
-              strategy: attempt.label,
-              url: url.toString(),
-            };
-          } finally {
-            httpClient.close();
-          }
+        if (attempt.type === "fetch") {
+          return await requestWithFetchHttp1(url, init, certPem, keyPem, attempt.label);
         }
 
-        // Raw HTTP/1.1
-        return await sendRawHttpRequest(url, init, certPem, keyPem, attempt.label);
+        return await sendRawHttpRequestOverTls(url, init, certPem, keyPem, attempt.label, attempt.alpnProtocols);
       } catch (error) {
         lastError = error as Error;
         const msg = (error as Error).message || "";
-        console.error(`Falha ${attempt.label} (tentativa ${retry + 1}):`, msg);
+        console.error(`Falha na estratégia ${attempt.label} (tentativa ${retry + 1}):`, msg);
 
-        // DNS failure - don't retry, try IP-based approach instead
         if (msg.includes("lookup") || msg.includes("not known") || msg.includes("NXDOMAIN")) {
           break;
         }
-        if (!msg.includes("reset") && !msg.includes("refused") && !msg.includes("timeout")) {
+        if (!msg.includes("reset") && !msg.includes("refused") && !msg.includes("timeout") && !msg.includes("peer")) {
           break;
         }
       }
     }
   }
 
-  // If connection failed (DNS or connection reset), try resolving via DoH and connecting by IP
   if (lastError) {
     const errMsg = lastError.message || "";
     const isDns = errMsg.includes("lookup") || errMsg.includes("not known") || errMsg.includes("NXDOMAIN");
-    const isReset = errMsg.includes("reset") || errMsg.includes("refused") || errMsg.includes("peer");
-    
+    const isReset = errMsg.includes("reset") || errMsg.includes("refused") || errMsg.includes("timeout") || errMsg.includes("peer");
+
     if (isDns || isReset) {
       console.log(`Tentando resolver hostname via DNS-over-HTTPS (motivo: ${isDns ? "DNS" : "connection reset"})...`);
       const ip = await resolveHostname(url.hostname);
@@ -639,18 +612,34 @@ async function requestTextWithMTLS(
         const ipUrl = new URL(url.toString());
         ipUrl.hostname = ip;
 
-        // Try raw connection with TCP→startTls (proper SNI)
-        for (let retry = 0; retry < 3; retry++) {
-          try {
-            if (retry > 0) {
-              const delay = Math.pow(2, retry) * 1000;
-              await new Promise((r) => setTimeout(r, delay));
-              console.log(`Retry DoH ${retry}/3...`);
+        const dohAttempts = [
+          { alpnProtocols: ["http/1.1"], label: "doh-raw-http1-alpn" },
+          { label: "doh-raw-http1-no-alpn" },
+        ];
+
+        for (const attempt of dohAttempts) {
+          for (let retry = 0; retry < MAX_RETRIES; retry++) {
+            try {
+              if (retry > 0) {
+                const delay = Math.pow(2, retry) * 1000;
+                await new Promise((r) => setTimeout(r, delay));
+                console.log(`Retry ${retry}/${MAX_RETRIES} para ${attempt.label} após ${delay}ms`);
+              }
+
+              console.log(`Tentando ${attempt.label} em ${ipUrl.hostname}:${ipUrl.port || 443} com SNI=${originalHost}`);
+              return await sendRawHttpRequestWithSNI(
+                ipUrl,
+                originalHost,
+                init,
+                certPem,
+                keyPem,
+                attempt.label,
+                attempt.alpnProtocols,
+              );
+            } catch (error) {
+              lastError = error as Error;
+              console.error(`Falha ${attempt.label} (tentativa ${retry + 1}):`, (error as Error).message);
             }
-            return await sendRawHttpRequestWithSNI(ipUrl, originalHost, init, certPem, keyPem, "doh-raw");
-          } catch (error) {
-            lastError = error as Error;
-            console.error(`Falha DoH raw (tentativa ${retry + 1}):`, (error as Error).message);
           }
         }
       }
@@ -660,12 +649,50 @@ async function requestTextWithMTLS(
   throw lastError || new Error("Falha ao conectar via mTLS");
 }
 
-async function sendRawHttpRequest(
+async function requestWithFetchHttp1(
   url: URL,
   init: { body?: string; headers?: HeadersInit; method: string },
   certPem: string,
   keyPem: string,
   strategy: string,
+): Promise<MtlsTextResponse> {
+  const httpClient = Deno.createHttpClient({
+    cert: certPem,
+    http1: true,
+    http2: false,
+    key: keyPem,
+  });
+
+  try {
+    const response = await fetch(url, {
+      body: init.body,
+      // @ts-expect-error Deno fetch supports client in edge runtime
+      client: httpClient,
+      headers: init.headers,
+      method: init.method,
+    });
+    const bodyText = await response.text();
+
+    return {
+      bodyText,
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+      strategy,
+      url: url.toString(),
+    };
+  } finally {
+    httpClient.close();
+  }
+}
+
+async function sendRawHttpRequestOverTls(
+  url: URL,
+  init: { body?: string; headers?: HeadersInit; method: string },
+  certPem: string,
+  keyPem: string,
+  strategy: string,
+  alpnProtocols?: string[],
 ): Promise<MtlsTextResponse> {
   const encoder = new TextEncoder();
   const bodyBytes = encoder.encode(init.body ?? "");
@@ -674,20 +701,23 @@ async function sendRawHttpRequest(
     port: Number(url.port || 443),
     cert: certPem,
     key: keyPem,
-    alpnProtocols: ["http/1.1"],
+    ...(alpnProtocols ? { alpnProtocols } : {}),
   });
 
   try {
     const headers = new Headers(init.headers || {});
     if (!headers.has("Host")) headers.set("Host", url.host);
+    if (!headers.has("Accept")) headers.set("Accept", "application/json");
+    if (!headers.has("Accept-Encoding")) headers.set("Accept-Encoding", "identity");
     if (!headers.has("Connection")) headers.set("Connection", "close");
+    if (!headers.has("User-Agent")) headers.set("User-Agent", "Cloudger-NFSe-Client/1.0");
     if (bodyBytes.byteLength > 0 && !headers.has("Content-Length")) {
       headers.set("Content-Length", String(bodyBytes.byteLength));
     }
 
     const requestHead = [
       `${init.method} ${url.pathname}${url.search} HTTP/1.1`,
-      ...Array.from(headers.entries()).map(([n, v]) => `${n}: ${v}`),
+      ...Array.from(headers.entries()).map(([name, value]) => `${name}: ${value}`),
       "",
       "",
     ].join("\r\n");
@@ -697,30 +727,16 @@ async function sendRawHttpRequest(
       await conn.write(bodyBytes);
     }
 
-    const responseBytes = await readAll(conn, 30000);
+    const responseBytes = await readAllFromConnection(conn, 30000);
     const rawResponse = new TextDecoder().decode(responseBytes);
-    const sepIdx = rawResponse.indexOf("\r\n\r\n");
-    if (sepIdx === -1) throw new Error("Resposta HTTP inválida");
-
-    const headerSection = rawResponse.slice(0, sepIdx);
-    const bodySection = rawResponse.slice(sepIdx + 4);
-    const lines = headerSection.split("\r\n");
-    const statusLine = lines.shift() || "";
-    const statusMatch = statusLine.match(/^HTTP\/\d\.\d\s+(\d{3})\s*(.*)$/i);
-    if (!statusMatch) throw new Error("Status HTTP inválido");
-
-    const respHeaders = new Headers();
-    for (const line of lines) {
-      const sep = line.indexOf(":");
-      if (sep === -1) continue;
-      respHeaders.append(line.slice(0, sep).trim(), line.slice(sep + 1).trim());
-    }
+    const response = parseRawHttpResponse(rawResponse);
+    const responseBody = await response.text();
 
     return {
-      bodyText: bodySection,
-      headers: respHeaders,
-      status: Number(statusMatch[1]),
-      statusText: statusMatch[2],
+      bodyText: responseBody,
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
       strategy,
       url: url.toString(),
     };
@@ -729,8 +745,6 @@ async function sendRawHttpRequest(
   }
 }
 
-// Connects via plain TCP to IP, then upgrades to TLS with SNI set to original hostname
-// This ensures certificate validation uses the real hostname, not the IP
 async function sendRawHttpRequestWithSNI(
   ipUrl: URL,
   originalHost: string,
@@ -738,38 +752,38 @@ async function sendRawHttpRequestWithSNI(
   certPem: string,
   keyPem: string,
   strategy: string,
+  alpnProtocols?: string[],
 ): Promise<MtlsTextResponse> {
   const encoder = new TextEncoder();
   const bodyBytes = encoder.encode(init.body ?? "");
   const port = Number(ipUrl.port || 443);
-  
-  console.log(`Connecting TCP to ${ipUrl.hostname}:${port}, then startTls with SNI=${originalHost}`);
-  
-  // Step 1: Plain TCP connection to IP
+
   const tcpConn = await Deno.connect({
     hostname: ipUrl.hostname,
     port,
   });
 
-  // Step 2: Upgrade to TLS with original hostname for SNI + client cert
   const conn = await Deno.startTls(tcpConn, {
-    hostname: originalHost, // SNI = real hostname, cert validation passes
+    hostname: originalHost,
     cert: certPem,
     key: keyPem,
-    alpnProtocols: ["http/1.1"],
+    ...(alpnProtocols ? { alpnProtocols } : {}),
   });
 
   try {
     const headers = new Headers(init.headers || {});
     headers.set("Host", originalHost);
+    if (!headers.has("Accept")) headers.set("Accept", "application/json");
+    if (!headers.has("Accept-Encoding")) headers.set("Accept-Encoding", "identity");
     if (!headers.has("Connection")) headers.set("Connection", "close");
+    if (!headers.has("User-Agent")) headers.set("User-Agent", "Cloudger-NFSe-Client/1.0");
     if (bodyBytes.byteLength > 0 && !headers.has("Content-Length")) {
       headers.set("Content-Length", String(bodyBytes.byteLength));
     }
 
     const requestHead = [
       `${init.method} ${ipUrl.pathname}${ipUrl.search} HTTP/1.1`,
-      ...Array.from(headers.entries()).map(([n, v]) => `${n}: ${v}`),
+      ...Array.from(headers.entries()).map(([name, value]) => `${name}: ${value}`),
       "",
       "",
     ].join("\r\n");
@@ -779,30 +793,16 @@ async function sendRawHttpRequestWithSNI(
       await conn.write(bodyBytes);
     }
 
-    const responseBytes = await readAll(conn, 30000);
+    const responseBytes = await readAllFromConnection(conn, 30000);
     const rawResponse = new TextDecoder().decode(responseBytes);
-    const sepIdx = rawResponse.indexOf("\r\n\r\n");
-    if (sepIdx === -1) throw new Error("Resposta HTTP inválida");
-
-    const headerSection = rawResponse.slice(0, sepIdx);
-    const bodySection = rawResponse.slice(sepIdx + 4);
-    const lines = headerSection.split("\r\n");
-    const statusLine = lines.shift() || "";
-    const statusMatch = statusLine.match(/^HTTP\/\d\.\d\s+(\d{3})\s*(.*)$/i);
-    if (!statusMatch) throw new Error("Status HTTP inválido");
-
-    const respHeaders = new Headers();
-    for (const line of lines) {
-      const sep = line.indexOf(":");
-      if (sep === -1) continue;
-      respHeaders.append(line.slice(0, sep).trim(), line.slice(sep + 1).trim());
-    }
+    const response = parseRawHttpResponse(rawResponse);
+    const responseBody = await response.text();
 
     return {
-      bodyText: bodySection,
-      headers: respHeaders,
-      status: Number(statusMatch[1]),
-      statusText: statusMatch[2],
+      bodyText: responseBody,
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
       strategy,
       url: `https://${originalHost}${ipUrl.pathname}${ipUrl.search}`,
     };
@@ -811,34 +811,105 @@ async function sendRawHttpRequestWithSNI(
   }
 }
 
-async function readAll(conn: Deno.Conn, timeoutMs: number): Promise<Uint8Array> {
+async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   let totalLength = 0;
   let didTimeout = false;
 
   const timeout = setTimeout(() => {
     didTimeout = true;
-    try { conn.close(); } catch { /* */ }
+    try {
+      conn.close();
+    } catch {
+      // no-op
+    }
   }, timeoutMs);
 
   try {
     while (true) {
       const buffer = new Uint8Array(16_384);
-      const n = await conn.read(buffer);
-      if (n === null) break;
-      chunks.push(buffer.slice(0, n));
-      totalLength += n;
+      const bytesRead = await conn.read(buffer);
+      if (bytesRead === null) break;
+      const chunk = buffer.slice(0, bytesRead);
+      chunks.push(chunk);
+      totalLength += chunk.length;
     }
   } finally {
     clearTimeout(timeout);
   }
 
-  if (didTimeout) throw new Error("Timeout na resposta do SEFIN");
+  if (didTimeout) {
+    throw new Error(`Timeout ao aguardar resposta do portal NFS-e após ${timeoutMs}ms`);
+  }
 
   const result = new Uint8Array(totalLength);
   let offset = 0;
-  for (const c of chunks) { result.set(c, offset); offset += c.length; }
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+
   return result;
+}
+
+function parseRawHttpResponse(rawResponse: string): Response {
+  const separatorIndex = rawResponse.indexOf("\r\n\r\n");
+  if (separatorIndex === -1) {
+    throw new Error("Resposta HTTP inválida do portal NFS-e");
+  }
+
+  const rawHeaders = rawResponse.slice(0, separatorIndex);
+  let rawBody = rawResponse.slice(separatorIndex + 4);
+  const headerLines = rawHeaders.split("\r\n");
+  const statusLine = headerLines.shift() || "";
+  const statusMatch = statusLine.match(/^HTTP\/\d\.\d\s+(\d{3})\s*(.*)$/i);
+
+  if (!statusMatch) {
+    throw new Error(`Status HTTP inválido retornado pelo portal NFS-e: ${statusLine}`);
+  }
+
+  const headers = new Headers();
+  for (const line of headerLines) {
+    const separator = line.indexOf(":");
+    if (separator === -1) continue;
+    const name = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim();
+    headers.append(name, value);
+  }
+
+  if ((headers.get("transfer-encoding") || "").toLowerCase().includes("chunked")) {
+    rawBody = decodeChunkedBody(rawBody);
+  }
+
+  return new Response(rawBody, {
+    headers,
+    status: Number(statusMatch[1]),
+    statusText: statusMatch[2],
+  });
+}
+
+function decodeChunkedBody(rawBody: string): string {
+  let position = 0;
+  let decoded = "";
+
+  while (position < rawBody.length) {
+    const lineEnd = rawBody.indexOf("\r\n", position);
+    if (lineEnd === -1) break;
+
+    const sizeHex = rawBody.slice(position, lineEnd).split(";", 1)[0].trim();
+    const chunkSize = Number.parseInt(sizeHex, 16);
+    if (Number.isNaN(chunkSize)) {
+      throw new Error("Resposta chunked inválida do portal NFS-e");
+    }
+
+    position = lineEnd + 2;
+    if (chunkSize === 0) break;
+
+    decoded += rawBody.slice(position, position + chunkSize);
+    position += chunkSize + 2;
+  }
+
+  return decoded;
 }
 
 // ─── PFX Parsing (reused from nfse-query) ───
@@ -879,11 +950,10 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
 
   if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no PFX");
 
-  const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId) || parsedCerts[0];
-  const chain = buildChain(leafCert, parsedCerts);
+  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); usando apenas o certificado cliente folha para mTLS.`);
 
   return {
-    certPem: chain.map((c) => c.pem.trim()).join("\n"),
+    certPem: leafCert.pem.trim(),
     keyPem,
   };
 }
