@@ -7,7 +7,49 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const NFSE_API_BASE = "https://sefin.nfse.gov.br/sefinnacional";
+const ADN_CONTRIBUTOR_API_BASE = "https://adn.nfse.gov.br/contribuintes";
+const MAX_DFE_REQUESTS_PER_SYNC = 12;
+
+type ParsedCertificate = {
+  issuer: string;
+  localKeyId: string | null;
+  pem: string;
+  subject: string;
+};
+
+type MtlsTextResponse = {
+  bodyText: string;
+  headers: Headers;
+  status: number;
+  statusText: string;
+  strategy: string;
+  url: string;
+};
+
+type AdnQueryResult = {
+  documents: string[];
+  maxNSU: string | null;
+  rawData: unknown;
+  strategy: string;
+  status: number;
+  ultNSU: string | null;
+};
+
+type ParsedInvoice = {
+  accessKey: string | null;
+  grossValue: number;
+  invoiceNumber: string | null;
+  issueDate: string | null;
+  issuerCnpj: string | null;
+  municipalityCode: string | null;
+  netValue: number;
+  rawData: Record<string, unknown>;
+  serviceDescription: string | null;
+  status: string;
+  takerCnpj: string | null;
+  taxValue: number;
+  xml: string;
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,42 +57,39 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Validate auth
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    // Verify user is authenticated
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+      return jsonResponse({ error: "Configuração do Supabase incompleta" }, 500);
+    }
+
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await userClient.auth.getUser();
+
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
     const { client_id, reference_month } = await req.json();
 
     if (!client_id || !reference_month) {
-      return new Response(
-        JSON.stringify({ error: "client_id e reference_month são obrigatórios" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "client_id e reference_month são obrigatórios" }, 400);
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Fetch client data (CNPJ, certificate info)
     const { data: client, error: clientError } = await adminClient
       .from("clients")
       .select("document, digital_certificate_url, digital_certificate_password, company_name")
@@ -58,142 +97,111 @@ Deno.serve(async (req) => {
       .single();
 
     if (clientError || !client) {
-      return new Response(
-        JSON.stringify({ error: "Cliente não encontrado" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Cliente não encontrado" }, 404);
     }
 
     if (!client.document) {
-      return new Response(
-        JSON.stringify({ error: "Cliente não possui CNPJ cadastrado" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Cliente não possui CNPJ cadastrado" }, 400);
     }
 
     if (!client.digital_certificate_url || !client.digital_certificate_password) {
-      return new Response(
-        JSON.stringify({ error: "Cliente não possui certificado digital A1 configurado" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Cliente não possui certificado digital A1 configurado" }, 400);
     }
 
-    // 2. Download certificate from storage
-    const certPath = client.digital_certificate_url;
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
-      .download(certPath);
+      .download(client.digital_certificate_url);
 
     if (certError || !certData) {
-      return new Response(
-        JSON.stringify({ error: "Erro ao baixar certificado digital: " + (certError?.message || "arquivo não encontrado") }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return jsonResponse(
+        { error: `Erro ao baixar certificado digital: ${certError?.message || "arquivo não encontrado"}` },
+        500,
       );
     }
 
     const cnpj = client.document.replace(/\D/g, "");
     const certBytes = new Uint8Array(await certData.arrayBuffer());
-    const certPassword = client.digital_certificate_password;
 
-    // 3. Parse PFX to extract cert and private key using pkcs12
     let certPem: string;
     let keyPem: string;
 
     try {
-      const result = await parsePfx(certBytes, certPassword);
-      certPem = result.certPem;
-      keyPem = result.keyPem;
-    } catch (e) {
-      return new Response(
-        JSON.stringify({ error: "Erro ao processar certificado digital: " + (e as Error).message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      const parsed = await parsePfx(certBytes, client.digital_certificate_password);
+      certPem = parsed.certPem;
+      keyPem = parsed.keyPem;
+    } catch (error) {
+      return jsonResponse(
+        { error: `Erro ao processar certificado digital: ${(error as Error).message}` },
+        500,
       );
     }
 
-    // 4. Query NFS-e API - Distribution endpoint (DFe)
-    // The API uses SOAP/REST with mTLS authentication
-    const [year, month] = reference_month.split("-").map(Number);
-    const competencia = `${year}-${String(month).padStart(2, "0")}`;
-
-    let invoicesData: any[] = [];
+    let invoicesData: ParsedInvoice[] = [];
+    let syncMeta: Record<string, unknown> = {};
 
     try {
-      // Build the DFe distribution request
-      const requestBody = buildDistributionRequest(cnpj, competencia);
-
-      // Make mTLS request to NFS-e API
-      const response = await fetchWithMTLS(
-        `${NFSE_API_BASE}/nfse/distribuicaonfse`,
-        requestBody,
+      const distribution = await fetchInvoicesFromAdn({
         certPem,
-        keyPem
-      );
+        cnpj,
+        keyPem,
+        referenceMonth: reference_month,
+      });
 
-      if (response.ok) {
-        const responseText = await response.text();
-        invoicesData = parseNfseResponse(responseText);
-      } else {
-        const errorText = await response.text();
-        console.error("NFS-e API error:", response.status, errorText);
-        
-        // If API returns error, still return a meaningful response
-        return new Response(
-          JSON.stringify({
-            error: `Erro na consulta ao portal NFS-e (HTTP ${response.status}). Verifique se o certificado é válido e se o município está integrado ao padrão nacional.`,
-            details: errorText.substring(0, 500),
-          }),
-          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      invoicesData = distribution.invoices;
+      syncMeta = {
+        documentsFetched: distribution.documentsFetched,
+        maxNSU: distribution.maxNSU,
+        transport: distribution.transport,
+        ultNSU: distribution.ultNSU,
+      };
     } catch (apiError) {
-      console.error("NFS-e API connection error:", apiError);
-      return new Response(
-        JSON.stringify({
-          error: "Erro ao conectar com o portal NFS-e. Verifique o certificado digital e tente novamente.",
+      console.error("ADN NFS-e connection error:", apiError);
+      return jsonResponse(
+        {
+          error:
+            "Erro ao consultar o ADN da NFS-e. A integração anterior usava uma rota legado incompatível; agora a função consulta a API oficial do contribuinte por NSU.",
           details: (apiError as Error).message,
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        502,
       );
     }
 
-    // 5. Save invoices to database and XML to storage
     const savedInvoices = [];
     for (const invoice of invoicesData) {
-      // Save XML to storage
       let xmlUrl = null;
       if (invoice.xml) {
-        const xmlPath = `nfse/${cnpj}/${competencia}/${invoice.accessKey || invoice.invoiceNumber || crypto.randomUUID()}.xml`;
+        const xmlPath = `nfse/${cnpj}/${reference_month}/${invoice.accessKey || invoice.invoiceNumber || crypto.randomUUID()}.xml`;
         const { error: uploadError } = await adminClient.storage
           .from("documents")
           .upload(xmlPath, new TextEncoder().encode(invoice.xml), {
             contentType: "application/xml",
             upsert: true,
           });
+
         if (!uploadError) {
           xmlUrl = xmlPath;
         }
       }
 
-      // Upsert invoice record
       const invoiceRecord = {
+        access_key: invoice.accessKey,
         client_id,
-        access_key: invoice.accessKey || null,
-        invoice_number: invoice.invoiceNumber || null,
-        issue_date: invoice.issueDate || null,
-        service_description: invoice.serviceDescription || null,
         gross_value: invoice.grossValue || 0,
-        tax_value: invoice.taxValue || 0,
-        net_value: invoice.netValue || 0,
-        status: invoice.status || "normal",
-        xml_url: xmlUrl,
+        invoice_number: invoice.invoiceNumber,
+        issue_date: invoice.issueDate,
         issuer_cnpj: invoice.issuerCnpj || cnpj,
-        taker_cnpj: invoice.takerCnpj || null,
-        municipality_code: invoice.municipalityCode || null,
-        raw_data: invoice.rawData || null,
+        municipality_code: invoice.municipalityCode,
+        net_value: invoice.netValue || 0,
+        pdf_url: null,
+        raw_data: invoice.rawData,
+        service_description: invoice.serviceDescription,
+        status: invoice.status || "normal",
+        taker_cnpj: invoice.takerCnpj,
+        tax_value: invoice.taxValue || 0,
+        xml_url: xmlUrl,
       };
 
       if (invoice.accessKey) {
-        // Upsert by access_key
         const { data: saved, error: saveError } = await adminClient
           .from("invoices")
           .upsert(invoiceRecord, { onConflict: "access_key" })
@@ -216,164 +224,275 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `${savedInvoices.length} nota(s) fiscal(is) encontrada(s) e salva(s).`,
-        invoices: savedInvoices,
-        total: invoicesData.length,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({
+      success: true,
+      message: `${savedInvoices.length} nota(s) fiscal(is) encontrada(s) para ${reference_month} e salva(s).`,
+      invoices: savedInvoices,
+      sync_meta: syncMeta,
+      total: invoicesData.length,
+    });
   } catch (error) {
     console.error("Unexpected error:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro interno do servidor", details: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    return jsonResponse(
+      { error: "Erro interno do servidor", details: (error as Error).message },
+      500,
     );
   }
 });
 
-// ---- Helper functions ----
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status,
+  });
+}
 
-type ParsedCertificate = {
-  issuer: string;
-  localKeyId: string | null;
-  pem: string;
-  subject: string;
-};
+async function fetchInvoicesFromAdn(params: {
+  certPem: string;
+  cnpj: string;
+  keyPem: string;
+  referenceMonth: string;
+}): Promise<{
+  documentsFetched: number;
+  invoices: ParsedInvoice[];
+  maxNSU: string | null;
+  transport: string | null;
+  ultNSU: string | null;
+}> {
+  const xmlDocuments: string[] = [];
+  const seenNsu = new Set<string>();
+  let currentNsu = "0";
+  let maxNSU: string | null = null;
+  let transport: string | null = null;
+  let ultNSU: string | null = null;
 
-async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certPem: string; keyPem: string }> {
-  let binary = "";
-  const chunkSize = 0x8000;
+  for (let index = 0; index < MAX_DFE_REQUESTS_PER_SYNC; index += 1) {
+    if (seenNsu.has(currentNsu)) {
+      break;
+    }
 
-  for (let i = 0; i < pfxBytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...pfxBytes.subarray(i, i + chunkSize));
+    seenNsu.add(currentNsu);
+
+    const result = await fetchAdnDfeByNsu(currentNsu, params.cnpj, params.certPem, params.keyPem);
+    transport = result.strategy;
+    if (result.maxNSU) maxNSU = result.maxNSU;
+    if (result.ultNSU) ultNSU = result.ultNSU;
+
+    xmlDocuments.push(...result.documents);
+
+    console.log(
+      `ADN DFe consultado com NSU ${currentNsu}: status=${result.status}, docs=${result.documents.length}, ultNSU=${result.ultNSU}, maxNSU=${result.maxNSU}, strategy=${result.strategy}`,
+    );
+
+    if (!result.ultNSU || !result.maxNSU) {
+      break;
+    }
+
+    if (result.ultNSU === result.maxNSU || result.ultNSU === currentNsu) {
+      break;
+    }
+
+    currentNsu = result.ultNSU;
   }
 
-  const asn1 = forge.asn1.fromDer(binary);
-  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
-
-  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-  const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
-  if (!keyBag?.key) {
-    throw new Error("Chave privada não encontrada no certificado");
-  }
-
-  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
-  const keyLocalKeyId = normalizeLocalKeyId(keyBag.attributes?.localKeyId?.[0]);
-
-  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const parsedCerts: ParsedCertificate[] = ((certBags[forge.pki.oids.certBag] || []) as Array<any>)
-    .filter((bag) => bag?.cert)
-    .map((bag) => ({
-      issuer: stringifyDistinguishedName(bag.cert.issuer),
-      localKeyId: normalizeLocalKeyId(bag.attributes?.localKeyId?.[0]),
-      pem: forge.pki.certificateToPem(bag.cert),
-      subject: stringifyDistinguishedName(bag.cert.subject),
-    }));
-
-  if (parsedCerts.length === 0) {
-    throw new Error("Certificado não encontrado no arquivo PFX");
-  }
-
-  const leafCert = parsedCerts.find((cert) => keyLocalKeyId && cert.localKeyId === keyLocalKeyId) || parsedCerts[0];
-  const chain = buildCertificateChain(leafCert, parsedCerts);
-
-  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); enviando cadeia com ${chain.length} item(ns).`);
+  const invoices = dedupeInvoices(parseXmlDocuments(xmlDocuments)).filter((invoice) =>
+    matchesReferenceMonth(invoice.issueDate, params.referenceMonth)
+  );
 
   return {
-    certPem: chain.map((cert) => cert.pem.trim()).join("\n"),
-    keyPem,
+    documentsFetched: xmlDocuments.length,
+    invoices,
+    maxNSU,
+    transport,
+    ultNSU,
   };
 }
 
-function normalizeLocalKeyId(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "string") return forge.util.bytesToHex(value);
-  if (value instanceof Uint8Array) return Array.from(value).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  if (Array.isArray(value)) return value.map((byte) => Number(byte).toString(16).padStart(2, "0")).join("");
-  return null;
-}
+async function fetchAdnDfeByNsu(
+  nsu: string,
+  cnpj: string,
+  certPem: string,
+  keyPem: string,
+): Promise<AdnQueryResult> {
+  const urls = buildAdnDfeUrls(nsu, cnpj);
+  let lastError: Error | null = null;
 
-function stringifyDistinguishedName(dn: { attributes?: Array<{ shortName?: string; name?: string; value?: string }> }): string {
-  return (dn.attributes || [])
-    .map((attr) => `${attr.shortName || attr.name || "attr"}=${attr.value || ""}`)
-    .join(",");
-}
+  for (const url of urls) {
+    try {
+      const response = await requestTextWithMTLS(
+        url,
+        {
+          headers: {
+            Accept: "application/json, application/xml, text/xml, */*",
+            "User-Agent": "Lovable-NFSe/1.0",
+          },
+          method: "GET",
+        },
+        certPem,
+        keyPem,
+      );
 
-function buildCertificateChain(leafCert: ParsedCertificate, allCerts: ParsedCertificate[]): ParsedCertificate[] {
-  const chain = [leafCert];
-  const visited = new Set([leafCert.pem]);
-  let current = leafCert;
+      if (response.status >= 400) {
+        throw new Error(
+          `HTTP ${response.status} ao consultar ${response.url}: ${response.bodyText.slice(0, 500) || response.statusText}`,
+        );
+      }
 
-  while (true) {
-    const next = allCerts.find((candidate) => (
-      !visited.has(candidate.pem) &&
-      candidate.subject === current.issuer
-    ));
+      const parsed = await parseAdnDistributionResponse(response.bodyText, response.headers);
 
-    if (!next) break;
-
-    chain.push(next);
-    visited.add(next.pem);
-
-    if (next.subject === next.issuer) break;
-    current = next;
+      return {
+        documents: parsed.documents,
+        maxNSU: parsed.maxNSU,
+        rawData: parsed.rawData,
+        status: response.status,
+        strategy: response.strategy,
+        ultNSU: parsed.ultNSU,
+      };
+    } catch (error) {
+      lastError = error as Error;
+      console.error(`Falha ao consultar ADN em ${url.toString()}:`, error);
+    }
   }
 
-  return chain;
+  throw lastError || new Error("Falha ao consultar o ADN da NFS-e");
 }
 
-function buildDistributionRequest(cnpj: string, competencia: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<distDFeInt xmlns="http://www.sefaz.gov.br/nfse" versao="1.00">
-  <tpAmb>1</tpAmb>
-  <CNPJ>${cnpj}</CNPJ>
-  <distNSU>
-    <ultNSU>0</ultNSU>
-  </distNSU>
-  <perRef>${competencia}</perRef>
-</distDFeInt>`;
+function buildAdnDfeUrls(nsu: string, cnpj: string): URL[] {
+  const baseUrl = `${ADN_CONTRIBUTOR_API_BASE}/DFe/${encodeURIComponent(nsu)}`;
+  const urls: URL[] = [];
+
+  if (cnpj) {
+    const urlWithQuery = new URL(baseUrl);
+    urlWithQuery.searchParams.set("CNPJConsulta", cnpj);
+    urls.push(urlWithQuery);
+  }
+
+  urls.push(new URL(baseUrl));
+  return urls;
 }
 
-async function fetchWithMTLS(
-  url: string,
-  body: string,
+async function parseAdnDistributionResponse(
+  bodyText: string,
+  headers: Headers,
+): Promise<{ documents: string[]; maxNSU: string | null; rawData: unknown; ultNSU: string | null }> {
+  const contentType = (headers.get("content-type") || "").toLowerCase();
+  const trimmedBody = bodyText.trim();
+
+  if (trimmedBody.length === 0) {
+    return { documents: [], maxNSU: null, rawData: null, ultNSU: null };
+  }
+
+  if (contentType.includes("json") || /^[\[{]/.test(trimmedBody)) {
+    const parsedJson = safeJsonParse(trimmedBody);
+    if (!parsedJson) {
+      throw new Error(`Resposta JSON inválida do ADN: ${trimmedBody.slice(0, 500)}`);
+    }
+
+    const metadata = extractNsuMetadata(parsedJson);
+    const documents = await extractXmlDocumentsFromUnknown(parsedJson);
+
+    return {
+      documents,
+      maxNSU: metadata.maxNSU,
+      rawData: parsedJson,
+      ultNSU: metadata.ultNSU,
+    };
+  }
+
+  if (looksLikeXml(trimmedBody)) {
+    return {
+      documents: extractStandaloneXmlDocuments(trimmedBody),
+      maxNSU: null,
+      rawData: { xml: trimmedBody },
+      ultNSU: null,
+    };
+  }
+
+  throw new Error(`Resposta inesperada do ADN: ${trimmedBody.slice(0, 500)}`);
+}
+
+async function requestTextWithMTLS(
+  url: URL,
+  init: { body?: string; headers?: HeadersInit; method: string },
   certPem: string,
-  keyPem: string
-): Promise<Response> {
-  const requestUrl = new URL(url);
-  const attempts: Array<{ alpnProtocols?: string[]; label: string }> = [
-    { label: "http1-alpn", alpnProtocols: ["http/1.1"] },
-    { label: "no-alpn" },
+  keyPem: string,
+): Promise<MtlsTextResponse> {
+  const attempts = [
+    { label: "fetch-http1", type: "fetch" as const },
+    { alpnProtocols: ["http/1.1"], label: "raw-http1-alpn", type: "raw" as const },
+    { label: "raw-http1-no-alpn", type: "raw" as const },
   ];
 
   let lastError: Error | null = null;
 
   for (const attempt of attempts) {
     try {
-      console.log(`Tentando conexão mTLS NFS-e com estratégia: ${attempt.label}`);
-      return await sendRawHttp1RequestOverTls(requestUrl, body, certPem, keyPem, attempt.alpnProtocols);
+      console.log(`Tentando conexão mTLS com estratégia ${attempt.label} para ${url.toString()}`);
+
+      if (attempt.type === "fetch") {
+        return await requestWithFetchHttp1(url, init, certPem, keyPem, attempt.label);
+      }
+
+      return await sendRawHttpRequestOverTls(url, init, certPem, keyPem, attempt.label, attempt.alpnProtocols);
     } catch (error) {
       lastError = error as Error;
       console.error(`Falha na estratégia ${attempt.label}:`, error);
     }
   }
 
-  throw lastError || new Error("Falha ao conectar com o portal NFS-e via mTLS");
+  throw lastError || new Error("Falha ao conectar via mTLS");
 }
 
-async function sendRawHttp1RequestOverTls(
+async function requestWithFetchHttp1(
   url: URL,
-  body: string,
+  init: { body?: string; headers?: HeadersInit; method: string },
   certPem: string,
   keyPem: string,
+  strategy: string,
+): Promise<MtlsTextResponse> {
+  const httpClient = Deno.createHttpClient({
+    cert: certPem,
+    http1: true,
+    http2: false,
+    key: keyPem,
+  });
+
+  try {
+    const requestInit = {
+      body: init.body,
+      // @ts-expect-error Deno fetch supports client in the edge runtime.
+      client: httpClient,
+      headers: init.headers,
+      method: init.method,
+    };
+
+    const response = await fetch(url, requestInit);
+    const bodyText = await response.text();
+
+    return {
+      bodyText,
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+      strategy,
+      url: url.toString(),
+    };
+  } finally {
+    httpClient.close();
+  }
+}
+
+async function sendRawHttpRequestOverTls(
+  url: URL,
+  init: { body?: string; headers?: HeadersInit; method: string },
+  certPem: string,
+  keyPem: string,
+  strategy: string,
   alpnProtocols?: string[],
-): Promise<Response> {
+): Promise<MtlsTextResponse> {
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  const bodyBytes = encoder.encode(body);
+  const bodyText = init.body ?? "";
+  const bodyBytes = encoder.encode(bodyText);
   const conn = await Deno.connectTls({
     hostname: url.hostname,
     port: Number(url.port || 443),
@@ -383,26 +502,41 @@ async function sendRawHttp1RequestOverTls(
   });
 
   try {
-    const requestPath = `${url.pathname}${url.search}`;
+    const headers = new Headers(init.headers || {});
+    if (!headers.has("Host")) headers.set("Host", url.host);
+    if (!headers.has("Accept")) headers.set("Accept", "application/json, application/xml, text/xml, */*");
+    if (!headers.has("Accept-Encoding")) headers.set("Accept-Encoding", "identity");
+    if (!headers.has("Connection")) headers.set("Connection", "close");
+    if (!headers.has("User-Agent")) headers.set("User-Agent", "Lovable-NFSe/1.0");
+    if (bodyBytes.byteLength > 0 && !headers.has("Content-Length")) {
+      headers.set("Content-Length", String(bodyBytes.byteLength));
+    }
+
     const requestHead = [
-      `POST ${requestPath} HTTP/1.1`,
-      `Host: ${url.host}`,
-      "Content-Type: application/xml; charset=utf-8",
-      "Accept: application/xml, text/xml, */*",
-      "Accept-Encoding: identity",
-      `Content-Length: ${bodyBytes.byteLength}`,
-      "Connection: close",
-      "User-Agent: Lovable-NFSe/1.0",
+      `${init.method} ${url.pathname}${url.search} HTTP/1.1`,
+      ...Array.from(headers.entries()).map(([name, value]) => `${name}: ${value}`),
       "",
       "",
     ].join("\r\n");
 
     await conn.write(encoder.encode(requestHead));
-    await conn.write(bodyBytes);
+    if (bodyBytes.byteLength > 0) {
+      await conn.write(bodyBytes);
+    }
 
     const responseBytes = await readAllFromConnection(conn, 20000);
-    const rawResponse = decoder.decode(responseBytes);
-    return parseRawHttpResponse(rawResponse);
+    const rawResponse = new TextDecoder().decode(responseBytes);
+    const response = parseRawHttpResponse(rawResponse);
+    const responseBody = await response.text();
+
+    return {
+      bodyText: responseBody,
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+      strategy,
+      url: url.toString(),
+    };
   } finally {
     conn.close();
   }
@@ -509,63 +643,346 @@ function decodeChunkedBody(rawBody: string): string {
   return decoded;
 }
 
-function parseNfseResponse(xmlText: string): any[] {
-  const invoices: any[] = [];
-
-  // Simple XML parsing for NFS-e response
-  // Extract individual NFS-e documents from the distribution response
-  const nfsePattern = /<NFS-e[^>]*>([\s\S]*?)<\/NFS-e>/gi;
-  let match;
-
-  while ((match = nfsePattern.exec(xmlText)) !== null) {
-    const nfseXml = match[0];
-    
-    const invoice: any = {
-      xml: nfseXml,
-      rawData: { xml: nfseXml },
-    };
-
-    // Extract fields using regex
-    invoice.invoiceNumber = extractXmlValue(nfseXml, "Numero") || extractXmlValue(nfseXml, "NumeroNfse");
-    invoice.accessKey = extractXmlValue(nfseXml, "ChaveAcesso") || extractXmlValue(nfseXml, "CodigoVerificacao");
-    invoice.issueDate = extractXmlValue(nfseXml, "DataEmissao") || extractXmlValue(nfseXml, "Competencia");
-    invoice.serviceDescription = extractXmlValue(nfseXml, "Discriminacao");
-    invoice.grossValue = parseFloat(extractXmlValue(nfseXml, "ValorServicos") || "0");
-    invoice.taxValue = parseFloat(extractXmlValue(nfseXml, "ValorIss") || "0");
-    invoice.netValue = parseFloat(extractXmlValue(nfseXml, "ValorLiquidoNfse") || "0") || (invoice.grossValue - invoice.taxValue);
-    invoice.issuerCnpj = extractXmlValue(nfseXml, "Cnpj");
-    invoice.takerCnpj = extractXmlValue(nfseXml, "CpfCnpj>.*?<Cnpj") || null;
-    invoice.municipalityCode = extractXmlValue(nfseXml, "CodigoMunicipio");
-    invoice.status = extractXmlValue(nfseXml, "SituacaoNfse") === "2" ? "cancelada" : "normal";
-
-    invoices.push(invoice);
+function safeJsonParse(value: string): unknown | null {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
   }
+}
 
-  // If no NFS-e pattern found, try alternative patterns
-  if (invoices.length === 0) {
-    const docPattern = /<docZip[^>]*>([\s\S]*?)<\/docZip>/gi;
-    while ((match = docPattern.exec(xmlText)) !== null) {
-      try {
-        // docZip contains base64 encoded gzipped XML
-        const base64Content = match[1].trim();
-        invoices.push({
-          xml: xmlText,
-          rawData: { compressed: base64Content },
-          invoiceNumber: null,
-          accessKey: null,
-          status: "normal",
-        });
-      } catch (_e) {
-        // Skip malformed entries
+function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: string | null } {
+  let maxNSU: string | null = null;
+  let ultNSU: string | null = null;
+  const stack = [value];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object") continue;
+
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item);
+      continue;
+    }
+
+    for (const [key, child] of Object.entries(current)) {
+      const normalizedKey = key.toLowerCase();
+      if (ultNSU === null && normalizedKey === "ultnsu" && child !== null && child !== undefined) {
+        ultNSU = String(child);
+      }
+      if (maxNSU === null && normalizedKey === "maxnsu" && child !== null && child !== undefined) {
+        maxNSU = String(child);
+      }
+
+      if (child && typeof child === "object") {
+        stack.push(child);
       }
     }
   }
 
-  return invoices;
+  return { maxNSU, ultNSU };
 }
 
-function extractXmlValue(xml: string, tagName: string): string | null {
-  const regex = new RegExp(`<${tagName}[^>]*>([^<]+)<`, "i");
-  const match = regex.exec(xml);
-  return match ? match[1].trim() : null;
+async function extractXmlDocumentsFromUnknown(value: unknown): Promise<string[]> {
+  const documents = new Set<string>();
+  await walkUnknownForXml(value, documents, null);
+  return Array.from(documents);
+}
+
+async function walkUnknownForXml(
+  value: unknown,
+  documents: Set<string>,
+  currentKey: string | null,
+): Promise<void> {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (looksLikeXml(trimmed)) {
+      for (const doc of extractStandaloneXmlDocuments(trimmed)) {
+        documents.add(doc);
+      }
+      return;
+    }
+
+    if (looksLikeBase64Payload(trimmed, currentKey)) {
+      const decodedXml = await decodePossibleCompressedXml(trimmed);
+      if (decodedXml) {
+        for (const doc of extractStandaloneXmlDocuments(decodedXml)) {
+          documents.add(doc);
+        }
+      }
+    }
+
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      await walkUnknownForXml(item, documents, currentKey);
+    }
+    return;
+  }
+
+  if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value)) {
+      await walkUnknownForXml(child, documents, key);
+    }
+  }
+}
+
+function looksLikeBase64Payload(value: string, key: string | null): boolean {
+  if (value.length < 32 || value.length % 4 !== 0) {
+    return false;
+  }
+
+  const likelyByKey = key ? /(xml|doc|dfe|conteudo|payload|arquivo|b64|gzip|zip)/i.test(key) : false;
+  return likelyByKey || /^[A-Za-z0-9+/=\s]+$/.test(value);
+}
+
+async function decodePossibleCompressedXml(base64Value: string): Promise<string | null> {
+  try {
+    const bytes = base64ToUint8Array(base64Value);
+    const gunzipped = await tryGunzip(bytes);
+    if (gunzipped && looksLikeXml(gunzipped)) {
+      return gunzipped;
+    }
+
+    const decodedText = new TextDecoder().decode(bytes).trim();
+    return looksLikeXml(decodedText) ? decodedText : null;
+  } catch {
+    return null;
+  }
+}
+
+function base64ToUint8Array(value: string): Uint8Array {
+  const sanitized = value.replace(/\s+/g, "");
+  const binary = atob(sanitized);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+async function tryGunzip(bytes: Uint8Array): Promise<string | null> {
+  try {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const buffer = await new Response(stream).arrayBuffer();
+    return new TextDecoder().decode(buffer).trim();
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeXml(value: string): boolean {
+  return /^<\?xml|^<([\w-]+:)?[\w-]+[\s>]/i.test(value);
+}
+
+function extractStandaloneXmlDocuments(xmlText: string): string[] {
+  const documents = new Set<string>();
+  const patterns = [
+    /<(?:[\w-]+:)?NFS-e\b[\s\S]*?<\/(?:[\w-]+:)?NFS-e>/gi,
+    /<(?:[\w-]+:)?NFSe\b[\s\S]*?<\/(?:[\w-]+:)?NFSe>/gi,
+    /<(?:[\w-]+:)?CompNfse\b[\s\S]*?<\/(?:[\w-]+:)?CompNfse>/gi,
+    /<(?:[\w-]+:)?compNFSe\b[\s\S]*?<\/(?:[\w-]+:)?compNFSe>/gi,
+    /<(?:[\w-]+:)?procNfse\b[\s\S]*?<\/(?:[\w-]+:)?procNfse>/gi,
+    /<(?:[\w-]+:)?nfseProc\b[\s\S]*?<\/(?:[\w-]+:)?nfseProc>/gi,
+  ];
+
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(xmlText)) !== null) {
+      documents.add(match[0]);
+    }
+  }
+
+  if (documents.size === 0 && looksLikeXml(xmlText)) {
+    documents.add(xmlText);
+  }
+
+  return Array.from(documents);
+}
+
+function parseXmlDocuments(documents: string[]): ParsedInvoice[] {
+  return documents
+    .map((xml) => parseInvoiceXml(xml))
+    .filter((invoice): invoice is ParsedInvoice => invoice !== null);
+}
+
+function parseInvoiceXml(xml: string): ParsedInvoice | null {
+  const invoiceNumber = extractFirstXmlValue(xml, ["NumeroNfse", "nNFSe", "Numero"]);
+  const accessKey = extractFirstXmlValue(xml, ["chNFSe", "ChaveAcesso", "CodigoVerificacao"]);
+  const issueDate = extractFirstXmlValue(xml, ["dhEmi", "DataEmissao", "Competencia", "dCompet"]);
+  const serviceDescription = extractFirstXmlValue(xml, ["xDescServ", "Discriminacao"]);
+  const grossValue = parseCurrencyValue(extractFirstXmlValue(xml, ["vServ", "ValorServicos", "ValorServico"]));
+  const taxValue = parseCurrencyValue(extractFirstXmlValue(xml, ["vISSQN", "ValorIss", "ValorISS"]));
+  const netValue = parseCurrencyValue(extractFirstXmlValue(xml, ["vLiq", "ValorLiquidoNfse", "ValorLiquido", "vNF"]));
+  const issuerCnpj = extractFirstXmlValue(xml, ["CNPJPrestador", "CnpjPrestador", "CNPJ"]);
+  const takerCnpj = extractFirstXmlValue(xml, ["CNPJTomador", "CnpjTomador"]);
+  const municipalityCode = extractFirstXmlValue(xml, ["cLocPrestacao", "CodigoMunicipio"]);
+  const statusCode = extractFirstXmlValue(xml, ["sitNFSe", "SituacaoNfse", "cSitNfse"]);
+
+  if (!invoiceNumber && !accessKey && !issueDate) {
+    return null;
+  }
+
+  return {
+    accessKey,
+    grossValue,
+    invoiceNumber,
+    issueDate,
+    issuerCnpj,
+    municipalityCode,
+    netValue: netValue || Math.max(grossValue - taxValue, 0),
+    rawData: { xml },
+    serviceDescription,
+    status: normalizeInvoiceStatus(statusCode),
+    takerCnpj,
+    taxValue,
+    xml,
+  };
+}
+
+function extractFirstXmlValue(xml: string, tagNames: string[]): string | null {
+  for (const tagName of tagNames) {
+    const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(
+      `<(?:[\\w-]+:)?${escapedTagName}[^>]*>([\\s\\S]*?)<\\/(?:[\\w-]+:)?${escapedTagName}>`,
+      "i",
+    );
+    const match = regex.exec(xml);
+    if (match?.[1]) {
+      const value = match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (value) return value;
+    }
+  }
+
+  return null;
+}
+
+function parseCurrencyValue(value: string | null): number {
+  if (!value) return 0;
+  const normalized = value.replace(/\./g, "").replace(",", ".");
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeInvoiceStatus(statusCode: string | null): string {
+  if (!statusCode) return "normal";
+  const normalized = statusCode.toLowerCase();
+  if (["2", "cancelada", "cancelled", "canceled"].includes(normalized)) {
+    return "cancelada";
+  }
+  return "normal";
+}
+
+function matchesReferenceMonth(issueDate: string | null, referenceMonth: string): boolean {
+  if (!issueDate) return false;
+
+  const isoMatch = issueDate.match(/(\d{4})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}` === referenceMonth;
+  }
+
+  const brMatch = issueDate.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brMatch) {
+    return `${brMatch[3]}-${brMatch[2]}` === referenceMonth;
+  }
+
+  return false;
+}
+
+function dedupeInvoices(invoices: ParsedInvoice[]): ParsedInvoice[] {
+  const seen = new Set<string>();
+  const deduped: ParsedInvoice[] = [];
+
+  for (const invoice of invoices) {
+    const key = invoice.accessKey || `${invoice.invoiceNumber || "sem-numero"}-${invoice.issueDate || "sem-data"}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(invoice);
+  }
+
+  return deduped;
+}
+
+async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certPem: string; keyPem: string }> {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < pfxBytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...pfxBytes.subarray(i, i + chunkSize));
+  }
+
+  const asn1 = forge.asn1.fromDer(binary);
+  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
+
+  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+  const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
+  if (!keyBag?.key) {
+    throw new Error("Chave privada não encontrada no certificado");
+  }
+
+  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
+  const keyLocalKeyId = normalizeLocalKeyId(keyBag.attributes?.localKeyId?.[0]);
+
+  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+  const parsedCerts: ParsedCertificate[] = ((certBags[forge.pki.oids.certBag] || []) as Array<any>)
+    .filter((bag) => bag?.cert)
+    .map((bag) => ({
+      issuer: stringifyDistinguishedName(bag.cert.issuer),
+      localKeyId: normalizeLocalKeyId(bag.attributes?.localKeyId?.[0]),
+      pem: forge.pki.certificateToPem(bag.cert),
+      subject: stringifyDistinguishedName(bag.cert.subject),
+    }));
+
+  if (parsedCerts.length === 0) {
+    throw new Error("Certificado não encontrado no arquivo PFX");
+  }
+
+  const leafCert = parsedCerts.find((cert) => keyLocalKeyId && cert.localKeyId === keyLocalKeyId) || parsedCerts[0];
+  const chain = buildCertificateChain(leafCert, parsedCerts);
+
+  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); enviando cadeia com ${chain.length} item(ns).`);
+
+  return {
+    certPem: chain.map((cert) => cert.pem.trim()).join("\n"),
+    keyPem,
+  };
+}
+
+function normalizeLocalKeyId(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return forge.util.bytesToHex(value);
+  if (value instanceof Uint8Array) return Array.from(value).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (Array.isArray(value)) return value.map((byte) => Number(byte).toString(16).padStart(2, "0")).join("");
+  return null;
+}
+
+function stringifyDistinguishedName(dn: { attributes?: Array<{ shortName?: string; name?: string; value?: string }> }): string {
+  return (dn.attributes || [])
+    .map((attr) => `${attr.shortName || attr.name || "attr"}=${attr.value || ""}`)
+    .join(",");
+}
+
+function buildCertificateChain(leafCert: ParsedCertificate, allCerts: ParsedCertificate[]): ParsedCertificate[] {
+  const chain = [leafCert];
+  const visited = new Set([leafCert.pem]);
+  let current = leafCert;
+
+  while (true) {
+    const next = allCerts.find((candidate) => !visited.has(candidate.pem) && candidate.subject === current.issuer);
+
+    if (!next) break;
+
+    chain.push(next);
+    visited.add(next.pem);
+
+    if (next.subject === next.issuer) break;
+    current = next;
+  }
+
+  return chain;
 }
