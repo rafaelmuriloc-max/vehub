@@ -45,8 +45,41 @@ export default function Invoices() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [filterClient, setFilterClient] = useState('all');
+  const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+
+  function handleDatePeriodChange(period: typeof datePeriod) {
+    setDatePeriod(period);
+    if (period === 'custom') return;
+    const now = new Date();
+    if (period === 'all') {
+      setFilterDateFrom('');
+      setFilterDateTo('');
+      return;
+    }
+    let from: Date, to: Date;
+    switch (period) {
+      case 'this_month':
+        from = new Date(now.getFullYear(), now.getMonth(), 1);
+        to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case 'last_month':
+        from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        to = new Date(now.getFullYear(), now.getMonth(), 0);
+        break;
+      case 'this_year':
+        from = new Date(now.getFullYear(), 0, 1);
+        to = new Date(now.getFullYear(), 11, 31);
+        break;
+      case 'last_year':
+        from = new Date(now.getFullYear() - 1, 0, 1);
+        to = new Date(now.getFullYear() - 1, 11, 31);
+        break;
+    }
+    setFilterDateFrom(from!.toISOString().slice(0, 10));
+    setFilterDateTo(to!.toISOString().slice(0, 10));
+  }
   const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
   const [exporting, setExporting] = useState(false);
 
