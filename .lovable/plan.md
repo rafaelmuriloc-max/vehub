@@ -1,47 +1,34 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Plano: Buscar notas de todos os clientes quando nenhum estiver selecionado
 
-### Mudanças
+## Mudança
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+Atualmente o `handleSync` exige um cliente selecionado. Quando nenhum cliente estiver selecionado, iterar sobre todos os clientes que possuem certificado digital (`digital_certificate_url`) e chamar o `nfse-query` para cada um sequencialmente.
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+## Implementação em `src/pages/Invoices.tsx`
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+1. **Remover validação obrigatória de cliente** no `handleSync` — se `selectedClient` estiver vazio, buscar de todos
+2. **Lógica de sync em lote**: quando `selectedClient` vazio, filtrar `clients` que têm `document` (CNPJ), iterar sequencialmente chamando `nfse-query` para cada `client_id`, acumulando resultados e erros
+3. **Feedback de progresso**: mostrar toast com progresso ("Consultando 3/15...") e ao final resumir quantos foram consultados com sucesso vs falhas
+4. **Ajustar placeholder do Select** para indicar que "todos" serão consultados quando vazio — adicionar um `SelectItem` com valor vazio: "Todos os clientes"
 
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
-
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
-
-### Estrutura do menu resultante
+### Estrutura do handleSync atualizado
 
 ```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
+handleSync():
+  if !referenceMonth → toast erro
+  clientIds = selectedClient ? [selectedClient] : clients.filter(c => c.document).map(c => c.id)
+  for each clientId:
+    invoke nfse-query({ client_id, reference_month })
+    track success/error count
+  loadInvoices()
+  toast resumo
 ```
+
+## Arquivo
+
+| Ação | Arquivo |
+|------|---------|
+| Editar | `src/pages/Invoices.tsx` — ajustar `handleSync` e Select de cliente |
 
