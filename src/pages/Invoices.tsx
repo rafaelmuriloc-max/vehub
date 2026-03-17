@@ -44,6 +44,7 @@ export default function Invoices() {
   });
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
@@ -109,33 +110,66 @@ export default function Invoices() {
   }
 
   async function handleSync() {
-    if (!selectedClient) {
-      toast({ title: 'Selecione um cliente', variant: 'destructive' });
-      return;
-    }
     if (!referenceMonth) {
       toast({ title: 'Selecione o mês de referência', variant: 'destructive' });
       return;
     }
 
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('nfse-query', {
-        body: { client_id: selectedClient, reference_month: referenceMonth },
-      });
+    const clientIds = selectedClient && selectedClient !== 'all'
+      ? [selectedClient]
+      : clients.filter(c => c.document).map(c => c.id);
 
-      if (error) {
-        toast({ title: 'Erro na consulta', description: error.message, variant: 'destructive' });
-      } else if (data?.error) {
-        toast({ title: 'Erro', description: data.error, variant: 'destructive' });
+    if (clientIds.length === 0) {
+      toast({ title: 'Nenhum cliente com CNPJ cadastrado', variant: 'destructive' });
+      return;
+    }
+
+    setSyncing(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (let i = 0; i < clientIds.length; i++) {
+        if (clientIds.length > 1) {
+          const clientName = clients.find(c => c.id === clientIds[i])?.company_name || '';
+          setSyncProgress(`Consultando ${i + 1}/${clientIds.length} — ${clientName}`);
+        }
+
+        try {
+          const { data, error } = await supabase.functions.invoke('nfse-query', {
+            body: { client_id: clientIds[i], reference_month: referenceMonth },
+          });
+
+          if (error || data?.error) {
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        } catch {
+          errorCount++;
+        }
+      }
+
+      await loadInvoices();
+
+      if (clientIds.length === 1) {
+        if (errorCount > 0) {
+          toast({ title: 'Erro na consulta', variant: 'destructive' });
+        } else {
+          toast({ title: 'Consulta realizada com sucesso' });
+        }
       } else {
-        toast({ title: 'Consulta realizada', description: data.message });
-        await loadInvoices();
+        toast({
+          title: 'Consulta em lote finalizada',
+          description: `${successCount} sucesso, ${errorCount} erro(s) de ${clientIds.length} clientes`,
+          variant: errorCount > 0 ? 'destructive' : 'default',
+        });
       }
     } catch (e) {
       toast({ title: 'Erro inesperado', description: (e as Error).message, variant: 'destructive' });
     } finally {
       setSyncing(false);
+      setSyncProgress('');
     }
   }
 
@@ -311,9 +345,10 @@ export default function Invoices() {
                 <Label>Cliente</Label>
                 <Select value={selectedClient} onValueChange={setSelectedClient}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
+                    <SelectValue placeholder="Todos os clientes" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="all">Todos os clientes</SelectItem>
                     {clients.filter(c => c.document).map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                     ))}
@@ -330,7 +365,7 @@ export default function Invoices() {
               </div>
               <Button onClick={handleSync} disabled={syncing}>
                 {syncing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
-                {syncing ? 'Consultando...' : 'Buscar Notas'}
+                {syncing ? (syncProgress || 'Consultando...') : 'Buscar Notas'}
               </Button>
             </div>
           </CardContent>
