@@ -236,33 +236,96 @@ Deno.serve(async (req) => {
 
 // ---- Helper functions ----
 
+type ParsedCertificate = {
+  issuer: string;
+  localKeyId: string | null;
+  pem: string;
+  subject: string;
+};
+
 async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certPem: string; keyPem: string }> {
-  // Convert Uint8Array to binary string for node-forge
-  const binary = String.fromCharCode(...pfxBytes);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < pfxBytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...pfxBytes.subarray(i, i + chunkSize));
+  }
+
   const asn1 = forge.asn1.fromDer(binary);
   const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
 
-  // Extract private key
   const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
   const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
   if (!keyBag?.key) {
     throw new Error("Chave privada não encontrada no certificado");
   }
-  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
 
-  // Extract certificate
+  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
+  const keyLocalKeyId = normalizeLocalKeyId(keyBag.attributes?.localKeyId?.[0]);
+
   const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const certBag = (certBags[forge.pki.oids.certBag] || [])[0];
-  if (!certBag?.cert) {
+  const parsedCerts: ParsedCertificate[] = ((certBags[forge.pki.oids.certBag] || []) as Array<any>)
+    .filter((bag) => bag?.cert)
+    .map((bag) => ({
+      issuer: stringifyDistinguishedName(bag.cert.issuer),
+      localKeyId: normalizeLocalKeyId(bag.attributes?.localKeyId?.[0]),
+      pem: forge.pki.certificateToPem(bag.cert),
+      subject: stringifyDistinguishedName(bag.cert.subject),
+    }));
+
+  if (parsedCerts.length === 0) {
     throw new Error("Certificado não encontrado no arquivo PFX");
   }
-  const certPem = forge.pki.certificateToPem(certBag.cert);
 
-  return { certPem, keyPem };
+  const leafCert = parsedCerts.find((cert) => keyLocalKeyId && cert.localKeyId === keyLocalKeyId) || parsedCerts[0];
+  const chain = buildCertificateChain(leafCert, parsedCerts);
+
+  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); enviando cadeia com ${chain.length} item(ns).`);
+
+  return {
+    certPem: chain.map((cert) => cert.pem.trim()).join("\n"),
+    keyPem,
+  };
+}
+
+function normalizeLocalKeyId(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return forge.util.bytesToHex(value);
+  if (value instanceof Uint8Array) return Array.from(value).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (Array.isArray(value)) return value.map((byte) => Number(byte).toString(16).padStart(2, "0")).join("");
+  return null;
+}
+
+function stringifyDistinguishedName(dn: { attributes?: Array<{ shortName?: string; name?: string; value?: string }> }): string {
+  return (dn.attributes || [])
+    .map((attr) => `${attr.shortName || attr.name || "attr"}=${attr.value || ""}`)
+    .join(",");
+}
+
+function buildCertificateChain(leafCert: ParsedCertificate, allCerts: ParsedCertificate[]): ParsedCertificate[] {
+  const chain = [leafCert];
+  const visited = new Set([leafCert.pem]);
+  let current = leafCert;
+
+  while (true) {
+    const next = allCerts.find((candidate) => (
+      !visited.has(candidate.pem) &&
+      candidate.subject === current.issuer
+    ));
+
+    if (!next) break;
+
+    chain.push(next);
+    visited.add(next.pem);
+
+    if (next.subject === next.issuer) break;
+    current = next;
+  }
+
+  return chain;
 }
 
 function buildDistributionRequest(cnpj: string, competencia: string): string {
-  // Build XML request for NFS-e distribution endpoint
   return `<?xml version="1.0" encoding="UTF-8"?>
 <distDFeInt xmlns="http://www.sefaz.gov.br/nfse" versao="1.00">
   <tpAmb>1</tpAmb>
@@ -280,28 +343,170 @@ async function fetchWithMTLS(
   certPem: string,
   keyPem: string
 ): Promise<Response> {
-  const httpClient = Deno.createHttpClient({
+  const requestUrl = new URL(url);
+  const attempts: Array<{ alpnProtocols?: string[]; label: string }> = [
+    { label: "http1-alpn", alpnProtocols: ["http/1.1"] },
+    { label: "no-alpn" },
+  ];
+
+  let lastError: Error | null = null;
+
+  for (const attempt of attempts) {
+    try {
+      console.log(`Tentando conexão mTLS NFS-e com estratégia: ${attempt.label}`);
+      return await sendRawHttp1RequestOverTls(requestUrl, body, certPem, keyPem, attempt.alpnProtocols);
+    } catch (error) {
+      lastError = error as Error;
+      console.error(`Falha na estratégia ${attempt.label}:`, error);
+    }
+  }
+
+  throw lastError || new Error("Falha ao conectar com o portal NFS-e via mTLS");
+}
+
+async function sendRawHttp1RequestOverTls(
+  url: URL,
+  body: string,
+  certPem: string,
+  keyPem: string,
+  alpnProtocols?: string[],
+): Promise<Response> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const bodyBytes = encoder.encode(body);
+  const conn = await Deno.connectTls({
+    hostname: url.hostname,
+    port: Number(url.port || 443),
     cert: certPem,
     key: keyPem,
-    http1: true,
-    http2: false,
+    ...(alpnProtocols ? { alpnProtocols } : {}),
   });
 
   try {
-    return await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/xml",
-        Accept: "application/xml",
-        Connection: "keep-alive",
-      },
-      body,
-      // @ts-ignore - Deno specific
-      client: httpClient,
-    });
+    const requestPath = `${url.pathname}${url.search}`;
+    const requestHead = [
+      `POST ${requestPath} HTTP/1.1`,
+      `Host: ${url.host}`,
+      "Content-Type: application/xml; charset=utf-8",
+      "Accept: application/xml, text/xml, */*",
+      "Accept-Encoding: identity",
+      `Content-Length: ${bodyBytes.byteLength}`,
+      "Connection: close",
+      "User-Agent: Lovable-NFSe/1.0",
+      "",
+      "",
+    ].join("\r\n");
+
+    await conn.write(encoder.encode(requestHead));
+    await conn.write(bodyBytes);
+
+    const responseBytes = await readAllFromConnection(conn, 20000);
+    const rawResponse = decoder.decode(responseBytes);
+    return parseRawHttpResponse(rawResponse);
   } finally {
-    httpClient.close();
+    conn.close();
   }
+}
+
+async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  let totalLength = 0;
+  let didTimeout = false;
+
+  const timeout = setTimeout(() => {
+    didTimeout = true;
+    try {
+      conn.close();
+    } catch {
+      // no-op
+    }
+  }, timeoutMs);
+
+  try {
+    while (true) {
+      const buffer = new Uint8Array(16_384);
+      const bytesRead = await conn.read(buffer);
+      if (bytesRead === null) break;
+      const chunk = buffer.slice(0, bytesRead);
+      chunks.push(chunk);
+      totalLength += chunk.length;
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (didTimeout) {
+    throw new Error(`Timeout ao aguardar resposta do portal NFS-e após ${timeoutMs}ms`);
+  }
+
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  return result;
+}
+
+function parseRawHttpResponse(rawResponse: string): Response {
+  const separatorIndex = rawResponse.indexOf("\r\n\r\n");
+  if (separatorIndex === -1) {
+    throw new Error("Resposta HTTP inválida do portal NFS-e");
+  }
+
+  const rawHeaders = rawResponse.slice(0, separatorIndex);
+  let rawBody = rawResponse.slice(separatorIndex + 4);
+  const headerLines = rawHeaders.split("\r\n");
+  const statusLine = headerLines.shift() || "";
+  const statusMatch = statusLine.match(/^HTTP\/\d\.\d\s+(\d{3})\s*(.*)$/i);
+
+  if (!statusMatch) {
+    throw new Error(`Status HTTP inválido retornado pelo portal NFS-e: ${statusLine}`);
+  }
+
+  const headers = new Headers();
+  for (const line of headerLines) {
+    const separator = line.indexOf(":");
+    if (separator === -1) continue;
+    const name = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim();
+    headers.append(name, value);
+  }
+
+  if ((headers.get("transfer-encoding") || "").toLowerCase().includes("chunked")) {
+    rawBody = decodeChunkedBody(rawBody);
+  }
+
+  return new Response(rawBody, {
+    headers,
+    status: Number(statusMatch[1]),
+    statusText: statusMatch[2],
+  });
+}
+
+function decodeChunkedBody(rawBody: string): string {
+  let position = 0;
+  let decoded = "";
+
+  while (position < rawBody.length) {
+    const lineEnd = rawBody.indexOf("\r\n", position);
+    if (lineEnd === -1) break;
+
+    const sizeHex = rawBody.slice(position, lineEnd).split(";", 1)[0].trim();
+    const chunkSize = Number.parseInt(sizeHex, 16);
+    if (Number.isNaN(chunkSize)) {
+      throw new Error("Resposta chunked inválida do portal NFS-e");
+    }
+
+    position = lineEnd + 2;
+    if (chunkSize === 0) break;
+
+    decoded += rawBody.slice(position, position + chunkSize);
+    position += chunkSize + 2;
+  }
+
+  return decoded;
 }
 
 function parseNfseResponse(xmlText: string): any[] {
