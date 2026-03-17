@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.nfse-emit]
 verify_jwt = false
+
+[functions.nfse-download]
+verify_jwt = false
