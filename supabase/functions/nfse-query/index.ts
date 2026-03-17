@@ -248,7 +248,7 @@ async function fetchInvoicesFromAdn(params: {
   certPem: string;
   cnpj: string;
   keyPem: string;
-  referenceMonth: string;
+  startNsu: string;
 }): Promise<{
   documentsFetched: number;
   invoices: ParsedInvoice[];
@@ -258,7 +258,7 @@ async function fetchInvoicesFromAdn(params: {
 }> {
   const xmlDocuments: string[] = [];
   const seenNsu = new Set<string>();
-  let currentNsu = "0";
+  let currentNsu = params.startNsu;
   let maxNSU: string | null = null;
   let transport: string | null = null;
   let ultNSU: string | null = null;
@@ -292,9 +292,8 @@ async function fetchInvoicesFromAdn(params: {
     currentNsu = result.ultNSU;
   }
 
-  const invoices = dedupeInvoices(parseXmlDocuments(xmlDocuments)).filter((invoice) =>
-    matchesReferenceMonth(invoice.issueDate, params.referenceMonth)
-  );
+  // Return ALL invoices without month filter
+  const invoices = dedupeInvoices(parseXmlDocuments(xmlDocuments));
 
   return {
     documentsFetched: xmlDocuments.length,
