@@ -732,7 +732,7 @@ export default function Clients() {
                         {certificateUploading && <Loader2 className="h-4 w-4 animate-spin" />}
                       </div>
                     )}
-                    {!editing && <p className="text-xs text-muted-foreground">Salve o cliente primeiro para fazer upload do certificado.</p>}
+                    {!editing && pendingCertFile && <p className="text-xs text-muted-foreground">Certificado será salvo ao criar o cliente.</p>}
                   </div>
                   <div className="col-span-2 space-y-2"><Label>Informações dos Sócios</Label><Textarea {...f('partners_info')} /></div>
                 </div>
