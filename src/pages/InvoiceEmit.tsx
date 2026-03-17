@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Send, Loader2 } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Search } from 'lucide-react';
 
 type Client = {
   id: string;
@@ -18,6 +18,21 @@ type Client = {
   document: string | null;
   municipal_registration: string | null;
   address: string | null;
+};
+
+type ServiceTaker = {
+  id: string;
+  document: string;
+  company_name: string;
+  municipal_registration: string | null;
+  email: string | null;
+  phone: string | null;
+  street: string | null;
+  number: string | null;
+  neighborhood: string | null;
+  municipality_code: string | null;
+  uf: string | null;
+  zip_code: string | null;
 };
 
 interface DpsFormData {
@@ -43,6 +58,16 @@ interface DpsFormData {
   issRetido: boolean;
 }
 
+function extractCep(address: string | null): string | null {
+  if (!address) return null;
+  const match = address.match(/(\d{5})-?(\d{3})/);
+  return match ? match[1] + match[2] : null;
+}
+
+function cleanDocument(doc: string): string {
+  return doc.replace(/\D/g, '');
+}
+
 export default function InvoiceEmit() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
@@ -52,6 +77,9 @@ export default function InvoiceEmit() {
   const [selectedClient, setSelectedClient] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [searchingCnpj, setSearchingCnpj] = useState(false);
+  const [savedTakers, setSavedTakers] = useState<ServiceTaker[]>([]);
+  const [selectedTaker, setSelectedTaker] = useState('');
 
   const [form, setForm] = useState<DpsFormData>({
     ambiente: 'homologacao',
@@ -78,7 +106,23 @@ export default function InvoiceEmit() {
 
   useEffect(() => {
     loadClients();
+    loadSavedTakers();
   }, []);
+
+  // Auto-fill IBGE code when client changes
+  useEffect(() => {
+    if (!selectedClient) return;
+    const client = clients.find(c => c.id === selectedClient);
+    if (!client) return;
+    const cep = extractCep(client.address);
+    if (cep) {
+      fetchIbgeFromCep(cep).then(ibge => {
+        if (ibge) {
+          setForm(prev => ({ ...prev, codigoMunicipioIncidencia: ibge }));
+        }
+      });
+    }
+  }, [selectedClient, clients]);
 
   async function loadClients() {
     const { data } = await supabase
@@ -89,8 +133,129 @@ export default function InvoiceEmit() {
     if (data) setClients(data);
   }
 
+  async function loadSavedTakers() {
+    const { data } = await supabase
+      .from('service_takers')
+      .select('*')
+      .order('company_name');
+    if (data) setSavedTakers(data as ServiceTaker[]);
+  }
+
+  async function fetchIbgeFromCep(cep: string): Promise<string | null> {
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.city_ibge || null;
+    } catch {
+      return null;
+    }
+  }
+
   function updateField(field: keyof DpsFormData, value: string | boolean) {
     setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function fillTakerFromSaved(takerId: string) {
+    setSelectedTaker(takerId);
+    if (!takerId) return;
+    const taker = savedTakers.find(t => t.id === takerId);
+    if (!taker) return;
+    setForm(prev => ({
+      ...prev,
+      tomadorCnpjCpf: taker.document,
+      tomadorRazaoSocial: taker.company_name,
+      tomadorInscricaoMunicipal: taker.municipal_registration || '',
+      tomadorEmail: taker.email || '',
+      tomadorTelefone: taker.phone || '',
+      tomadorLogradouro: taker.street || '',
+      tomadorNumero: taker.number || '',
+      tomadorBairro: taker.neighborhood || '',
+      tomadorCodigoMunicipio: taker.municipality_code || '',
+      tomadorUf: taker.uf || '',
+      tomadorCep: taker.zip_code || '',
+    }));
+  }
+
+  async function handleSearchCnpj() {
+    const digits = cleanDocument(form.tomadorCnpjCpf);
+    if (digits.length < 11) {
+      toast({ title: 'Informe um CNPJ/CPF válido', variant: 'destructive' });
+      return;
+    }
+
+    setSearchingCnpj(true);
+    try {
+      // 1. Check saved takers first
+      const saved = savedTakers.find(t => cleanDocument(t.document) === digits);
+      if (saved) {
+        fillTakerFromSaved(saved.id);
+        toast({ title: 'Tomador encontrado nos registros salvos' });
+        setSearchingCnpj(false);
+        return;
+      }
+
+      // 2. Query BrasilAPI for CNPJ (only works for 14-digit CNPJ)
+      if (digits.length === 14) {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+        if (res.ok) {
+          const data = await res.json();
+          const cep = (data.cep || '').replace(/\D/g, '');
+          let ibge = '';
+          if (cep.length === 8) {
+            const ibgeResult = await fetchIbgeFromCep(cep);
+            ibge = ibgeResult || '';
+          }
+          setForm(prev => ({
+            ...prev,
+            tomadorRazaoSocial: data.razao_social || '',
+            tomadorEmail: data.email || '',
+            tomadorTelefone: data.ddd_telefone_1 || '',
+            tomadorLogradouro: data.logradouro || '',
+            tomadorNumero: data.numero || '',
+            tomadorBairro: data.bairro || '',
+            tomadorUf: data.uf || '',
+            tomadorCep: cep,
+            tomadorCodigoMunicipio: ibge,
+          }));
+          toast({ title: 'Dados do CNPJ preenchidos automaticamente' });
+        } else {
+          toast({ title: 'CNPJ não encontrado na base pública', variant: 'destructive' });
+        }
+      } else {
+        toast({ title: 'Busca automática disponível apenas para CNPJ (14 dígitos)', variant: 'destructive' });
+      }
+    } catch (err) {
+      toast({ title: 'Erro ao buscar CNPJ', description: (err as Error).message, variant: 'destructive' });
+    } finally {
+      setSearchingCnpj(false);
+    }
+  }
+
+  async function upsertServiceTaker() {
+    const digits = cleanDocument(form.tomadorCnpjCpf);
+    if (!digits || !form.tomadorRazaoSocial) return;
+    try {
+      await supabase
+        .from('service_takers')
+        .upsert({
+          document: digits,
+          company_name: form.tomadorRazaoSocial,
+          municipal_registration: form.tomadorInscricaoMunicipal || null,
+          email: form.tomadorEmail || null,
+          phone: form.tomadorTelefone || null,
+          street: form.tomadorLogradouro || null,
+          number: form.tomadorNumero || null,
+          neighborhood: form.tomadorBairro || null,
+          municipality_code: form.tomadorCodigoMunicipio || null,
+          uf: form.tomadorUf || null,
+          zip_code: form.tomadorCep || null,
+          updated_at: new Date().toISOString(),
+        } as any, { onConflict: 'document' });
+      loadSavedTakers();
+    } catch {
+      // silent — non-critical
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -156,6 +321,8 @@ export default function InvoiceEmit() {
       } else {
         toast({ title: 'DPS enviada com sucesso!', description: data.message });
         setResult(data);
+        // Save taker for future use
+        await upsertServiceTaker();
       }
     } catch (err) {
       toast({ title: 'Erro inesperado', description: (err as Error).message, variant: 'destructive' });
@@ -245,6 +412,9 @@ export default function InvoiceEmit() {
                   onChange={e => updateField('codigoMunicipioIncidencia', e.target.value)}
                   placeholder="Ex: 3550308 (São Paulo) - 7 dígitos"
                 />
+                {selectedClientData && form.codigoMunicipioIncidencia && (
+                  <p className="text-xs text-muted-foreground mt-1">Preenchido automaticamente pelo CEP do prestador</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -256,14 +426,46 @@ export default function InvoiceEmit() {
             <CardTitle className="text-lg">Tomador do Serviço</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Saved takers combobox */}
+            {savedTakers.length > 0 && (
+              <div>
+                <Label>Tomadores Salvos</Label>
+                <Select value={selectedTaker} onValueChange={fillTakerFromSaved}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um tomador salvo ou preencha manualmente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedTakers.map(t => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.company_name} — {t.document}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>CNPJ/CPF *</Label>
-                <Input
-                  value={form.tomadorCnpjCpf}
-                  onChange={e => updateField('tomadorCnpjCpf', e.target.value)}
-                  placeholder="00.000.000/0000-00"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    value={form.tomadorCnpjCpf}
+                    onChange={e => updateField('tomadorCnpjCpf', e.target.value)}
+                    placeholder="00.000.000/0000-00"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleSearchCnpj}
+                    disabled={searchingCnpj || !form.tomadorCnpjCpf}
+                    title="Buscar dados pelo CNPJ"
+                  >
+                    {searchingCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label>Razão Social *</Label>

@@ -731,6 +731,57 @@ export type Database = {
           },
         ]
       }
+      service_takers: {
+        Row: {
+          company_name: string
+          created_at: string | null
+          document: string
+          email: string | null
+          id: string
+          municipal_registration: string | null
+          municipality_code: string | null
+          neighborhood: string | null
+          number: string | null
+          phone: string | null
+          street: string | null
+          uf: string | null
+          updated_at: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          company_name: string
+          created_at?: string | null
+          document: string
+          email?: string | null
+          id?: string
+          municipal_registration?: string | null
+          municipality_code?: string | null
+          neighborhood?: string | null
+          number?: string | null
+          phone?: string | null
+          street?: string | null
+          uf?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          company_name?: string
+          created_at?: string | null
+          document?: string
+          email?: string | null
+          id?: string
+          municipal_registration?: string | null
+          municipality_code?: string | null
+          neighborhood?: string | null
+          number?: string | null
+          phone?: string | null
+          street?: string | null
+          uf?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
       task_assignments: {
         Row: {
           assigned_at: string
