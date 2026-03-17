@@ -639,51 +639,19 @@ async function requestTextWithMTLS(
         const ipUrl = new URL(url.toString());
         ipUrl.hostname = ip;
 
-        // Try raw connection with SNI/Host header pointing to original hostname
-        for (let retry = 0; retry < 2; retry++) {
+        // Try raw connection with TCP→startTls (proper SNI)
+        for (let retry = 0; retry < 3; retry++) {
           try {
             if (retry > 0) {
-              await new Promise((r) => setTimeout(r, 3000));
-              console.log(`Retry DoH ${retry}/2...`);
+              const delay = Math.pow(2, retry) * 1000;
+              await new Promise((r) => setTimeout(r, delay));
+              console.log(`Retry DoH ${retry}/3...`);
             }
             return await sendRawHttpRequestWithSNI(ipUrl, originalHost, init, certPem, keyPem, "doh-raw");
           } catch (error) {
             lastError = error as Error;
             console.error(`Falha DoH raw (tentativa ${retry + 1}):`, (error as Error).message);
           }
-        }
-
-        // Also try fetch with IP-based URL
-        try {
-          const httpClient = Deno.createHttpClient({
-            cert: certPem,
-            http1: true,
-            http2: false,
-            key: keyPem,
-          });
-          try {
-            const response = await fetch(ipUrl, {
-              body: init.body,
-              // @ts-expect-error Deno fetch supports client
-              client: httpClient,
-              headers: { ...(init.headers as Record<string, string>), Host: originalHost },
-              method: init.method,
-            });
-            const bodyText = await response.text();
-            return {
-              bodyText,
-              headers: response.headers,
-              status: response.status,
-              statusText: response.statusText,
-              strategy: "doh-fetch",
-              url: url.toString(),
-            };
-          } finally {
-            httpClient.close();
-          }
-        } catch (error) {
-          lastError = error as Error;
-          console.error(`Falha DoH fetch:`, (error as Error).message);
         }
       }
     }
