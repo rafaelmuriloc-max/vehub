@@ -329,10 +329,27 @@ export default function Invoices() {
       {/* Filter + Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center flex-wrap gap-4">
             <CardTitle className="text-lg">Notas Fiscais</CardTitle>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm">Filtrar cliente:</Label>
+            <div className="flex items-center gap-2 flex-wrap ml-auto">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">De:</Label>
+                <Input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={e => setFilterDateFrom(e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">Até:</Label>
+                <Input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={e => setFilterDateTo(e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
               <Select value={filterClient} onValueChange={setFilterClient}>
                 <SelectTrigger className="w-[220px]">
                   <SelectValue />
@@ -344,6 +361,15 @@ export default function Invoices() {
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={exporting || filteredInvoices.filter(i => i.access_key).length === 0}
+                onClick={handleBatchExportXml}
+              >
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PackageOpen className="h-4 w-4 mr-2" />}
+                {exporting ? 'Exportando...' : 'Exportar XMLs'}
+              </Button>
             </div>
           </div>
         </CardHeader>
