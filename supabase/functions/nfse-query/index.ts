@@ -158,70 +158,47 @@ Deno.serve(async (req) => {
       console.error("ADN NFS-e connection error:", apiError);
       return jsonResponse(
         {
-          error:
-            "Erro ao consultar o ADN da NFS-e. A integração anterior usava uma rota legado incompatível; agora a função consulta a API oficial do contribuinte por NSU.",
+          error: "Erro ao consultar o ADN da NFS-e.",
           details: (apiError as Error).message,
         },
         502,
       );
     }
 
-    const savedInvoices = [];
-    for (const invoice of invoicesData) {
-      let xmlUrl = null;
-      if (invoice.xml) {
-        const xmlPath = `nfse/${cnpj}/${reference_month}/${invoice.accessKey || invoice.invoiceNumber || crypto.randomUUID()}.xml`;
-        const { error: uploadError } = await adminClient.storage
-          .from("documents")
-          .upload(xmlPath, new TextEncoder().encode(invoice.xml), {
-            contentType: "application/xml",
-            upsert: true,
-          });
+    // Cap at 20 invoices per sync to avoid timeout
+    const MAX_SAVE_PER_SYNC = 20;
+    const invoicesToSave = invoicesData.slice(0, MAX_SAVE_PER_SYNC);
 
-        if (!uploadError) {
-          xmlUrl = xmlPath;
-        }
+    // Batch upsert: build all records first, then save in one call
+    const invoiceRecords = invoicesToSave.map((invoice) => ({
+      access_key: invoice.accessKey,
+      client_id,
+      gross_value: invoice.grossValue || 0,
+      invoice_number: invoice.invoiceNumber,
+      issue_date: invoice.issueDate,
+      issuer_cnpj: invoice.issuerCnpj || cnpj,
+      municipality_code: invoice.municipalityCode,
+      net_value: invoice.netValue || 0,
+      pdf_url: null,
+      raw_data: invoice.rawData,
+      service_description: invoice.serviceDescription,
+      status: invoice.status || "normal",
+      taker_cnpj: invoice.takerCnpj,
+      tax_value: invoice.taxValue || 0,
+      xml_url: null,
+    }));
+
+    let savedInvoices: unknown[] = [];
+    if (invoiceRecords.length > 0) {
+      const { data: saved, error: saveError } = await adminClient
+        .from("invoices")
+        .upsert(invoiceRecords, { onConflict: "access_key" })
+        .select();
+
+      if (saveError) {
+        console.error("Erro ao salvar invoices em lote:", saveError);
       }
-
-      const invoiceRecord = {
-        access_key: invoice.accessKey,
-        client_id,
-        gross_value: invoice.grossValue || 0,
-        invoice_number: invoice.invoiceNumber,
-        issue_date: invoice.issueDate,
-        issuer_cnpj: invoice.issuerCnpj || cnpj,
-        municipality_code: invoice.municipalityCode,
-        net_value: invoice.netValue || 0,
-        pdf_url: null,
-        raw_data: invoice.rawData,
-        service_description: invoice.serviceDescription,
-        status: invoice.status || "normal",
-        taker_cnpj: invoice.takerCnpj,
-        tax_value: invoice.taxValue || 0,
-        xml_url: xmlUrl,
-      };
-
-      if (invoice.accessKey) {
-        const { data: saved, error: saveError } = await adminClient
-          .from("invoices")
-          .upsert(invoiceRecord, { onConflict: "access_key" })
-          .select()
-          .single();
-
-        if (!saveError && saved) {
-          savedInvoices.push(saved);
-        }
-      } else {
-        const { data: saved, error: saveError } = await adminClient
-          .from("invoices")
-          .insert(invoiceRecord)
-          .select()
-          .single();
-
-        if (!saveError && saved) {
-          savedInvoices.push(saved);
-        }
-      }
+      savedInvoices = saved || [];
     }
 
     return jsonResponse({
@@ -230,6 +207,7 @@ Deno.serve(async (req) => {
       invoices: savedInvoices,
       sync_meta: syncMeta,
       total: invoicesData.length,
+      truncated: invoicesData.length > MAX_SAVE_PER_SYNC,
     });
   } catch (error) {
     console.error("Unexpected error:", error);
