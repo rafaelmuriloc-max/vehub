@@ -7,9 +7,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SEFIN_URLS = {
-  producao: "https://sefin.nfse.gov.br/SefinNacional/nfse",
-  homologacao: "https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse",
+// Multiple SEFIN endpoints to try (some may have different TLS configs)
+const SEFIN_ENDPOINTS = {
+  producao: [
+    "https://sefin.nfse.gov.br/SefinNacional/nfse",
+    "https://cnc.nfse.gov.br/SefinNacional/nfse",
+  ],
+  homologacao: [
+    "https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse",
+    "https://cnc.producaorestrita.nfse.gov.br/SefinNacional/nfse",
+  ],
 };
 
 interface DpsData {
