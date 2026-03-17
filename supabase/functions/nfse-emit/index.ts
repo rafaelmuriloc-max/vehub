@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
     // Sign the XML
     let signedDpsXml: string;
     try {
-      signedDpsXml = signXml(infDpsXml, idDPS, keyPem, certPem);
+      signedDpsXml = await signXml(infDpsXml, idDPS, keyPem, certPem);
     } catch (error) {
       return jsonResponse({ error: `Erro ao assinar XML: ${(error as Error).message}` }, 500);
     }
