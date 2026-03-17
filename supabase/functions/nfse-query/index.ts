@@ -310,6 +310,11 @@ async function fetchAdnDfeByNsu(
         keyPem,
       );
 
+      // DIAGNOSTIC: log raw response shape
+      const ct = response.headers.get("content-type") || "unknown";
+      console.log(`[DIAG] NSU=${nsu} status=${response.status} content-type=${ct} bodyLen=${response.bodyText.length}`);
+      console.log(`[DIAG] body preview: ${response.bodyText.slice(0, 1000)}`);
+
       if (response.status >= 400) {
         throw new Error(
           `HTTP ${response.status} ao consultar ${response.url}: ${response.bodyText.slice(0, 500) || response.statusText}`,
