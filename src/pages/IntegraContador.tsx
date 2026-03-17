@@ -388,7 +388,7 @@ export default function IntegraContador() {
                   )}
                 </Button>
 
-                {!admin && (
+                {!isAdmin && (
                   <p className="text-sm text-destructive">Apenas administradores podem executar consultas.</p>
                 )}
               </CardContent>
