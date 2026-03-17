@@ -536,6 +536,22 @@ type MtlsTextResponse = {
   url: string;
 };
 
+// Resolve hostname via DNS-over-HTTPS (Google) as fallback when system DNS fails
+async function resolveHostname(hostname: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`https://dns.google/resolve?name=${hostname}&type=A`);
+    const data = await resp.json();
+    if (data.Answer && data.Answer.length > 0) {
+      const ip = data.Answer.find((a: { type: number; data: string }) => a.type === 1)?.data;
+      console.log(`DNS-over-HTTPS resolved ${hostname} -> ${ip}`);
+      return ip || null;
+    }
+  } catch (e) {
+    console.error(`DNS-over-HTTPS failed for ${hostname}:`, (e as Error).message);
+  }
+  return null;
+}
+
 async function requestTextWithMTLS(
   url: URL,
   init: { body?: string; headers?: HeadersInit; method: string },
@@ -550,6 +566,7 @@ async function requestTextWithMTLS(
   const MAX_RETRIES = 3;
   let lastError: Error | null = null;
 
+  // First try with original hostname
   for (const attempt of attempts) {
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
       try {
@@ -595,9 +612,33 @@ async function requestTextWithMTLS(
         lastError = error as Error;
         const msg = (error as Error).message || "";
         console.error(`Falha ${attempt.label} (tentativa ${retry + 1}):`, msg);
+
+        // DNS failure - don't retry, try IP-based approach instead
+        if (msg.includes("lookup") || msg.includes("not known") || msg.includes("NXDOMAIN")) {
+          break;
+        }
         if (!msg.includes("reset") && !msg.includes("refused") && !msg.includes("timeout")) {
           break;
         }
+      }
+    }
+  }
+
+  // If DNS failed, try resolving via DoH and connecting by IP with Host header
+  if (lastError && (lastError.message.includes("lookup") || lastError.message.includes("not known"))) {
+    console.log("Tentando resolver hostname via DNS-over-HTTPS...");
+    const ip = await resolveHostname(url.hostname);
+    if (ip) {
+      const originalHost = url.hostname;
+      const ipUrl = new URL(url.toString());
+      ipUrl.hostname = ip;
+
+      // Use raw connection with SNI/Host header pointing to original hostname
+      try {
+        return await sendRawHttpRequestWithSNI(ipUrl, originalHost, init, certPem, keyPem, "doh-raw");
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`Falha DoH raw:`, (error as Error).message);
       }
     }
   }
