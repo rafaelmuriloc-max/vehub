@@ -335,42 +335,38 @@ export default function IntegraContador() {
               <CardDescription>Escolha a categoria e o serviço desejado</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label>Categoria</Label>
-                <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a categoria..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(SERVICE_CATALOG).map(([key, cat]) => (
-                      <SelectItem key={key} value={key}>
-                        <span className="flex items-center gap-2">{cat.icon} {cat.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Tabs value={selectedCategory} onValueChange={handleCategoryChange}>
+                <TabsList className="flex flex-wrap h-auto gap-1 bg-muted p-1">
+                  {Object.entries(SERVICE_CATALOG).map(([key, cat]) => (
+                    <TabsTrigger key={key} value={key} className="text-xs gap-1.5">
+                      {cat.icon} {cat.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-              {selectedCategory_ && (
-                <div>
-                  <Label>Serviço</Label>
-                  <Select value={selectedServiceId} onValueChange={handleServiceChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o serviço..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selectedCategory_.services.map((svc) => (
-                        <SelectItem key={`${svc.idSistema}-${svc.idServico}`} value={`${svc.idSistema}-${svc.idServico}`}>
-                          {svc.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedService && (
-                    <p className="text-sm text-muted-foreground mt-1">{selectedService.description}</p>
-                  )}
-                </div>
-              )}
+                {Object.entries(SERVICE_CATALOG).map(([key]) => (
+                  <TabsContent key={key} value={key} className="mt-4">
+                    <div>
+                      <Label>Serviço</Label>
+                      <Select value={selectedServiceId} onValueChange={handleServiceChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o serviço..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SERVICE_CATALOG[key].services.map((svc) => (
+                            <SelectItem key={`${svc.idSistema}-${svc.idServico}`} value={`${svc.idSistema}-${svc.idServico}`}>
+                              {svc.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedService && (
+                        <p className="text-sm text-muted-foreground mt-1">{selectedService.description}</p>
+                      )}
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
             </CardContent>
           </Card>
 
