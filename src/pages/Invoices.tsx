@@ -115,7 +115,7 @@ export default function Invoices() {
       return;
     }
 
-    const clientIds = selectedClient
+    const clientIds = selectedClient && selectedClient !== 'all'
       ? [selectedClient]
       : clients.filter(c => c.document).map(c => c.id);
 
