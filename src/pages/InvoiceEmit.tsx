@@ -108,6 +108,10 @@ export default function InvoiceEmit() {
       toast({ title: 'Preencha os dados do serviço', variant: 'destructive' });
       return;
     }
+    if (!form.codigoMunicipioIncidencia || !/^\d{7}$/.test(form.codigoMunicipioIncidencia)) {
+      toast({ title: 'Código do município de incidência (IBGE) deve ter exatamente 7 dígitos', variant: 'destructive' });
+      return;
+    }
 
     setSubmitting(true);
     setResult(null);
