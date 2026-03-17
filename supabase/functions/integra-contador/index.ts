@@ -145,9 +145,9 @@ Deno.serve(async (req) => {
 
     let authData: { access_token?: string; jwt_token?: string };
     try {
-      authData = JSON.parse(authResponse.bodyText);
+      authData = JSON.parse(authResponseText);
     } catch {
-      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponse.bodyText }, 500);
+      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponseText }, 500);
     }
 
     const bearerToken = authData.access_token;
