@@ -169,30 +169,31 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Cap at 20 invoices per sync to avoid timeout
-    const MAX_SAVE_PER_SYNC = 20;
+    // Save ALL invoices (no month filter)
+    const MAX_SAVE_PER_SYNC = 50;
     const invoicesToSave = invoicesData.slice(0, MAX_SAVE_PER_SYNC);
 
-    // Batch upsert: build all records first, then save in one call
-    const invoiceRecords = invoicesToSave.map((invoice) => ({
-      access_key: invoice.accessKey,
-      client_id,
-      gross_value: invoice.grossValue || 0,
-      invoice_number: invoice.invoiceNumber,
-      issue_date: invoice.issueDate,
-      issuer_cnpj: invoice.issuerCnpj || cnpj,
-      municipality_code: invoice.municipalityCode,
-      net_value: invoice.netValue || 0,
-      pdf_url: null,
-      raw_data: invoice.rawData,
-      service_description: invoice.serviceDescription,
-      status: invoice.status || "normal",
-      taker_cnpj: invoice.takerCnpj,
-      tax_value: invoice.taxValue || 0,
-      xml_url: null,
-    }));
+    const invoiceRecords = invoicesToSave
+      .filter((inv) => inv.accessKey) // must have access_key for upsert
+      .map((invoice) => ({
+        access_key: invoice.accessKey,
+        client_id,
+        gross_value: invoice.grossValue || 0,
+        invoice_number: invoice.invoiceNumber,
+        issue_date: invoice.issueDate,
+        issuer_cnpj: invoice.issuerCnpj || cnpj,
+        municipality_code: invoice.municipalityCode,
+        net_value: invoice.netValue || 0,
+        pdf_url: null,
+        raw_data: invoice.rawData,
+        service_description: invoice.serviceDescription,
+        status: invoice.status || "normal",
+        taker_cnpj: invoice.takerCnpj,
+        tax_value: invoice.taxValue || 0,
+        xml_url: null,
+      }));
 
-    let savedInvoices: unknown[] = [];
+    let savedCount = 0;
     if (invoiceRecords.length > 0) {
       const { data: saved, error: saveError } = await adminClient
         .from("invoices")
@@ -202,16 +203,30 @@ Deno.serve(async (req) => {
       if (saveError) {
         console.error("Erro ao salvar invoices em lote:", saveError);
       }
-      savedInvoices = saved || [];
+      savedCount = saved?.length || 0;
     }
+
+    // Persist last NSU for incremental sync
+    const lastNsu = syncMeta.ultNSU || syncMeta.maxNSU;
+    if (lastNsu) {
+      await adminClient
+        .from("clients")
+        .update({ last_nsu: String(lastNsu) })
+        .eq("id", client_id);
+    }
+
+    // Filter by month only for the response
+    const monthInvoices = invoicesData.filter((inv) =>
+      matchesReferenceMonth(inv.issueDate, reference_month)
+    );
 
     return jsonResponse({
       success: true,
-      message: `${savedInvoices.length} nota(s) fiscal(is) encontrada(s) para ${reference_month} e salva(s).`,
-      invoices: savedInvoices,
+      message: `${savedCount} nota(s) salva(s) no total, ${monthInvoices.length} do mês ${reference_month}.`,
+      invoices_saved: savedCount,
+      invoices_month: monthInvoices.length,
       sync_meta: syncMeta,
-      total: invoicesData.length,
-      truncated: invoicesData.length > MAX_SAVE_PER_SYNC,
+      total_fetched: invoicesData.length,
     });
   } catch (error) {
     console.error("Unexpected error:", error);
