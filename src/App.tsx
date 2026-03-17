@@ -18,6 +18,7 @@ import Settings from "./pages/Settings";
 import DocumentTypes from "./pages/DocumentTypes";
 import InvoiceEmit from "./pages/InvoiceEmit";
 import Fiscal from "./pages/Fiscal";
+import IntegraContador from "./pages/IntegraContador";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
