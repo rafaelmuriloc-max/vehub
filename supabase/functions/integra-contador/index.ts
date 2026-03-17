@@ -117,34 +117,29 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Credenciais SERPRO não configuradas" }, 500);
     }
 
-    // OAuth2 authenticate with mTLS
-    console.log("Autenticando no SERPRO via OAuth2 com mTLS...");
+    // OAuth2 authenticate via gateway (Basic Auth, sem mTLS)
+    console.log("Autenticando no SERPRO via OAuth2 (gateway)...");
     const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
 
-    const authResponse = await requestWithFetchHttp1(
-      new URL(SERPRO_AUTH_URL),
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${authCredentials}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Role-Type": "TERCEIROS",
-        },
-        body: "grant_type=client_credentials",
+    const authFetchResponse = await fetch(SERPRO_AUTH_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${authCredentials}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Role-Type": "TERCEIROS",
       },
-      certPem,
-      keyPem,
-      "serpro-auth"
-    );
+      body: "grant_type=client_credentials",
+    });
 
-    console.log(`Auth response status: ${authResponse.status}`);
+    const authResponseText = await authFetchResponse.text();
+    console.log(`Auth response status: ${authFetchResponse.status}`);
 
-    if (authResponse.status !== 200) {
-      console.error("Auth error body:", authResponse.bodyText);
+    if (!authFetchResponse.ok) {
+      console.error("Auth error body:", authResponseText);
       return jsonResponse({
         error: "Falha na autenticação SERPRO",
-        details: authResponse.bodyText,
-        status: authResponse.status,
+        details: authResponseText,
+        status: authFetchResponse.status,
       }, 401);
     }
 
