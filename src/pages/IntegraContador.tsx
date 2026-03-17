@@ -41,7 +41,86 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     services: [
       {
         idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D',
-        description: 'Consulta declarações do PGDAS-D por período',
+        description: 'Consulta declarações transmitidas do PGDAS-D',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', label: 'Última Declaração/Recibo',
+        description: 'Consulta última declaração e recibo do PGDAS-D',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+        ],
+      },
+      {
+        idSistema: 'PGDASD', idServico: 'CONSDECREC15', label: 'Declaração/Recibo por PA',
+        description: 'Consulta declaração e recibo por período de apuração',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', label: 'Extrato do DAS',
+        description: 'Consulta extrato do DAS do Simples Nacional',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'PGDASD', idServico: 'GERARDAS12', label: 'Gerar DAS',
+        description: 'Gera guia DAS do Simples Nacional',
+        tipo: 'Emitir',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'PGDASD', idServico: 'GERARDASCOBRANCA17', label: 'DAS Cobrança RFB',
+        description: 'Gera DAS de cobrança da Receita Federal',
+        tipo: 'Emitir',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'PGDASD', idServico: 'GERARDASAVULSO19', label: 'DAS Avulso',
+        description: 'Gera DAS avulso do Simples Nacional',
+        tipo: 'Emitir',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal',
+        description: 'Transmite declaração mensal do PGDAS-D',
+        tipo: 'Declarar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTARANOSCALENDARIOS102', label: 'Regime Apuração',
+        description: 'Consulta opções de regime de apuração por ano',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+        ],
+      },
+      {
+        idSistema: 'DEFIS', idServico: 'CONSDECLARACAO142', label: 'Consultar DEFIS',
+        description: 'Consulta declarações DEFIS transmitidas',
         tipo: 'Consultar',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
@@ -49,21 +128,11 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
         ],
       },
       {
-        idSistema: 'PGDASD', idServico: 'CONSDASN14', label: 'Consultar DAS-N',
-        description: 'Consulta guia DAS do Simples Nacional',
+        idSistema: 'DEFIS', idServico: 'CONSULTIMADECREC143', label: 'Última Declaração DEFIS',
+        description: 'Consulta última declaração e recibo DEFIS',
         tipo: 'Consultar',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
-          { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
-        ],
-      },
-      {
-        idSistema: 'PGDASD', idServico: 'CONSEXTRATO', label: 'Extrato Simples Nacional',
-        description: 'Consulta extrato do Simples Nacional',
-        tipo: 'Consultar',
-        fields: [
-          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
-          { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' },
         ],
       },
     ],
@@ -73,21 +142,45 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <Building2 className="h-4 w-4" />,
     services: [
       {
-        idSistema: 'PGMEI', idServico: 'CONSDASPDF', label: 'DAS MEI (PDF)',
+        idSistema: 'PGMEI', idServico: 'GERARDASPDF21', label: 'DAS MEI (PDF)',
         description: 'Gera DAS do MEI em formato PDF',
         tipo: 'Emitir',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
-          { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
         ],
       },
       {
-        idSistema: 'PGMEI', idServico: 'CONSCODIGOBARRAS', label: 'Código de Barras DAS MEI',
-        description: 'Retorna código de barras do DAS MEI',
+        idSistema: 'PGMEI', idServico: 'GERARDASCODBARRA22', label: 'DAS MEI (Código de Barras)',
+        description: 'Gera DAS do MEI com código de barras',
+        tipo: 'Emitir',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'PGMEI', idServico: 'DIVIDAATIVA24', label: 'Dívida Ativa MEI',
+        description: 'Consulta dívida ativa do MEI',
         tipo: 'Consultar',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
-          { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'CCMEI', idServico: 'EMITIRCCMEI121', label: 'Certificado Condição MEI',
+        description: 'Emite certificado de condição de MEI',
+        tipo: 'Emitir',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+        ],
+      },
+      {
+        idSistema: 'CCMEI', idServico: 'DADOSCCMEI122', label: 'Dados CCMEI',
+        description: 'Consulta dados do certificado de condição MEI',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
         ],
       },
     ],
@@ -97,21 +190,39 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <FileText className="h-4 w-4" />,
     services: [
       {
-        idSistema: 'DCTFWEB', idServico: 'CONSGUIA', label: 'Consultar Guia DCTFWeb',
-        description: 'Consulta guias da DCTFWeb',
-        tipo: 'Consultar',
+        idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', label: 'Gerar Guia DCTFWeb',
+        description: 'Gera guia de pagamento da DCTFWeb',
+        tipo: 'Emitir',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
-          { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
         ],
       },
       {
-        idSistema: 'DCTFWEB', idServico: 'CONSRECIBO', label: 'Recibo DCTFWeb',
+        idSistema: 'DCTFWEB', idServico: 'CONSRECIBO32', label: 'Recibo DCTFWeb',
         description: 'Consulta recibo de entrega da DCTFWeb',
         tipo: 'Consultar',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
-          { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'DCTFWEB', idServico: 'CONSDECCOMPLETA33', label: 'Declaração Completa',
+        description: 'Consulta declaração completa da DCTFWeb',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'DCTFWEB', idServico: 'CONSXMLDECLARACAO38', label: 'XML Declaração',
+        description: 'Consulta XML da declaração DCTFWeb',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
         ],
       },
     ],
@@ -121,13 +232,29 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <CreditCard className="h-4 w-4" />,
     services: [
       {
-        idSistema: 'SICALC', idServico: 'CONSDARF', label: 'Consultar DARF',
-        description: 'Consulta DARF gerados pelo Sicalc',
-        tipo: 'Consultar',
+        idSistema: 'SICALC', idServico: 'CONSOLIDARGERARDARF51', label: 'Emitir DARF (PDF)',
+        description: 'Consolida e emite DARF em formato PDF',
+        tipo: 'Emitir',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
-          { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
-          { key: 'codigoReceita', label: 'Código da Receita', placeholder: '0561' },
+          { key: 'codigoReceita', label: 'Código da Receita', required: true, placeholder: '0561' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
+        ],
+      },
+      {
+        idSistema: 'SICALC', idServico: 'CONSULTAAPOIORECEITAS52', label: 'Consultar Receitas',
+        description: 'Consulta receitas disponíveis no Sicalc',
+        tipo: 'Apoiar',
+        fields: [],
+      },
+      {
+        idSistema: 'SICALC', idServico: 'GERARDARFCODBARRA53', label: 'DARF (Código de Barras)',
+        description: 'Emite DARF com código de barras',
+        tipo: 'Emitir',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'codigoReceita', label: 'Código da Receita', required: true, placeholder: '0561' },
+          { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' },
         ],
       },
     ],
@@ -137,8 +264,33 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <Mail className="h-4 w-4" />,
     services: [
       {
-        idSistema: 'CAIXAPOSTAL', idServico: 'CONSMENSAGENS', label: 'Consultar Mensagens',
-        description: 'Consulta mensagens da Caixa Postal da Receita Federal',
+        idSistema: 'CAIXAPOSTAL', idServico: 'MSGCONTRIBUINTE61', label: 'Mensagens do Contribuinte',
+        description: 'Lista mensagens da Caixa Postal por contribuinte',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+        ],
+      },
+      {
+        idSistema: 'CAIXAPOSTAL', idServico: 'MSGDETALHAMENTO62', label: 'Detalhes da Mensagem',
+        description: 'Consulta detalhes de uma mensagem específica',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'idMensagem', label: 'ID da Mensagem', required: true, placeholder: '' },
+        ],
+      },
+      {
+        idSistema: 'CAIXAPOSTAL', idServico: 'INNOVAMSG63', label: 'Novas Mensagens',
+        description: 'Verifica indicador de novas mensagens não lidas',
+        tipo: 'Monitorar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+        ],
+      },
+      {
+        idSistema: 'DTE', idServico: 'CONSULTASITUACAODTE111', label: 'Situação Adesão DTE',
+        description: 'Consulta situação de adesão à Caixa Postal eletrônica',
         tipo: 'Consultar',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
@@ -151,19 +303,20 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <Search className="h-4 w-4" />,
     services: [
       {
-        idSistema: 'SITUACAOFISCAL', idServico: 'CONSPENDENCIAS', label: 'Consultar Pendências',
-        description: 'Consulta pendências fiscais do contribuinte',
-        tipo: 'Consultar',
+        idSistema: 'SITFIS', idServico: 'SOLICITARPROTOCOLO91', label: 'Solicitar Protocolo',
+        description: 'Solicita protocolo do relatório de situação fiscal',
+        tipo: 'Apoiar',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
         ],
       },
       {
-        idSistema: 'SITUACAOFISCAL', idServico: 'CONSREGULARIDADE', label: 'Consultar Regularidade',
-        description: 'Verifica regularidade fiscal do contribuinte',
-        tipo: 'Consultar',
+        idSistema: 'SITFIS', idServico: 'RELATORIOSITFIS92', label: 'Relatório Situação Fiscal',
+        description: 'Emite relatório completo da situação fiscal',
+        tipo: 'Emitir',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'protocolo', label: 'Protocolo', required: true, placeholder: '' },
         ],
       },
     ],
@@ -173,12 +326,35 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <Landmark className="h-4 w-4" />,
     services: [
       {
-        idSistema: 'PAGTOWEB', idServico: 'CONSPAGAMENTOS', label: 'Consultar Pagamentos',
+        idSistema: 'PAGTOWEB', idServico: 'PAGAMENTOS71', label: 'Consultar Pagamentos',
         description: 'Consulta pagamentos realizados (DARF, DAS)',
         tipo: 'Consultar',
         fields: [
           { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
           { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' },
+        ],
+      },
+      {
+        idSistema: 'PAGTOWEB', idServico: 'COMPARRECADACAO72', label: 'Comprovante Arrecadação',
+        description: 'Emite comprovante de arrecadação de pagamento',
+        tipo: 'Emitir',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
+          { key: 'numeroPagamento', label: 'Número do Pagamento', required: true, placeholder: '' },
+        ],
+      },
+    ],
+  },
+  procuracoes: {
+    label: 'Procurações',
+    icon: <FileText className="h-4 w-4" />,
+    services: [
+      {
+        idSistema: 'PROCURACOES', idServico: 'OBTERPROCURACAO41', label: 'Obter Procuração',
+        description: 'Consulta procurações do contribuinte',
+        tipo: 'Consultar',
+        fields: [
+          { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' },
         ],
       },
     ],
