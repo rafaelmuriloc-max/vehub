@@ -7,9 +7,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SEFIN_URLS = {
-  producao: "https://sefin.nfse.gov.br/SefinNacional/nfse",
-  homologacao: "https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse",
+// Multiple SEFIN endpoints to try (some may have different TLS configs)
+const SEFIN_ENDPOINTS = {
+  producao: [
+    "https://sefin.nfse.gov.br/SefinNacional/nfse",
+    "https://cnc.nfse.gov.br/SefinNacional/nfse",
+  ],
+  homologacao: [
+    "https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse",
+    "https://cnc.producaorestrita.nfse.gov.br/SefinNacional/nfse",
+  ],
 };
 
 interface DpsData {
@@ -127,13 +134,18 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Erro ao processar certificado: ${(error as Error).message}` }, 500);
     }
 
+    // Validate required municipality code
+    if (!dps_data.codigoMunicipioIncidencia || dps_data.codigoMunicipioIncidencia.length < 7) {
+      return jsonResponse({ error: "Código do município de incidência (IBGE) é obrigatório (7 dígitos)" }, 400);
+    }
+
     // Build DPS XML
     const tpAmb = dps_data.ambiente === "producao" ? "1" : "2";
     const serie = dps_data.serie || "EPN";
     const nDPS = (dps_data.numeroDps || "1").padStart(15, "0");
     const dhEmi = new Date().toISOString().replace("Z", "-03:00");
     const dCompet = dps_data.competencia;
-    const codigoMunicipio = dps_data.codigoMunicipioIncidencia || "0000000";
+    const codigoMunicipio = dps_data.codigoMunicipioIncidencia;
 
     // Generate DPS ID: DPS + cMunPrest(7) + tpInsc(1|2) + CNPJ(14) + serie(5) + nDPS(15)
     const tpInsc = cnpj.length <= 11 ? "2" : "1";
@@ -238,30 +250,40 @@ Deno.serve(async (req) => {
     const b64 = uint8ArrayToBase64(gzipped);
 
     const payload = JSON.stringify({ dpsXmlGZipB64: b64 });
-    const sefinUrl = SEFIN_URLS[dps_data.ambiente] || SEFIN_URLS.homologacao;
+    const endpoints = SEFIN_ENDPOINTS[dps_data.ambiente] || SEFIN_ENDPOINTS.homologacao;
 
-    console.log(`Enviando DPS para SEFIN (${dps_data.ambiente}): ${sefinUrl}`);
+    // Try multiple SEFIN endpoints
+    let sefinResponse: MtlsTextResponse | null = null;
+    let lastError: Error | null = null;
 
-    // Send via mTLS
-    let sefinResponse: MtlsTextResponse;
-    try {
-      sefinResponse = await requestTextWithMTLS(
-        new URL(sefinUrl),
-        {
-          method: "POST",
-          body: payload,
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json, application/xml, */*",
-            "User-Agent": "VeloGestao-NFSe/1.0",
+    for (const sefinUrl of endpoints) {
+      console.log(`Tentando enviar DPS para SEFIN (${dps_data.ambiente}): ${sefinUrl}`);
+      try {
+        sefinResponse = await requestTextWithMTLS(
+          new URL(sefinUrl),
+          {
+            method: "POST",
+            body: payload,
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json, application/xml, */*",
+              "User-Agent": "VeloGestao-NFSe/1.0",
+            },
           },
-        },
-        certPem,
-        keyPem,
-      );
-    } catch (error) {
-      console.error("Erro ao enviar DPS via mTLS:", error);
-      return jsonResponse({ error: `Erro de conexão com SEFIN: ${(error as Error).message}` }, 502);
+          certPem,
+          keyPem,
+        );
+        console.log(`SEFIN ${sefinUrl} respondeu: status=${sefinResponse.status}`);
+        break; // success
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`Falha ao conectar em ${sefinUrl}:`, (error as Error).message);
+      }
+    }
+
+    if (!sefinResponse) {
+      console.error("Todas as tentativas de conexão SEFIN falharam:", lastError);
+      return jsonResponse({ error: `Erro de conexão com SEFIN: ${lastError?.message || "connection reset"}` }, 502);
     }
 
     console.log(`SEFIN response: status=${sefinResponse.status} bodyLen=${sefinResponse.bodyText.length}`);

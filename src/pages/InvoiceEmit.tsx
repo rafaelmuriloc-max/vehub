@@ -234,11 +234,12 @@ export default function InvoiceEmit() {
                 />
               </div>
               <div>
-                <Label>Código Município Incidência (IBGE)</Label>
+                <Label>Código Município Incidência (IBGE) *</Label>
                 <Input
+                  required
                   value={form.codigoMunicipioIncidencia}
                   onChange={e => updateField('codigoMunicipioIncidencia', e.target.value)}
-                  placeholder="Ex: 3550308 (São Paulo)"
+                  placeholder="Ex: 3550308 (São Paulo) - 7 dígitos"
                 />
               </div>
             </div>
