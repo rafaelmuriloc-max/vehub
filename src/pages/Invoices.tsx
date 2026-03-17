@@ -103,16 +103,31 @@ export default function Invoices() {
     }
   }
 
+  async function triggerDownload(url: string, filename: string) {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  }
+
   async function handleDownload(invoiceId: string, type: 'xml' | 'pdf', existingUrl: string | null) {
     const key = `${invoiceId}-${type}`;
     setDownloadingMap(prev => ({ ...prev, [key]: true }));
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    const filename = `${invoice?.access_key || invoice?.invoice_number || invoiceId}.${type}`;
 
     try {
       // If URL already exists, just create a signed URL
       if (existingUrl) {
         const { data } = await supabase.storage.from('documents').createSignedUrl(existingUrl, 300);
         if (data?.signedUrl) {
-          window.open(data.signedUrl, '_blank');
+          await triggerDownload(data.signedUrl, filename);
           return;
         }
       }
@@ -133,7 +148,7 @@ export default function Invoices() {
       }
 
       if (data?.signed_url) {
-        window.open(data.signed_url, '_blank');
+        await triggerDownload(data.signed_url, filename);
         // Update local state so next click is instant
         setInvoices(prev => prev.map(inv => {
           if (inv.id !== invoiceId) return inv;
