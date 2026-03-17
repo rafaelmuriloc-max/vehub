@@ -31,7 +31,7 @@ type Invoice = {
 };
 
 export default function Invoices() {
-  const { admin } = useAuth();
+  const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
