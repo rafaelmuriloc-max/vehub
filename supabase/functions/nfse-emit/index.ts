@@ -729,7 +729,8 @@ async function sendRawHttpRequest(
   }
 }
 
-// Same as sendRawHttpRequest but connects to IP while using original hostname for TLS SNI and Host header
+// Connects via plain TCP to IP, then upgrades to TLS with SNI set to original hostname
+// This ensures certificate validation uses the real hostname, not the IP
 async function sendRawHttpRequestWithSNI(
   ipUrl: URL,
   originalHost: string,
@@ -740,12 +741,19 @@ async function sendRawHttpRequestWithSNI(
 ): Promise<MtlsTextResponse> {
   const encoder = new TextEncoder();
   const bodyBytes = encoder.encode(init.body ?? "");
+  const port = Number(ipUrl.port || 443);
   
-  console.log(`Connecting to IP ${ipUrl.hostname}:${ipUrl.port || 443} with SNI ${originalHost}`);
+  console.log(`Connecting TCP to ${ipUrl.hostname}:${port}, then startTls with SNI=${originalHost}`);
   
-  const conn = await Deno.connectTls({
+  // Step 1: Plain TCP connection to IP
+  const tcpConn = await Deno.connect({
     hostname: ipUrl.hostname,
-    port: Number(ipUrl.port || 443),
+    port,
+  });
+
+  // Step 2: Upgrade to TLS with original hostname for SNI + client cert
+  const conn = await Deno.startTls(tcpConn, {
+    hostname: originalHost, // SNI = real hostname, cert validation passes
     cert: certPem,
     key: keyPem,
     alpnProtocols: ["http/1.1"],
@@ -759,11 +767,8 @@ async function sendRawHttpRequestWithSNI(
       headers.set("Content-Length", String(bodyBytes.byteLength));
     }
 
-    const originalUrl = new URL(ipUrl.toString());
-    originalUrl.hostname = originalHost;
-
     const requestHead = [
-      `${init.method} ${originalUrl.pathname}${originalUrl.search} HTTP/1.1`,
+      `${init.method} ${ipUrl.pathname}${ipUrl.search} HTTP/1.1`,
       ...Array.from(headers.entries()).map(([n, v]) => `${n}: ${v}`),
       "",
       "",
@@ -799,7 +804,7 @@ async function sendRawHttpRequestWithSNI(
       status: Number(statusMatch[1]),
       statusText: statusMatch[2],
       strategy,
-      url: originalUrl.toString(),
+      url: `https://${originalHost}${ipUrl.pathname}${ipUrl.search}`,
     };
   } finally {
     conn.close();
