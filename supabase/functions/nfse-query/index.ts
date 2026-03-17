@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("document, digital_certificate_url, digital_certificate_password, company_name")
+      .select("document, digital_certificate_url, digital_certificate_password, company_name, last_nsu")
       .eq("id", client_id)
       .single();
 
