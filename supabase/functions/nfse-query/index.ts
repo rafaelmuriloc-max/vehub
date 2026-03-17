@@ -140,11 +140,14 @@ Deno.serve(async (req) => {
     let syncMeta: Record<string, unknown> = {};
 
     try {
+      const startNsu = (client as any).last_nsu || "0";
+      console.log(`Iniciando sync do NSU ${startNsu} para cliente ${client_id}`);
+
       const distribution = await fetchInvoicesFromAdn({
         certPem,
         cnpj,
         keyPem,
-        referenceMonth: reference_month,
+        startNsu,
       });
 
       invoicesData = distribution.invoices;
@@ -153,6 +156,7 @@ Deno.serve(async (req) => {
         maxNSU: distribution.maxNSU,
         transport: distribution.transport,
         ultNSU: distribution.ultNSU,
+        startNsu,
       };
     } catch (apiError) {
       console.error("ADN NFS-e connection error:", apiError);
