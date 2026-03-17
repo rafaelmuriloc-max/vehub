@@ -284,6 +284,10 @@ async function fetchInvoicesFromAdn(params: {
         console.warn(`Rate limited (429) at NSU ${currentNsu}, stopping pagination with ${xmlDocuments.length} docs collected so far.`);
         break;
       }
+      if (msg.includes("404") || msg.includes("NENHUM_DOCUMENTO_LOCALIZADO")) {
+        console.log(`No more documents at NSU ${currentNsu}, ending pagination with ${xmlDocuments.length} docs collected.`);
+        break;
+      }
       throw err;
     }
 
