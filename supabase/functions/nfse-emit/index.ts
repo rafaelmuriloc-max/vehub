@@ -953,11 +953,12 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
   const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId)
     || parsedCerts.find((c) => c.subject !== c.issuer)
     || parsedCerts[0];
+  const chain = buildChain(leafCert, parsedCerts);
 
-  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); usando apenas o certificado cliente folha para mTLS.`);
+  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); enviando cadeia com ${chain.length} item(ns).`);
 
   return {
-    certPem: leafCert.pem.trim(),
+    certPem: chain.map((cert) => cert.pem.trim()).join("\n"),
     keyPem,
   };
 }
