@@ -143,10 +143,19 @@ export default function InvoiceEmit() {
 
   async function fetchIbgeFromCep(cep: string): Promise<string | null> {
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.ibge || null;
+      // ViaCEP always returns ibge code
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ibge) return data.ibge;
+      }
+      // Fallback to BrasilAPI
+      const res2 = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+      if (res2.ok) {
+        const data2 = await res2.json();
+        return data2.ibge || null;
+      }
+      return null;
     } catch {
       return null;
     }
