@@ -134,13 +134,18 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Erro ao processar certificado: ${(error as Error).message}` }, 500);
     }
 
+    // Validate required municipality code
+    if (!dps_data.codigoMunicipioIncidencia || dps_data.codigoMunicipioIncidencia.length < 7) {
+      return jsonResponse({ error: "Código do município de incidência (IBGE) é obrigatório (7 dígitos)" }, 400);
+    }
+
     // Build DPS XML
     const tpAmb = dps_data.ambiente === "producao" ? "1" : "2";
     const serie = dps_data.serie || "EPN";
     const nDPS = (dps_data.numeroDps || "1").padStart(15, "0");
     const dhEmi = new Date().toISOString().replace("Z", "-03:00");
     const dCompet = dps_data.competencia;
-    const codigoMunicipio = dps_data.codigoMunicipioIncidencia || "0000000";
+    const codigoMunicipio = dps_data.codigoMunicipioIncidencia;
 
     // Generate DPS ID: DPS + cMunPrest(7) + tpInsc(1|2) + CNPJ(14) + serie(5) + nDPS(15)
     const tpInsc = cnpj.length <= 11 ? "2" : "1";
