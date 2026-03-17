@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, Search, RefreshCw, FileCode, Plus } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2 } from 'lucide-react';
 
 type Client = { id: string; company_name: string; document: string | null };
 type Invoice = {
@@ -45,6 +45,7 @@ export default function Invoices() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [filterClient, setFilterClient] = useState('all');
+  const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadClients();
@@ -102,19 +103,51 @@ export default function Invoices() {
     }
   }
 
-  async function downloadXml(xmlUrl: string) {
-    const { data, error } = await supabase.storage.from('documents').createSignedUrl(xmlUrl, 300);
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, '_blank');
-    } else {
-      toast({ title: 'Erro ao gerar link de download', variant: 'destructive' });
-    }
-  }
+  async function handleDownload(invoiceId: string, type: 'xml' | 'pdf', existingUrl: string | null) {
+    const key = `${invoiceId}-${type}`;
+    setDownloadingMap(prev => ({ ...prev, [key]: true }));
 
-  async function downloadPdf(pdfUrl: string) {
-    const { data } = await supabase.storage.from('documents').createSignedUrl(pdfUrl, 300);
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, '_blank');
+    try {
+      // If URL already exists, just create a signed URL
+      if (existingUrl) {
+        const { data } = await supabase.storage.from('documents').createSignedUrl(existingUrl, 300);
+        if (data?.signedUrl) {
+          window.open(data.signedUrl, '_blank');
+          return;
+        }
+      }
+
+      // Call the edge function to generate/fetch
+      const { data, error } = await supabase.functions.invoke('nfse-download', {
+        body: { invoice_id: invoiceId, type },
+      });
+
+      if (error) {
+        toast({ title: `Erro ao baixar ${type.toUpperCase()}`, description: error.message, variant: 'destructive' });
+        return;
+      }
+
+      if (data?.error) {
+        toast({ title: `Erro ao baixar ${type.toUpperCase()}`, description: data.error, variant: 'destructive' });
+        return;
+      }
+
+      if (data?.signed_url) {
+        window.open(data.signed_url, '_blank');
+        // Update local state so next click is instant
+        setInvoices(prev => prev.map(inv => {
+          if (inv.id !== invoiceId) return inv;
+          return type === 'xml'
+            ? { ...inv, xml_url: inv.xml_url || 'cached' }
+            : { ...inv, pdf_url: inv.pdf_url || 'cached' };
+        }));
+      } else {
+        toast({ title: `${type.toUpperCase()} não disponível`, variant: 'destructive' });
+      }
+    } catch (e) {
+      toast({ title: 'Erro inesperado', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setDownloadingMap(prev => ({ ...prev, [key]: false }));
     }
   }
 
@@ -259,35 +292,51 @@ export default function Invoices() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInvoices.map(inv => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                    <TableCell>{getClientName(inv.client_id)}</TableCell>
-                    <TableCell>{formatDate(inv.issue_date)}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{inv.service_description || '—'}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(inv.gross_value)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(inv.tax_value)}</TableCell>
-                    <TableCell>
-                      <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
-                        {inv.status || 'normal'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {inv.xml_url && (
-                          <Button size="sm" variant="ghost" onClick={() => downloadXml(inv.xml_url!)}>
-                            <FileCode className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {inv.pdf_url && (
-                          <Button size="sm" variant="ghost" onClick={() => downloadPdf(inv.pdf_url!)}>
-                            <FileText className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredInvoices.map(inv => {
+                  const xmlLoading = downloadingMap[`${inv.id}-xml`];
+                  const pdfLoading = downloadingMap[`${inv.id}-pdf`];
+                  return (
+                    <TableRow key={inv.id}>
+                      <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
+                      <TableCell>{getClientName(inv.client_id)}</TableCell>
+                      <TableCell>{formatDate(inv.issue_date)}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{inv.service_description || '—'}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(inv.gross_value)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(inv.tax_value)}</TableCell>
+                      <TableCell>
+                        <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
+                          {inv.status || 'normal'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {inv.access_key && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={xmlLoading}
+                                onClick={() => handleDownload(inv.id, 'xml', inv.xml_url)}
+                                title="Baixar XML"
+                              >
+                                {xmlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={pdfLoading}
+                                onClick={() => handleDownload(inv.id, 'pdf', inv.pdf_url)}
+                                title="Baixar PDF"
+                              >
+                                {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
