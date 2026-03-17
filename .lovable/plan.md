@@ -1,47 +1,18 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Fix: Habilitar upload de certificado ao criar novo cliente
 
-### Mudanças
+## Problema
+O input de certificado digital tem `disabled={!editing}`, o que impede o upload quando estamos criando um novo cliente (quando `editing` é `null`). O upload precisa do `client_id` para salvar no Storage, e esse ID só existe após o `insert`.
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+## Solução
+Mudar o fluxo para que, ao criar um novo cliente, o certificado seja armazenado temporariamente em estado local (o `File` objeto) e processado logo após o `insert` retornar o `client_id`.
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+### Alterações em `src/pages/Clients.tsx`:
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
-
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
-
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
-
-### Estrutura do menu resultante
-
-```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
-```
+1. **Novo estado**: `pendingCertFile` para guardar o arquivo selecionado antes de salvar
+2. **Remover `disabled={!editing}`** do input de certificado — manter apenas `disabled={certificateUploading}`
+3. **Alterar `handleCertificateUpload`**: Se `editing` é `null`, armazenar o arquivo em `pendingCertFile` e extrair a validade localmente (já faz isso). Não tentar upload ao Storage.
+4. **Alterar `handleSave`**: Após o `insert` retornar o `clientId`, se `pendingCertFile` existir, fazer o upload do certificado e atualizar `digital_certificate_url` no registro recém-criado.
+5. **Remover a mensagem** "Salve o cliente primeiro para fazer upload do certificado."
 
