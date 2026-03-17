@@ -1,29 +1,47 @@
 
 
-# Plano: Filtro de período com presets (Esse Mês, Mês Anterior, etc.)
+## Plano: Reorganizar menu Cadastro com submenus
 
-## Alteração
+### Mudanças
 
-Substituir os dois inputs de data (`De` / `Até`) por um **Select de período** com as opções:
-- **Esse Mês** — primeiro e último dia do mês atual
-- **Mês Anterior** — primeiro e último dia do mês anterior
-- **Esse Ano** — 1º de janeiro até hoje
-- **Ano Anterior** — 1º de janeiro a 31 de dezembro do ano anterior
-- **Personalizado** — exibe os dois inputs de data (comportamento atual)
-- **Todos** (valor padrão) — sem filtro de data
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-### Em `src/pages/Invoices.tsx`:
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-1. **Novo estado** `datePeriod` com valores `'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'`, default `'all'`.
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-2. **Função helper** `getDateRange(period)` que retorna `{ from: string, to: string }` calculando as datas com base no período selecionado.
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
 
-3. **Ao mudar `datePeriod`**: se não for `'custom'`, calcular e setar `filterDateFrom`/`filterDateTo` automaticamente. Se for `'custom'`, manter os valores atuais para edição manual. Se for `'all'`, limpar ambos.
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
 
-4. **UI**: Trocar os dois inputs de data por um Select de período. Os inputs de data só aparecem quando `datePeriod === 'custom'`.
+### Estrutura do menu resultante
 
-```
-[Select: Período ▼]  [De: ____] [Até: ____]   [Select: Cliente ▼]
-                      ↑ só visível se "Personalizado"
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
+
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
 ```
 
