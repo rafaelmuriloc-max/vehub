@@ -134,8 +134,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Erro ao processar certificado: ${(error as Error).message}` }, 500);
     }
 
-    // Validate required municipality code
-    if (!dps_data.codigoMunicipioIncidencia || dps_data.codigoMunicipioIncidencia.length < 7) {
+    // Trim and validate required municipality code
+    dps_data.codigoMunicipioIncidencia = (dps_data.codigoMunicipioIncidencia || "").trim();
+    if (!dps_data.codigoMunicipioIncidencia || !/^\d{7}$/.test(dps_data.codigoMunicipioIncidencia)) {
       return jsonResponse({ error: "Código do município de incidência (IBGE) é obrigatório (7 dígitos)" }, 400);
     }
 
