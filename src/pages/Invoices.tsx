@@ -345,9 +345,10 @@ export default function Invoices() {
                 <Label>Cliente</Label>
                 <Select value={selectedClient} onValueChange={setSelectedClient}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
+                    <SelectValue placeholder="Todos os clientes" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="all">Todos os clientes</SelectItem>
                     {clients.filter(c => c.document).map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                     ))}
