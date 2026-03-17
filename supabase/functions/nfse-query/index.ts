@@ -437,14 +437,8 @@ async function requestTextWithMTLS(
   }
 
   throw lastError || new Error("Falha ao conectar via mTLS");
-    } catch (error) {
-      lastError = error as Error;
-      console.error(`Falha na estratégia ${attempt.label}:`, error);
-    }
-  }
-
-  throw lastError || new Error("Falha ao conectar via mTLS");
 }
+
 
 async function requestWithFetchHttp1(
   url: URL,
