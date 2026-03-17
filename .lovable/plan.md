@@ -1,47 +1,32 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Plano: Criar menu "Fiscal" com iframe do Monitor Contábil
 
-### Mudanças
+## Alterações
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+### 1. Nova página `src/pages/Fiscal.tsx`
+Página simples que renderiza um iframe fullscreen apontando para `https://app.monitorcontabil.com.br/`. O iframe ocupará toda a área de conteúdo disponível.
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
-
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
-
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
-
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
-
-### Estrutura do menu resultante
-
-```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
+```typescript
+export default function Fiscal() {
+  return (
+    <div className="w-full h-[calc(100vh-7rem)]">
+      <iframe
+        src="https://app.monitorcontabil.com.br/"
+        className="w-full h-full border-0 rounded-lg"
+        allow="clipboard-write"
+        title="Monitor Contábil"
+      />
+    </div>
+  );
+}
 ```
+
+### 2. Rota em `src/App.tsx`
+Adicionar `<Route path="/fiscal" element={<Fiscal />} />` dentro do `AppLayout`.
+
+### 3. Menu em `src/components/AppSidebar.tsx`
+Adicionar item "Fiscal" ao array `menuItems` com ícone `Scale` (lucide-react), path `/fiscal`, posicionado após "Notas Fiscais".
+
+**Nota**: O site externo pode bloquear iframes via header `X-Frame-Options` ou `Content-Security-Policy`. Se isso acontecer, o iframe mostrará uma página em branco e será necessário uma abordagem alternativa (ex: abrir em nova aba).
 
