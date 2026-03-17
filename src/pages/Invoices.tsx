@@ -45,7 +45,10 @@ export default function Invoices() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [filterClient, setFilterClient] = useState('all');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadClients();
