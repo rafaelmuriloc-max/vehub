@@ -1,32 +1,47 @@
 
 
-# Plano: Corrigir endpoint de autenticação do Integra Contador
+## Plano: Reorganizar menu Cadastro com submenus
 
-## Problema
+### Mudanças
 
-O código atual autentica via mTLS em `https://autenticacao.sapi.serpro.gov.br/authenticate`, mas conforme o curl que você compartilhou, a autenticação OAuth2 deve ser feita diretamente no gateway:
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
+
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
+
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
+
+### Estrutura do menu resultante
+
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
+
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
 ```
-https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/
-```
-
-Com Basic Auth (consumer-key:consumer-secret) e `grant_type=client_credentials`, **sem necessidade de mTLS** no passo de autenticação.
-
-Além disso, o erro 403 `[AcessoNegado-ICGERENCIADOR-018]` indica que o CNPJ do contratante (`40908083000136`) não corresponde ao habilitado no e-commerce SERPRO. Isso pode estar relacionado ao uso do endpoint de auth errado (que pode gerar tokens com escopo diferente).
-
-## Correção em `supabase/functions/integra-contador/index.ts`
-
-1. **Mudar `SERPRO_AUTH_URL`** de `https://autenticacao.sapi.serpro.gov.br/authenticate` para `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/`
-2. **Simplificar a chamada de autenticação** — usar `fetch()` padrão com Basic Auth (sem mTLS/certificado), já que o gateway não exige mTLS para o token OAuth2
-3. **Manter mTLS apenas na chamada da API** (POST para `/v1/{tipo}`) que efetivamente precisa do certificado
-
-## Sobre o erro do Contratante
-
-O erro "número do Contratante informado é diferente do conteúdo do Contratante habilitado no ecommerce" é uma questão de configuração na Loja SERPRO — o CNPJ `40908083000136` precisa ser o mesmo cadastrado lá. Após corrigir o endpoint de auth, se o erro persistir, será necessário verificar qual CNPJ está habilitado no e-commerce SERPRO.
-
-## Arquivos
-
-| Ação | Arquivo |
-|------|---------|
-| Editar | `supabase/functions/integra-contador/index.ts` — alterar URL de auth e simplificar chamada OAuth2 |
 

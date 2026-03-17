@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SERPRO_AUTH_URL = "https://autenticacao.sapi.serpro.gov.br/authenticate";
+const SERPRO_AUTH_URL = "https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/";
 const SERPRO_API_BASE = "https://gateway.apiserpro.serpro.gov.br/integra-contador/v1";
 
 type ParsedCertificate = {
@@ -117,42 +117,37 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Credenciais SERPRO não configuradas" }, 500);
     }
 
-    // OAuth2 authenticate with mTLS
-    console.log("Autenticando no SERPRO via OAuth2 com mTLS...");
+    // OAuth2 authenticate via gateway (Basic Auth, sem mTLS)
+    console.log("Autenticando no SERPRO via OAuth2 (gateway)...");
     const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
 
-    const authResponse = await requestWithFetchHttp1(
-      new URL(SERPRO_AUTH_URL),
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${authCredentials}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Role-Type": "TERCEIROS",
-        },
-        body: "grant_type=client_credentials",
+    const authFetchResponse = await fetch(SERPRO_AUTH_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${authCredentials}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Role-Type": "TERCEIROS",
       },
-      certPem,
-      keyPem,
-      "serpro-auth"
-    );
+      body: "grant_type=client_credentials",
+    });
 
-    console.log(`Auth response status: ${authResponse.status}`);
+    const authResponseText = await authFetchResponse.text();
+    console.log(`Auth response status: ${authFetchResponse.status}`);
 
-    if (authResponse.status !== 200) {
-      console.error("Auth error body:", authResponse.bodyText);
+    if (!authFetchResponse.ok) {
+      console.error("Auth error body:", authResponseText);
       return jsonResponse({
         error: "Falha na autenticação SERPRO",
-        details: authResponse.bodyText,
-        status: authResponse.status,
+        details: authResponseText,
+        status: authFetchResponse.status,
       }, 401);
     }
 
     let authData: { access_token?: string; jwt_token?: string };
     try {
-      authData = JSON.parse(authResponse.bodyText);
+      authData = JSON.parse(authResponseText);
     } catch {
-      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponse.bodyText }, 500);
+      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponseText }, 500);
     }
 
     const bearerToken = authData.access_token;
