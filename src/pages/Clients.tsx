@@ -108,6 +108,7 @@ export default function Clients() {
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
+  const [pendingCertFile, setPendingCertFile] = useState<File | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact>>({});
 
@@ -254,10 +255,6 @@ export default function Clients() {
   async function handleCertificateUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!editing) {
-      toast({ title: 'Salve o cliente primeiro', description: 'É necessário salvar o cliente antes de fazer upload do certificado.', variant: 'destructive' });
-      return;
-    }
     const password = form.digital_certificate_password;
     if (!password) {
       toast({ title: 'Senha necessária', description: 'Informe a senha do certificado antes de fazer o upload.', variant: 'destructive' });
@@ -298,14 +295,20 @@ export default function Clients() {
         setForm(prev => ({ ...prev, digital_certificate_expiry: formatted }));
       }
 
-      // Upload to storage
-      const filePath = `${editing.id}/${file.name}`;
-      const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { error: updateError } = await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', editing.id);
-      if (updateError) throw updateError;
-      setCertificateUrl(filePath);
-      toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo. Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}.` });
+      if (editing) {
+        // Upload to storage immediately
+        const filePath = `${editing.id}/${file.name}`;
+        const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, file, { upsert: true });
+        if (uploadError) throw uploadError;
+        const { error: updateError } = await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', editing.id);
+        if (updateError) throw updateError;
+        setCertificateUrl(filePath);
+        toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo. Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}.` });
+      } else {
+        // Store file for upload after save
+        setPendingCertFile(file);
+        toast({ title: 'Certificado carregado', description: `Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}. Será salvo ao criar o cliente.` });
+      }
     } catch (err: any) {
       toast({ title: 'Erro no upload', description: err.message, variant: 'destructive' });
     } finally {
@@ -400,6 +403,18 @@ export default function Clients() {
           toast({ title: 'Erro ao salvar contatos', description: contactError.message, variant: 'destructive' });
         }
       }
+    }
+
+    // Upload pending certificate for new clients
+    if (clientId && pendingCertFile) {
+      try {
+        const filePath = `${clientId}/${pendingCertFile.name}`;
+        const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, pendingCertFile, { upsert: true });
+        if (!uploadError) {
+          await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', clientId);
+        }
+      } catch {}
+      setPendingCertFile(null);
     }
 
     setDialogOpen(false);
@@ -712,12 +727,12 @@ export default function Clients() {
                           type="file"
                           accept=".pfx,.p12"
                           onChange={handleCertificateUpload}
-                          disabled={!editing || certificateUploading}
+                          disabled={certificateUploading}
                         />
                         {certificateUploading && <Loader2 className="h-4 w-4 animate-spin" />}
                       </div>
                     )}
-                    {!editing && <p className="text-xs text-muted-foreground">Salve o cliente primeiro para fazer upload do certificado.</p>}
+                    {!editing && pendingCertFile && <p className="text-xs text-muted-foreground">Certificado será salvo ao criar o cliente.</p>}
                   </div>
                   <div className="col-span-2 space-y-2"><Label>Informações dos Sócios</Label><Textarea {...f('partners_info')} /></div>
                 </div>
