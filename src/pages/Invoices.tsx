@@ -365,24 +365,41 @@ export default function Invoices() {
           <div className="flex items-center flex-wrap gap-4">
             <CardTitle className="text-lg">Notas Fiscais</CardTitle>
             <div className="flex items-center gap-2 flex-wrap ml-auto">
-              <div className="flex items-center gap-2">
-                <Label className="text-sm whitespace-nowrap">De:</Label>
-                <Input
-                  type="date"
-                  value={filterDateFrom}
-                  onChange={e => setFilterDateFrom(e.target.value)}
-                  className="w-[160px]"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm whitespace-nowrap">Até:</Label>
-                <Input
-                  type="date"
-                  value={filterDateTo}
-                  onChange={e => setFilterDateTo(e.target.value)}
-                  className="w-[160px]"
-                />
-              </div>
+              <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os períodos</SelectItem>
+                  <SelectItem value="this_month">Esse Mês</SelectItem>
+                  <SelectItem value="last_month">Mês Anterior</SelectItem>
+                  <SelectItem value="this_year">Esse Ano</SelectItem>
+                  <SelectItem value="last_year">Ano Anterior</SelectItem>
+                  <SelectItem value="custom">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+              {datePeriod === 'custom' && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm whitespace-nowrap">De:</Label>
+                    <Input
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={e => setFilterDateFrom(e.target.value)}
+                      className="w-[160px]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm whitespace-nowrap">Até:</Label>
+                    <Input
+                      type="date"
+                      value={filterDateTo}
+                      onChange={e => setFilterDateTo(e.target.value)}
+                      className="w-[160px]"
+                    />
+                  </div>
+                </>
+              )}
               <Select value={filterClient} onValueChange={setFilterClient}>
                 <SelectTrigger className="w-[220px]">
                   <SelectValue />
