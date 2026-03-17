@@ -86,6 +86,7 @@ export type Database = {
           foundation_date: string | null
           from_another_office: boolean
           id: string
+          last_nsu: string | null
           main_activity: string | null
           monthly_value: number | null
           municipal_registration: string | null
@@ -128,6 +129,7 @@ export type Database = {
           foundation_date?: string | null
           from_another_office?: boolean
           id?: string
+          last_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
@@ -170,6 +172,7 @@ export type Database = {
           foundation_date?: string | null
           from_another_office?: boolean
           id?: string
+          last_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null

@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("document, digital_certificate_url, digital_certificate_password, company_name")
+      .select("document, digital_certificate_url, digital_certificate_password, company_name, last_nsu")
       .eq("id", client_id)
       .single();
 
@@ -140,11 +140,14 @@ Deno.serve(async (req) => {
     let syncMeta: Record<string, unknown> = {};
 
     try {
+      const startNsu = (client as any).last_nsu || "0";
+      console.log(`Iniciando sync do NSU ${startNsu} para cliente ${client_id}`);
+
       const distribution = await fetchInvoicesFromAdn({
         certPem,
         cnpj,
         keyPem,
-        referenceMonth: reference_month,
+        startNsu,
       });
 
       invoicesData = distribution.invoices;
@@ -153,6 +156,7 @@ Deno.serve(async (req) => {
         maxNSU: distribution.maxNSU,
         transport: distribution.transport,
         ultNSU: distribution.ultNSU,
+        startNsu,
       };
     } catch (apiError) {
       console.error("ADN NFS-e connection error:", apiError);
@@ -165,30 +169,31 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Cap at 20 invoices per sync to avoid timeout
-    const MAX_SAVE_PER_SYNC = 20;
+    // Save ALL invoices (no month filter)
+    const MAX_SAVE_PER_SYNC = 50;
     const invoicesToSave = invoicesData.slice(0, MAX_SAVE_PER_SYNC);
 
-    // Batch upsert: build all records first, then save in one call
-    const invoiceRecords = invoicesToSave.map((invoice) => ({
-      access_key: invoice.accessKey,
-      client_id,
-      gross_value: invoice.grossValue || 0,
-      invoice_number: invoice.invoiceNumber,
-      issue_date: invoice.issueDate,
-      issuer_cnpj: invoice.issuerCnpj || cnpj,
-      municipality_code: invoice.municipalityCode,
-      net_value: invoice.netValue || 0,
-      pdf_url: null,
-      raw_data: invoice.rawData,
-      service_description: invoice.serviceDescription,
-      status: invoice.status || "normal",
-      taker_cnpj: invoice.takerCnpj,
-      tax_value: invoice.taxValue || 0,
-      xml_url: null,
-    }));
+    const invoiceRecords = invoicesToSave
+      .filter((inv) => inv.accessKey) // must have access_key for upsert
+      .map((invoice) => ({
+        access_key: invoice.accessKey,
+        client_id,
+        gross_value: invoice.grossValue || 0,
+        invoice_number: invoice.invoiceNumber,
+        issue_date: invoice.issueDate,
+        issuer_cnpj: invoice.issuerCnpj || cnpj,
+        municipality_code: invoice.municipalityCode,
+        net_value: invoice.netValue || 0,
+        pdf_url: null,
+        raw_data: invoice.rawData,
+        service_description: invoice.serviceDescription,
+        status: invoice.status || "normal",
+        taker_cnpj: invoice.takerCnpj,
+        tax_value: invoice.taxValue || 0,
+        xml_url: null,
+      }));
 
-    let savedInvoices: unknown[] = [];
+    let savedCount = 0;
     if (invoiceRecords.length > 0) {
       const { data: saved, error: saveError } = await adminClient
         .from("invoices")
@@ -198,16 +203,30 @@ Deno.serve(async (req) => {
       if (saveError) {
         console.error("Erro ao salvar invoices em lote:", saveError);
       }
-      savedInvoices = saved || [];
+      savedCount = saved?.length || 0;
     }
+
+    // Persist last NSU for incremental sync
+    const lastNsu = syncMeta.ultNSU || syncMeta.maxNSU;
+    if (lastNsu) {
+      await adminClient
+        .from("clients")
+        .update({ last_nsu: String(lastNsu) })
+        .eq("id", client_id);
+    }
+
+    // Filter by month only for the response
+    const monthInvoices = invoicesData.filter((inv) =>
+      matchesReferenceMonth(inv.issueDate, reference_month)
+    );
 
     return jsonResponse({
       success: true,
-      message: `${savedInvoices.length} nota(s) fiscal(is) encontrada(s) para ${reference_month} e salva(s).`,
-      invoices: savedInvoices,
+      message: `${savedCount} nota(s) salva(s) no total, ${monthInvoices.length} do mês ${reference_month}.`,
+      invoices_saved: savedCount,
+      invoices_month: monthInvoices.length,
       sync_meta: syncMeta,
-      total: invoicesData.length,
-      truncated: invoicesData.length > MAX_SAVE_PER_SYNC,
+      total_fetched: invoicesData.length,
     });
   } catch (error) {
     console.error("Unexpected error:", error);
@@ -229,7 +248,7 @@ async function fetchInvoicesFromAdn(params: {
   certPem: string;
   cnpj: string;
   keyPem: string;
-  referenceMonth: string;
+  startNsu: string;
 }): Promise<{
   documentsFetched: number;
   invoices: ParsedInvoice[];
@@ -239,7 +258,7 @@ async function fetchInvoicesFromAdn(params: {
 }> {
   const xmlDocuments: string[] = [];
   const seenNsu = new Set<string>();
-  let currentNsu = "0";
+  let currentNsu = params.startNsu;
   let maxNSU: string | null = null;
   let transport: string | null = null;
   let ultNSU: string | null = null;
@@ -273,9 +292,8 @@ async function fetchInvoicesFromAdn(params: {
     currentNsu = result.ultNSU;
   }
 
-  const invoices = dedupeInvoices(parseXmlDocuments(xmlDocuments)).filter((invoice) =>
-    matchesReferenceMonth(invoice.issueDate, params.referenceMonth)
-  );
+  // Return ALL invoices without month filter
+  const invoices = dedupeInvoices(parseXmlDocuments(xmlDocuments));
 
   return {
     documentsFetched: xmlDocuments.length,
@@ -651,6 +669,13 @@ function safeJsonParse(value: string): unknown | null {
 function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: string | null } {
   let maxNSU: string | null = null;
   let ultNSU: string | null = null;
+
+  // Log top-level keys for debugging
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const topKeys = Object.keys(value as Record<string, unknown>);
+    console.log(`[DIAG] Top-level JSON keys: ${topKeys.join(", ")}`);
+  }
+
   const stack = [value];
 
   while (stack.length > 0) {
@@ -664,15 +689,42 @@ function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: st
 
     for (const [key, child] of Object.entries(current)) {
       const normalizedKey = key.toLowerCase();
-      if (ultNSU === null && normalizedKey === "ultnsu" && child !== null && child !== undefined) {
+      // Match various naming patterns: ultNSU, UltNSU, ultNsu, NSUUltimo, etc.
+      if (ultNSU === null && (normalizedKey === "ultnsu" || normalizedKey === "nsuultimo" || normalizedKey === "ultimonsu") && child !== null && child !== undefined) {
         ultNSU = String(child);
+        console.log(`[DIAG] Found ultNSU key="${key}" value="${ultNSU}"`);
       }
-      if (maxNSU === null && normalizedKey === "maxnsu" && child !== null && child !== undefined) {
+      if (maxNSU === null && (normalizedKey === "maxnsu" || normalizedKey === "nsumaximo" || normalizedKey === "maximonsu") && child !== null && child !== undefined) {
         maxNSU = String(child);
+        console.log(`[DIAG] Found maxNSU key="${key}" value="${maxNSU}"`);
       }
 
       if (child && typeof child === "object") {
         stack.push(child);
+      }
+    }
+  }
+
+  // If we have documents in an array, try to extract max NSU from LoteDFe items
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    const loteDfe = obj["LoteDFe"] || obj["loteDFe"] || obj["lotedfe"];
+    if (Array.isArray(loteDfe) && loteDfe.length > 0) {
+      const lastItem = loteDfe[loteDfe.length - 1] as Record<string, unknown> | undefined;
+      if (lastItem) {
+        const nsuFromItem = lastItem["NSU"] || lastItem["nsu"] || lastItem["Nsu"];
+        if (nsuFromItem !== undefined && nsuFromItem !== null) {
+          const derivedUltNsu = String(nsuFromItem);
+          if (!ultNSU) {
+            ultNSU = derivedUltNsu;
+            console.log(`[DIAG] Derived ultNSU from last LoteDFe item: ${ultNSU}`);
+          }
+          if (!maxNSU) {
+            // If there are 50 items, there might be more pages
+            maxNSU = loteDfe.length >= 50 ? String(Number(derivedUltNsu) + 1) : derivedUltNsu;
+            console.log(`[DIAG] Derived maxNSU: ${maxNSU} (loteDFe.length=${loteDfe.length})`);
+          }
+        }
       }
     }
   }
