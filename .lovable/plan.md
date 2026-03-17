@@ -1,47 +1,33 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Fix: `leafCert is not defined` in nfse-emit
 
-### Mudanças
+## Problem
+In `parsePfx()` (line 956), the code references `leafCert.pem.trim()` but `leafCert` is never declared. The variable `parsedCerts` is populated but no leaf certificate is selected from it.
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+## Fix
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+**File: `supabase/functions/nfse-emit/index.ts`** (lines 951-958)
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+After `parsedCerts` is built and validated, add leaf certificate selection logic before the return statement:
 
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
+```typescript
+if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no PFX");
 
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
+// Find leaf cert: match by localKeyId with the private key, or pick the one whose subject != issuer (not self-signed)
+let leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId)
+  || parsedCerts.find((c) => c.subject !== c.issuer)
+  || parsedCerts[0];
 
-### Estrutura do menu resultante
+console.log(`PFX carregado com ${parsedCerts.length} certificado(s); usando apenas o certificado cliente folha para mTLS.`);
 
-```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
+return {
+  certPem: leafCert.pem.trim(),
+  keyPem,
+};
 ```
+
+This matches the pattern used in `nfse-query` -- find the leaf by localKeyId match with the private key, fall back to the non-self-signed cert, then fall back to the first cert.
+
+Single variable addition, no other changes needed.
 
