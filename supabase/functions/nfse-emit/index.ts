@@ -950,6 +950,10 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
 
   if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no PFX");
 
+  const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId)
+    || parsedCerts.find((c) => c.subject !== c.issuer)
+    || parsedCerts[0];
+
   console.log(`PFX carregado com ${parsedCerts.length} certificado(s); usando apenas o certificado cliente folha para mTLS.`);
 
   return {
