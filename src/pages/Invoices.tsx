@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -9,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, Search, RefreshCw, FileCode } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, FileCode, Plus } from 'lucide-react';
 
 type Client = { id: string; company_name: string; document: string | null };
 type Invoice = {
@@ -31,6 +32,7 @@ type Invoice = {
 };
 
 export default function Invoices() {
+  const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
@@ -143,6 +145,12 @@ export default function Invoices() {
           <h1 className="text-3xl font-bold text-foreground">Notas Fiscais de Serviço</h1>
           <p className="text-muted-foreground">Consulta e download de NFS-e do Portal Nacional</p>
         </div>
+        {isAdmin && (
+          <Button onClick={() => navigate('/invoices/emit')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Emitir NFS-e
+          </Button>
+        )}
       </div>
 
       {/* Sync Card */}

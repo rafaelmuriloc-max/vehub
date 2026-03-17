@@ -16,6 +16,7 @@ import Documents from "./pages/Documents";
 import Invoices from "./pages/Invoices";
 import Settings from "./pages/Settings";
 import DocumentTypes from "./pages/DocumentTypes";
+import InvoiceEmit from "./pages/InvoiceEmit";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/obligations" element={<Obligations />} />
               <Route path="/documents" element={<Documents />} />
               <Route path="/invoices" element={<Invoices />} />
+              <Route path="/invoices/emit" element={<InvoiceEmit />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />

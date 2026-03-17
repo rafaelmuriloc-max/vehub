@@ -2,3 +2,6 @@ project_id = "ismgjjvarzzfsbdpthot"
 
 [functions.nfse-query]
 verify_jwt = false
+
+[functions.nfse-emit]
+verify_jwt = false
