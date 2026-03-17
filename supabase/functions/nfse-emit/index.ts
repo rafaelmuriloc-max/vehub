@@ -250,30 +250,40 @@ Deno.serve(async (req) => {
     const b64 = uint8ArrayToBase64(gzipped);
 
     const payload = JSON.stringify({ dpsXmlGZipB64: b64 });
-    const sefinUrl = SEFIN_URLS[dps_data.ambiente] || SEFIN_URLS.homologacao;
+    const endpoints = SEFIN_ENDPOINTS[dps_data.ambiente] || SEFIN_ENDPOINTS.homologacao;
 
-    console.log(`Enviando DPS para SEFIN (${dps_data.ambiente}): ${sefinUrl}`);
+    // Try multiple SEFIN endpoints
+    let sefinResponse: MtlsTextResponse | null = null;
+    let lastError: Error | null = null;
 
-    // Send via mTLS
-    let sefinResponse: MtlsTextResponse;
-    try {
-      sefinResponse = await requestTextWithMTLS(
-        new URL(sefinUrl),
-        {
-          method: "POST",
-          body: payload,
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json, application/xml, */*",
-            "User-Agent": "VeloGestao-NFSe/1.0",
+    for (const sefinUrl of endpoints) {
+      console.log(`Tentando enviar DPS para SEFIN (${dps_data.ambiente}): ${sefinUrl}`);
+      try {
+        sefinResponse = await requestTextWithMTLS(
+          new URL(sefinUrl),
+          {
+            method: "POST",
+            body: payload,
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json, application/xml, */*",
+              "User-Agent": "VeloGestao-NFSe/1.0",
+            },
           },
-        },
-        certPem,
-        keyPem,
-      );
-    } catch (error) {
-      console.error("Erro ao enviar DPS via mTLS:", error);
-      return jsonResponse({ error: `Erro de conexão com SEFIN: ${(error as Error).message}` }, 502);
+          certPem,
+          keyPem,
+        );
+        console.log(`SEFIN ${sefinUrl} respondeu: status=${sefinResponse.status}`);
+        break; // success
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`Falha ao conectar em ${sefinUrl}:`, (error as Error).message);
+      }
+    }
+
+    if (!sefinResponse) {
+      console.error("Todas as tentativas de conexão SEFIN falharam:", lastError);
+      return jsonResponse({ error: `Erro de conexão com SEFIN: ${lastError?.message || "connection reset"}` }, 502);
     }
 
     console.log(`SEFIN response: status=${sefinResponse.status} bodyLen=${sefinResponse.bodyText.length}`);
