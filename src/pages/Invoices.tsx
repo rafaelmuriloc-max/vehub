@@ -365,7 +365,7 @@ export default function Invoices() {
               </div>
               <Button onClick={handleSync} disabled={syncing}>
                 {syncing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
-                {syncing ? 'Consultando...' : 'Buscar Notas'}
+                {syncing ? (syncProgress || 'Consultando...') : 'Buscar Notas'}
               </Button>
             </div>
           </CardContent>
