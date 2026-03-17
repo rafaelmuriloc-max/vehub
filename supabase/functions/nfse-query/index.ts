@@ -270,7 +270,23 @@ async function fetchInvoicesFromAdn(params: {
 
     seenNsu.add(currentNsu);
 
-    const result = await fetchAdnDfeByNsu(currentNsu, params.cnpj, params.certPem, params.keyPem);
+    // Rate-limit: wait 2s between requests (skip first)
+    if (index > 0) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    let result: AdnQueryResult;
+    try {
+      result = await fetchAdnDfeByNsu(currentNsu, params.cnpj, params.certPem, params.keyPem);
+    } catch (err) {
+      const msg = (err as Error).message || "";
+      if (msg.includes("429")) {
+        console.warn(`Rate limited (429) at NSU ${currentNsu}, stopping pagination with ${xmlDocuments.length} docs collected so far.`);
+        break;
+      }
+      throw err;
+    }
+
     transport = result.strategy;
     if (result.maxNSU) maxNSU = result.maxNSU;
     if (result.ultNSU) ultNSU = result.ultNSU;
