@@ -16,6 +16,7 @@ import Documents from "./pages/Documents";
 import Invoices from "./pages/Invoices";
 import Settings from "./pages/Settings";
 import DocumentTypes from "./pages/DocumentTypes";
+import InvoiceEmit from "./pages/InvoiceEmit";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
