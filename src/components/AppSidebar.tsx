@@ -16,6 +16,7 @@ const menuItems = [
   { title: 'Documentos', icon: FileText, path: '/documents' },
   { title: 'Notas Fiscais', icon: Receipt, path: '/invoices' },
   { title: 'Fiscal', icon: Scale, path: '/fiscal' },
+  { title: 'Integra Contador', icon: Plug, path: '/integra-contador' },
   { title: 'Tarefas', icon: CheckSquare, path: '/tasks' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
 ];
