@@ -108,6 +108,7 @@ export default function Clients() {
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
+  const [pendingCertFile, setPendingCertFile] = useState<File | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact>>({});
 
