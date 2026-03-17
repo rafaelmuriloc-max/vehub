@@ -669,6 +669,13 @@ function safeJsonParse(value: string): unknown | null {
 function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: string | null } {
   let maxNSU: string | null = null;
   let ultNSU: string | null = null;
+
+  // Log top-level keys for debugging
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const topKeys = Object.keys(value as Record<string, unknown>);
+    console.log(`[DIAG] Top-level JSON keys: ${topKeys.join(", ")}`);
+  }
+
   const stack = [value];
 
   while (stack.length > 0) {
@@ -682,15 +689,42 @@ function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: st
 
     for (const [key, child] of Object.entries(current)) {
       const normalizedKey = key.toLowerCase();
-      if (ultNSU === null && normalizedKey === "ultnsu" && child !== null && child !== undefined) {
+      // Match various naming patterns: ultNSU, UltNSU, ultNsu, NSUUltimo, etc.
+      if (ultNSU === null && (normalizedKey === "ultnsu" || normalizedKey === "nsuultimo" || normalizedKey === "ultimonsu") && child !== null && child !== undefined) {
         ultNSU = String(child);
+        console.log(`[DIAG] Found ultNSU key="${key}" value="${ultNSU}"`);
       }
-      if (maxNSU === null && normalizedKey === "maxnsu" && child !== null && child !== undefined) {
+      if (maxNSU === null && (normalizedKey === "maxnsu" || normalizedKey === "nsumaximo" || normalizedKey === "maximonsu") && child !== null && child !== undefined) {
         maxNSU = String(child);
+        console.log(`[DIAG] Found maxNSU key="${key}" value="${maxNSU}"`);
       }
 
       if (child && typeof child === "object") {
         stack.push(child);
+      }
+    }
+  }
+
+  // If we have documents in an array, try to extract max NSU from LoteDFe items
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    const loteDfe = obj["LoteDFe"] || obj["loteDFe"] || obj["lotedfe"];
+    if (Array.isArray(loteDfe) && loteDfe.length > 0) {
+      const lastItem = loteDfe[loteDfe.length - 1] as Record<string, unknown> | undefined;
+      if (lastItem) {
+        const nsuFromItem = lastItem["NSU"] || lastItem["nsu"] || lastItem["Nsu"];
+        if (nsuFromItem !== undefined && nsuFromItem !== null) {
+          const derivedUltNsu = String(nsuFromItem);
+          if (!ultNSU) {
+            ultNSU = derivedUltNsu;
+            console.log(`[DIAG] Derived ultNSU from last LoteDFe item: ${ultNSU}`);
+          }
+          if (!maxNSU) {
+            // If there are 50 items, there might be more pages
+            maxNSU = loteDfe.length >= 50 ? String(Number(derivedUltNsu) + 1) : derivedUltNsu;
+            console.log(`[DIAG] Derived maxNSU: ${maxNSU} (loteDFe.length=${loteDfe.length})`);
+          }
+        }
       }
     }
   }
