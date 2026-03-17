@@ -398,6 +398,77 @@ export type Database = {
           },
         ]
       }
+      invoices: {
+        Row: {
+          access_key: string | null
+          client_id: string
+          created_at: string
+          gross_value: number | null
+          id: string
+          invoice_number: string | null
+          issue_date: string | null
+          issuer_cnpj: string | null
+          municipality_code: string | null
+          net_value: number | null
+          pdf_url: string | null
+          raw_data: Json | null
+          service_description: string | null
+          status: string | null
+          taker_cnpj: string | null
+          tax_value: number | null
+          updated_at: string
+          xml_url: string | null
+        }
+        Insert: {
+          access_key?: string | null
+          client_id: string
+          created_at?: string
+          gross_value?: number | null
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          issuer_cnpj?: string | null
+          municipality_code?: string | null
+          net_value?: number | null
+          pdf_url?: string | null
+          raw_data?: Json | null
+          service_description?: string | null
+          status?: string | null
+          taker_cnpj?: string | null
+          tax_value?: number | null
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Update: {
+          access_key?: string | null
+          client_id?: string
+          created_at?: string
+          gross_value?: number | null
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          issuer_cnpj?: string | null
+          municipality_code?: string | null
+          net_value?: number | null
+          pdf_url?: string | null
+          raw_data?: Json | null
+          service_description?: string | null
+          status?: string | null
+          taker_cnpj?: string | null
+          tax_value?: number | null
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       obligation_activities: {
         Row: {
           created_at: string
