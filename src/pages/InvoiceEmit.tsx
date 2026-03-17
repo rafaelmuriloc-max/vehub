@@ -146,7 +146,7 @@ export default function InvoiceEmit() {
       const res = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
       if (!res.ok) return null;
       const data = await res.json();
-      return data.city_ibge || null;
+      return data.ibge || null;
     } catch {
       return null;
     }
