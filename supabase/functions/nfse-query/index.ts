@@ -27,12 +27,19 @@ type MtlsTextResponse = {
 };
 
 type AdnQueryResult = {
-  documents: string[];
+  documents: DFeDocument[];
   maxNSU: string | null;
   rawData: unknown;
   strategy: string;
   status: number;
   ultNSU: string | null;
+};
+
+type DFeDocument = {
+  accessKey: string | null;
+  nsu: number | null;
+  tipoDocumento: string | null;
+  xml: string;
 };
 
 type ParsedInvoice = {
@@ -170,7 +177,7 @@ Deno.serve(async (req) => {
     }
 
     // Save ALL invoices (no month filter)
-    const MAX_SAVE_PER_SYNC = 50;
+    const MAX_SAVE_PER_SYNC = 200;
     const invoicesToSave = invoicesData.slice(0, MAX_SAVE_PER_SYNC);
 
     const invoiceRecords = invoicesToSave
@@ -195,20 +202,27 @@ Deno.serve(async (req) => {
 
     let savedCount = 0;
     if (invoiceRecords.length > 0) {
-      const { data: saved, error: saveError } = await adminClient
-        .from("invoices")
-        .upsert(invoiceRecords, { onConflict: "access_key" })
-        .select();
+      // Upsert in batches of 50 to avoid payload limits
+      for (let i = 0; i < invoiceRecords.length; i += 50) {
+        const batch = invoiceRecords.slice(i, i + 50);
+        const { data: saved, error: saveError } = await adminClient
+          .from("invoices")
+          .upsert(batch, { onConflict: "access_key" })
+          .select();
 
-      if (saveError) {
-        console.error("Erro ao salvar invoices em lote:", saveError);
+        if (saveError) {
+          console.error(`Erro ao salvar invoices batch ${i}-${i + batch.length}:`, saveError);
+        } else {
+          savedCount += saved?.length || 0;
+        }
       }
-      savedCount = saved?.length || 0;
     }
 
-    // Persist last NSU for incremental sync
+    console.log(`[RESULT] ${invoiceRecords.length} records to save, ${savedCount} saved, ${invoicesData.length} parsed from ${syncMeta.documentsFetched} fetched docs`);
+
+    // Only persist last NSU if we actually saved invoices
     const lastNsu = syncMeta.ultNSU || syncMeta.maxNSU;
-    if (lastNsu) {
+    if (lastNsu && savedCount > 0) {
       await adminClient
         .from("clients")
         .update({ last_nsu: String(lastNsu) })
@@ -256,7 +270,7 @@ async function fetchInvoicesFromAdn(params: {
   transport: string | null;
   ultNSU: string | null;
 }> {
-  const xmlDocuments: string[] = [];
+  const allDfeDocs: DFeDocument[] = [];
   const seenNsu = new Set<string>();
   let currentNsu = params.startNsu;
   let maxNSU: string | null = null;
@@ -281,11 +295,11 @@ async function fetchInvoicesFromAdn(params: {
     } catch (err) {
       const msg = (err as Error).message || "";
       if (msg.includes("429")) {
-        console.warn(`Rate limited (429) at NSU ${currentNsu}, stopping pagination with ${xmlDocuments.length} docs collected so far.`);
+        console.warn(`Rate limited (429) at NSU ${currentNsu}, stopping pagination with ${allDfeDocs.length} docs collected so far.`);
         break;
       }
       if (msg.includes("404") || msg.includes("NENHUM_DOCUMENTO_LOCALIZADO")) {
-        console.log(`No more documents at NSU ${currentNsu}, ending pagination with ${xmlDocuments.length} docs collected.`);
+        console.log(`No more documents at NSU ${currentNsu}, ending pagination with ${allDfeDocs.length} docs collected.`);
         break;
       }
       throw err;
@@ -295,7 +309,7 @@ async function fetchInvoicesFromAdn(params: {
     if (result.maxNSU) maxNSU = result.maxNSU;
     if (result.ultNSU) ultNSU = result.ultNSU;
 
-    xmlDocuments.push(...result.documents);
+    allDfeDocs.push(...result.documents);
 
     console.log(
       `ADN DFe consultado com NSU ${currentNsu}: status=${result.status}, docs=${result.documents.length}, ultNSU=${result.ultNSU}, maxNSU=${result.maxNSU}, strategy=${result.strategy}`,
@@ -312,11 +326,34 @@ async function fetchInvoicesFromAdn(params: {
     currentNsu = result.ultNSU;
   }
 
-  // Return ALL invoices without month filter
-  const invoices = dedupeInvoices(parseXmlDocuments(xmlDocuments));
+  // Parse and dedupe invoices
+  const nfseDocs = allDfeDocs.filter((d) => !d.tipoDocumento || d.tipoDocumento === "NFSE");
+  const eventDocs = allDfeDocs.filter((d) => d.tipoDocumento === "EVENTO");
+
+  console.log(`[DIAG] Total DFe docs: ${allDfeDocs.length}, NFS-e: ${nfseDocs.length}, Eventos: ${eventDocs.length}`);
+
+  const invoices = dedupeInvoices(parseDFeDocuments(nfseDocs));
+  
+  // Process cancellation events
+  const cancelledKeys = new Set<string>();
+  for (const evt of eventDocs) {
+    const chNFSe = extractFirstXmlValue(evt.xml, ["chNFSe"]);
+    if (chNFSe) {
+      cancelledKeys.add(chNFSe);
+    }
+  }
+  
+  // Mark cancelled invoices
+  for (const inv of invoices) {
+    if (inv.accessKey && cancelledKeys.has(inv.accessKey)) {
+      inv.status = "cancelada";
+    }
+  }
+
+  console.log(`[DIAG] Parsed ${invoices.length} invoices from ${nfseDocs.length} NFS-e docs. Cancelled keys: ${cancelledKeys.size}`);
 
   return {
-    documentsFetched: xmlDocuments.length,
+    documentsFetched: allDfeDocs.length,
     invoices,
     maxNSU,
     transport,
@@ -351,7 +388,6 @@ async function fetchAdnDfeByNsu(
       // DIAGNOSTIC: log raw response shape
       const ct = response.headers.get("content-type") || "unknown";
       console.log(`[DIAG] NSU=${nsu} status=${response.status} content-type=${ct} bodyLen=${response.bodyText.length}`);
-      console.log(`[DIAG] body preview: ${response.bodyText.slice(0, 1000)}`);
 
       if (response.status >= 400) {
         throw new Error(
@@ -395,7 +431,7 @@ function buildAdnDfeUrls(nsu: string, cnpj: string): URL[] {
 async function parseAdnDistributionResponse(
   bodyText: string,
   headers: Headers,
-): Promise<{ documents: string[]; maxNSU: string | null; rawData: unknown; ultNSU: string | null }> {
+): Promise<{ documents: DFeDocument[]; maxNSU: string | null; rawData: unknown; ultNSU: string | null }> {
   const contentType = (headers.get("content-type") || "").toLowerCase();
   const trimmedBody = bodyText.trim();
 
@@ -410,7 +446,7 @@ async function parseAdnDistributionResponse(
     }
 
     const metadata = extractNsuMetadata(parsedJson);
-    const documents = await extractXmlDocumentsFromUnknown(parsedJson);
+    const documents = await extractDFeDocumentsFromJson(parsedJson);
 
     return {
       documents,
@@ -422,7 +458,12 @@ async function parseAdnDistributionResponse(
 
   if (looksLikeXml(trimmedBody)) {
     return {
-      documents: extractStandaloneXmlDocuments(trimmedBody),
+      documents: extractStandaloneXmlDocuments(trimmedBody).map((xml) => ({
+        accessKey: null,
+        nsu: null,
+        tipoDocumento: null,
+        xml,
+      })),
       maxNSU: null,
       rawData: { xml: trimmedBody },
       ultNSU: null,
@@ -430,6 +471,69 @@ async function parseAdnDistributionResponse(
   }
 
   throw new Error(`Resposta inesperada do ADN: ${trimmedBody.slice(0, 500)}`);
+}
+
+// Process LoteDFe array directly, preserving JSON-level metadata
+async function extractDFeDocumentsFromJson(value: unknown): Promise<DFeDocument[]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+
+  const obj = value as Record<string, unknown>;
+  const loteDfe = obj["LoteDFe"] || obj["loteDFe"] || obj["lotedfe"];
+
+  if (Array.isArray(loteDfe) && loteDfe.length > 0) {
+    return await processLoteDFe(loteDfe);
+  }
+
+  // Fallback: generic walk for XML
+  const docs: DFeDocument[] = [];
+  const xmlStrings = new Set<string>();
+  await walkUnknownForXml(value, xmlStrings, null);
+  for (const xml of xmlStrings) {
+    docs.push({ accessKey: null, nsu: null, tipoDocumento: null, xml });
+  }
+  return docs;
+}
+
+async function processLoteDFe(loteDfe: unknown[]): Promise<DFeDocument[]> {
+  const documents: DFeDocument[] = [];
+  let diagLoggedCount = 0;
+
+  for (const item of loteDfe) {
+    if (!item || typeof item !== "object") continue;
+    const dfeItem = item as Record<string, unknown>;
+
+    const accessKey = dfeItem["ChaveAcesso"] ? String(dfeItem["ChaveAcesso"]) : null;
+    const tipoDocumento = dfeItem["TipoDocumento"] ? String(dfeItem["TipoDocumento"]) : null;
+    const nsu = dfeItem["NSU"] !== undefined ? Number(dfeItem["NSU"]) : null;
+    const arquivoXml = dfeItem["ArquivoXml"] ? String(dfeItem["ArquivoXml"]) : null;
+
+    if (!arquivoXml) continue;
+
+    // Decompress the base64+gzip XML
+    const decompressedXml = await decodePossibleCompressedXml(arquivoXml);
+    if (!decompressedXml) {
+      console.warn(`[DIAG] Failed to decompress ArquivoXml for NSU=${nsu} key=${accessKey}`);
+      continue;
+    }
+
+    // Log first few documents for diagnostics
+    if (diagLoggedCount < 3) {
+      console.log(`[DIAG] NSU=${nsu} tipo=${tipoDocumento} key=${accessKey} xmlPreview=${decompressedXml.slice(0, 500)}`);
+      diagLoggedCount++;
+    }
+
+    documents.push({
+      accessKey,
+      nsu,
+      tipoDocumento,
+      xml: decompressedXml,
+    });
+  }
+
+  console.log(`[DIAG] processLoteDFe: ${loteDfe.length} items → ${documents.length} decompressed docs`);
+  return documents;
 }
 
 async function requestTextWithMTLS(
@@ -451,7 +555,7 @@ async function requestTextWithMTLS(
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
       try {
         if (retry > 0) {
-          const delay = Math.pow(2, retry) * 1000; // 2s, 4s
+          const delay = Math.pow(2, retry) * 1000;
           console.log(`Retry ${retry}/${MAX_RETRIES} para ${attempt.label} após ${delay}ms`);
           await new Promise((r) => setTimeout(r, delay));
         }
@@ -466,9 +570,8 @@ async function requestTextWithMTLS(
         lastError = error as Error;
         const msg = (error as Error).message || "";
         console.error(`Falha na estratégia ${attempt.label} (tentativa ${retry + 1}):`, msg);
-        // Only retry on connection reset / network errors
         if (!msg.includes("reset") && !msg.includes("refused") && !msg.includes("timeout")) {
-          break; // Don't retry on non-transient errors
+          break;
         }
       }
     }
@@ -690,7 +793,6 @@ function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: st
   let maxNSU: string | null = null;
   let ultNSU: string | null = null;
 
-  // Log top-level keys for debugging
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const topKeys = Object.keys(value as Record<string, unknown>);
     console.log(`[DIAG] Top-level JSON keys: ${topKeys.join(", ")}`);
@@ -709,14 +811,11 @@ function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: st
 
     for (const [key, child] of Object.entries(current)) {
       const normalizedKey = key.toLowerCase();
-      // Match various naming patterns: ultNSU, UltNSU, ultNsu, NSUUltimo, etc.
       if (ultNSU === null && (normalizedKey === "ultnsu" || normalizedKey === "nsuultimo" || normalizedKey === "ultimonsu") && child !== null && child !== undefined) {
         ultNSU = String(child);
-        console.log(`[DIAG] Found ultNSU key="${key}" value="${ultNSU}"`);
       }
       if (maxNSU === null && (normalizedKey === "maxnsu" || normalizedKey === "nsumaximo" || normalizedKey === "maximonsu") && child !== null && child !== undefined) {
         maxNSU = String(child);
-        console.log(`[DIAG] Found maxNSU key="${key}" value="${maxNSU}"`);
       }
 
       if (child && typeof child === "object") {
@@ -725,7 +824,7 @@ function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: st
     }
   }
 
-  // If we have documents in an array, try to extract max NSU from LoteDFe items
+  // Derive from LoteDFe items if not found
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const obj = value as Record<string, unknown>;
     const loteDfe = obj["LoteDFe"] || obj["loteDFe"] || obj["lotedfe"];
@@ -740,7 +839,6 @@ function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: st
             console.log(`[DIAG] Derived ultNSU from last LoteDFe item: ${ultNSU}`);
           }
           if (!maxNSU) {
-            // If there are 50 items, there might be more pages
             maxNSU = loteDfe.length >= 50 ? String(Number(derivedUltNsu) + 1) : derivedUltNsu;
             console.log(`[DIAG] Derived maxNSU: ${maxNSU} (loteDFe.length=${loteDfe.length})`);
           }
@@ -750,12 +848,6 @@ function extractNsuMetadata(value: unknown): { maxNSU: string | null; ultNSU: st
   }
 
   return { maxNSU, ultNSU };
-}
-
-async function extractXmlDocumentsFromUnknown(value: unknown): Promise<string[]> {
-  const documents = new Set<string>();
-  await walkUnknownForXml(value, documents, null);
-  return Array.from(documents);
 }
 
 async function walkUnknownForXml(
@@ -852,12 +944,16 @@ function looksLikeXml(value: string): boolean {
 function extractStandaloneXmlDocuments(xmlText: string): string[] {
   const documents = new Set<string>();
   const patterns = [
-    /<(?:[\w-]+:)?NFS-e\b[\s\S]*?<\/(?:[\w-]+:)?NFS-e>/gi,
+    // National standard (SPED) patterns
+    /<(?:[\w-]+:)?nfseProc\b[\s\S]*?<\/(?:[\w-]+:)?nfseProc>/gi,
     /<(?:[\w-]+:)?NFSe\b[\s\S]*?<\/(?:[\w-]+:)?NFSe>/gi,
+    /<(?:[\w-]+:)?NFS-e\b[\s\S]*?<\/(?:[\w-]+:)?NFS-e>/gi,
     /<(?:[\w-]+:)?CompNfse\b[\s\S]*?<\/(?:[\w-]+:)?CompNfse>/gi,
     /<(?:[\w-]+:)?compNFSe\b[\s\S]*?<\/(?:[\w-]+:)?compNFSe>/gi,
     /<(?:[\w-]+:)?procNfse\b[\s\S]*?<\/(?:[\w-]+:)?procNfse>/gi,
-    /<(?:[\w-]+:)?nfseProc\b[\s\S]*?<\/(?:[\w-]+:)?nfseProc>/gi,
+    // Evento patterns
+    /<(?:[\w-]+:)?evento\b[\s\S]*?<\/(?:[\w-]+:)?evento>/gi,
+    /<(?:[\w-]+:)?procEventoNFSe\b[\s\S]*?<\/(?:[\w-]+:)?procEventoNFSe>/gi,
   ];
 
   for (const pattern of patterns) {
@@ -867,6 +963,7 @@ function extractStandaloneXmlDocuments(xmlText: string): string[] {
     }
   }
 
+  // If no specific patterns matched, use the whole XML
   if (documents.size === 0 && looksLikeXml(xmlText)) {
     documents.add(xmlText);
   }
@@ -874,25 +971,62 @@ function extractStandaloneXmlDocuments(xmlText: string): string[] {
   return Array.from(documents);
 }
 
-function parseXmlDocuments(documents: string[]): ParsedInvoice[] {
+function parseDFeDocuments(documents: DFeDocument[]): ParsedInvoice[] {
   return documents
-    .map((xml) => parseInvoiceXml(xml))
+    .map((doc) => parseInvoiceXml(doc.xml, doc.accessKey))
     .filter((invoice): invoice is ParsedInvoice => invoice !== null);
 }
 
-function parseInvoiceXml(xml: string): ParsedInvoice | null {
-  const invoiceNumber = extractFirstXmlValue(xml, ["NumeroNfse", "nNFSe", "Numero"]);
-  const accessKey = extractFirstXmlValue(xml, ["chNFSe", "ChaveAcesso", "CodigoVerificacao"]);
-  const issueDate = extractFirstXmlValue(xml, ["dhEmi", "DataEmissao", "Competencia", "dCompet"]);
-  const serviceDescription = extractFirstXmlValue(xml, ["xDescServ", "Discriminacao"]);
-  const grossValue = parseCurrencyValue(extractFirstXmlValue(xml, ["vServ", "ValorServicos", "ValorServico"]));
-  const taxValue = parseCurrencyValue(extractFirstXmlValue(xml, ["vISSQN", "ValorIss", "ValorISS"]));
-  const netValue = parseCurrencyValue(extractFirstXmlValue(xml, ["vLiq", "ValorLiquidoNfse", "ValorLiquido", "vNF"]));
-  const issuerCnpj = extractFirstXmlValue(xml, ["CNPJPrestador", "CnpjPrestador", "CNPJ"]);
-  const takerCnpj = extractFirstXmlValue(xml, ["CNPJTomador", "CnpjTomador"]);
-  const municipalityCode = extractFirstXmlValue(xml, ["cLocPrestacao", "CodigoMunicipio"]);
-  const statusCode = extractFirstXmlValue(xml, ["sitNFSe", "SituacaoNfse", "cSitNfse"]);
+function parseInvoiceXml(xml: string, metadataAccessKey?: string | null): ParsedInvoice | null {
+  // Skip event documents that were not filtered at the DFe level
+  if (/<(?:[\w-]+:)?evento\b/i.test(xml) && !/<(?:[\w-]+:)?infNFSe\b/i.test(xml)) {
+    return null;
+  }
 
+  const invoiceNumber = extractFirstXmlValue(xml, [
+    "nNFSe", "NumeroNfse", "Numero", "nDPS", "InfNfse>Numero",
+  ]);
+  
+  // Use JSON-level ChaveAcesso first, then try XML
+  const xmlAccessKey = extractFirstXmlValue(xml, [
+    "chNFSe", "ChaveAcesso", "CodigoVerificacao", "chDPS",
+  ]);
+  const accessKey = metadataAccessKey || xmlAccessKey;
+
+  const issueDate = extractFirstXmlValue(xml, [
+    "dhEmi", "DataEmissao", "Competencia", "dCompet", "DataEmissaoNfse",
+  ]);
+  const serviceDescription = extractFirstXmlValue(xml, [
+    "xDescServ", "Discriminacao", "xLocPrestacao",
+  ]);
+
+  // National standard: values can be nested in <vServPrest><vServ> or flat
+  const grossValue = parseCurrencyValue(extractFirstXmlValue(xml, [
+    "vServ", "ValorServicos", "ValorServico", "vReceb",
+  ]));
+  const taxValue = parseCurrencyValue(extractFirstXmlValue(xml, [
+    "vISSQN", "ValorIss", "ValorISS", "vISS",
+  ]));
+  const netValue = parseCurrencyValue(extractFirstXmlValue(xml, [
+    "vLiq", "ValorLiquidoNfse", "ValorLiquido", "vNF",
+  ]));
+
+  // For CNPJ, try specific prestador/tomador tags first, then generic
+  const issuerCnpj = extractCnpjFromContext(xml, "prest") 
+    || extractCnpjFromContext(xml, "emit")
+    || extractFirstXmlValue(xml, ["CNPJPrestador", "CnpjPrestador"]);
+  
+  const takerCnpj = extractCnpjFromContext(xml, "toma")
+    || extractFirstXmlValue(xml, ["CNPJTomador", "CnpjTomador"]);
+
+  const municipalityCode = extractFirstXmlValue(xml, [
+    "cLocPrestacao", "CodigoMunicipio", "cMunGer",
+  ]);
+  const statusCode = extractFirstXmlValue(xml, [
+    "sitNFSe", "SituacaoNfse", "cSitNfse",
+  ]);
+
+  // Accept document if we have at least an access key OR invoice number OR issue date
   if (!invoiceNumber && !accessKey && !issueDate) {
     return null;
   }
@@ -901,7 +1035,7 @@ function parseInvoiceXml(xml: string): ParsedInvoice | null {
     accessKey,
     grossValue,
     invoiceNumber,
-    issueDate,
+    issueDate: normalizeIssueDate(issueDate),
     issuerCnpj,
     municipalityCode,
     netValue: netValue || Math.max(grossValue - taxValue, 0),
@@ -912,6 +1046,31 @@ function parseInvoiceXml(xml: string): ParsedInvoice | null {
     taxValue,
     xml,
   };
+}
+
+// Extract CNPJ from a specific parent context (e.g., <prest><CNPJ>...</CNPJ></prest>)
+function extractCnpjFromContext(xml: string, parentTag: string): string | null {
+  const regex = new RegExp(
+    `<(?:[\\w-]+:)?${parentTag}\\b[^>]*>[\\s\\S]*?<(?:[\\w-]+:)?CNPJ[^>]*>([^<]+)<\\/(?:[\\w-]+:)?CNPJ>`,
+    "i",
+  );
+  const match = regex.exec(xml);
+  return match?.[1]?.trim() || null;
+}
+
+// Normalize various date formats to ISO date
+function normalizeIssueDate(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  
+  // Already ISO format: 2024-01-15 or 2024-01-15T10:30:00
+  const isoMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+  
+  // BR format: 15/01/2024
+  const brMatch = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brMatch) return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  
+  return dateStr;
 }
 
 function extractFirstXmlValue(xml: string, tagNames: string[]): string | null {
@@ -933,8 +1092,14 @@ function extractFirstXmlValue(xml: string, tagNames: string[]): string | null {
 
 function parseCurrencyValue(value: string | null): number {
   if (!value) return 0;
-  const normalized = value.replace(/\./g, "").replace(",", ".");
-  const parsed = Number.parseFloat(normalized);
+  // Handle both 1234.56 (standard) and 1.234,56 (BR) formats
+  if (value.includes(",") && value.includes(".")) {
+    // BR format: 1.234,56
+    const normalized = value.replace(/\./g, "").replace(",", ".");
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const parsed = Number.parseFloat(value.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

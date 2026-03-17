@@ -1,0 +1,1 @@
+UPDATE clients SET last_nsu = NULL WHERE last_nsu IS NOT NULL;
