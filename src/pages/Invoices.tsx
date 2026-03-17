@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2 } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen } from 'lucide-react';
 
 type Client = { id: string; company_name: string; document: string | null };
 type Invoice = {
@@ -45,7 +45,10 @@ export default function Invoices() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [filterClient, setFilterClient] = useState('all');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -103,10 +106,7 @@ export default function Invoices() {
     }
   }
 
-  async function triggerDownload(url: string, filename: string) {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
+  function triggerDownloadBlob(blobUrl: string, filename: string) {
     const a = document.createElement('a');
     a.href = blobUrl;
     a.download = filename;
@@ -114,6 +114,67 @@ export default function Invoices() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
+  }
+
+  async function triggerDownload(url: string, filename: string) {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    triggerDownloadBlob(blobUrl, filename);
+  }
+
+  async function getSignedXmlUrl(inv: Invoice): Promise<string | null> {
+    if (inv.xml_url) {
+      const { data } = await supabase.storage.from('documents').createSignedUrl(inv.xml_url, 300);
+      if (data?.signedUrl) return data.signedUrl;
+    }
+    const { data, error } = await supabase.functions.invoke('nfse-download', {
+      body: { invoice_id: inv.id, type: 'xml' },
+    });
+    if (error || data?.error) return null;
+    return data?.signed_url || null;
+  }
+
+  async function handleBatchExportXml() {
+    const targets = filteredInvoices.filter(i => i.access_key);
+    if (targets.length === 0) {
+      toast({ title: 'Nenhuma nota com XML disponível nos filtros atuais', variant: 'destructive' });
+      return;
+    }
+    setExporting(true);
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      let added = 0;
+
+      for (const inv of targets) {
+        try {
+          const url = await getSignedXmlUrl(inv);
+          if (url) {
+            const resp = await fetch(url);
+            const blob = await resp.blob();
+            zip.file(`${inv.access_key || inv.invoice_number || inv.id}.xml`, blob);
+            added++;
+          }
+        } catch {
+          // skip individual failures
+        }
+      }
+
+      if (added === 0) {
+        toast({ title: 'Não foi possível obter nenhum XML', variant: 'destructive' });
+        return;
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const blobUrl = URL.createObjectURL(zipBlob);
+      triggerDownloadBlob(blobUrl, `nfse-xml-export.zip`);
+      toast({ title: `${added} XML(s) exportados com sucesso` });
+    } catch (e) {
+      toast({ title: 'Erro na exportação', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleDownload(invoiceId: string, type: 'xml' | 'pdf', existingUrl: string | null) {
@@ -179,9 +240,10 @@ export default function Invoices() {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
   }
 
-  const filteredInvoices = filterClient === 'all'
-    ? invoices
-    : invoices.filter(i => i.client_id === filterClient);
+  let filteredInvoices = invoices;
+  if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
+  if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
+  if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
@@ -267,10 +329,27 @@ export default function Invoices() {
       {/* Filter + Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center flex-wrap gap-4">
             <CardTitle className="text-lg">Notas Fiscais</CardTitle>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm">Filtrar cliente:</Label>
+            <div className="flex items-center gap-2 flex-wrap ml-auto">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">De:</Label>
+                <Input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={e => setFilterDateFrom(e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">Até:</Label>
+                <Input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={e => setFilterDateTo(e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
               <Select value={filterClient} onValueChange={setFilterClient}>
                 <SelectTrigger className="w-[220px]">
                   <SelectValue />
@@ -282,6 +361,15 @@ export default function Invoices() {
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={exporting || filteredInvoices.filter(i => i.access_key).length === 0}
+                onClick={handleBatchExportXml}
+              >
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PackageOpen className="h-4 w-4 mr-2" />}
+                {exporting ? 'Exportando...' : 'Exportar XMLs'}
+              </Button>
             </div>
           </div>
         </CardHeader>
