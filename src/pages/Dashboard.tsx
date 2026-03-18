@@ -22,7 +22,7 @@ export default function Dashboard() {
 
   async function loadMetrics() {
     const [{ data: clients }, { data: tasks }, { data: entries }] = await Promise.all([
-      supabase.from('clients').select('status, monthly_value, start_date, end_date, created_at'),
+      supabase.from('clients').select('status, monthly_value, start_date, end_date, created_at, opening_date'),
       supabase.from('tasks').select('status, due_date'),
       supabase.from('financial_entries').select('type, amount, status, due_date, paid_date'),
     ]);
@@ -64,12 +64,20 @@ export default function Dashboard() {
     setCashFlowData(months);
 
     // Evolution charts - last 12 months
-    const evoData: { month: string; clientes: number; mrr: number }[] = [];
+    const evoData: { month: string; clientes: number; novos: number; mrr: number }[] = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
       const monthStart = d.toISOString().split('T')[0];
 
+      // Clientes com opening_date até o fim desse mês (acumulado)
+      const openedUntilMonth = clients?.filter(c => {
+        const openDate = c.opening_date;
+        if (!openDate || openDate > monthEnd) return false;
+        return true;
+      }) || [];
+
+      // Clientes ativos no mês (para MRR)
       const activeInMonth = clients?.filter(c => {
         const start = c.start_date || c.created_at?.split('T')[0];
         if (!start || start > monthEnd) return false;
@@ -77,9 +85,16 @@ export default function Dashboard() {
         return true;
       }) || [];
 
+      // Novos no mês (opening_date dentro do mês)
+      const newInMonth = clients?.filter(c => {
+        const openDate = c.opening_date;
+        return openDate && openDate >= monthStart && openDate <= monthEnd;
+      }) || [];
+
       evoData.push({
         month: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
-        clientes: activeInMonth.length,
+        clientes: openedUntilMonth.length,
+        novos: newInMonth.length,
         mrr: activeInMonth.reduce((s, c) => s + Number(c.monthly_value || 0), 0),
       });
     }
@@ -175,7 +190,7 @@ export default function Dashboard() {
       {/* Evolution Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-base">Evolução de Clientes Ativos</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Evolução de Clientes (por abertura)</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={clientEvolution}>
@@ -183,7 +198,8 @@ export default function Dashboard() {
                 <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                 <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
                 <Tooltip />
-                <Line type="monotone" dataKey="clientes" stroke="hsl(var(--chart-1))" name="Clientes Ativos" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="clientes" stroke="hsl(var(--chart-1))" name="Acumulado" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="novos" stroke="hsl(var(--chart-3))" name="Novos no Mês" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
