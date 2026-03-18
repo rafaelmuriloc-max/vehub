@@ -11,6 +11,7 @@ interface CompanyData {
   id?: string;
   company_name: string;
   cnpj: string;
+  serpro_cnpj: string;
   address: string;
   phone: string;
   email: string;
@@ -22,7 +23,7 @@ export function CompanyTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<CompanyData>({
-    company_name: '', cnpj: '', address: '', phone: '', email: '',
+    company_name: '', cnpj: '', serpro_cnpj: '', address: '', phone: '', email: '',
   });
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export function CompanyTab() {
   const fields: { key: keyof CompanyData; label: string }[] = [
     { key: 'company_name', label: 'Razão Social' },
     { key: 'cnpj', label: 'CNPJ' },
+    { key: 'serpro_cnpj', label: 'CNPJ Contratante SERPRO' },
     { key: 'address', label: 'Endereço' },
     { key: 'phone', label: 'Telefone' },
     { key: 'email', label: 'Email' },

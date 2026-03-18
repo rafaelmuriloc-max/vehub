@@ -204,6 +204,7 @@ export type Database = {
           id: string
           logo_url: string | null
           phone: string | null
+          serpro_cnpj: string | null
           updated_at: string
         }
         Insert: {
@@ -215,6 +216,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           phone?: string | null
+          serpro_cnpj?: string | null
           updated_at?: string
         }
         Update: {
@@ -226,6 +228,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           phone?: string | null
+          serpro_cnpj?: string | null
           updated_at?: string
         }
         Relationships: []
