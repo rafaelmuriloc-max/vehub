@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { ShieldAlert } from 'lucide-react';
+
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 60;
 
 export default function Auth() {
   const { user, loading } = useAuth();
@@ -14,23 +18,63 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(0);
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
+
+  // Countdown timer for lockout
+  useEffect(() => {
+    if (!lockoutUntil) return;
+    const tick = () => {
+      const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setLockoutUntil(null);
+        setCountdown(0);
+        setFailedAttempts(0);
+      } else {
+        setCountdown(remaining);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
+
+  const isLockedOut = lockoutUntil !== null && Date.now() < lockoutUntil;
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p>Carregando...</p></div>;
   if (user) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isLockedOut) {
+      toast({ title: 'Bloqueado', description: `Aguarde ${countdown}s antes de tentar novamente.`, variant: 'destructive' });
+      return;
+    }
+
     setSubmitting(true);
     const { error } = isLogin
       ? await signIn(email, password)
       : await signUp(email, password, fullName);
     setSubmitting(false);
+
     if (error) {
-      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    } else if (!isLogin) {
-      toast({ title: 'Sucesso', description: 'Verifique seu email para confirmar o cadastro.' });
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+      if (newAttempts >= MAX_ATTEMPTS) {
+        setLockoutUntil(Date.now() + LOCKOUT_SECONDS * 1000);
+        toast({ title: 'Acesso bloqueado', description: `Muitas tentativas falhas. Aguarde ${LOCKOUT_SECONDS}s.`, variant: 'destructive' });
+      } else {
+        toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      }
+    } else {
+      setFailedAttempts(0);
+      if (!isLogin) {
+        toast({ title: 'Sucesso', description: 'Verifique seu email para confirmar o cadastro.' });
+      }
     }
   };
 
