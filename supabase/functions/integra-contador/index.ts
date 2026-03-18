@@ -85,11 +85,11 @@ Deno.serve(async (req) => {
     // Load contratante (company_settings) CNPJ
     const { data: company } = await supabase
       .from("company_settings")
-      .select("cnpj")
+      .select("cnpj, serpro_cnpj")
       .limit(1)
       .single();
 
-    const contratanteCnpj = company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
+    const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
 
     // Download certificate
     const certPath = client.digital_certificate_url;

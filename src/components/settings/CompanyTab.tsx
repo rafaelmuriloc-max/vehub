@@ -11,6 +11,7 @@ interface CompanyData {
   id?: string;
   company_name: string;
   cnpj: string;
+  serpro_cnpj: string;
   address: string;
   phone: string;
   email: string;
