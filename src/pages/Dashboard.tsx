@@ -63,10 +63,10 @@ export default function Dashboard() {
     }
     setCashFlowData(months);
 
-    // Evolution charts - last 12 months
+    // Evolution charts - desde janeiro de 2021
     const evoData: { month: string; clientes: number; novos: number; mrr: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const startEvo = new Date(2021, 0, 1);
+    for (let d = new Date(startEvo); d <= now; d.setMonth(d.getMonth() + 1)) {
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
       const monthStart = d.toISOString().split('T')[0];
 
