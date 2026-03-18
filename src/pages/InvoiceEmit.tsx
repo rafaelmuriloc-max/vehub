@@ -18,6 +18,9 @@ type Client = {
   document: string | null;
   municipal_registration: string | null;
   address: string | null;
+  tax_regime: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
 };
 
 type ServiceTaker = {
