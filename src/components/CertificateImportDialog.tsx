@@ -147,11 +147,28 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
         }
 
         entry.expiry = foundCert.validity.notAfter;
+
+        // Filter expired certificates
+        if (foundCert.validity.notAfter < new Date()) {
+          entry.status = 'error';
+          entry.error = `Certificado vencido (${foundCert.validity.notAfter.toLocaleDateString('pt-BR')})`;
+          results.push(entry);
+          continue;
+        }
+
         const cnpj = extractCnpjFromCert(foundCert);
 
         if (!cnpj) {
+          // Check if it's a CPF (pessoa física) certificate
+          const allText = [
+            cert.subject.getField('CN')?.value,
+            cert.subject.getField({ shortName: 'serialNumber' })?.value,
+            cert.subject.getField({ type: '2.5.4.5' })?.value,
+          ].filter(Boolean).join(' ');
+          const hasCpf = /\d{11}/.test(allText);
+
           entry.status = 'error';
-          entry.error = 'CNPJ não encontrado no certificado';
+          entry.error = hasCpf ? 'Certificado de pessoa física (CPF)' : 'CNPJ não encontrado no certificado';
           results.push(entry);
           continue;
         }
