@@ -1,47 +1,16 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Gráfico de Evolução de Clientes desde 2021
 
-### Mudanças
+## Alteração
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+No `src/pages/Dashboard.tsx`, mudar o loop de evolução de clientes de "últimos 12 meses" para "todos os meses desde janeiro de 2021 até o mês atual".
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+## Detalhes técnicos
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+| Arquivo | Alteração |
+|---|---|
+| `src/pages/Dashboard.tsx` | Alterar o loop (linhas 68-100) para iterar desde `new Date(2021, 0, 1)` até `now`, mês a mês, em vez de `i = 11..0`. O formato do label do mês passará a incluir mês/ano completo (`MMM/YY`) para distinguir os anos. |
 
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
-
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
-
-### Estrutura do menu resultante
-
-```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
-```
+A lógica interna de contagem (acumulado por `opening_date`, novos no mês, MRR) permanece igual -- apenas o intervalo de iteração muda.
 
