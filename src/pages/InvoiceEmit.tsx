@@ -283,7 +283,7 @@ export default function InvoiceEmit() {
       toast({ title: 'Preencha os dados do tomador', variant: 'destructive' });
       return;
     }
-    if (!form.codigoServico || !form.descricaoServico || !form.valorServico) {
+    if (!form.codigoTribNac || !form.descricaoServico || !form.valorServico) {
       toast({ title: 'Preencha os dados do serviço', variant: 'destructive' });
       return;
     }
