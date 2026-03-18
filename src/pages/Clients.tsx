@@ -112,6 +112,7 @@ export default function Clients() {
   const [pendingCertFile, setPendingCertFile] = useState<File | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact>>({});
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
