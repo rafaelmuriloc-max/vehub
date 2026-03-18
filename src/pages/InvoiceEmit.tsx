@@ -284,7 +284,7 @@ export default function InvoiceEmit() {
       return;
     }
     if (!form.codigoTribNac || !form.descricaoServico || !form.valorServico) {
-      toast({ title: 'Preencha os dados do serviço', variant: 'destructive' });
+      toast({ title: 'Preencha código tributário nacional, descrição e valor do serviço', variant: 'destructive' });
       return;
     }
     if (!form.codigoMunicipioIncidencia || !/^\d{7}$/.test(form.codigoMunicipioIncidencia)) {
