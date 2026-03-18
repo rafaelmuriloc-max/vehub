@@ -95,10 +95,10 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Load client data
+    // Load client data with all fields needed for XML
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("document, digital_certificate_url, digital_certificate_password, company_name, municipal_registration, address")
+      .select("document, digital_certificate_url, digital_certificate_password, company_name, municipal_registration, address, contact_phone, contact_email, tax_regime")
       .eq("id", client_id)
       .single();
 
