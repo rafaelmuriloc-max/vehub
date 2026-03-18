@@ -20,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import ContractTab from '@/components/ContractTab';
 import ClientObligationsTab from '@/components/ClientObligationsTab';
+import CertificateImportDialog from '@/components/CertificateImportDialog';
 
 type PermitItem = { name: string; enabled: boolean; expiry: string };
 
