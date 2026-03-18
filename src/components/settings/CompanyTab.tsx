@@ -23,7 +23,7 @@ export function CompanyTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<CompanyData>({
-    company_name: '', cnpj: '', address: '', phone: '', email: '',
+    company_name: '', cnpj: '', serpro_cnpj: '', address: '', phone: '', email: '',
   });
 
   useEffect(() => {
