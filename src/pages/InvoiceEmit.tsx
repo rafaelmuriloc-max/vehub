@@ -52,7 +52,8 @@ interface DpsFormData {
   tomadorCodigoMunicipio: string;
   tomadorUf: string;
   tomadorCep: string;
-  codigoServico: string;
+  codigoTribNac: string;
+  codigoTribMun: string;
   descricaoServico: string;
   codigoMunicipioIncidencia: string;
   valorServico: string;
