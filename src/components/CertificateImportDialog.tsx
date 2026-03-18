@@ -306,6 +306,7 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
   const newCount = entries.filter(e => e.status === 'new').length;
   const existsCount = entries.filter(e => e.status === 'exists').length;
   const errorCount = entries.filter(e => e.status === 'error').length;
+  const ignoredCount = entries.filter(e => e.status === 'error' && (e.error?.includes('pessoa física') || e.error?.includes('vencido'))).length;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!importing) { onOpenChange(v); if (!v) reset(); } }}>
