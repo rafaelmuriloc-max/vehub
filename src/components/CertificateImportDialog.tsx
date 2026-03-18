@@ -147,11 +147,28 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
         }
 
         entry.expiry = foundCert.validity.notAfter;
+
+        // Filter expired certificates
+        if (foundCert.validity.notAfter < new Date()) {
+          entry.status = 'error';
+          entry.error = `Certificado vencido (${foundCert.validity.notAfter.toLocaleDateString('pt-BR')})`;
+          results.push(entry);
+          continue;
+        }
+
         const cnpj = extractCnpjFromCert(foundCert);
 
         if (!cnpj) {
+          // Check if it's a CPF (pessoa física) certificate
+          const allText = [
+            foundCert.subject.getField('CN')?.value,
+            foundCert.subject.getField({ shortName: 'serialNumber' })?.value,
+            foundCert.subject.getField({ type: '2.5.4.5' })?.value,
+          ].filter(Boolean).join(' ');
+          const hasCpf = /\d{11}/.test(allText);
+
           entry.status = 'error';
-          entry.error = 'CNPJ não encontrado no certificado';
+          entry.error = hasCpf ? 'Certificado de pessoa física (CPF)' : 'CNPJ não encontrado no certificado';
           results.push(entry);
           continue;
         }
@@ -289,6 +306,7 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
   const newCount = entries.filter(e => e.status === 'new').length;
   const existsCount = entries.filter(e => e.status === 'exists').length;
   const errorCount = entries.filter(e => e.status === 'error').length;
+  const ignoredCount = entries.filter(e => e.status === 'error' && (e.error?.includes('pessoa física') || e.error?.includes('vencido'))).length;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!importing) { onOpenChange(v); if (!v) reset(); } }}>
@@ -340,7 +358,8 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
             <div className="flex gap-4 text-sm">
               <span className="text-emerald-600 font-medium">{newCount} novos</span>
               <span className="text-amber-600 font-medium">{existsCount} existentes</span>
-              <span className="text-destructive font-medium">{errorCount} erros</span>
+              {ignoredCount > 0 && <span className="text-muted-foreground font-medium">{ignoredCount} ignorados</span>}
+              {errorCount - ignoredCount > 0 && <span className="text-destructive font-medium">{errorCount - ignoredCount} erros</span>}
             </div>
 
             <div className="border rounded-md max-h-[50vh] overflow-y-auto">

@@ -1,27 +1,47 @@
 
 
-# Filtrar certificados de pessoa física e vencidos na importação
+## Plano: Reorganizar menu Cadastro com submenus
 
-## O que será feito
+### Mudanças
 
-Duas filtragens automáticas durante o processamento dos certificados na pasta:
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-1. **Pessoa física (CPF)**: Se o certificado contiver apenas CPF (11 dígitos) em vez de CNPJ (14 dígitos), será descartado com status de erro "Certificado de pessoa física"
-2. **Certificados vencidos**: Se `validity.notAfter` for anterior à data atual, será descartado com status de erro "Certificado vencido"
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-Ambos aparecerão na tabela de preview com badge de erro e motivo, mas não serão contados como importáveis.
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-## Arquivo alterado
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
 
-| Arquivo | Alteração |
-|---|---|
-| `src/components/CertificateImportDialog.tsx` | Adicionar verificação de vencimento após extrair `expiry` (linha ~149) e tratar ausência de CNPJ de 14 dígitos como "pessoa física" quando houver CPF de 11 dígitos (linha ~152). Adicionar contadores de "ignorados" no resumo do preview. |
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
 
-## Detalhes
+### Estrutura do menu resultante
 
-Na função `handleFolderSelect`, após extrair o certificado:
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
 
-1. Verificar `foundCert.validity.notAfter < new Date()` → marcar como erro "Certificado vencido (DD/MM/AAAA)"
-2. Na extração de CNPJ, se não encontrar 14 dígitos mas encontrar 11 dígitos (CPF), marcar como erro "Certificado de pessoa física (CPF)"
-3. Adicionar um badge "Ignorado" na cor cinza para esses casos, ou reutilizar o badge de erro existente com a mensagem descritiva
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
+```
 
