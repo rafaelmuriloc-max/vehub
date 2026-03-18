@@ -1,43 +1,47 @@
 
 
-# CRUD Completo de Clientes
+## Plano: Reorganizar menu Cadastro com submenus
 
-## Situação atual
+### Mudanças
 
-O módulo de clientes já possui **Create**, **Read** (listagem) e **Update**. Faltam:
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-1. **Delete** - Não existe opção de excluir cliente
-2. **Visualização** - Não-admins não conseguem ver detalhes de um cliente (só a tabela)
-3. **Confirmação de exclusão** - Sem dialog de confirmação antes de deletar
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-## Alterações planejadas
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-### 1. Botão de exclusão com confirmação (admin only)
-- Adicionar botão "Excluir" na coluna de ações da tabela (ícone Trash2, vermelho)
-- AlertDialog de confirmação antes de excluir
-- Ao confirmar: deletar registros relacionados (`client_department_contacts`) e depois o cliente
-- Também remover certificado do Storage se existir
-- Toast de sucesso/erro
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
 
-### 2. Botão de visualização para todos os usuários
-- Adicionar botão "Ver" (ícone Eye) na coluna de ações, visível para todos
-- Abre o mesmo dialog em modo read-only (campos desabilitados, sem botão Salvar)
-- Admins mantêm o botão "Editar" separado
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
 
-### 3. Melhorias na tabela
-- Adicionar paginação na listagem (10 por página)
-- Tornar a tabela responsiva com cards em mobile
+### Estrutura do menu resultante
 
-## Arquivo alterado
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
 
-| Arquivo | Alteração |
-|---|---|
-| `src/pages/Clients.tsx` | Adicionar função `handleDelete` com AlertDialog de confirmação, botão "Ver" para modo read-only, paginação simples na listagem, e layout responsivo com cards em mobile |
-
-## Detalhes técnicos
-
-- `handleDelete(clientId)`: deleta `client_department_contacts` where `client_id`, remove certificado do Storage, deleta de `clients`, recarrega lista
-- Estado `viewOnly: boolean` para controlar se o dialog é read-only
-- Paginação com estado `page` e `pageSize = 10`, calculando `filtered.slice(start, end)`
-- Mobile: `hidden md:table-cell` nas colunas menos importantes, cards abaixo de `md:`
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
+```
 
