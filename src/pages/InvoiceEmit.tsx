@@ -292,6 +292,13 @@ export default function InvoiceEmit() {
       return;
     }
 
+    // Validate prestador has IM
+    const clientData = clients.find(c => c.id === selectedClient);
+    if (clientData && !clientData.municipal_registration) {
+      toast({ title: 'Cliente sem Inscrição Municipal', description: 'Preencha a IM no cadastro do cliente antes de emitir.', variant: 'destructive' });
+      return;
+    }
+
     setSubmitting(true);
     setResult(null);
 
