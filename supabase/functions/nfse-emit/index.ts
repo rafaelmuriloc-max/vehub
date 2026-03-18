@@ -44,7 +44,8 @@ interface DpsData {
   tomadorEmail?: string;
   tomadorTelefone?: string;
   // Serviço
-  codigoServico: string; // LC 116 code e.g. "01.01"
+  codigoTribNac: string; // National tax code e.g. "090201"
+  codigoTribMun?: string; // Municipal tax code e.g. "001"
   codigoMunicipioIncidencia: string;
   descricaoServico: string;
   valorServico: number;
@@ -54,6 +55,8 @@ interface DpsData {
   issRetido?: boolean;
   // Local da prestação
   codigoMunicipioPrestacao?: string;
+  // Info complementar
+  infoComplementar?: string;
 }
 
 Deno.serve(async (req) => {
