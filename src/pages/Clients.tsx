@@ -830,6 +830,13 @@ export default function Clients() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <CertificateImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImportComplete={loadClients}
+        existingDocuments={clients.map(c => c.document || '').filter(Boolean)}
+      />
     </div>
   );
 }
