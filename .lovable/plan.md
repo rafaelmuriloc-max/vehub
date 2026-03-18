@@ -1,37 +1,47 @@
 
 
-# Melhorar o Dialog de Importação de Certificados A1
+## Plano: Reorganizar menu Cadastro com submenus
 
-## Problemas identificados (pela screenshot)
+### Mudanças
 
-1. O dialog não é responsivo -- a tabela não se adapta a telas menores
-2. Layout da tabela com colunas cortadas (vencimento cortado)
-3. Falta de visual hierarchy -- contadores no topo sem destaque
-4. Sem scroll horizontal na tabela em telas pequenas
-5. O dialog usa `max-w-4xl` fixo sem adaptação mobile
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-## Melhorias planejadas
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-### Layout responsivo
-- Dialog: usar `w-[95vw] max-w-5xl` para ocupar melhor o espaço disponível
-- Em mobile: trocar a tabela por cards empilhados (cada certificado vira um card com as infos em stack vertical)
-- Usar `hidden sm:table-cell` para ocultar colunas menos importantes em telas pequenas
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-### Visual melhorado
-- Contadores de status (novos/existentes/ignorados/erros) em cards coloridos com ícones em vez de texto simples
-- Badges de status mais claros com ícones
-- Arquivo com nome truncado via `truncate` + tooltip
-- Coluna de vencimento com indicação visual (cor verde se válido, amarelo se próximo do vencimento)
-- Scroll horizontal na tabela como fallback (`overflow-x-auto`)
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
 
-### Responsividade mobile
-- Breakpoint `md:` para alternar entre cards e tabela
-- Botões de ação em full-width no mobile
-- Espaçamento e padding ajustados
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
 
-## Arquivo alterado
+### Estrutura do menu resultante
 
-| Arquivo | Alteração |
-|---|---|
-| `src/components/CertificateImportDialog.tsx` | Reescrever o layout do preview com cards de status, tabela responsiva com scroll horizontal, cards em mobile, e melhor hierarquia visual |
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
+
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
+```
 
