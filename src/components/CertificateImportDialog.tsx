@@ -358,7 +358,8 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
             <div className="flex gap-4 text-sm">
               <span className="text-emerald-600 font-medium">{newCount} novos</span>
               <span className="text-amber-600 font-medium">{existsCount} existentes</span>
-              <span className="text-destructive font-medium">{errorCount} erros</span>
+              {ignoredCount > 0 && <span className="text-muted-foreground font-medium">{ignoredCount} ignorados</span>}
+              {errorCount - ignoredCount > 0 && <span className="text-destructive font-medium">{errorCount - ignoredCount} erros</span>}
             </div>
 
             <div className="border rounded-md max-h-[50vh] overflow-y-auto">
