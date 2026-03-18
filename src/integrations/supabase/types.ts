@@ -200,6 +200,9 @@ export type Database = {
           cnpj: string | null
           company_name: string | null
           created_at: string
+          digital_certificate_expiry: string | null
+          digital_certificate_password: string | null
+          digital_certificate_url: string | null
           email: string | null
           id: string
           logo_url: string | null
@@ -212,6 +215,9 @@ export type Database = {
           cnpj?: string | null
           company_name?: string | null
           created_at?: string
+          digital_certificate_expiry?: string | null
+          digital_certificate_password?: string | null
+          digital_certificate_url?: string | null
           email?: string | null
           id?: string
           logo_url?: string | null
@@ -224,6 +230,9 @@ export type Database = {
           cnpj?: string | null
           company_name?: string | null
           created_at?: string
+          digital_certificate_expiry?: string | null
+          digital_certificate_password?: string | null
+          digital_certificate_url?: string | null
           email?: string | null
           id?: string
           logo_url?: string | null
