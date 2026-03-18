@@ -1,32 +1,47 @@
 
 
-# Certificado Digital no Cadastro do Escritório
+## Plano: Reorganizar menu Cadastro com submenus
 
-## O que será feito
+### Mudanças
 
-Adicionar ao formulário de "Dados da Empresa" (CompanyTab) campos para:
-1. **Upload do certificado digital A1** (.pfx/.p12) -- armazenado no bucket `certificates`
-2. **Senha do certificado** -- armazenada na tabela `company_settings`
-3. Exibição do status do certificado (nome do arquivo, validade, botões de download/remover)
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-## Alterações
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-### 1. Migração SQL
-Adicionar colunas à tabela `company_settings`:
-- `digital_certificate_url` (text, nullable)
-- `digital_certificate_password` (text, nullable)
-- `digital_certificate_expiry` (date, nullable)
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-### 2. `src/components/settings/CompanyTab.tsx`
-- Adicionar estado para controle do upload de certificado
-- Adicionar seção de certificado digital após os campos existentes:
-  - Input type="file" accept=".pfx,.p12" (admin only)
-  - Input para senha do certificado
-  - Exibição do arquivo atual com nome, validade e badge de status
-  - Botões de download e remover (admin only)
-- Upload do arquivo para `certificates/company/{id}/{filename}` no Storage
-- Parsing do certificado com `node-forge` para extrair validade
-- Salvar URL, senha e validade na tabela `company_settings`
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
 
-O fluxo reutiliza o mesmo padrão já usado em `Clients.tsx` para certificados de clientes.
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
+
+### Estrutura do menu resultante
+
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
+
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
+```
 
