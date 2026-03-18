@@ -70,6 +70,14 @@ export default function Dashboard() {
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
       const monthStart = d.toISOString().split('T')[0];
 
+      // Clientes com opening_date até o fim desse mês (acumulado)
+      const openedUntilMonth = clients?.filter(c => {
+        const openDate = c.opening_date;
+        if (!openDate || openDate > monthEnd) return false;
+        return true;
+      }) || [];
+
+      // Clientes ativos no mês (para MRR)
       const activeInMonth = clients?.filter(c => {
         const start = c.start_date || c.created_at?.split('T')[0];
         if (!start || start > monthEnd) return false;
@@ -77,9 +85,16 @@ export default function Dashboard() {
         return true;
       }) || [];
 
+      // Novos no mês (opening_date dentro do mês)
+      const newInMonth = clients?.filter(c => {
+        const openDate = c.opening_date;
+        return openDate && openDate >= monthStart && openDate <= monthEnd;
+      }) || [];
+
       evoData.push({
         month: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
-        clientes: activeInMonth.length,
+        clientes: openedUntilMonth.length,
+        novos: newInMonth.length,
         mrr: activeInMonth.reduce((s, c) => s + Number(c.monthly_value || 0), 0),
       });
     }
