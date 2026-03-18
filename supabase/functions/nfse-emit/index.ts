@@ -44,7 +44,8 @@ interface DpsData {
   tomadorEmail?: string;
   tomadorTelefone?: string;
   // Serviço
-  codigoServico: string; // LC 116 code e.g. "01.01"
+  codigoTribNac: string; // National tax code e.g. "090201"
+  codigoTribMun?: string; // Municipal tax code e.g. "001"
   codigoMunicipioIncidencia: string;
   descricaoServico: string;
   valorServico: number;
@@ -54,6 +55,8 @@ interface DpsData {
   issRetido?: boolean;
   // Local da prestação
   codigoMunicipioPrestacao?: string;
+  // Info complementar
+  infoComplementar?: string;
 }
 
 Deno.serve(async (req) => {
@@ -92,10 +95,10 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Load client data
+    // Load client data with all fields needed for XML
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("document, digital_certificate_url, digital_certificate_password, company_name, municipal_registration, address")
+      .select("document, digital_certificate_url, digital_certificate_password, company_name, municipal_registration, address, contact_phone, contact_email, tax_regime")
       .eq("id", client_id)
       .single();
 
@@ -109,6 +112,10 @@ Deno.serve(async (req) => {
 
     if (!client.digital_certificate_url || !client.digital_certificate_password) {
       return jsonResponse({ error: "Cliente não possui certificado digital A1 configurado" }, 400);
+    }
+
+    if (!client.municipal_registration) {
+      return jsonResponse({ error: "Cliente não possui Inscrição Municipal (IM) cadastrada. Preencha no cadastro do cliente antes de emitir." }, 400);
     }
 
     // Download certificate
@@ -140,17 +147,22 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Código do município de incidência (IBGE) é obrigatório (7 dígitos)" }, 400);
     }
 
+    if (!dps_data.codigoTribNac) {
+      return jsonResponse({ error: "Código Tributário Nacional (cTribNac) é obrigatório" }, 400);
+    }
+
     // Build DPS XML
     const tpAmb = dps_data.ambiente === "producao" ? "1" : "2";
-    const serie = dps_data.serie || "EPN";
+    const serie = dps_data.serie || "1";
     const nDPS = (dps_data.numeroDps || "1").padStart(15, "0");
     const dhEmi = new Date().toISOString().replace("Z", "-03:00");
     const dCompet = dps_data.competencia;
     const codigoMunicipio = dps_data.codigoMunicipioIncidencia;
+    const locPrestacao = dps_data.codigoMunicipioPrestacao || codigoMunicipio;
 
-    // Generate DPS ID: DPS + cMunPrest(7) + tpInsc(1|2) + CNPJ(14) + serie(5) + nDPS(15)
-    const tpInsc = cnpj.length <= 11 ? "2" : "1";
-    const seriePadded = serie.padEnd(5, " ").substring(0, 5);
+    // Generate DPS ID: DPS + cMunPrest(7) + tpInsc(1=CPF,2=CNPJ) + doc(14) + serie(5) + nDPS(15)
+    const tpInsc = cnpj.length <= 11 ? "1" : "2";
+    const seriePadded = serie.padStart(5, "0").substring(0, 5);
     const idDPS = `DPS${codigoMunicipio}${tpInsc}${cnpj.padStart(14, "0")}${seriePadded}${nDPS}`;
 
     // Tomador CNPJ/CPF
@@ -159,45 +171,65 @@ Deno.serve(async (req) => {
       ? `<CPF>${tomadorDoc}</CPF>`
       : `<CNPJ>${tomadorDoc}</CNPJ>`;
 
-    // Valor ISS
+    // Valores
     const vServ = dps_data.valorServico.toFixed(2);
     const vDeducoes = (dps_data.valorDeducoes || 0).toFixed(2);
-    const vLiq = (dps_data.valorServico - (dps_data.valorDeducoes || 0)).toFixed(2);
-    const aliquota = dps_data.aliquotaIss != null ? dps_data.aliquotaIss.toFixed(4) : "";
-    const issRetido = dps_data.issRetido ? "1" : "2";
+    const aliquota = dps_data.aliquotaIss != null ? dps_data.aliquotaIss.toFixed(2) : "";
+    const tpRetISSQN = dps_data.issRetido ? "2" : "1"; // 1=não retido, 2=retido
 
-    // Build tomador address XML
+    // Build prestador address from client.address (extract CEP)
+    let prestEnderecoXml = "";
+    const prestCep = (client.address || "").match(/(\d{5})-?(\d{3})/);
+    if (prestCep) {
+      prestEnderecoXml = `<end><endNac><cMun>${codigoMunicipio}</cMun><CEP>${prestCep[1]}${prestCep[2]}</CEP></endNac></end>`;
+    }
+
+    // Build prestador regTrib from client.tax_regime
+    let regTribXml = `<regTrib><opSimpNac>1</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    const taxRegime = (client.tax_regime || "").toLowerCase();
+    if (taxRegime.includes("lucro presumido") || taxRegime.includes("presumido")) {
+      regTribXml = `<regTrib><opSimpNac>2</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    } else if (taxRegime.includes("lucro real") || taxRegime.includes("real")) {
+      regTribXml = `<regTrib><opSimpNac>2</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    } else if (taxRegime.includes("mei")) {
+      regTribXml = `<regTrib><opSimpNac>4</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    }
+
+    // Build tomador address XML (matching valid pattern: endNac + fields)
     let tomadorEnderecoXml = "";
     if (dps_data.tomadorEndereco) {
       const e = dps_data.tomadorEndereco;
+      const hasMunCep = e.codigoMunicipio && e.cep;
       tomadorEnderecoXml = `<end>` +
+        (hasMunCep ? `<endNac><cMun>${e.codigoMunicipio}</cMun><CEP>${e.cep!.replace(/\D/g, "")}</CEP></endNac>` : "") +
         (e.logradouro ? `<xLgr>${escapeXml(e.logradouro)}</xLgr>` : "") +
         (e.numero ? `<nro>${escapeXml(e.numero)}</nro>` : "") +
-        (e.complemento ? `<xCpl>${escapeXml(e.complemento)}</xCpl>` : "") +
         (e.bairro ? `<xBairro>${escapeXml(e.bairro)}</xBairro>` : "") +
-        (e.codigoMunicipio ? `<cMun>${e.codigoMunicipio}</cMun>` : "") +
-        (e.uf ? `<UF>${e.uf}</UF>` : "") +
-        (e.cep ? `<CEP>${e.cep.replace(/\D/g, "")}</CEP>` : "") +
-        (e.codigoPais ? `<cPais>${e.codigoPais}</cPais>` : `<cPais>1058</cPais>`) +
         `</end>`;
     }
 
-    // Build infDPS XML (the part that gets signed)
+    // Build infDPS XML matching the valid NFS-e pattern
     const infDpsXml =
       `<infDPS versao="1.00" Id="${idDPS}">` +
       `<tpAmb>${tpAmb}</tpAmb>` +
       `<dhEmi>${dhEmi}</dhEmi>` +
-      `<verAplic>VeloGestao-1.0</verAplic>` +
+      `<verAplic>1.00</verAplic>` +
       `<serie>${escapeXml(serie)}</serie>` +
       `<nDPS>${nDPS}</nDPS>` +
       `<dCompet>${dCompet}</dCompet>` +
       `<tpEmit>1</tpEmit>` +
       `<cLocEmi>${codigoMunicipio}</cLocEmi>` +
-      `<subst>2</subst>` +
+      // Prestador completo
       `<prest>` +
       `<CNPJ>${cnpj}</CNPJ>` +
-      (client.municipal_registration ? `<IM>${escapeXml(client.municipal_registration)}</IM>` : "") +
+      `<IM>${escapeXml(client.municipal_registration)}</IM>` +
+      `<xNome>${escapeXml(client.company_name)}</xNome>` +
+      prestEnderecoXml +
+      (client.contact_phone ? `<fone>${client.contact_phone.replace(/\D/g, "")}</fone>` : "") +
+      (client.contact_email ? `<email>${escapeXml(client.contact_email)}</email>` : "") +
+      regTribXml +
       `</prest>` +
+      // Tomador
       `<toma>` +
       tomadorDocTag +
       `<xNome>${escapeXml(dps_data.tomadorRazaoSocial)}</xNome>` +
@@ -206,27 +238,29 @@ Deno.serve(async (req) => {
       (dps_data.tomadorEmail ? `<email>${escapeXml(dps_data.tomadorEmail)}</email>` : "") +
       (dps_data.tomadorTelefone ? `<fone>${dps_data.tomadorTelefone.replace(/\D/g, "")}</fone>` : "") +
       `</toma>` +
+      // Serviço (padrão nacional: locPrest + cServ com cTribNac)
       `<serv>` +
-      `<cServ>${escapeXml(dps_data.codigoServico)}</cServ>` +
+      `<locPrest><cLocPrestacao>${locPrestacao}</cLocPrestacao></locPrest>` +
+      `<cServ>` +
+      `<cTribNac>${escapeXml(dps_data.codigoTribNac)}</cTribNac>` +
+      (dps_data.codigoTribMun ? `<cTribMun>${escapeXml(dps_data.codigoTribMun)}</cTribMun>` : "") +
       `<xDescServ>${escapeXml(dps_data.descricaoServico)}</xDescServ>` +
-      (dps_data.codigoMunicipioPrestacao ? `<cLocPrestacao>${dps_data.codigoMunicipioPrestacao}</cLocPrestacao>` : `<cLocPrestacao>${codigoMunicipio}</cLocPrestacao>`) +
-      `<cPaisPrestacao>1058</cPaisPrestacao>` +
+      `</cServ>` +
+      (dps_data.infoComplementar ? `<infoCompl><xInfComp>${escapeXml(dps_data.infoComplementar)}</xInfComp></infoCompl>` : "") +
       `</serv>` +
+      // Valores (padrão nacional: tribMun)
       `<valores>` +
-      `<vServPrest>` +
-      `<vReceb>${vServ}</vReceb>` +
-      `<vServ>${vServ}</vServ>` +
-      `</vServPrest>` +
+      `<vServPrest><vServ>${vServ}</vServ></vServPrest>` +
+      `<vDescCondIncond><vDescIncond>0.00</vDescIncond><vDescCond>0.00</vDescCond></vDescCondIncond>` +
+      `<vDedRed><vDR>${vDeducoes}</vDR></vDedRed>` +
       `<trib>` +
-      `<totTrib>` +
-      `<indTotTrib>0</indTotTrib>` +
-      `</totTrib>` +
-      `<ISS>` +
-      `<tpRetISSQN>${issRetido}</tpRetISSQN>` +
+      `<tribMun>` +
+      `<tribISSQN>1</tribISSQN>` +
       (aliquota ? `<pAliq>${aliquota}</pAliq>` : "") +
-      `</ISS>` +
+      `<tpRetISSQN>${tpRetISSQN}</tpRetISSQN>` +
+      `</tribMun>` +
+      `<totTrib><indTotTrib>0</indTotTrib></totTrib>` +
       `</trib>` +
-      (dps_data.valorDeducoes ? `<vDed>${vDeducoes}</vDed>` : "") +
       `</valores>` +
       `</infDPS>`;
 
@@ -367,31 +401,31 @@ function escapeXml(value: string): string {
 async function signXml(infDpsXml: string, referenceId: string, keyPem: string, certPem: string): Promise<string> {
   const encoder = new TextEncoder();
 
-  // 1. SHA-256 digest of infDPS
-  const digestBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(infDpsXml));
+  // 1. SHA-1 digest of infDPS (matching valid NFS-e signatures)
+  const digestBuffer = await crypto.subtle.digest("SHA-1", encoder.encode(infDpsXml));
   const digestB64 = uint8ArrayToBase64(new Uint8Array(digestBuffer));
 
-  // 2. Build SignedInfo
+  // 2. Build SignedInfo (using rsa-sha1 as per valid NFS-e pattern)
   const signedInfo =
     `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>` +
-    `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>` +
+    `<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>` +
     `<Reference URI="#${referenceId}">` +
     `<Transforms>` +
     `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>` +
     `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>` +
     `</Transforms>` +
-    `<DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>` +
+    `<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>` +
     `<DigestValue>${digestB64}</DigestValue>` +
     `</Reference>` +
     `</SignedInfo>`;
 
-  // 3. Import private key via WebCrypto
+  // 3. Import private key via WebCrypto (SHA-1 for signature)
   const keyDer = pemToDer(keyPem, "PRIVATE KEY");
   const cryptoKey = await crypto.subtle.importKey(
     "pkcs8",
     keyDer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-1" },
     false,
     ["sign"],
   );

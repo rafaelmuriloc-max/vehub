@@ -18,6 +18,9 @@ type Client = {
   document: string | null;
   municipal_registration: string | null;
   address: string | null;
+  tax_regime: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
 };
 
 type ServiceTaker = {
@@ -49,7 +52,8 @@ interface DpsFormData {
   tomadorCodigoMunicipio: string;
   tomadorUf: string;
   tomadorCep: string;
-  codigoServico: string;
+  codigoTribNac: string;
+  codigoTribMun: string;
   descricaoServico: string;
   codigoMunicipioIncidencia: string;
   valorServico: string;
@@ -95,7 +99,8 @@ export default function InvoiceEmit() {
     tomadorCodigoMunicipio: '',
     tomadorUf: '',
     tomadorCep: '',
-    codigoServico: '',
+    codigoTribNac: '',
+    codigoTribMun: '',
     descricaoServico: '',
     codigoMunicipioIncidencia: '',
     valorServico: '',
@@ -127,7 +132,7 @@ export default function InvoiceEmit() {
   async function loadClients() {
     const { data } = await supabase
       .from('clients')
-      .select('id, company_name, document, municipal_registration, address')
+      .select('id, company_name, document, municipal_registration, address, tax_regime, contact_phone, contact_email')
       .eq('status', 'active')
       .order('company_name');
     if (data) setClients(data);
@@ -278,12 +283,19 @@ export default function InvoiceEmit() {
       toast({ title: 'Preencha os dados do tomador', variant: 'destructive' });
       return;
     }
-    if (!form.codigoServico || !form.descricaoServico || !form.valorServico) {
-      toast({ title: 'Preencha os dados do serviço', variant: 'destructive' });
+    if (!form.codigoTribNac || !form.descricaoServico || !form.valorServico) {
+      toast({ title: 'Preencha código tributário nacional, descrição e valor do serviço', variant: 'destructive' });
       return;
     }
     if (!form.codigoMunicipioIncidencia || !/^\d{7}$/.test(form.codigoMunicipioIncidencia)) {
       toast({ title: 'Código do município de incidência (IBGE) deve ter exatamente 7 dígitos', variant: 'destructive' });
+      return;
+    }
+
+    // Validate prestador has IM
+    const clientData = clients.find(c => c.id === selectedClient);
+    if (clientData && !clientData.municipal_registration) {
+      toast({ title: 'Cliente sem Inscrição Municipal', description: 'Preencha a IM no cadastro do cliente antes de emitir.', variant: 'destructive' });
       return;
     }
 
@@ -307,7 +319,8 @@ export default function InvoiceEmit() {
           uf: form.tomadorUf,
           cep: form.tomadorCep,
         } : undefined,
-        codigoServico: form.codigoServico,
+        codigoTribNac: form.codigoTribNac,
+        codigoTribMun: form.codigoTribMun || undefined,
         descricaoServico: form.descricaoServico,
         codigoMunicipioIncidencia: form.codigoMunicipioIncidencia,
         codigoMunicipioPrestacao: form.codigoMunicipioIncidencia,
@@ -398,11 +411,18 @@ export default function InvoiceEmit() {
               </Select>
             </div>
             {selectedClientData && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm bg-muted/30 p-3 rounded-md">
-                <div><span className="text-muted-foreground">CNPJ:</span> {selectedClientData.document}</div>
-                <div><span className="text-muted-foreground">IM:</span> {selectedClientData.municipal_registration || '—'}</div>
-                <div><span className="text-muted-foreground">Endereço:</span> {selectedClientData.address || '—'}</div>
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm bg-muted/30 p-3 rounded-md">
+                  <div><span className="text-muted-foreground">CNPJ:</span> {selectedClientData.document}</div>
+                  <div><span className="text-muted-foreground">IM:</span> {selectedClientData.municipal_registration || '—'}</div>
+                  <div><span className="text-muted-foreground">Regime:</span> {selectedClientData.tax_regime || '—'}</div>
+                </div>
+                {!selectedClientData.municipal_registration && (
+                  <p className="text-sm text-destructive font-medium">
+                    ⚠️ Este cliente não possui Inscrição Municipal cadastrada. A emissão será bloqueada.
+                  </p>
+                )}
+              </>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -567,13 +587,22 @@ export default function InvoiceEmit() {
             <CardTitle className="text-lg">Serviço</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>Código do Serviço (LC 116) *</Label>
+                <Label>Código Tributário Nacional (cTribNac) *</Label>
                 <Input
-                  value={form.codigoServico}
-                  onChange={e => updateField('codigoServico', e.target.value)}
-                  placeholder="Ex: 01.01"
+                  value={form.codigoTribNac}
+                  onChange={e => updateField('codigoTribNac', e.target.value)}
+                  placeholder="Ex: 090201"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Código de 6 dígitos do padrão nacional NFS-e</p>
+              </div>
+              <div>
+                <Label>Código Tributário Municipal (cTribMun)</Label>
+                <Input
+                  value={form.codigoTribMun}
+                  onChange={e => updateField('codigoTribMun', e.target.value)}
+                  placeholder="Ex: 001"
                 />
               </div>
               <div>
