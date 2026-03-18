@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { DollarSign, Users, TrendingDown, CheckSquare, TrendingUp, AlertTriangle } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
 export default function Dashboard() {
   const { profile } = useAuth();
@@ -13,6 +13,8 @@ export default function Dashboard() {
     monthRevenue: 0, monthExpenses: 0, balance: 0,
   });
   const [cashFlowData, setCashFlowData] = useState<any[]>([]);
+  const [clientEvolution, setClientEvolution] = useState<any[]>([]);
+  const [revenueEvolution, setRevenueEvolution] = useState<any[]>([]);
 
   useEffect(() => {
     loadMetrics();
@@ -20,7 +22,7 @@ export default function Dashboard() {
 
   async function loadMetrics() {
     const [{ data: clients }, { data: tasks }, { data: entries }] = await Promise.all([
-      supabase.from('clients').select('status, monthly_value'),
+      supabase.from('clients').select('status, monthly_value, start_date, end_date, created_at'),
       supabase.from('tasks').select('status, due_date'),
       supabase.from('financial_entries').select('type, amount, status, due_date, paid_date'),
     ]);
@@ -60,6 +62,29 @@ export default function Dashboard() {
       });
     }
     setCashFlowData(months);
+
+    // Evolution charts - last 12 months
+    const evoData: { month: string; clientes: number; mrr: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+      const monthStart = d.toISOString().split('T')[0];
+
+      const activeInMonth = clients?.filter(c => {
+        const start = c.start_date || c.created_at?.split('T')[0];
+        if (!start || start > monthEnd) return false;
+        if (c.end_date && c.end_date < monthStart) return false;
+        return true;
+      }) || [];
+
+      evoData.push({
+        month: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+        clientes: activeInMonth.length,
+        mrr: activeInMonth.reduce((s, c) => s + Number(c.monthly_value || 0), 0),
+      });
+    }
+    setClientEvolution(evoData);
+    setRevenueEvolution(evoData);
   }
 
   const greeting = () => {
@@ -142,6 +167,39 @@ export default function Dashboard() {
                 </Pie>
                 <Tooltip />
               </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Evolution Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Evolução de Clientes Ativos</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={clientEvolution}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="clientes" stroke="hsl(var(--chart-1))" name="Clientes Ativos" strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Evolução do MRR</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={revenueEvolution}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                <Line type="monotone" dataKey="mrr" stroke="hsl(var(--chart-3))" name="MRR" strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>

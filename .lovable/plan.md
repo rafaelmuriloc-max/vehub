@@ -1,25 +1,47 @@
 
 
-# Dashboard: Gráficos de Evolução de Clientes e Receita
+## Plano: Reorganizar menu Cadastro com submenus
 
-## O que será adicionado
+### Mudanças
 
-Dois novos gráficos de linha (LineChart) abaixo dos gráficos atuais, mostrando evolução ao longo do tempo:
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-1. **Evolução de Clientes** -- linha mostrando quantidade acumulada de clientes ativos mês a mês (últimos 12 meses), usando `created_at` e `start_date` dos clientes
-2. **Evolução de Receita (MRR)** -- linha mostrando a receita recorrente mensal acumulada ao longo dos últimos 12 meses, calculada a partir do `monthly_value` dos clientes ativos em cada mês
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-## Como funciona
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-- Buscar clientes com `created_at`, `start_date`, `end_date`, `status`, `monthly_value`
-- Para cada um dos últimos 12 meses, calcular:
-  - Quantos clientes estavam ativos naquele mês (start_date <= mês e sem end_date ou end_date > mês)
-  - Soma do `monthly_value` desses clientes ativos
-- Renderizar dois `LineChart` do recharts em um grid de 2 colunas
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
 
-## Arquivo alterado
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
 
-| Arquivo | Alteração |
-|---|---|
-| `src/pages/Dashboard.tsx` | Adicionar estados `clientEvolution` e `revenueEvolution`, calcular dados dos últimos 12 meses no `loadMetrics`, e renderizar dois novos LineCharts abaixo dos gráficos existentes |
+### Estrutura do menu resultante
+
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
+
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
+```
 
