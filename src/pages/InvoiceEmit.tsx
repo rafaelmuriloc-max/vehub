@@ -573,13 +573,22 @@ export default function InvoiceEmit() {
             <CardTitle className="text-lg">Serviço</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>Código do Serviço (LC 116) *</Label>
+                <Label>Código Tributário Nacional (cTribNac) *</Label>
                 <Input
-                  value={form.codigoServico}
-                  onChange={e => updateField('codigoServico', e.target.value)}
-                  placeholder="Ex: 01.01"
+                  value={form.codigoTribNac}
+                  onChange={e => updateField('codigoTribNac', e.target.value)}
+                  placeholder="Ex: 090201"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Código de 6 dígitos do padrão nacional NFS-e</p>
+              </div>
+              <div>
+                <Label>Código Tributário Municipal (cTribMun)</Label>
+                <Input
+                  value={form.codigoTribMun}
+                  onChange={e => updateField('codigoTribMun', e.target.value)}
+                  placeholder="Ex: 001"
                 />
               </div>
               <div>
