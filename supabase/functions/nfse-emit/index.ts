@@ -153,15 +153,16 @@ Deno.serve(async (req) => {
 
     // Build DPS XML
     const tpAmb = dps_data.ambiente === "producao" ? "1" : "2";
-    const serie = dps_data.serie || "EPN";
+    const serie = dps_data.serie || "1";
     const nDPS = (dps_data.numeroDps || "1").padStart(15, "0");
     const dhEmi = new Date().toISOString().replace("Z", "-03:00");
     const dCompet = dps_data.competencia;
     const codigoMunicipio = dps_data.codigoMunicipioIncidencia;
+    const locPrestacao = dps_data.codigoMunicipioPrestacao || codigoMunicipio;
 
-    // Generate DPS ID: DPS + cMunPrest(7) + tpInsc(1|2) + CNPJ(14) + serie(5) + nDPS(15)
-    const tpInsc = cnpj.length <= 11 ? "2" : "1";
-    const seriePadded = serie.padEnd(5, " ").substring(0, 5);
+    // Generate DPS ID: DPS + cMunPrest(7) + tpInsc(1=CPF,2=CNPJ) + doc(14) + serie(5) + nDPS(15)
+    const tpInsc = cnpj.length <= 11 ? "1" : "2";
+    const seriePadded = serie.padStart(5, "0").substring(0, 5);
     const idDPS = `DPS${codigoMunicipio}${tpInsc}${cnpj.padStart(14, "0")}${seriePadded}${nDPS}`;
 
     // Tomador CNPJ/CPF
@@ -170,45 +171,65 @@ Deno.serve(async (req) => {
       ? `<CPF>${tomadorDoc}</CPF>`
       : `<CNPJ>${tomadorDoc}</CNPJ>`;
 
-    // Valor ISS
+    // Valores
     const vServ = dps_data.valorServico.toFixed(2);
     const vDeducoes = (dps_data.valorDeducoes || 0).toFixed(2);
-    const vLiq = (dps_data.valorServico - (dps_data.valorDeducoes || 0)).toFixed(2);
-    const aliquota = dps_data.aliquotaIss != null ? dps_data.aliquotaIss.toFixed(4) : "";
-    const issRetido = dps_data.issRetido ? "1" : "2";
+    const aliquota = dps_data.aliquotaIss != null ? dps_data.aliquotaIss.toFixed(2) : "";
+    const tpRetISSQN = dps_data.issRetido ? "2" : "1"; // 1=não retido, 2=retido
 
-    // Build tomador address XML
+    // Build prestador address from client.address (extract CEP)
+    let prestEnderecoXml = "";
+    const prestCep = (client.address || "").match(/(\d{5})-?(\d{3})/);
+    if (prestCep) {
+      prestEnderecoXml = `<end><endNac><cMun>${codigoMunicipio}</cMun><CEP>${prestCep[1]}${prestCep[2]}</CEP></endNac></end>`;
+    }
+
+    // Build prestador regTrib from client.tax_regime
+    let regTribXml = `<regTrib><opSimpNac>1</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    const taxRegime = (client.tax_regime || "").toLowerCase();
+    if (taxRegime.includes("lucro presumido") || taxRegime.includes("presumido")) {
+      regTribXml = `<regTrib><opSimpNac>2</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    } else if (taxRegime.includes("lucro real") || taxRegime.includes("real")) {
+      regTribXml = `<regTrib><opSimpNac>2</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    } else if (taxRegime.includes("mei")) {
+      regTribXml = `<regTrib><opSimpNac>4</opSimpNac><regEspTrib>0</regEspTrib></regTrib>`;
+    }
+
+    // Build tomador address XML (matching valid pattern: endNac + fields)
     let tomadorEnderecoXml = "";
     if (dps_data.tomadorEndereco) {
       const e = dps_data.tomadorEndereco;
+      const hasMunCep = e.codigoMunicipio && e.cep;
       tomadorEnderecoXml = `<end>` +
+        (hasMunCep ? `<endNac><cMun>${e.codigoMunicipio}</cMun><CEP>${e.cep!.replace(/\D/g, "")}</CEP></endNac>` : "") +
         (e.logradouro ? `<xLgr>${escapeXml(e.logradouro)}</xLgr>` : "") +
         (e.numero ? `<nro>${escapeXml(e.numero)}</nro>` : "") +
-        (e.complemento ? `<xCpl>${escapeXml(e.complemento)}</xCpl>` : "") +
         (e.bairro ? `<xBairro>${escapeXml(e.bairro)}</xBairro>` : "") +
-        (e.codigoMunicipio ? `<cMun>${e.codigoMunicipio}</cMun>` : "") +
-        (e.uf ? `<UF>${e.uf}</UF>` : "") +
-        (e.cep ? `<CEP>${e.cep.replace(/\D/g, "")}</CEP>` : "") +
-        (e.codigoPais ? `<cPais>${e.codigoPais}</cPais>` : `<cPais>1058</cPais>`) +
         `</end>`;
     }
 
-    // Build infDPS XML (the part that gets signed)
+    // Build infDPS XML matching the valid NFS-e pattern
     const infDpsXml =
       `<infDPS versao="1.00" Id="${idDPS}">` +
       `<tpAmb>${tpAmb}</tpAmb>` +
       `<dhEmi>${dhEmi}</dhEmi>` +
-      `<verAplic>VeloGestao-1.0</verAplic>` +
+      `<verAplic>1.00</verAplic>` +
       `<serie>${escapeXml(serie)}</serie>` +
       `<nDPS>${nDPS}</nDPS>` +
       `<dCompet>${dCompet}</dCompet>` +
       `<tpEmit>1</tpEmit>` +
       `<cLocEmi>${codigoMunicipio}</cLocEmi>` +
-      `<subst>2</subst>` +
+      // Prestador completo
       `<prest>` +
       `<CNPJ>${cnpj}</CNPJ>` +
-      (client.municipal_registration ? `<IM>${escapeXml(client.municipal_registration)}</IM>` : "") +
+      `<IM>${escapeXml(client.municipal_registration)}</IM>` +
+      `<xNome>${escapeXml(client.company_name)}</xNome>` +
+      prestEnderecoXml +
+      (client.contact_phone ? `<fone>${client.contact_phone.replace(/\D/g, "")}</fone>` : "") +
+      (client.contact_email ? `<email>${escapeXml(client.contact_email)}</email>` : "") +
+      regTribXml +
       `</prest>` +
+      // Tomador
       `<toma>` +
       tomadorDocTag +
       `<xNome>${escapeXml(dps_data.tomadorRazaoSocial)}</xNome>` +
@@ -217,27 +238,29 @@ Deno.serve(async (req) => {
       (dps_data.tomadorEmail ? `<email>${escapeXml(dps_data.tomadorEmail)}</email>` : "") +
       (dps_data.tomadorTelefone ? `<fone>${dps_data.tomadorTelefone.replace(/\D/g, "")}</fone>` : "") +
       `</toma>` +
+      // Serviço (padrão nacional: locPrest + cServ com cTribNac)
       `<serv>` +
-      `<cServ>${escapeXml(dps_data.codigoServico)}</cServ>` +
+      `<locPrest><cLocPrestacao>${locPrestacao}</cLocPrestacao></locPrest>` +
+      `<cServ>` +
+      `<cTribNac>${escapeXml(dps_data.codigoTribNac)}</cTribNac>` +
+      (dps_data.codigoTribMun ? `<cTribMun>${escapeXml(dps_data.codigoTribMun)}</cTribMun>` : "") +
       `<xDescServ>${escapeXml(dps_data.descricaoServico)}</xDescServ>` +
-      (dps_data.codigoMunicipioPrestacao ? `<cLocPrestacao>${dps_data.codigoMunicipioPrestacao}</cLocPrestacao>` : `<cLocPrestacao>${codigoMunicipio}</cLocPrestacao>`) +
-      `<cPaisPrestacao>1058</cPaisPrestacao>` +
+      `</cServ>` +
+      (dps_data.infoComplementar ? `<infoCompl><xInfComp>${escapeXml(dps_data.infoComplementar)}</xInfComp></infoCompl>` : "") +
       `</serv>` +
+      // Valores (padrão nacional: tribMun)
       `<valores>` +
-      `<vServPrest>` +
-      `<vReceb>${vServ}</vReceb>` +
-      `<vServ>${vServ}</vServ>` +
-      `</vServPrest>` +
+      `<vServPrest><vServ>${vServ}</vServ></vServPrest>` +
+      `<vDescCondIncond><vDescIncond>0.00</vDescIncond><vDescCond>0.00</vDescCond></vDescCondIncond>` +
+      `<vDedRed><vDR>${vDeducoes}</vDR></vDedRed>` +
       `<trib>` +
-      `<totTrib>` +
-      `<indTotTrib>0</indTotTrib>` +
-      `</totTrib>` +
-      `<ISS>` +
-      `<tpRetISSQN>${issRetido}</tpRetISSQN>` +
+      `<tribMun>` +
+      `<tribISSQN>1</tribISSQN>` +
       (aliquota ? `<pAliq>${aliquota}</pAliq>` : "") +
-      `</ISS>` +
+      `<tpRetISSQN>${tpRetISSQN}</tpRetISSQN>` +
+      `</tribMun>` +
+      `<totTrib><indTotTrib>0</indTotTrib></totTrib>` +
       `</trib>` +
-      (dps_data.valorDeducoes ? `<vDed>${vDeducoes}</vDed>` : "") +
       `</valores>` +
       `</infDPS>`;
 
