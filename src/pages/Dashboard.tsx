@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { DollarSign, Users, TrendingDown, CheckSquare, TrendingUp, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export default function Dashboard() {
+  const { profile } = useAuth();
   const [metrics, setMetrics] = useState({
     totalClients: 0, activeClients: 0, churnedClients: 0, churnRate: 0,
     mrr: 0, pendingTasks: 0, overdueTasks: 0,
@@ -45,7 +47,6 @@ export default function Dashboard() {
       monthRevenue, monthExpenses, balance: monthRevenue - monthExpenses,
     });
 
-    // Cash flow last 6 months
     const months: any[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -61,15 +62,22 @@ export default function Dashboard() {
     setCashFlowData(months);
   }
 
+  const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Bom dia';
+    if (h < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
   const cards = [
-    { title: 'Receita do Mês', value: `R$ ${metrics.monthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-emerald-600' },
-    { title: 'Despesas do Mês', value: `R$ ${metrics.monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingDown, color: 'text-red-500' },
-    { title: 'Saldo', value: `R$ ${metrics.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingUp, color: metrics.balance >= 0 ? 'text-emerald-600' : 'text-red-500' },
-    { title: 'Clientes Ativos', value: metrics.activeClients.toString(), icon: Users, color: 'text-primary' },
-    { title: 'MRR', value: `R$ ${metrics.mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-primary' },
-    { title: 'Churn Rate', value: `${metrics.churnRate.toFixed(1)}%`, icon: TrendingDown, color: 'text-orange-500' },
-    { title: 'Tarefas Pendentes', value: metrics.pendingTasks.toString(), icon: CheckSquare, color: 'text-primary' },
-    { title: 'Tarefas Atrasadas', value: metrics.overdueTasks.toString(), icon: AlertTriangle, color: 'text-red-500' },
+    { title: 'Receita do Mês', value: `R$ ${metrics.monthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, iconBg: 'bg-emerald-100 text-emerald-600' },
+    { title: 'Despesas do Mês', value: `R$ ${metrics.monthExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingDown, iconBg: 'bg-red-100 text-red-500' },
+    { title: 'Saldo', value: `R$ ${metrics.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingUp, iconBg: metrics.balance >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500' },
+    { title: 'Clientes Ativos', value: metrics.activeClients.toString(), icon: Users, iconBg: 'bg-primary/10 text-primary' },
+    { title: 'MRR', value: `R$ ${metrics.mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, iconBg: 'bg-primary/10 text-primary' },
+    { title: 'Churn Rate', value: `${metrics.churnRate.toFixed(1)}%`, icon: TrendingDown, iconBg: 'bg-amber-100 text-amber-600' },
+    { title: 'Tarefas Pendentes', value: metrics.pendingTasks.toString(), icon: CheckSquare, iconBg: 'bg-secondary/10 text-secondary' },
+    { title: 'Tarefas Atrasadas', value: metrics.overdueTasks.toString(), icon: AlertTriangle, iconBg: 'bg-red-100 text-red-500' },
   ];
 
   const pieData = [
@@ -81,41 +89,51 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+      {/* Greeting */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">
+          {greeting()}, {profile?.full_name?.split(' ')[0] || 'Usuário'} 👋
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">Aqui está o resumo do seu escritório</p>
+      </div>
 
+      {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {cards.map(card => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <Card key={card.title} className="border-l-4 border-l-primary/30 hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center gap-3 pb-2">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${card.iconBg}`}>
+                <card.icon className="h-5 w-5" />
+              </div>
               <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
-              <card.icon className={`h-4 w-4 ${card.color}`} />
             </CardHeader>
             <CardContent>
-              <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+              <p className="text-2xl font-bold text-foreground">{card.value}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Fluxo de Caixa</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Fluxo de Caixa</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={cashFlowData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                 <Tooltip formatter={(v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
-                <Bar dataKey="receitas" fill="hsl(var(--chart-1))" name="Receitas" />
-                <Bar dataKey="despesas" fill="hsl(var(--destructive))" name="Despesas" />
+                <Bar dataKey="receitas" fill="hsl(var(--chart-1))" name="Receitas" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="despesas" fill="hsl(var(--chart-2))" name="Despesas" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Distribuição de Clientes</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Distribuição de Clientes</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>

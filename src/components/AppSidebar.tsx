@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, ClipboardList, FileType, Receipt, Scale, Plug } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Receipt, Scale, Plug } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Separator } from '@/components/ui/separator';
 
 const menuItems = [
   { title: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -36,17 +37,35 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4">
-        <h2 className="text-lg font-bold text-foreground">Contábil Gestão</h2>
+      <SidebarHeader className="p-5">
+        <div className="flex items-center gap-3">
+          {/* Velocitä logo mark – stylized bars */}
+          <div className="flex gap-0.5">
+            <div className="w-1 h-6 rounded-full bg-sidebar-primary" />
+            <div className="w-1 h-8 rounded-full bg-sidebar-primary" />
+            <div className="w-1 h-5 rounded-full bg-sidebar-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-sidebar-foreground">Velocitä</h2>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/50 font-medium">Contabilidade</p>
+          </div>
+        </div>
       </SidebarHeader>
-      <SidebarContent>
+
+      <Separator className="bg-sidebar-border mx-3" />
+
+      <SidebarContent className="pt-2">
         <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map(item => (
                 <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton isActive={location.pathname === item.path} onClick={() => navigate(item.path)}>
+                  <SidebarMenuButton
+                    isActive={location.pathname === item.path}
+                    onClick={() => navigate(item.path)}
+                    className="transition-colors duration-150"
+                  >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
@@ -55,8 +74,11 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <Separator className="bg-sidebar-border mx-3" />
+
         <SidebarGroup>
-          <SidebarGroupLabel>Administração</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">Administração</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <Collapsible defaultOpen={isCadastroActive} className="group/collapsible">
@@ -88,16 +110,20 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
       <SidebarFooter className="p-4">
+        <Separator className="bg-sidebar-border mb-4" />
         <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback>{profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
+          <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/60">
+            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-semibold text-sm">
+              {profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+            </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate text-foreground">{profile?.full_name || 'Usuário'}</p>
-            <p className="text-xs text-muted-foreground truncate">{profile?.job_title || 'Funcionário'}</p>
+            <p className="text-sm font-medium truncate text-sidebar-foreground">{profile?.full_name || 'Usuário'}</p>
+            <p className="text-xs text-sidebar-foreground/50 truncate">{profile?.job_title || 'Funcionário'}</p>
           </div>
-          <button onClick={signOut} className="text-muted-foreground hover:text-foreground">
+          <button onClick={signOut} className="text-sidebar-foreground/50 hover:text-sidebar-primary transition-colors">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
