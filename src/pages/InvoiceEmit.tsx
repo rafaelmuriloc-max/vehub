@@ -411,11 +411,18 @@ export default function InvoiceEmit() {
               </Select>
             </div>
             {selectedClientData && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm bg-muted/30 p-3 rounded-md">
-                <div><span className="text-muted-foreground">CNPJ:</span> {selectedClientData.document}</div>
-                <div><span className="text-muted-foreground">IM:</span> {selectedClientData.municipal_registration || '—'}</div>
-                <div><span className="text-muted-foreground">Endereço:</span> {selectedClientData.address || '—'}</div>
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm bg-muted/30 p-3 rounded-md">
+                  <div><span className="text-muted-foreground">CNPJ:</span> {selectedClientData.document}</div>
+                  <div><span className="text-muted-foreground">IM:</span> {selectedClientData.municipal_registration || '—'}</div>
+                  <div><span className="text-muted-foreground">Regime:</span> {selectedClientData.tax_regime || '—'}</div>
+                </div>
+                {!selectedClientData.municipal_registration && (
+                  <p className="text-sm text-destructive font-medium">
+                    ⚠️ Este cliente não possui Inscrição Municipal cadastrada. A emissão será bloqueada.
+                  </p>
+                )}
+              </>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
