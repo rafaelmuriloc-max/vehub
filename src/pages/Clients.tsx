@@ -20,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import ContractTab from '@/components/ContractTab';
 import ClientObligationsTab from '@/components/ClientObligationsTab';
+import CertificateImportDialog from '@/components/CertificateImportDialog';
 
 type PermitItem = { name: string; enabled: boolean; expiry: string };
 
@@ -111,6 +112,7 @@ export default function Clients() {
   const [pendingCertFile, setPendingCertFile] = useState<File | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact>>({});
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
@@ -443,7 +445,12 @@ export default function Clients() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Clientes</h1>
         {isAdmin && (
-          <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" />Novo Cliente</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />Importar Certificados
+            </Button>
+            <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" />Novo Cliente</Button>
+          </div>
         )}
       </div>
 
@@ -823,6 +830,13 @@ export default function Clients() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <CertificateImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImportComplete={loadClients}
+        existingDocuments={clients.map(c => c.document || '').filter(Boolean)}
+      />
     </div>
   );
 }

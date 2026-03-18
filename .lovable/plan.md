@@ -1,38 +1,47 @@
 
 
-# Importação em Lote de Clientes via Certificados A1
+## Plano: Reorganizar menu Cadastro com submenus
 
-## O que será feito
+### Mudanças
 
-Adicionar um botão "Importar Certificados" na página de Clientes que permite selecionar uma pasta com arquivos `.pfx`/`.p12`. Para cada certificado, o sistema:
+**1. Sidebar (`src/components/AppSidebar.tsx`)**
+- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
+- Submenus:
+  - **Meu Escritório** → `/settings` (página Settings atual)
+  - **Obrigações** → `/obligations` (página Obligations atual)
+  - **Tipos de Documento** → `/settings/document-types` (nova rota)
+- Remover "Obrigações" do menu principal (já existente lá)
+- Importar `ChevronRight` e os componentes de submenu do sidebar
 
-1. Lê o arquivo com `node-forge` usando a senha informada
-2. Extrai o CNPJ do campo `Subject` do certificado (CN ou serialNumber)
-3. Extrai a data de vencimento do certificado
-4. Consulta a BrasilAPI para preencher razão social, endereço, atividades, etc.
-5. Mostra um preview dos clientes encontrados com status (novo/existente/erro)
-6. Ao confirmar: cria o registro no banco, faz upload do `.pfx` para o Storage (`certificates` bucket), e salva `digital_certificate_url`, `digital_certificate_password` e `digital_certificate_expiry` no cliente
+**2. Rotas (`src/App.tsx`)**
+- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
+- Manter `/settings` e `/obligations` como estão
 
-## Fluxo do usuário
+**3. Nova página `src/pages/DocumentTypes.tsx`**
+- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
 
-1. Clica em "Importar Certificados" na página de Clientes
-2. Dialog abre pedindo a senha padrão dos certificados
-3. Seleciona a pasta com os arquivos (usa `<input webkitdirectory>`)
-4. Sistema processa cada arquivo e exibe tabela com: nome do arquivo, CNPJ extraído, razão social (da BrasilAPI), vencimento, status (novo/já existe/erro de senha)
-5. Usuário confirma importação
-6. Sistema cria clientes novos, faz upload dos certificados, e atualiza os existentes (opcional)
+**4. Settings (`src/pages/Settings.tsx`)**
+- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
+- Renomear título para "Meu Escritório"
 
-## Detalhes técnicos
+**5. Obligations (`src/pages/Obligations.tsx`)**
+- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
 
-- Extração do CNPJ: certificados A1 brasileiros têm o CNPJ no `commonName` (CN) do subject, geralmente no formato `RAZAO SOCIAL:CNPJ`. Fallback para `serialNumber`.
-- Deduplicação: verifica se já existe cliente com mesmo `document` (CNPJ). Se existir, marca como "já cadastrado" e permite atualizar apenas o certificado.
-- Tratamento de erros por arquivo: se a senha falhar em algum arquivo, marca como erro e continua com os demais.
-- Reusa a lógica existente de `fetchCnpjData` (BrasilAPI) para preencher dados.
-- Reusa a lógica existente de upload para o bucket `certificates`.
+### Estrutura do menu resultante
 
-## Arquivo alterado
+```text
+Menu
+  Dashboard
+  Clientes
+  Financeiro
+  Documentos
+  Tarefas
+  Calendário
 
-| Arquivo | Ação |
-|---|---|
-| `src/pages/Clients.tsx` | Adicionar botão "Importar Certificados", dialog de importação com progresso/preview, lógica de extração em lote, criação de clientes e upload de certificados |
+Administração
+  Cadastro (colapsável)
+    ├─ Meu Escritório
+    ├─ Obrigações
+    └─ Tipos de Documento
+```
 
