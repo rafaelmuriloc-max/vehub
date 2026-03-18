@@ -62,6 +62,29 @@ export default function Dashboard() {
       });
     }
     setCashFlowData(months);
+
+    // Evolution charts - last 12 months
+    const evoData: { month: string; clientes: number; mrr: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+      const monthStart = d.toISOString().split('T')[0];
+
+      const activeInMonth = clients?.filter(c => {
+        const start = c.start_date || c.created_at?.split('T')[0];
+        if (!start || start > monthEnd) return false;
+        if (c.end_date && c.end_date < monthStart) return false;
+        return true;
+      }) || [];
+
+      evoData.push({
+        month: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+        clientes: activeInMonth.length,
+        mrr: activeInMonth.reduce((s, c) => s + Number(c.monthly_value || 0), 0),
+      });
+    }
+    setClientEvolution(evoData);
+    setRevenueEvolution(evoData);
   }
 
   const greeting = () => {
