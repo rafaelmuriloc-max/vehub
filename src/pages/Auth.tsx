@@ -137,8 +137,14 @@ export default function Auth() {
                 <Label htmlFor="password" className="text-sm font-medium">Senha</Label>
                 <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="••••••" />
               </div>
-              <Button type="submit" className="w-full h-11 font-semibold" disabled={submitting}>
-                {submitting ? 'Aguarde...' : isLogin ? 'Entrar' : 'Cadastrar'}
+              {isLockedOut && (
+                <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                  <ShieldAlert className="h-4 w-4 shrink-0" />
+                  <span>Bloqueado por segurança. Tente novamente em <strong>{countdown}s</strong>.</span>
+                </div>
+              )}
+              <Button type="submit" className="w-full h-11 font-semibold" disabled={submitting || isLockedOut}>
+                {submitting ? 'Aguarde...' : isLockedOut ? `Bloqueado (${countdown}s)` : isLogin ? 'Entrar' : 'Cadastrar'}
               </Button>
             </form>
 
