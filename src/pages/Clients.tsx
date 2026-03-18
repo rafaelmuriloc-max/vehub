@@ -445,7 +445,12 @@ export default function Clients() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Clientes</h1>
         {isAdmin && (
-          <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" />Novo Cliente</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />Importar Certificados
+            </Button>
+            <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" />Novo Cliente</Button>
+          </div>
         )}
       </div>
 
