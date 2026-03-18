@@ -190,7 +190,7 @@ export default function Dashboard() {
       {/* Evolution Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-base">Evolução de Clientes Ativos</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Evolução de Clientes (por abertura)</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={clientEvolution}>
@@ -198,7 +198,8 @@ export default function Dashboard() {
                 <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                 <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
                 <Tooltip />
-                <Line type="monotone" dataKey="clientes" stroke="hsl(var(--chart-1))" name="Clientes Ativos" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="clientes" stroke="hsl(var(--chart-1))" name="Acumulado" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="novos" stroke="hsl(var(--chart-3))" name="Novos no Mês" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
