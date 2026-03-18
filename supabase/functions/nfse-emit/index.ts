@@ -950,15 +950,15 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
 
   if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no PFX");
 
+  // Para emissão, siga a referência PHP/OpenSSL (-clcerts): envie apenas o certificado cliente folha no mTLS.
   const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId)
     || parsedCerts.find((c) => c.subject !== c.issuer)
     || parsedCerts[0];
-  const chain = buildChain(leafCert, parsedCerts);
 
-  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); enviando cadeia com ${chain.length} item(ns).`);
+  console.log(`PFX carregado com ${parsedCerts.length} certificado(s); enviando apenas o certificado cliente folha no mTLS.`);
 
   return {
-    certPem: chain.map((cert) => cert.pem.trim()).join("\n"),
+    certPem: leafCert.pem.trim(),
     keyPem,
   };
 }
