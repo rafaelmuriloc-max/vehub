@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { FolderOpen, Loader2, Upload, CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { FolderOpen, Loader2, Upload, CheckCircle, XCircle, AlertCircle, RefreshCw, FilePlus2, FileCheck2, FileX2, ShieldAlert, CalendarClock } from 'lucide-react';
 
 type ImportEntry = {
   file: File;
