@@ -161,9 +161,9 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
         if (!cnpj) {
           // Check if it's a CPF (pessoa física) certificate
           const allText = [
-            cert.subject.getField('CN')?.value,
-            cert.subject.getField({ shortName: 'serialNumber' })?.value,
-            cert.subject.getField({ type: '2.5.4.5' })?.value,
+            foundCert.subject.getField('CN')?.value,
+            foundCert.subject.getField({ shortName: 'serialNumber' })?.value,
+            foundCert.subject.getField({ type: '2.5.4.5' })?.value,
           ].filter(Boolean).join(' ');
           const hasCpf = /\d{11}/.test(allText);
 
