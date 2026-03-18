@@ -295,31 +295,82 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
 
   const statusIcon = (status: ImportEntry['status']) => {
     switch (status) {
-      case 'new': return <Badge className="bg-emerald-100 text-emerald-800">Novo</Badge>;
-      case 'exists': return <Badge className="bg-amber-100 text-amber-800">Atualizar cert.</Badge>;
-      case 'error': return <Badge variant="destructive">Erro</Badge>;
+      case 'new': return <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><FilePlus2 className="h-3 w-3" />Novo</Badge>;
+      case 'exists': return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 gap-1"><FileCheck2 className="h-3 w-3" />Atualizar</Badge>;
+      case 'error': return <Badge variant="destructive" className="gap-1"><FileX2 className="h-3 w-3" />Erro</Badge>;
       case 'importing': return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
       case 'done': return <CheckCircle className="h-4 w-4 text-emerald-600" />;
       default: return null;
     }
   };
 
+  const expiryBadge = (expiry: Date | null) => {
+    if (!expiry) return <span className="text-muted-foreground">-</span>;
+    const now = new Date();
+    const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const formatted = expiry.toLocaleDateString('pt-BR');
+    if (diffDays < 0) return <span className="text-destructive font-medium">{formatted}</span>;
+    if (diffDays <= 30) return <span className="text-amber-600 dark:text-amber-400 font-medium">{formatted}</span>;
+    if (diffDays <= 90) return <span className="text-yellow-600 dark:text-yellow-400">{formatted}</span>;
+    return <span className="text-emerald-600 dark:text-emerald-400">{formatted}</span>;
+  };
+
   const newCount = entries.filter(e => e.status === 'new').length;
   const existsCount = entries.filter(e => e.status === 'exists').length;
   const errorCount = entries.filter(e => e.status === 'error').length;
   const ignoredCount = entries.filter(e => e.status === 'error' && (e.error?.includes('pessoa física') || e.error?.includes('vencido'))).length;
+  const realErrorCount = errorCount - ignoredCount;
+
+  const StatusCard = ({ icon: Icon, label, count, color }: { icon: any; label: string; count: number; color: string }) => (
+    <div className={`flex items-center gap-2 rounded-lg border p-3 ${color}`}>
+      <Icon className="h-5 w-5 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-lg font-bold leading-none">{count}</p>
+        <p className="text-xs opacity-80 truncate">{label}</p>
+      </div>
+    </div>
+  );
+
+  const MobileCard = ({ entry }: { entry: ImportEntry }) => (
+    <div className="border rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono text-xs truncate max-w-[60%] block">{entry.fileName}</span>
+            </TooltipTrigger>
+            <TooltipContent>{entry.fileName}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        {statusIcon(entry.status)}
+      </div>
+      {entry.cnpj && (
+        <p className="text-sm"><span className="text-muted-foreground">CNPJ:</span> {formatCnpjDisplay(entry.cnpj)}</p>
+      )}
+      {entry.companyName && (
+        <p className="text-sm truncate"><span className="text-muted-foreground">Razão Social:</span> {entry.companyName}</p>
+      )}
+      {entry.expiry && (
+        <p className="text-sm flex items-center gap-1">
+          <CalendarClock className="h-3 w-3 text-muted-foreground" />
+          {expiryBadge(entry.expiry)}
+        </p>
+      )}
+      {entry.error && <p className="text-xs text-destructive">{entry.error}</p>}
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!importing) { onOpenChange(v); if (!v) reset(); } }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle>Importar Certificados A1</DialogTitle>
+          <DialogTitle className="text-lg sm:text-xl">Importar Certificados A1</DialogTitle>
         </DialogHeader>
 
         {step === 'password' && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Informe a senha padrão dos certificados e selecione a pasta contendo os arquivos <code>.pfx</code> / <code>.p12</code>.
+              Informe a senha padrão dos certificados e selecione a pasta contendo os arquivos <code className="bg-muted px-1 py-0.5 rounded text-xs">.pfx</code> / <code className="bg-muted px-1 py-0.5 rounded text-xs">.p12</code>.
             </p>
             <div>
               <Label>Senha dos certificados</Label>
@@ -356,35 +407,44 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
 
         {step === 'preview' && (
           <div className="space-y-4">
-            <div className="flex gap-4 text-sm">
-              <span className="text-emerald-600 font-medium">{newCount} novos</span>
-              <span className="text-amber-600 font-medium">{existsCount} existentes</span>
-              {ignoredCount > 0 && <span className="text-muted-foreground font-medium">{ignoredCount} ignorados</span>}
-              {errorCount - ignoredCount > 0 && <span className="text-destructive font-medium">{errorCount - ignoredCount} erros</span>}
+            {/* Status summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <StatusCard icon={FilePlus2} label="Novos" count={newCount} color="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" />
+              <StatusCard icon={FileCheck2} label="Existentes" count={existsCount} color="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800" />
+              <StatusCard icon={ShieldAlert} label="Ignorados" count={ignoredCount} color="bg-muted text-muted-foreground border-border" />
+              <StatusCard icon={FileX2} label="Erros" count={realErrorCount} color="bg-destructive/10 text-destructive border-destructive/30" />
             </div>
 
-            <div className="border rounded-md max-h-[50vh] overflow-y-auto">
+            {/* Desktop table */}
+            <div className="hidden md:block border rounded-lg max-h-[50vh] overflow-y-auto overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Arquivo</TableHead>
-                    <TableHead>CNPJ</TableHead>
-                    <TableHead>Razão Social</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="min-w-[140px]">Arquivo</TableHead>
+                    <TableHead className="min-w-[160px]">CNPJ</TableHead>
+                    <TableHead className="min-w-[200px]">Razão Social</TableHead>
+                    <TableHead className="min-w-[110px]">Vencimento</TableHead>
+                    <TableHead className="min-w-[140px]">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {entries.map((entry, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-mono text-xs">{entry.fileName}</TableCell>
-                      <TableCell>{entry.cnpj ? formatCnpjDisplay(entry.cnpj) : '-'}</TableCell>
-                      <TableCell>{entry.companyName || '-'}</TableCell>
+                    <TableRow key={i} className={entry.status === 'error' ? 'opacity-60' : ''}>
                       <TableCell>
-                        {entry.expiry ? entry.expiry.toLocaleDateString('pt-BR') : '-'}
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="font-mono text-xs truncate max-w-[180px] block">{entry.fileName}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>{entry.fileName}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
+                      <TableCell className="font-mono text-xs">{entry.cnpj ? formatCnpjDisplay(entry.cnpj) : '-'}</TableCell>
+                      <TableCell className="max-w-[250px] truncate">{entry.companyName || '-'}</TableCell>
+                      <TableCell>{expiryBadge(entry.expiry)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {statusIcon(entry.status)}
                           {entry.error && <span className="text-xs text-destructive">{entry.error}</span>}
                         </div>
@@ -395,13 +455,21 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
               </Table>
             </div>
 
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => { reset(); }}>
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-2 max-h-[50vh] overflow-y-auto">
+              {entries.map((entry, i) => (
+                <MobileCard key={i} entry={entry} />
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+              <Button variant="outline" onClick={() => { reset(); }} className="w-full sm:w-auto">
                 Cancelar
               </Button>
               <Button
                 onClick={handleImport}
                 disabled={newCount + existsCount === 0}
+                className="w-full sm:w-auto"
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Importar {newCount + existsCount} cliente(s)
@@ -414,27 +482,37 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
           <div className="space-y-4">
             <Progress value={progress} />
             <p className="text-sm text-muted-foreground text-center">
-              {importing ? 'Importando...' : 'Importação concluída!'}
+              {importing ? `Importando... ${progress}%` : 'Importação concluída!'}
             </p>
 
-            <div className="border rounded-md max-h-[50vh] overflow-y-auto">
+            {/* Desktop table */}
+            <div className="hidden md:block border rounded-lg max-h-[50vh] overflow-y-auto overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Arquivo</TableHead>
-                    <TableHead>CNPJ</TableHead>
-                    <TableHead>Razão Social</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="min-w-[140px]">Arquivo</TableHead>
+                    <TableHead className="min-w-[160px]">CNPJ</TableHead>
+                    <TableHead className="min-w-[200px]">Razão Social</TableHead>
+                    <TableHead className="min-w-[140px]">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {entries.filter(e => e.status !== 'pending').map((entry, i) => (
                     <TableRow key={i}>
-                      <TableCell className="font-mono text-xs">{entry.fileName}</TableCell>
-                      <TableCell>{entry.cnpj ? formatCnpjDisplay(entry.cnpj) : '-'}</TableCell>
-                      <TableCell>{entry.companyName || '-'}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="font-mono text-xs truncate max-w-[180px] block">{entry.fileName}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>{entry.fileName}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{entry.cnpj ? formatCnpjDisplay(entry.cnpj) : '-'}</TableCell>
+                      <TableCell className="max-w-[250px] truncate">{entry.companyName || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {statusIcon(entry.status)}
                           {entry.error && <span className="text-xs text-destructive">{entry.error}</span>}
                         </div>
@@ -445,9 +523,16 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
               </Table>
             </div>
 
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-2 max-h-[50vh] overflow-y-auto">
+              {entries.filter(e => e.status !== 'pending').map((entry, i) => (
+                <MobileCard key={i} entry={entry} />
+              ))}
+            </div>
+
             {!importing && (
               <div className="flex justify-end">
-                <Button onClick={() => { onOpenChange(false); reset(); }}>Fechar</Button>
+                <Button onClick={() => { onOpenChange(false); reset(); }} className="w-full sm:w-auto">Fechar</Button>
               </div>
             )}
           </div>
