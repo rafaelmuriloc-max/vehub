@@ -13,6 +13,8 @@ export default function Dashboard() {
     monthRevenue: 0, monthExpenses: 0, balance: 0,
   });
   const [cashFlowData, setCashFlowData] = useState<any[]>([]);
+  const [clientEvolution, setClientEvolution] = useState<any[]>([]);
+  const [revenueEvolution, setRevenueEvolution] = useState<any[]>([]);
 
   useEffect(() => {
     loadMetrics();
