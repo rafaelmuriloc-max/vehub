@@ -1,47 +1,36 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Diagnóstico e Proxy para Emissão NFS-e (SEFIN bloqueando IPs cloud)
 
-### Mudanças
+## Situação Atual
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+O `nfse-query` funciona porque conecta em `adn.nfse.gov.br`. O `nfse-emit` falha porque conecta em `sefin.nfse.gov.br` (IP 189.9.84.43), que rejeita conexões TLS de IPs de datacenter/cloud (Supabase). Todas as estratégias (fetch, raw-http1, DoH+SNI) falham com `ECONNRESET`.
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+Não é possível testar de um VPS diretamente a partir do Lovable. Em vez disso, proponho:
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+## Plano
 
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
+### 1. Script de diagnóstico para VPS (arquivo `.lovable/tmp/`)
 
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
+Criar um script Deno standalone que o usuário pode rodar em qualquer VPS/máquina local para confirmar se a conexão mTLS ao SEFIN funciona fora do Supabase. O script:
+- Recebe o caminho do PFX e senha como argumentos
+- Tenta `Deno.connectTls()` para `sefin.nfse.gov.br:443` com o certificado cliente
+- Envia um POST de teste (ou apenas tenta o handshake TLS)
+- Imprime sucesso/falha com detalhes
 
-### Estrutura do menu resultante
+### 2. Proxy reverso mTLS (implementação futura)
 
-```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
+Se o teste confirmar que funciona fora do cloud, criar:
+- **Worker/proxy no VPS**: recebe o XML comprimido + certificado PEM via HTTPS, faz o POST mTLS ao SEFIN e retorna a resposta
+- **Edge Function atualizada**: em vez de conectar diretamente ao SEFIN, envia o payload ao proxy via HTTPS simples
 
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
-```
+Isso fica para uma etapa posterior, após confirmação do diagnóstico.
+
+### Arquivos a criar/editar
+
+| Arquivo | Ação |
+|---|---|
+| `.lovable/tmp/test-sefin-connection.ts` | Criar - script Deno para rodar no VPS |
+
+O script é ~80 linhas: parseia PFX com node-forge, tenta `Deno.connectTls` para o SEFIN, reporta resultado.
 
