@@ -1,47 +1,26 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Gráfico de Evolução de Clientes por Data de Abertura
 
-### Mudanças
+## Contexto
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+Atualmente o gráfico de "Evolução de Clientes" usa `start_date` (ou `created_at` como fallback) para determinar quais clientes estavam ativos em cada mês. O pedido é usar a **data de abertura da empresa** (`opening_date`) como base para o gráfico.
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+## Alteração
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+No `src/pages/Dashboard.tsx`:
 
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
+1. **Atualizar a query** para incluir `opening_date` no select dos clientes
+2. **Alterar a lógica de evolução** para usar `opening_date` como critério principal:
+   - Contar quantas empresas foram abertas (`opening_date`) em cada mês dos últimos 12 meses
+   - Mostrar também o acumulado (total de empresas abertas até aquele mês)
+3. **Renomear o gráfico** para "Evolução de Clientes (por abertura)" para deixar claro o critério
 
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
+A lógica passará de "clientes ativos no mês" para "clientes com `opening_date` até aquele mês" (acumulado) e "novos no mês" como dado secundário.
 
-### Estrutura do menu resultante
+## Arquivo alterado
 
-```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
-```
+| Arquivo | Alteração |
+|---|---|
+| `src/pages/Dashboard.tsx` | Incluir `opening_date` na query, recalcular evolução usando `opening_date`, atualizar título do gráfico |
 
