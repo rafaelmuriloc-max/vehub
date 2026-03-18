@@ -64,7 +64,7 @@ export default function Dashboard() {
     setCashFlowData(months);
 
     // Evolution charts - last 12 months
-    const evoData: { month: string; clientes: number; mrr: number }[] = [];
+    const evoData: { month: string; clientes: number; novos: number; mrr: number }[] = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
