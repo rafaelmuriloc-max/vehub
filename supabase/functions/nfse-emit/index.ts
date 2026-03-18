@@ -401,31 +401,31 @@ function escapeXml(value: string): string {
 async function signXml(infDpsXml: string, referenceId: string, keyPem: string, certPem: string): Promise<string> {
   const encoder = new TextEncoder();
 
-  // 1. SHA-256 digest of infDPS
-  const digestBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(infDpsXml));
+  // 1. SHA-1 digest of infDPS (matching valid NFS-e signatures)
+  const digestBuffer = await crypto.subtle.digest("SHA-1", encoder.encode(infDpsXml));
   const digestB64 = uint8ArrayToBase64(new Uint8Array(digestBuffer));
 
-  // 2. Build SignedInfo
+  // 2. Build SignedInfo (using rsa-sha1 as per valid NFS-e pattern)
   const signedInfo =
     `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>` +
-    `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>` +
+    `<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>` +
     `<Reference URI="#${referenceId}">` +
     `<Transforms>` +
     `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>` +
     `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>` +
     `</Transforms>` +
-    `<DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>` +
+    `<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>` +
     `<DigestValue>${digestB64}</DigestValue>` +
     `</Reference>` +
     `</SignedInfo>`;
 
-  // 3. Import private key via WebCrypto
+  // 3. Import private key via WebCrypto (SHA-1 for signature)
   const keyDer = pemToDer(keyPem, "PRIVATE KEY");
   const cryptoKey = await crypto.subtle.importKey(
     "pkcs8",
     keyDer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-1" },
     false,
     ["sign"],
   );
