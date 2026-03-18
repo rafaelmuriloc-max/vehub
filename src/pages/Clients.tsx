@@ -9,11 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -52,19 +53,14 @@ type Client = {
   contact_email: string | null; contact_phone: string | null; address: string | null;
   status: 'active' | 'inactive' | 'churned'; monthly_value: number; start_date: string | null;
   end_date: string | null; notes: string | null;
-  // Fiscal
   tax_regime: string | null; main_activity: string | null; secondary_activities: string | null;
   state_registration: string | null; municipal_registration: string | null;
-  // Pessoal
   payroll_type: string | null; employee_count: number | null; payroll_notes: string | null;
-  // Societário
   permits: string | null; digital_certificate_expiry: string | null; digital_certificate_type: string | null;
   digital_certificate_url: string | null; digital_certificate_password: string | null;
   partners_info: string | null;
-  // Sucesso do Cliente
   company_description: string | null; business_segment: string | null; foundation_date: string | null;
   success_notes: string | null;
-  // Geral extras
   opening_date: string | null; from_another_office: boolean;
   previous_office_name: string | null; exit_reason: string | null;
   destination_office_name: string | null; exit_reason_notes: string | null;
@@ -79,15 +75,10 @@ const emptyForm = {
   company_name: '', sci_code: '', document: '', contact_name: '', contact_email: '',
   contact_phone: '', address: '', status: 'active' as 'active' | 'inactive' | 'churned', monthly_value: '',
   start_date: '', end_date: '', notes: '',
-  // Fiscal
   tax_regime: '', main_activity: '', secondary_activities: '', state_registration: '', municipal_registration: '',
-  // Pessoal
   payroll_type: '', employee_count: '', payroll_notes: '',
-  // Societário
   permits: '', digital_certificate_expiry: '', digital_certificate_type: '', digital_certificate_password: '', partners_info: '',
-  // Sucesso do Cliente
   company_description: '', business_segment: '', foundation_date: '', success_notes: '',
-  // Geral extras
   opening_date: '', from_another_office: false as boolean,
   previous_office_name: '', exit_reason: '',
   destination_office_name: '', exit_reason_notes: '',
@@ -96,12 +87,15 @@ const emptyForm = {
 type Department = { id: string; name: string };
 type DeptContact = { contact_name: string; contact_phone: string; contact_email: string };
 
+const PAGE_SIZE = 10;
+
 export default function Clients() {
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
+  const [viewOnly, setViewOnly] = useState(false);
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState({ ...emptyForm });
@@ -113,6 +107,9 @@ export default function Clients() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact>>({});
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
@@ -217,6 +214,7 @@ export default function Clients() {
 
   async function openNew() {
     setEditing(null);
+    setViewOnly(false);
     setForm({ ...emptyForm, start_date: new Date().toISOString().split('T')[0] });
     setPermits(defaultPermits.map(p => ({ ...p })));
     setCertificateUrl(null);
@@ -227,6 +225,27 @@ export default function Clients() {
 
   async function openEdit(c: Client) {
     setEditing(c);
+    setViewOnly(false);
+    populateForm(c);
+    setPermits(parsePermits(c.permits));
+    setCertificateUrl(c.digital_certificate_url || null);
+    const deps = await loadDepartments();
+    await loadDeptContacts(c.id, deps);
+    setDialogOpen(true);
+  }
+
+  async function openView(c: Client) {
+    setEditing(c);
+    setViewOnly(true);
+    populateForm(c);
+    setPermits(parsePermits(c.permits));
+    setCertificateUrl(c.digital_certificate_url || null);
+    const deps = await loadDepartments();
+    await loadDeptContacts(c.id, deps);
+    setDialogOpen(true);
+  }
+
+  function populateForm(c: Client) {
     setForm({
       company_name: c.company_name, sci_code: c.sci_code || '', document: c.document || '', contact_name: c.contact_name || '',
       contact_email: c.contact_email || '', contact_phone: c.contact_phone || '', address: c.address || '',
@@ -247,11 +266,32 @@ export default function Clients() {
       previous_office_name: (c as any).previous_office_name || '', exit_reason: (c as any).exit_reason || '',
       destination_office_name: (c as any).destination_office_name || '', exit_reason_notes: (c as any).exit_reason_notes || '',
     });
-    setPermits(parsePermits(c.permits));
-    setCertificateUrl(c.digital_certificate_url || null);
-    const deps = await loadDepartments();
-    await loadDeptContacts(c.id, deps);
-    setDialogOpen(true);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      // Delete department contacts
+      await (supabase as any).from('client_department_contacts').delete().eq('client_id', deleteTarget.id);
+
+      // Remove certificate from storage if exists
+      if (deleteTarget.digital_certificate_url) {
+        await supabase.storage.from('certificates').remove([deleteTarget.digital_certificate_url]);
+      }
+
+      // Delete client
+      const { error } = await supabase.from('clients').delete().eq('id', deleteTarget.id);
+      if (error) throw error;
+
+      toast({ title: 'Cliente excluído', description: `${deleteTarget.company_name} foi removido.` });
+      loadClients();
+    } catch (err: any) {
+      toast({ title: 'Erro ao excluir', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
   }
 
   async function handleCertificateUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -265,7 +305,6 @@ export default function Clients() {
     }
     setCertificateUploading(true);
     try {
-      // Read file and extract expiry using node-forge
       const arrayBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       let binary = '';
@@ -282,7 +321,6 @@ export default function Clients() {
         setCertificateUploading(false);
         return;
       }
-      // Extract certificate expiry
       const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
       const certs = certBags[forge.pki.oids.certBag] || [];
       let expiryDate: Date | null = null;
@@ -298,7 +336,6 @@ export default function Clients() {
       }
 
       if (editing) {
-        // Upload to storage immediately
         const filePath = `${editing.id}/${file.name}`;
         const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, file, { upsert: true });
         if (uploadError) throw uploadError;
@@ -307,7 +344,6 @@ export default function Clients() {
         setCertificateUrl(filePath);
         toast({ title: 'Certificado enviado', description: `Arquivo ${file.name} salvo. Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}.` });
       } else {
-        // Store file for upload after save
         setPendingCertFile(file);
         toast({ title: 'Certificado carregado', description: `Vencimento: ${expiryDate ? expiryDate.toLocaleDateString('pt-BR') : 'não encontrado'}. Será salvo ao criar o cliente.` });
       }
@@ -352,22 +388,17 @@ export default function Clients() {
       contact_email: form.contact_email || null, contact_phone: form.contact_phone || null, address: form.address || null,
       status: form.status, monthly_value: Number(form.monthly_value) || 0,
       start_date: form.start_date || null, end_date: form.end_date || null, notes: form.notes || null,
-      // Fiscal
       tax_regime: form.tax_regime || null, main_activity: form.main_activity || null,
       secondary_activities: form.secondary_activities || null, state_registration: form.state_registration || null,
       municipal_registration: form.municipal_registration || null,
-      // Pessoal
       payroll_type: form.payroll_type || null, employee_count: Number(form.employee_count) || 0,
       payroll_notes: form.payroll_notes || null,
-      // Societário
       permits: JSON.stringify(permits), digital_certificate_expiry: form.digital_certificate_expiry || null,
       digital_certificate_type: form.digital_certificate_type || null,
       digital_certificate_password: form.digital_certificate_password || null,
       partners_info: form.partners_info || null,
-      // Sucesso do Cliente
       company_description: form.company_description || null, business_segment: form.business_segment || null,
       foundation_date: form.foundation_date || null, success_notes: form.success_notes || null,
-      // Geral extras
       opening_date: form.opening_date || null, from_another_office: form.from_another_office,
       previous_office_name: form.previous_office_name || null, exit_reason: form.exit_reason || null,
       destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
@@ -386,7 +417,6 @@ export default function Clients() {
       return;
     }
 
-    // Upsert department contacts
     if (clientId && Object.keys(deptContacts).length > 0) {
       const contactRows = Object.entries(deptContacts)
         .filter(([, c]) => c.contact_name || c.contact_phone || c.contact_email)
@@ -407,7 +437,6 @@ export default function Clients() {
       }
     }
 
-    // Upload pending certificate for new clients
     if (clientId && pendingCertFile) {
       try {
         const filePath = `${clientId}/${pendingCertFile.name}`;
@@ -427,6 +456,7 @@ export default function Clients() {
   const f = (field: keyof typeof form) => ({
     value: form[field] as string,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [field]: e.target.value }),
+    disabled: viewOnly,
   });
 
   const filtered = clients.filter(c => {
@@ -435,16 +465,26 @@ export default function Clients() {
     return matchSearch && matchStatus;
   });
 
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedClients = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [search, filterStatus]);
+
   const activeCount = clients.filter(c => c.status === 'active').length;
   const churnedCount = clients.filter(c => c.status === 'churned').length;
   const mrr = clients.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.monthly_value || 0), 0);
   const churnRate = clients.length > 0 ? (churnedCount / clients.length) * 100 : 0;
 
+  const isAdmin_ = isAdmin;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Clientes</h1>
-        {isAdmin && (
+        {isAdmin_ && (
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <Upload className="mr-2 h-4 w-4" />Importar Certificados
@@ -477,7 +517,8 @@ export default function Clients() {
         </Select>
       </div>
 
-      <Card>
+      {/* Desktop Table */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -492,7 +533,7 @@ export default function Clients() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(c => (
+              {paginatedClients.map(c => (
                 <TableRow key={c.id}>
                   <TableCell>{c.sci_code || '-'}</TableCell>
                   <TableCell className="font-medium">{c.company_name}</TableCell>
@@ -501,7 +542,21 @@ export default function Clients() {
                   <TableCell>R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge></TableCell>
                   <TableCell>
-                    {isAdmin && <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>Editar</Button>}
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openView(c)} title="Visualizar">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {isAdmin_ && (
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Editar">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(c)} title="Excluir">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -511,10 +566,87 @@ export default function Clients() {
         </CardContent>
       </Card>
 
+      {/* Mobile Cards */}
+      <div className="space-y-3 md:hidden">
+        {paginatedClients.map(c => (
+          <Card key={c.id}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">{c.company_name}</p>
+                  <p className="text-sm text-muted-foreground">{c.document || 'Sem documento'}</p>
+                  <p className="text-sm text-muted-foreground">R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openView(c)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    {isAdmin_ && (
+                      <>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(c)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget(c)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {filtered.length === 0 && <p className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</p>}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} cliente{filtered.length !== 1 ? 's' : ''} · Página {safePage} de {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setPage(p => p - 1)}>
+              <ChevronLeft className="h-4 w-4 mr-1" />Anterior
+            </Button>
+            <Button variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>
+              Próximo<ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cliente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{deleteTarget?.company_name}</strong>? Esta ação não pode ser desfeita. Todos os contatos por departamento e certificados associados serão removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Client Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSave}>
+          <DialogHeader>
+            <DialogTitle>
+              {viewOnly ? 'Detalhes do Cliente' : editing ? 'Editar Cliente' : 'Novo Cliente'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={viewOnly ? (e) => e.preventDefault() : handleSave}>
             <Tabs defaultValue="geral" className="w-full">
               <TabsList className={`grid w-full mb-4 ${editing ? 'grid-cols-8' : 'grid-cols-6'}`}>
                 <TabsTrigger value="geral">Geral</TabsTrigger>
@@ -529,17 +661,18 @@ export default function Clients() {
 
               {/* ── Geral ── */}
               <TabsContent value="geral" className="space-y-4">
-                {/* Dados Básicos */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Código SCI</Label><Input {...f('sci_code')} placeholder="Código no SCI Sistemas" /></div>
                   <div className="col-span-2 space-y-2"><Label>Razão Social *</Label><Input {...f('company_name')} required /></div>
                   <div className="space-y-2">
                     <Label>CNPJ/CPF</Label>
                     <div className="flex gap-2">
-                      <Input value={form.document} onChange={handleDocumentChange} placeholder="00.000.000/0000-00" />
-                      <Button type="button" variant="outline" size="icon" onClick={fetchCnpjData} disabled={cnpjLoading} title="Buscar dados pelo CNPJ">
-                        {cnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                      </Button>
+                      <Input value={form.document} onChange={handleDocumentChange} placeholder="00.000.000/0000-00" disabled={viewOnly} />
+                      {!viewOnly && (
+                        <Button type="button" variant="outline" size="icon" onClick={fetchCnpjData} disabled={cnpjLoading} title="Buscar dados pelo CNPJ">
+                          {cnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2"><Label>Contato</Label><Input {...f('contact_name')} /></div>
@@ -549,7 +682,7 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Valor Mensal (R$)</Label><Input type="number" step="0.01" {...f('monthly_value')} /></div>
                   <div className="space-y-2">
                     <Label>Status</Label>
-                    <Select value={form.status} onValueChange={v => setForm({ ...form, status: v as any })}>
+                    <Select value={form.status} onValueChange={v => setForm({ ...form, status: v as any })} disabled={viewOnly}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Ativo</SelectItem>
@@ -560,7 +693,6 @@ export default function Clients() {
                   </div>
                 </div>
 
-                {/* Datas */}
                 <Separator />
                 <h4 className="text-sm font-semibold text-muted-foreground">Datas</h4>
                 <div className="grid grid-cols-3 gap-4">
@@ -569,7 +701,6 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Data Saída</Label><Input type="date" {...f('end_date')} /></div>
                 </div>
 
-                {/* Conditional: exit reason when end_date is filled */}
                 {form.end_date && (
                   <div className="grid grid-cols-2 gap-4 rounded-md border border-border p-4">
                     <div className="col-span-2">
@@ -577,7 +708,7 @@ export default function Clients() {
                     </div>
                     <div className="space-y-2">
                       <Label>Motivo</Label>
-                      <Select value={form.exit_reason} onValueChange={v => setForm({ ...form, exit_reason: v })}>
+                      <Select value={form.exit_reason} onValueChange={v => setForm({ ...form, exit_reason: v })} disabled={viewOnly}>
                         <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="office_change">Troca de escritório</SelectItem>
@@ -590,18 +721,17 @@ export default function Clients() {
                       <>
                         <div className="space-y-2">
                           <Label>Escritório de Destino</Label>
-                          <Input value={form.destination_office_name} onChange={e => setForm({ ...form, destination_office_name: e.target.value })} placeholder="Nome do escritório de destino" />
+                          <Input value={form.destination_office_name} onChange={e => setForm({ ...form, destination_office_name: e.target.value })} placeholder="Nome do escritório de destino" disabled={viewOnly} />
                         </div>
                         <div className="col-span-2 space-y-2">
                           <Label>Motivo da Troca</Label>
-                          <Textarea value={form.exit_reason_notes} onChange={e => setForm({ ...form, exit_reason_notes: e.target.value })} placeholder="Descreva o motivo da troca de escritório" />
+                          <Textarea value={form.exit_reason_notes} onChange={e => setForm({ ...form, exit_reason_notes: e.target.value })} placeholder="Descreva o motivo da troca de escritório" disabled={viewOnly} />
                         </div>
                       </>
                     )}
                   </div>
                 )}
 
-                {/* Origem */}
                 <Separator />
                 <h4 className="text-sm font-semibold text-muted-foreground">Origem</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -609,18 +739,18 @@ export default function Clients() {
                     <Checkbox
                       checked={form.from_another_office}
                       onCheckedChange={(checked) => setForm({ ...form, from_another_office: !!checked, previous_office_name: checked ? form.previous_office_name : '' })}
+                      disabled={viewOnly}
                     />
                     <Label>Veio de outro escritório?</Label>
                   </div>
                   {form.from_another_office && (
                     <div className="col-span-2 space-y-2">
                       <Label>Nome do Escritório Anterior</Label>
-                      <Input value={form.previous_office_name} onChange={e => setForm({ ...form, previous_office_name: e.target.value })} placeholder="Nome do escritório anterior" />
+                      <Input value={form.previous_office_name} onChange={e => setForm({ ...form, previous_office_name: e.target.value })} placeholder="Nome do escritório anterior" disabled={viewOnly} />
                     </div>
                   )}
                 </div>
 
-                {/* Observações */}
                 <Separator />
                 <div className="space-y-2"><Label>Observações</Label><Textarea {...f('notes')} /></div>
               </TabsContent>
@@ -630,7 +760,7 @@ export default function Clients() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 space-y-2">
                     <Label>Regime Tributário</Label>
-                    <Select value={form.tax_regime} onValueChange={v => setForm({ ...form, tax_regime: v })}>
+                    <Select value={form.tax_regime} onValueChange={v => setForm({ ...form, tax_regime: v })} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="mei">MEI</SelectItem>
@@ -658,7 +788,7 @@ export default function Clients() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 space-y-2">
                     <Label>Tipo de Folha</Label>
-                    <Select value={form.payroll_type} onValueChange={v => setForm({ ...form, payroll_type: v })}>
+                    <Select value={form.payroll_type} onValueChange={v => setForm({ ...form, payroll_type: v })} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="normal">Normal</SelectItem>
@@ -667,7 +797,6 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
                   <div className="col-span-2 space-y-2"><Label>Observações sobre Folha</Label><Textarea {...f('payroll_notes')} /></div>
                 </div>
               </TabsContent>
@@ -681,6 +810,7 @@ export default function Clients() {
                       <div key={permit.name} className="flex items-center gap-3">
                         <Checkbox
                           checked={permit.enabled}
+                          disabled={viewOnly}
                           onCheckedChange={(checked) => {
                             const updated = [...permits];
                             updated[idx] = { ...updated[idx], enabled: !!checked };
@@ -696,6 +826,7 @@ export default function Clients() {
                               type="date"
                               className="w-40"
                               value={permit.expiry}
+                              disabled={viewOnly}
                               onChange={(e) => {
                                 const updated = [...permits];
                                 updated[idx] = { ...updated[idx], expiry: e.target.value };
@@ -709,7 +840,7 @@ export default function Clients() {
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo Certificado Digital</Label>
-                    <Select value={form.digital_certificate_type} onValueChange={v => setForm({ ...form, digital_certificate_type: v })}>
+                    <Select value={form.digital_certificate_type} onValueChange={v => setForm({ ...form, digital_certificate_type: v })} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="A1">A1</SelectItem>
@@ -717,30 +848,42 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label>Senha do Certificado</Label><Input type="password" value={form.digital_certificate_password} onChange={e => setForm({ ...form, digital_certificate_password: e.target.value })} placeholder="Informe a senha do certificado" /></div>
+                  <div className="space-y-2"><Label>Senha do Certificado</Label><Input type="password" value={form.digital_certificate_password} onChange={e => setForm({ ...form, digital_certificate_password: e.target.value })} placeholder="Informe a senha do certificado" disabled={viewOnly} /></div>
                   <div className="space-y-2"><Label>Vencimento Certificado</Label><Input type="date" value={form.digital_certificate_expiry} readOnly className="bg-muted/50" /></div>
-                  <div className="col-span-2 space-y-2">
-                    <Label>Arquivo do Certificado A1 (.pfx / .p12)</Label>
-                    {certificateUrl ? (
+                  {!viewOnly && (
+                    <div className="col-span-2 space-y-2">
+                      <Label>Arquivo do Certificado A1 (.pfx / .p12)</Label>
+                      {certificateUrl ? (
+                        <div className="flex items-center gap-2 p-3 rounded-md border border-input bg-muted/50">
+                          <FileCheck className="h-4 w-4 text-primary" />
+                          <span className="text-sm flex-1 truncate">{certificateUrl.split('/').pop()}</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={handleCertificateDownload}><Download className="h-4 w-4" /></Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={handleCertificateRemove}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="file"
+                            accept=".pfx,.p12"
+                            onChange={handleCertificateUpload}
+                            disabled={certificateUploading}
+                          />
+                          {certificateUploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                        </div>
+                      )}
+                      {!editing && pendingCertFile && <p className="text-xs text-muted-foreground">Certificado será salvo ao criar o cliente.</p>}
+                    </div>
+                  )}
+                  {viewOnly && certificateUrl && (
+                    <div className="col-span-2 space-y-2">
+                      <Label>Arquivo do Certificado</Label>
                       <div className="flex items-center gap-2 p-3 rounded-md border border-input bg-muted/50">
                         <FileCheck className="h-4 w-4 text-primary" />
                         <span className="text-sm flex-1 truncate">{certificateUrl.split('/').pop()}</span>
                         <Button type="button" variant="ghost" size="sm" onClick={handleCertificateDownload}><Download className="h-4 w-4" /></Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={handleCertificateRemove}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="file"
-                          accept=".pfx,.p12"
-                          onChange={handleCertificateUpload}
-                          disabled={certificateUploading}
-                        />
-                        {certificateUploading && <Loader2 className="h-4 w-4 animate-spin" />}
-                      </div>
-                    )}
-                    {!editing && pendingCertFile && <p className="text-xs text-muted-foreground">Certificado será salvo ao criar o cliente.</p>}
-                  </div>
+                    </div>
+                  )}
                   <div className="col-span-2 space-y-2"><Label>Informações dos Sócios</Label><Textarea {...f('partners_info')} /></div>
                 </div>
               </TabsContent>
@@ -769,6 +912,7 @@ export default function Clients() {
                           <Input
                             placeholder="Nome do contato"
                             value={deptContacts[dep.id]?.contact_name || ''}
+                            disabled={viewOnly}
                             onChange={e => setDeptContacts(prev => ({
                               ...prev,
                               [dep.id]: { ...prev[dep.id], contact_name: e.target.value }
@@ -780,6 +924,7 @@ export default function Clients() {
                           <Input
                             placeholder="Telefone"
                             value={deptContacts[dep.id]?.contact_phone || ''}
+                            disabled={viewOnly}
                             onChange={e => setDeptContacts(prev => ({
                               ...prev,
                               [dep.id]: { ...prev[dep.id], contact_phone: e.target.value }
@@ -792,6 +937,7 @@ export default function Clients() {
                             type="email"
                             placeholder="E-mail"
                             value={deptContacts[dep.id]?.contact_email || ''}
+                            disabled={viewOnly}
                             onChange={e => setDeptContacts(prev => ({
                               ...prev,
                               [dep.id]: { ...prev[dep.id], contact_email: e.target.value }
@@ -826,7 +972,9 @@ export default function Clients() {
               )}
             </Tabs>
 
-            <Button type="submit" className="w-full mt-4">{editing ? 'Salvar' : 'Criar'}</Button>
+            {!viewOnly && (
+              <Button type="submit" className="w-full mt-4">{editing ? 'Salvar' : 'Criar'}</Button>
+            )}
           </form>
         </DialogContent>
       </Dialog>
