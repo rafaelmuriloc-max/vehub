@@ -22,7 +22,7 @@ export default function Dashboard() {
 
   async function loadMetrics() {
     const [{ data: clients }, { data: tasks }, { data: entries }] = await Promise.all([
-      supabase.from('clients').select('status, monthly_value'),
+      supabase.from('clients').select('status, monthly_value, start_date, end_date, created_at'),
       supabase.from('tasks').select('status, due_date'),
       supabase.from('financial_entries').select('type, amount, status, due_date, paid_date'),
     ]);
