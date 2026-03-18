@@ -114,6 +114,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Cliente não possui certificado digital A1 configurado" }, 400);
     }
 
+    if (!client.municipal_registration) {
+      return jsonResponse({ error: "Cliente não possui Inscrição Municipal (IM) cadastrada. Preencha no cadastro do cliente antes de emitir." }, 400);
+    }
+
     // Download certificate
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
@@ -141,6 +145,10 @@ Deno.serve(async (req) => {
     dps_data.codigoMunicipioIncidencia = (dps_data.codigoMunicipioIncidencia || "").trim();
     if (!dps_data.codigoMunicipioIncidencia || !/^\d{7}$/.test(dps_data.codigoMunicipioIncidencia)) {
       return jsonResponse({ error: "Código do município de incidência (IBGE) é obrigatório (7 dígitos)" }, 400);
+    }
+
+    if (!dps_data.codigoTribNac) {
+      return jsonResponse({ error: "Código Tributário Nacional (cTribNac) é obrigatório" }, 400);
     }
 
     // Build DPS XML
