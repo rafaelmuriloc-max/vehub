@@ -54,6 +54,7 @@ export function CompanyTab() {
   const fields: { key: keyof CompanyData; label: string }[] = [
     { key: 'company_name', label: 'Razão Social' },
     { key: 'cnpj', label: 'CNPJ' },
+    { key: 'serpro_cnpj', label: 'CNPJ Contratante SERPRO' },
     { key: 'address', label: 'Endereço' },
     { key: 'phone', label: 'Telefone' },
     { key: 'email', label: 'Email' },
