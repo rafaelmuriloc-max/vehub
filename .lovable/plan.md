@@ -1,47 +1,34 @@
 
 
-## Plano: Reorganizar menu Cadastro com submenus
+# Atualização Única de Regime Tributário dos Clientes Existentes
 
-### Mudanças
+## O que será feito
 
-**1. Sidebar (`src/components/AppSidebar.tsx`)**
-- Transformar o item "Cadastro" em um menu colapsável usando `Collapsible` + `SidebarMenuSub`/`SidebarMenuSubItem`/`SidebarMenuSubButton`
-- Submenus:
-  - **Meu Escritório** → `/settings` (página Settings atual)
-  - **Obrigações** → `/obligations` (página Obligations atual)
-  - **Tipos de Documento** → `/settings/document-types` (nova rota)
-- Remover "Obrigações" do menu principal (já existente lá)
-- Importar `ChevronRight` e os componentes de submenu do sidebar
+Criar uma edge function que será chamada uma única vez (manualmente ou via botão temporário) para percorrer todos os clientes com CNPJ cadastrado, consultar a BrasilAPI e atualizar o campo `tax_regime`. Sem botão permanente na interface.
 
-**2. Rotas (`src/App.tsx`)**
-- Adicionar rota `/settings/document-types` apontando para uma nova página dedicada
-- Manter `/settings` e `/obligations` como estão
+## Abordagem
 
-**3. Nova página `src/pages/DocumentTypes.tsx`**
-- Página simples que renderiza apenas o componente `DocumentTypesTab` já existente, com título "Tipos de Documento"
+### 1. Edge Function `batch-update-tax-regime`
+- Busca todos os clientes com `document` preenchido (14 dígitos)
+- Para cada um, consulta `https://brasilapi.com.br/api/cnpj/v1/{cnpj}`
+- Aplica a regra: MEI → `mei`, Simples → `simples_nacional`, senão → `lucro_presumido`
+- Atualiza o registro no Supabase se o regime mudou
+- Delay de 1s entre chamadas para evitar rate limit da BrasilAPI
+- Retorna relatório com total atualizado e erros
 
-**4. Settings (`src/pages/Settings.tsx`)**
-- Remover a aba "Tipos de Documento" do TabsList (pois agora tem rota própria)
-- Renomear título para "Meu Escritório"
+### 2. Execução única
+- Após deploy, chamar a function uma vez via curl ou pelo dashboard do Supabase
+- A function pode ser removida depois, ou mantida para uso futuro
 
-**5. Obligations (`src/pages/Obligations.tsx`)**
-- Sem mudanças no conteúdo, apenas reorganização de onde é acessado
+### 3. Cadastro de novos clientes (já implementado)
+- A lógica em `fetchCnpjData()` no `Clients.tsx` já preenche automaticamente o `tax_regime` ao consultar CNPJ — nada muda aqui.
 
-### Estrutura do menu resultante
+## Detalhes técnicos
 
-```text
-Menu
-  Dashboard
-  Clientes
-  Financeiro
-  Documentos
-  Tarefas
-  Calendário
-
-Administração
-  Cadastro (colapsável)
-    ├─ Meu Escritório
-    ├─ Obrigações
-    └─ Tipos de Documento
-```
+| Item | Detalhe |
+|---|---|
+| Arquivo | `supabase/functions/batch-update-tax-regime/index.ts` |
+| API | `brasilapi.com.br/api/cnpj/v1/{cnpj}` |
+| Auth | Requer service role key (já disponível como secret) |
+| Delay | 1s entre chamadas |
 
