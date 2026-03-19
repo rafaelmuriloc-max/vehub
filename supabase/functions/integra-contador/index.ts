@@ -87,33 +87,20 @@ Deno.serve(async (req) => {
 
     const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
 
-    // Detect partial accountant configuration
-    const hasAccountantCert = !!company?.accountant_certificate_url;
-    const hasAccountantPassword = !!company?.accountant_certificate_password;
+    // --- Accountant CPF for autorPedidoDados (optional) ---
     const hasAccountantCpf = !!company?.accountant_cpf;
+    const autorPedidoCpfCnpj = hasAccountantCpf ? company!.accountant_cpf!.replace(/\D/g, "") : contratanteCnpj;
+    const autorPedidoTipo = hasAccountantCpf ? 1 : 2; // CPF = tipo 1, CNPJ = tipo 2
 
-    if (hasAccountantCert && (!hasAccountantPassword || !hasAccountantCpf)) {
-      const missing = [];
-      if (!hasAccountantPassword) missing.push("senha do certificado");
-      if (!hasAccountantCpf) missing.push("CPF do contador");
-      return jsonResponse({
-        success: false,
-        error: `Certificado do contador configurado, mas faltam: ${missing.join(", ")}. Complete a configuração em Configurações > Meu Escritório.`,
-      });
-    }
-
-    // Determine which certificate to use: accountant (e-CPF) takes priority if fully configured
-    const useAccountantCert = hasAccountantCert && hasAccountantPassword && hasAccountantCpf;
-    const certUrl = useAccountantCert ? company!.accountant_certificate_url! : company?.digital_certificate_url;
-    const certPassword = useAccountantCert ? company!.accountant_certificate_password! : company?.digital_certificate_password;
-    const autorPedidoCpfCnpj = useAccountantCert ? company!.accountant_cpf!.replace(/\D/g, "") : contratanteCnpj;
-    const autorPedidoTipo = useAccountantCert ? 1 : 2; // CPF = tipo 1, CNPJ = tipo 2
+    // --- mTLS always uses the office's e-CNPJ certificate ---
+    const certUrl = company?.digital_certificate_url;
+    const certPassword = company?.digital_certificate_password;
 
     if (!certUrl || !certPassword) {
-      return jsonResponse({ success: false, error: "Certificado digital não configurado. Configure em Configurações > Meu Escritório." });
+      return jsonResponse({ success: false, error: "Certificado digital do escritório (e-CNPJ) não configurado. Configure em Configurações > Meu Escritório." });
     }
 
-    console.log(`[integra-contador] Modo: ${useAccountantCert ? "CONTADOR" : "ESCRITÓRIO"} | autorPedidoDados: ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
+    console.log(`[integra-contador] mTLS: e-CNPJ do escritório | autorPedidoDados: ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
 
     // Download certificate for mTLS
     const certPath = certUrl;
