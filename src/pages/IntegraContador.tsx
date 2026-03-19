@@ -224,6 +224,10 @@ export default function IntegraContador() {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<unknown>(null);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [messageDetail, setMessageDetail] = useState<any>(null);
+  const [messageLoading, setMessageLoading] = useState(false);
+  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
 
   useEffect(() => {
     loadClients();
