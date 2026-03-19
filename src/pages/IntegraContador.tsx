@@ -26,7 +26,7 @@ type ServiceDefinition = {
   label: string;
   description: string;
   tipo: string;
-  fields: { key: string; label: string; required?: boolean; placeholder?: string }[];
+  fields: { key: string; label: string; required?: boolean; placeholder?: string; options?: { value: string; label: string }[] }[];
 };
 
 type ServiceCategory = {
