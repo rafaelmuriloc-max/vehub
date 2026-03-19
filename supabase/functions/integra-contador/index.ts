@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
 
     const requestBody = {
       contratante: { numero: contratanteCnpj, tipo: 2 },
-      autorPedidoDados: { numero: contratanteCnpj, tipo: 2 },
+      autorPedidoDados: { numero: autorPedidoCpfCnpj, tipo: autorPedidoTipo },
       contribuinte: { numero: clientCnpj, tipo: clientCnpj.length <= 11 ? 1 : 2 },
       pedidoDados: {
         idSistema,
