@@ -1,22 +1,24 @@
 
 
-# Exibir mensagem de erro detalhada do Integra Contador
+# Corrigir URL de autenticação OAuth2 do SERPRO
 
 ## Problema
-A edge function retorna 400 com mensagem explicativa ("Certificado do contador configurado, mas faltam: CPF do contador"), mas o `supabase.functions.invoke()` descarta o body em respostas não-2xx e lança erro genérico "Edge Function returned a non-2xx status code".
+A edge function usa `https://autenticacao.sapi.serpro.gov.br/authenticate` para OAuth2, mas o curl que você compartilhou mostra que a autenticação do Integra Contador funciona diretamente em `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/` com Basic Auth + `grant_type=client_credentials`.
+
+O endpoint de autenticação correto para o Integra Contador é o próprio gateway, não o servidor de autenticação separado.
 
 ## Solução
 
 ### Arquivo: `supabase/functions/integra-contador/index.ts`
-Mudar os erros de validação (400) para retornar **status 200** com `{ success: false, error: "..." }` em vez de status HTTP 400. Isso permite que o SDK do Supabase entregue o body ao frontend.
 
-Alterações nas linhas 95-101 e 111-113:
-- Trocar `jsonResponse({...}, 400)` por `jsonResponse({ success: false, error: "..." }, 200)`
-- Manter o mesmo padrão já usado para erros da API SERPRO (que retornam 200 com `success: false`)
+1. **Trocar a URL de autenticação** (linha 10):
+   - De: `https://autenticacao.sapi.serpro.gov.br/authenticate`
+   - Para: `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/`
 
-### Arquivo: `src/pages/IntegraContador.tsx`
-Nenhuma alteração necessária — o código na linha 290 já trata `data?.error` quando `data?.success` é false.
+2. **Remover o header `Role-Type: TERCEIROS`** da chamada de auth (linha 142) — o gateway pode não usar esse header no mesmo formato.
 
-## Resultado
-O toast e o painel de resultado mostrarão a mensagem real: "Certificado do contador configurado, mas faltam: CPF do contador. Complete a configuração em Configurações > Meu Escritório."
+3. **Manter o restante do fluxo** igual: Basic Auth com consumer key/secret, `grant_type=client_credentials`, e uso do `access_token` retornado para as chamadas subsequentes à API.
+
+## Resultado esperado
+A autenticação OAuth2 passará pelo mesmo endpoint que funciona via curl, eliminando possíveis incompatibilidades com o servidor de autenticação separado.
 
