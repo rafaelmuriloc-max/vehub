@@ -1,23 +1,42 @@
 
 
-# Corrigir autenticação OAuth2 — usar fetch normal (sem mTLS)
+# Corrigir autenticação SERPRO — URL e fluxo conforme documentação oficial
 
-## Problema
-A chamada de autenticação OAuth2 usa `requestWithFetchHttp1` com certificado mTLS, mas o `curl` que funciona não usa certificado cliente — apenas `Authorization: Basic` + `grant_type=client_credentials`. O gateway SERPRO retorna 404 quando recebe mTLS na rota de autenticação.
+## Problema identificado
+
+A documentação oficial do Integra Contador revela que o fluxo de autenticação atual está **completamente errado** em dois aspectos:
+
+1. **URL errada**: O código usa `https://gateway.apiserpro.serpro.gov.br/token`, mas a documentação oficial indica `https://autenticacao.sapi.serpro.gov.br/authenticate`
+2. **Autenticação REQUER mTLS**: Ao contrário do que assumimos antes, a documentação oficial diz explicitamente que a autenticação **exige certificado digital e-CNPJ** (`--cert arquivo_certificado.p12:senha_certificado`)
+3. **Header `Role-Type: TERCEIROS` ausente**: A documentação exige esse header na requisição de autenticação
+
+Isso explica o erro 404 — o endpoint `/token` no gateway não é o correto para o Integra Contador.
 
 ## Solução
 
 ### Arquivo: `supabase/functions/integra-contador/index.ts`
 
-1. **Trocar a chamada de auth de `requestWithFetchHttp1` para `fetch` padrão** (linhas 135-149):
-   - Usar `fetch(SERPRO_AUTH_URL, { method: "POST", headers: {...}, body: "grant_type=client_credentials" })` sem certificado cliente
-   - Manter mTLS apenas para as chamadas à API de serviço (que exigem certificado digital)
+1. **Alterar `SERPRO_AUTH_URL`** para `https://autenticacao.sapi.serpro.gov.br/authenticate`
 
-2. **Ajustar o parsing da resposta** (linhas 151-167):
-   - Adaptar de `authResponse.bodyText` / `authResponse.status` para `await response.text()` / `response.status` do fetch nativo
+2. **Voltar a usar `requestWithFetchHttp1` (mTLS) na autenticação** — a documentação oficial exige certificado digital na chamada de autenticação. Adicionar o header `Role-Type: TERCEIROS`.
 
-3. **Manter mTLS nas chamadas de serviço** — a chamada real à API continua usando `requestWithFetchHttp1` com certificado
+3. **Manter o uso de `jwt_token`** na chamada à API — o código já faz isso corretamente (linhas 195-197).
+
+### Mudanças concretas
+
+```text
+Linha 10:  SERPRO_AUTH_URL → "https://autenticacao.sapi.serpro.gov.br/authenticate"
+
+Linhas 135-142: Trocar fetch() por requestWithFetchHttp1() com:
+  - certPem/keyPem (mTLS)
+  - Header "Role-Type": "TERCEIROS"
+  - Header "Authorization": "Basic ..."
+  - Header "Content-Type": "application/x-www-form-urlencoded"
+  - body: "grant_type=client_credentials"
+
+Linhas 144-153: Voltar a usar authResponse.bodyText / authResponse.status
+```
 
 ## Resultado esperado
-A autenticação OAuth2 passará igual ao `curl` (sem certificado cliente), e apenas as chamadas à API usarão mTLS com o e-CNPJ.
+A autenticação usará o endpoint correto com mTLS + Role-Type, retornando `access_token` e `jwt_token` para uso nas chamadas à API.
 
