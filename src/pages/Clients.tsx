@@ -207,6 +207,67 @@ export default function Clients() {
 
   useEffect(() => { loadClients(); }, []);
 
+  // One-time batch update of tax_regime for existing clients
+  useEffect(() => {
+    const BATCH_KEY = 'tax_regime_batch_done_v1';
+    if (localStorage.getItem(BATCH_KEY)) return;
+    
+    async function batchUpdateTaxRegimes() {
+      const { data: allClients } = await supabase
+        .from('clients')
+        .select('id, document, tax_regime');
+      
+      if (!allClients) return;
+      
+      const cnpjClients = allClients.filter(
+        (c) => c.document && c.document.replace(/\D/g, '').length === 14
+      );
+
+      let updated = 0;
+      let errors = 0;
+
+      for (const client of cnpjClients) {
+        const cnpj = client.document!.replace(/\D/g, '');
+        try {
+          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+          if (!res.ok) { await res.text(); errors++; continue; }
+          const data = await res.json();
+          
+          const newRegime = data.opcao_pelo_mei
+            ? 'mei'
+            : data.opcao_pelo_simples
+            ? 'simples_nacional'
+            : 'lucro_presumido';
+
+          if (client.tax_regime !== newRegime) {
+            await supabase
+              .from('clients')
+              .update({ tax_regime: newRegime })
+              .eq('id', client.id);
+            updated++;
+          }
+        } catch {
+          errors++;
+        }
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      localStorage.setItem(BATCH_KEY, 'true');
+      console.log(`[batch-tax-regime] Done: ${updated} updated, ${errors} errors, ${cnpjClients.length} total`);
+      
+      if (updated > 0) {
+        loadClients(); // Reload to show updated regimes
+        toast({
+          title: 'Regimes tributários atualizados',
+          description: `${updated} cliente(s) atualizado(s) automaticamente.`,
+        });
+      }
+    }
+
+    batchUpdateTaxRegimes();
+  }, []);
+
   async function loadClients() {
     const { data } = await supabase.from('clients').select('*').order('company_name');
     setClients((data as unknown as Client[]) || []);
