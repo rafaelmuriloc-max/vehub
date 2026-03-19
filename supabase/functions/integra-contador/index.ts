@@ -284,8 +284,8 @@ Deno.serve(async (req) => {
     const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
     const contratanteNome = company?.company_name || "Escritório Contábil";
 
-    // --- autorPedidoDados = CNPJ do cliente (contribuinte) ---
-    const autorPedidoCpfCnpj = client.document.replace(/\D/g, "");
+    // --- autorPedidoDados = CNPJ do escritório (contratante) ---
+    const autorPedidoCpfCnpj = contratanteCnpj;
     const autorPedidoTipo = 2; // CNPJ = tipo 2
 
     // --- mTLS always uses the office's e-CNPJ certificate ---
@@ -296,7 +296,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: "Certificado digital do escritório (e-CNPJ) não configurado. Configure em Configurações > Meu Escritório." });
     }
 
-    console.log(`[integra-contador] mTLS: e-CNPJ do escritório | autorPedidoDados (cliente): ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
+    console.log(`[integra-contador] mTLS: e-CNPJ do escritório | autorPedidoDados (escritório): ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
 
     // Download office certificate for mTLS
     const serviceClient = createClient(
