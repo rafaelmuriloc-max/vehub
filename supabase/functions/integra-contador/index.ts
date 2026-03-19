@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
         headers: {
           "Authorization": `Basic ${authCredentials}`,
           "Content-Type": "application/x-www-form-urlencoded",
-          "Role-Type": "TERCEIROS",
+          
         },
         body: "grant_type=client_credentials",
       },
