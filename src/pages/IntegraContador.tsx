@@ -26,7 +26,7 @@ type ServiceDefinition = {
   label: string;
   description: string;
   tipo: string;
-  fields: { key: string; label: string; required?: boolean; placeholder?: string }[];
+  fields: { key: string; label: string; required?: boolean; placeholder?: string; options?: { value: string; label: string }[] }[];
 };
 
 type ServiceCategory = {
@@ -131,9 +131,9 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     label: 'Caixa Postal RFB',
     icon: <Mail className="h-4 w-4" />,
     services: [
-      { idSistema: 'CAIXAPOSTAL', idServico: 'MSGCONTRIBUINTE61', label: 'Mensagens do Contribuinte', description: 'Lista mensagens da Caixa Postal por contribuinte', tipo: 'Consultar', fields: [F_CNPJ] },
-      { idSistema: 'CAIXAPOSTAL', idServico: 'MSGDETALHAMENTO62', label: 'Detalhes da Mensagem', description: 'Consulta detalhes de uma mensagem específica', tipo: 'Consultar', fields: [F_CNPJ, { key: 'idMensagem', label: 'ID da Mensagem', required: true, placeholder: '' }] },
-      { idSistema: 'CAIXAPOSTAL', idServico: 'INNOVAMSG63', label: 'Novas Mensagens', description: 'Verifica indicador de novas mensagens não lidas', tipo: 'Monitorar', fields: [F_CNPJ] },
+      { idSistema: 'CAIXAPOSTAL', idServico: 'MSGCONTRIBUINTE61', label: 'Mensagens do Contribuinte', description: 'Lista mensagens da Caixa Postal por contribuinte', tipo: 'Consultar', fields: [{ key: 'statusLeitura', label: 'Status Leitura', required: true, placeholder: '0', options: [{ value: '0', label: 'Não lidas' }, { value: '1', label: 'Lidas' }, { value: '2', label: 'Todas' }] }, { key: 'indicadorPagina', label: 'Indicador Página', required: true, placeholder: '0' }, { key: 'ponteiroPagina', label: 'Ponteiro Página', required: true, placeholder: '00000000000000' }] },
+      { idSistema: 'CAIXAPOSTAL', idServico: 'MSGDETALHAMENTO62', label: 'Detalhes da Mensagem', description: 'Consulta detalhes de uma mensagem específica', tipo: 'Consultar', fields: [{ key: 'isn', label: 'ISN (Nº Sequencial)', required: true, placeholder: '0000082838' }] },
+      { idSistema: 'CAIXAPOSTAL', idServico: 'INNOVAMSG63', label: 'Novas Mensagens', description: 'Verifica indicador de novas mensagens não lidas', tipo: 'Monitorar', fields: [] },
       { idSistema: 'DTE', idServico: 'CONSULTASITUACAODTE111', label: 'Situação Adesão DTE', description: 'Consulta situação de adesão à Caixa Postal eletrônica', tipo: 'Consultar', fields: [F_CNPJ] },
     ],
   },
@@ -277,7 +277,7 @@ export default function IntegraContador() {
           idSistema: selectedService.idSistema,
           idServico: selectedService.idServico,
           tipo: selectedService.tipo,
-          dados: JSON.stringify(formData),
+          dados: selectedService.fields.length > 0 ? JSON.stringify(formData) : '',
         },
       });
 
@@ -391,11 +391,22 @@ export default function IntegraContador() {
                       {field.label}
                       {field.required && <span className="text-destructive ml-1">*</span>}
                     </Label>
-                    <Input
-                      value={formData[field.key] || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                    />
+                    {field.options ? (
+                      <Select value={formData[field.key] || ''} onValueChange={(val) => setFormData((prev) => ({ ...prev, [field.key]: val }))}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                          {field.options.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={formData[field.key] || ''}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                      />
+                    )}
                   </div>
                 ))}
 
