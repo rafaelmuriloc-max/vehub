@@ -97,8 +97,9 @@ Deno.serve(async (req) => {
       if (!hasAccountantPassword) missing.push("senha do certificado");
       if (!hasAccountantCpf) missing.push("CPF do contador");
       return jsonResponse({
+        success: false,
         error: `Certificado do contador configurado, mas faltam: ${missing.join(", ")}. Complete a configuração em Configurações > Meu Escritório.`,
-      }, 400);
+      });
     }
 
     // Determine which certificate to use: accountant (e-CPF) takes priority if fully configured
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
     const autorPedidoTipo = useAccountantCert ? 1 : 2; // CPF = tipo 1, CNPJ = tipo 2
 
     if (!certUrl || !certPassword) {
-      return jsonResponse({ error: "Certificado digital não configurado. Configure em Configurações > Meu Escritório." }, 400);
+      return jsonResponse({ success: false, error: "Certificado digital não configurado. Configure em Configurações > Meu Escritório." });
     }
 
     console.log(`[integra-contador] Modo: ${useAccountantCert ? "CONTADOR" : "ESCRITÓRIO"} | autorPedidoDados: ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
