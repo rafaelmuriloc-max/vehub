@@ -34,10 +34,10 @@ serve(async (req) => {
       throw new Error("SERPRO credentials not configured");
     }
 
-    // Try multiple auth URLs (ConectaGov gateway and standard SERPRO gateway)
+    // Try auth endpoints with timeout
     const authUrls = [
-      "https://apigateway.conectagov.estaleiro.serpro.gov.br/oauth2/jwt-token",
       "https://gateway.apiserpro.serpro.gov.br/token",
+      "https://apigateway.conectagov.estaleiro.serpro.gov.br/oauth2/jwt-token",
     ];
 
     let accessToken: string | null = null;
@@ -46,6 +46,9 @@ serve(async (req) => {
     for (const authUrl of authUrls) {
       try {
         console.log(`[cnpj-query] Trying auth at: ${authUrl}`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
         const tokenRes = await fetch(authUrl, {
           method: "POST",
           headers: {
@@ -53,8 +56,10 @@ serve(async (req) => {
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: "grant_type=client_credentials",
+          signal: controller.signal,
         });
 
+        clearTimeout(timeout);
         const responseText = await tokenRes.text();
         console.log(`[cnpj-query] Auth response [${tokenRes.status}]: ${responseText.substring(0, 200)}`);
 
