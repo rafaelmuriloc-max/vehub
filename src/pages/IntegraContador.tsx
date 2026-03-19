@@ -628,6 +628,113 @@ export default function IntegraContador() {
           </Card>
         </div>
       </div>
+
+      {/* Message Detail Dialog */}
+      <Dialog open={messageDialogOpen} onOpenChange={setMessageDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MailCheck className="h-5 w-5 text-primary" />
+              Detalhes da Mensagem
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMessage && (selectedMessage.assunto || selectedMessage.titulo || selectedMessage.subject || 'Mensagem da Caixa Postal')}
+            </DialogDescription>
+          </DialogHeader>
+
+          {messageLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+              <span className="text-muted-foreground">Carregando detalhes...</span>
+            </div>
+          ) : messageDetail?.error ? (
+            <div className="space-y-4">
+              <div className="bg-destructive/10 text-destructive p-4 rounded-lg text-sm">
+                {messageDetail.error}
+              </div>
+              {selectedMessage && (
+                <div className="space-y-2">
+                  <h4 className="font-medium text-foreground text-sm">Dados da lista:</h4>
+                  <pre className="text-xs font-mono bg-muted p-3 rounded-md whitespace-pre-wrap break-words">
+                    {JSON.stringify(selectedMessage, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          ) : messageDetail ? (
+            <div className="space-y-4">
+              {/* Message metadata */}
+              <div className="grid grid-cols-2 gap-3 bg-muted/50 p-4 rounded-lg">
+                {messageDetail.remetente && (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Remetente</span>
+                    <span className="text-sm font-medium text-foreground">{messageDetail.remetente}</span>
+                  </div>
+                )}
+                {messageDetail.assunto && (
+                  <div className="col-span-2">
+                    <span className="text-xs text-muted-foreground block">Assunto</span>
+                    <span className="text-sm font-medium text-foreground">{messageDetail.assunto}</span>
+                  </div>
+                )}
+                {(messageDetail.dataEnvio || messageDetail.dataCriacao) && (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Data de Envio</span>
+                    <span className="text-sm text-foreground">{messageDetail.dataEnvio || messageDetail.dataCriacao}</span>
+                  </div>
+                )}
+                {messageDetail.dataLeitura && (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Data de Leitura</span>
+                    <span className="text-sm text-foreground">{messageDetail.dataLeitura}</span>
+                  </div>
+                )}
+                {/* Render any other simple key-value pairs */}
+                {Object.entries(messageDetail)
+                  .filter(([key]) => !['remetente', 'assunto', 'dataEnvio', 'dataCriacao', 'dataLeitura', 'corpo', 'textoMensagem', 'conteudo', 'mensagem', 'texto'].includes(key))
+                  .filter(([, val]) => typeof val === 'string' || typeof val === 'number')
+                  .map(([key, val]) => (
+                    <div key={key}>
+                      <span className="text-xs text-muted-foreground block">{key}</span>
+                      <span className="text-sm text-foreground">{String(val)}</span>
+                    </div>
+                  ))
+                }
+              </div>
+
+              {/* Message body */}
+              {(() => {
+                const body = messageDetail.corpo || messageDetail.textoMensagem || messageDetail.conteudo || messageDetail.mensagem || messageDetail.texto;
+                if (!body) return null;
+                return (
+                  <div className="border rounded-lg p-4">
+                    <h4 className="text-xs text-muted-foreground mb-2">Conteúdo da Mensagem</h4>
+                    <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                      {body}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Raw JSON fallback */}
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="raw">
+                  <AccordionTrigger className="text-xs text-muted-foreground">Ver JSON completo</AccordionTrigger>
+                  <AccordionContent>
+                    <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                      {JSON.stringify(messageDetail, null, 2)}
+                    </pre>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          ) : selectedMessage ? (
+            <pre className="text-xs font-mono bg-muted p-3 rounded-md whitespace-pre-wrap break-words">
+              {JSON.stringify(selectedMessage, null, 2)}
+            </pre>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
