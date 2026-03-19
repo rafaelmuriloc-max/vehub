@@ -1,82 +1,43 @@
 
 
-# Implementar fluxo de Autenticação de Procurador (Termo de Autorização)
+# Fix Caixa Postal Service Definitions
 
-## Problema
+## Problem
 
-O erro 403 `[AcessoNegado-ICGERENCIADOR-019]` ocorre porque quando o `autorPedidoDados` (cliente) **difere** do `contratante` (escritório), o SERPRO exige um **Termo de Autorização** assinado digitalmente pelo cliente (procurador). Sem esse termo, o contratante não pode consultar em nome do cliente.
+The current Caixa Postal service definitions in the service catalog have incorrect field mappings that don't match the SERPRO API documentation:
 
-O fluxo oficial do SERPRO exige dois passos:
-1. **Enviar XML assinado** (com o certificado do cliente) via `AUTENTICAPROCURADOR/ENVIOXMLASSINADO81` no endpoint `/Apoiar` para obter um `autenticar_procurador_token`
-2. **Usar esse token** no header `autenticar_procurador_token` em todas as requisições subsequentes para aquele cliente
+1. **MSGCONTRIBUINTE61** — Currently only has `cnpjBasico` field. The API expects `statusLeitura`, `indicadorPagina`, and `ponteiroPagina` in the `dados` payload. The contribuinte CNPJ is already sent in the `contribuinte` object, not in `dados`.
 
-## Solução
+2. **MSGDETALHAMENTO62** — Uses field key `idMensagem`, but the SERPRO API expects `isn` (Internal Sequence Number).
 
-Implementar o fluxo completo em 3 partes:
+3. **INNOVAMSG63** — Currently has `cnpjBasico` field, but the API expects empty `dados` (`""`). The contribuinte is identified by the `contribuinte` object.
 
-### 1. Edge Function: Gerar e assinar o XML do Termo de Autorização
+## Changes
 
-No `supabase/functions/integra-contador/index.ts`, adicionar lógica que:
+### File: `src/pages/IntegraContador.tsx` (lines 130-138)
 
-- Quando o `autorPedidoDados` (cliente) for diferente do `contratante` (escritório), **antes** da consulta principal:
-  - Gera o XML do Termo de Autorização com os dados do contratante e do cliente
-  - Assina o XML com o certificado digital do **cliente** (já armazenado no Supabase Storage via `clients.digital_certificate_url` e `clients.digital_certificate_password`)
-  - Converte para base64
-  - Chama `AUTENTICAPROCURADOR/ENVIOXMLASSINADO81` via endpoint `/Apoiar`
-  - Extrai o `autenticar_procurador_token` da resposta
-  - Inclui esse token no header das requisições subsequentes
+Update the Caixa Postal service definitions:
 
-### 2. Modificações no Edge Function (index.ts)
+- **MSGCONTRIBUINTE61**: Replace `[F_CNPJ]` with fields for `statusLeitura` (select: 0=não lidas, 1=lidas, 2=todas), `indicadorPagina`, and `ponteiroPagina` with sensible defaults.
+- **MSGDETALHAMENTO62**: Change `idMensagem` field key to `isn` to match the API.
+- **INNOVAMSG63**: Remove fields entirely (empty array) since the API expects empty dados. Also need to handle sending empty string for dados when no fields exist.
 
-**Novo fluxo antes da chamada principal (entre linhas 176-206):**
+### File: `src/pages/IntegraContador.tsx` (line 280)
+
+Update `handleSubmit` to send empty string for `dados` when the service has no fields (for INNOVAMSG63 and similar services).
+
+### Technical Details
 
 ```text
-1. Baixar certificado do CLIENTE (clients.digital_certificate_url/password)
-2. Gerar XML do Termo de Autorização:
-   - destinatario = contratante (escritório)
-   - assinadoPor = autorPedidoDados (cliente)
-   - vigencia = data atual + 1 ano
-3. Assinar XML com chave privada do cliente (XMLDSig via node-forge)
-4. Converter XML assinado para base64
-5. Chamar /Apoiar com AUTENTICAPROCURADOR/ENVIOXMLASSINADO81
-6. Extrair autenticar_procurador_token da resposta
-7. Adicionar header "autenticar_procurador_token" na chamada principal
+Current fields → Corrected fields:
+
+MSGCONTRIBUINTE61:
+  [cnpjBasico] → [statusLeitura, indicadorPagina, ponteiroPagina]
+
+MSGDETALHAMENTO62:
+  [cnpjBasico, idMensagem] → [isn]
+
+INNOVAMSG63:
+  [cnpjBasico] → [] (empty, dados sent as "")
 ```
-
-**Mudanças específicas:**
-- Linha 67-71: Adicionar `digital_certificate_url, digital_certificate_password` ao select de clients
-- Linhas 196-204: Adicionar header `autenticar_procurador_token` quando disponível
-- Nova função `generateSignedAuthorizationXml()` para gerar e assinar o XML
-- Nova função `obtainProcuradorToken()` que orquestra o fluxo completo
-
-### 3. Frontend (IntegraContador.tsx)
-
-- Sem mudanças significativas no frontend -- o fluxo é transparente para o usuário
-- Apenas melhorar o toast de erro para sugerir que o certificado do cliente pode estar faltando
-
-## Detalhes Técnicos
-
-**Estrutura do XML do Termo de Autorização** (conforme documentação SERPRO):
-```text
-<termoDeAutorizacao>
-  <dados>
-    <sistema id="API Integra Contador" />
-    <termo texto="Autorizo a empresa CONTRATANTE..." />
-    <avisoLegal texto="..." />
-    <finalidade texto="..." />
-    <dataAssinatura data="AAAAMMDD" />
-    <vigencia data="AAAAMMDD" />
-    <destinatario numero="CNPJ_ESCRITORIO" nome="NOME" tipo="PJ" papel="contratante" />
-    <assinadoPor numero="CNPJ_CLIENTE" nome="NOME" tipo="PJ" papel="autor pedido de dados" />
-  </dados>
-  <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">...</Signature>
-</termoDeAutorizacao>
-```
-
-**Assinatura digital**: Usa XMLDSig (enveloped signature) com RSA-SHA256, usando a chave privada extraída do PFX do cliente.
-
-**Certificado do cliente**: Já existe no banco (`clients.digital_certificate_url` e `clients.digital_certificate_password`) e no Storage bucket `certificates`.
-
-### Arquivos modificados
-- `supabase/functions/integra-contador/index.ts` -- lógica principal do fluxo de procurador
 
