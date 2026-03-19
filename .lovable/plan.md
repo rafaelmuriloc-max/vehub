@@ -1,44 +1,63 @@
 
 
-# Corrigir Certificado de Autenticação do Integra Contador
+# Adicionar Certificado do Contador ao Integra Contador
 
-## Problema
-A edge function usa o certificado digital do **cliente** para autenticação mTLS, mas deveria usar o certificado do **escritório** (contratante). O SERPRO valida que o certificado corresponde ao NI do contratante e rejeita com 403.
+## Contexto
 
-## Solução
-Alterar `supabase/functions/integra-contador/index.ts` para usar o certificado do escritório (`company_settings`) em vez do certificado do cliente.
+O erro 022 ocorre porque o `autorPedidoDados` (59400171000150 = CNPJ do escritório) não tem procuração no eCAC para o contribuinte. Em muitos escritórios, a procuração está vinculada ao **CPF do contador** (e-CPF), não ao e-CNPJ da empresa.
+
+A solução é permitir configurar um segundo certificado digital (do contador) e usá-lo como alternativa para autenticação mTLS e como `autorPedidoDados`.
 
 ## Alterações
 
-### Arquivo: `supabase/functions/integra-contador/index.ts`
+### 1. Banco de dados - Novos campos em `company_settings`
 
-1. **Carregar certificado do escritório** em vez do cliente:
-   - Buscar `digital_certificate_url` e `digital_certificate_password` de `company_settings` (já carregado na linha 86-90, mas só pega `cnpj` e `serpro_cnpj`)
-   - Expandir o select para incluir `digital_certificate_url, digital_certificate_password`
-   - Validar que o escritório tem certificado configurado
+Adicionar 4 campos:
+- `accountant_certificate_url` (text, nullable)
+- `accountant_certificate_password` (text, nullable)
+- `accountant_certificate_expiry` (date, nullable)
+- `accountant_cpf` (text, nullable) - CPF do contador para usar como `autorPedidoDados`
 
-2. **Usar certificado do escritório para mTLS**:
-   - Baixar o PFX de `company_settings.digital_certificate_url` (caminho no bucket `certificates`)
-   - Parsear com `company_settings.digital_certificate_password`
+### 2. UI - Aba Empresa (CompanyTab.tsx)
 
-3. **Manter o certificado do cliente apenas como referência** (não usado para auth):
-   - O client continua fornecendo o CNPJ do contribuinte para o campo `dados`
-   - Remover a exigência de certificado digital no cliente para usar o Integra Contador
+Adicionar uma seção "Certificado do Contador" abaixo do certificado do escritório existente, com:
+- Campo CPF do contador
+- Upload de certificado e-CPF (.pfx/.p12)
+- Senha do certificado
+- Indicador de validade (mesmo padrão do certificado do escritório)
+- Botões download/remover (admin only)
 
-### Detalhes técnicos
+### 3. Edge Function - integra-contador/index.ts
 
+Modificar a lógica para:
+- Carregar também `accountant_certificate_url`, `accountant_certificate_password`, `accountant_cpf` de `company_settings`
+- **Se o certificado do contador estiver configurado**: usar o certificado do contador para mTLS e o CPF do contador como `autorPedidoDados`
+- **Senão**: manter o comportamento atual (certificado e CNPJ do escritório)
+- O campo `contratante` continua sendo o CNPJ do escritório (é quem contratou a API)
+
+```text
+Com certificado do contador:
+  contratante     = CNPJ do escritório (quem contratou)
+  autorPedidoDados = CPF do contador (quem tem procuração)
+  mTLS            = certificado e-CPF do contador
+  contribuinte    = CNPJ do cliente
+
+Sem certificado do contador (atual):
+  contratante     = CNPJ do escritório
+  autorPedidoDados = CNPJ do escritório
+  mTLS            = certificado e-CNPJ do escritório
+  contribuinte    = CNPJ do cliente
 ```
-Antes:
-  company_settings → contratanteCnpj (CNPJ apenas)
-  client → certificado PFX para mTLS ❌
 
-Depois:
-  company_settings → contratanteCnpj + certificado PFX para mTLS ✅
-  client → CNPJ do contribuinte (dados da consulta)
-```
+### 4. Página IntegraContador.tsx
 
-- Linha 86-90: adicionar `digital_certificate_url, digital_certificate_password` ao select de `company_settings`
-- Linhas 81-83: remover validação de certificado do cliente
-- Linhas 94-110: trocar download do certificado do cliente pelo do escritório
-- Adicionar validação de que o escritório tem certificado configurado
+Nenhuma alteração necessária na página de consulta. A escolha do certificado é automática baseada na configuração do escritório.
+
+## Arquivos modificados
+
+| Arquivo | Alteração |
+|---|---|
+| Nova migration | Adicionar 4 campos em `company_settings` |
+| `src/components/settings/CompanyTab.tsx` | Seção de certificado do contador |
+| `supabase/functions/integra-contador/index.ts` | Lógica de seleção certificado/autor |
 
