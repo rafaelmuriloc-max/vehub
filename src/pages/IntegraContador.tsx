@@ -41,16 +41,22 @@ const F_PA = { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true,
 const F_ANO = { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' };
 const F_PROTOCOLO = { key: 'protocolo', label: 'Protocolo', required: true, placeholder: '' };
 const F_NUM_PEDIDO = { key: 'numeroPedido', label: 'Número do Pedido', required: true, placeholder: '' };
+const F_NUM_DECLARACAO = { key: 'numeroDeclaracao', label: 'Nº Declaração', required: true, placeholder: '00000000201801001' };
+const F_NUM_DAS = { key: 'numeroDas', label: 'Nº DAS', required: true, placeholder: '07202136999997159' };
+const F_NUM_PROCESSO = { key: 'numeroProcesso', label: 'Nº Processo', required: true, placeholder: '' };
+const F_NUM_PARCELAMENTO = { key: 'numeroParcelamento', label: 'Nº Parcelamento', required: true, placeholder: '' };
+const F_ANOMES_PARCELA = { key: 'anoMesParcela', label: 'Ano/Mês Parcela (AAAAMM)', required: true, placeholder: '202401' };
+const F_PARCELA_EMITIR = { key: 'parcelaParaEmitir', label: 'Parcela p/ Emitir (AAAAMM)', required: true, placeholder: '202401' };
 
 // Gera os 5 serviços padrão de uma modalidade de parcelamento
 function parcServices(modalidade: string, desc: string, idSuffix: number[]): ServiceDefinition[] {
   const idSistema = modalidade;
   return [
-    { idSistema, idServico: `GERARDAS${idSuffix[0]}`, label: `Gerar DAS – ${desc}`, description: `Gera DAS do parcelamento ${desc}`, tipo: 'Emitir', fields: [F_CNPJ, F_NUM_PEDIDO] },
-    { idSistema, idServico: `PARCELASPARAGERAR${idSuffix[1]}`, label: `Parcelas p/ Gerar – ${desc}`, description: `Consulta parcelas disponíveis para gerar DAS – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PEDIDO] },
+    { idSistema, idServico: `GERARDAS${idSuffix[0]}`, label: `Gerar DAS – ${desc}`, description: `Gera DAS do parcelamento ${desc}`, tipo: 'Emitir', fields: [F_CNPJ, F_PARCELA_EMITIR] },
+    { idSistema, idServico: `PARCELASPARAGERAR${idSuffix[1]}`, label: `Parcelas p/ Gerar – ${desc}`, description: `Consulta parcelas disponíveis para gerar DAS – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ] },
     { idSistema, idServico: `PEDIDOSPARC${idSuffix[2]}`, label: `Pedidos – ${desc}`, description: `Consulta pedidos de parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ] },
-    { idSistema, idServico: `OBTERPARC${idSuffix[3]}`, label: `Obter Parcelamento – ${desc}`, description: `Obtém detalhes do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PEDIDO] },
-    { idSistema, idServico: `DETPAGTOPARC${idSuffix[4]}`, label: `Det. Pagamento – ${desc}`, description: `Detalhes de pagamento do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PEDIDO] },
+    { idSistema, idServico: `OBTERPARC${idSuffix[3]}`, label: `Obter Parcelamento – ${desc}`, description: `Obtém detalhes do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PARCELAMENTO] },
+    { idSistema, idServico: `DETPAGTOPARC${idSuffix[4]}`, label: `Det. Pagamento – ${desc}`, description: `Detalhes de pagamento do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PARCELAMENTO, F_ANOMES_PARCELA] },
   ];
 }
 
@@ -62,12 +68,12 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       // PGDASD
       { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal', description: 'Transmite declaração mensal do PGDAS-D', tipo: 'Declarar', fields: [F_CNPJ, F_PA] },
       { idSistema: 'PGDASD', idServico: 'GERARDAS12', label: 'Gerar DAS', description: 'Gera guia DAS do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D', description: 'Consulta declarações transmitidas do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D', description: 'Consulta declarações transmitidas do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ, F_ANO] },
       { idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', label: 'Última Declaração/Recibo', description: 'Consulta última declaração e recibo do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ] },
-      { idSistema: 'PGDASD', idServico: 'CONSDECREC15', label: 'Declaração/Recibo por PA', description: 'Consulta declaração e recibo por período de apuração', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', label: 'Extrato do DAS', description: 'Consulta extrato do DAS do Simples Nacional', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'CONSDECREC15', label: 'Declaração/Recibo por Nº', description: 'Consulta declaração e recibo por número da declaração', tipo: 'Consultar', fields: [F_CNPJ, F_NUM_DECLARACAO] },
+      { idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', label: 'Extrato do DAS', description: 'Consulta extrato do DAS pelo número do DAS', tipo: 'Consultar', fields: [F_CNPJ, F_NUM_DAS] },
       { idSistema: 'PGDASD', idServico: 'GERARDASCOBRANCA17', label: 'DAS Cobrança RFB', description: 'Gera DAS de cobrança da Receita Federal', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGDASD', idServico: 'GERARDASPROCESSO18', label: 'DAS Processo Cobrança', description: 'Gera DAS referente a processo de Cobrança RFB', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'GERARDASPROCESSO18', label: 'DAS Processo Cobrança', description: 'Gera DAS referente a processo de Cobrança RFB', tipo: 'Emitir', fields: [F_CNPJ, F_NUM_PROCESSO] },
       { idSistema: 'PGDASD', idServico: 'GERARDASAVULSO19', label: 'DAS Avulso', description: 'Gera DAS avulso do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
       // Regime de Apuração
       { idSistema: 'REGIMEAPURACAO', idServico: 'EFETUAROPCAOREGIME101', label: 'Efetuar Opção Regime', description: 'Efetua opção de regime de apuração', tipo: 'Declarar', fields: [F_CNPJ, F_ANO] },
@@ -88,7 +94,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       { idSistema: 'PGMEI', idServico: 'GERARDASPDF21', label: 'DAS MEI (PDF)', description: 'Gera DAS do MEI em formato PDF', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
       { idSistema: 'PGMEI', idServico: 'GERARDASCODBARRA22', label: 'DAS MEI (Cód. Barras)', description: 'Gera DAS do MEI com código de barras', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
       { idSistema: 'PGMEI', idServico: 'ATUBENEFICIO23', label: 'Atualizar Benefício', description: 'Atualiza benefício do MEI', tipo: 'Emitir', fields: [F_CNPJ] },
-      { idSistema: 'PGMEI', idServico: 'DIVIDAATIVA24', label: 'Dívida Ativa MEI', description: 'Consulta dívida ativa do MEI', tipo: 'Consultar', fields: [F_CNPJ] },
+      { idSistema: 'PGMEI', idServico: 'DIVIDAATIVA24', label: 'Dívida Ativa MEI', description: 'Consulta dívida ativa do MEI', tipo: 'Consultar', fields: [F_CNPJ, F_ANO] },
       { idSistema: 'CCMEI', idServico: 'EMITIRCCMEI121', label: 'Certificado Condição MEI', description: 'Emite certificado de condição de MEI', tipo: 'Emitir', fields: [F_CNPJ] },
       { idSistema: 'CCMEI', idServico: 'DADOSCCMEI122', label: 'Dados CCMEI', description: 'Consulta dados do certificado de condição MEI', tipo: 'Consultar', fields: [F_CNPJ] },
       { idSistema: 'CCMEI', idServico: 'CCMEISITCADASTRAL123', label: 'Situação Cadastral MEI por CPF', description: 'Consulta situação cadastral do CNPJ MEI por CPF', tipo: 'Consultar', fields: [{ key: 'cpf', label: 'CPF (11 dígitos)', required: true, placeholder: '12345678901' }] },
