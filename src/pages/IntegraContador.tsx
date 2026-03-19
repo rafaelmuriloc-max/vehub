@@ -68,12 +68,12 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       // PGDASD
       { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal', description: 'Transmite declaração mensal do PGDAS-D', tipo: 'Declarar', fields: [F_CNPJ, F_PA] },
       { idSistema: 'PGDASD', idServico: 'GERARDAS12', label: 'Gerar DAS', description: 'Gera guia DAS do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D', description: 'Consulta declarações transmitidas do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D', description: 'Consulta declarações transmitidas do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ, F_ANO] },
       { idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', label: 'Última Declaração/Recibo', description: 'Consulta última declaração e recibo do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ] },
-      { idSistema: 'PGDASD', idServico: 'CONSDECREC15', label: 'Declaração/Recibo por PA', description: 'Consulta declaração e recibo por período de apuração', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', label: 'Extrato do DAS', description: 'Consulta extrato do DAS do Simples Nacional', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'CONSDECREC15', label: 'Declaração/Recibo por Nº', description: 'Consulta declaração e recibo por número da declaração', tipo: 'Consultar', fields: [F_CNPJ, F_NUM_DECLARACAO] },
+      { idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', label: 'Extrato do DAS', description: 'Consulta extrato do DAS pelo número do DAS', tipo: 'Consultar', fields: [F_CNPJ, F_NUM_DAS] },
       { idSistema: 'PGDASD', idServico: 'GERARDASCOBRANCA17', label: 'DAS Cobrança RFB', description: 'Gera DAS de cobrança da Receita Federal', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGDASD', idServico: 'GERARDASPROCESSO18', label: 'DAS Processo Cobrança', description: 'Gera DAS referente a processo de Cobrança RFB', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'GERARDASPROCESSO18', label: 'DAS Processo Cobrança', description: 'Gera DAS referente a processo de Cobrança RFB', tipo: 'Emitir', fields: [F_CNPJ, F_NUM_PROCESSO] },
       { idSistema: 'PGDASD', idServico: 'GERARDASAVULSO19', label: 'DAS Avulso', description: 'Gera DAS avulso do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
       // Regime de Apuração
       { idSistema: 'REGIMEAPURACAO', idServico: 'EFETUAROPCAOREGIME101', label: 'Efetuar Opção Regime', description: 'Efetua opção de regime de apuração', tipo: 'Declarar', fields: [F_CNPJ, F_ANO] },
