@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     // Load client
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("document, digital_certificate_url, digital_certificate_password, company_name")
+      .select("document, company_name")
       .eq("id", client_id)
       .single();
 
@@ -78,21 +78,21 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
     }
 
-    if (!client.digital_certificate_url || !client.digital_certificate_password) {
-      return jsonResponse({ error: "Cliente sem certificado digital configurado" }, 400);
-    }
-
-    // Load contratante (company_settings) CNPJ
+    // Load contratante (company_settings) with certificate
     const { data: company } = await supabase
       .from("company_settings")
-      .select("cnpj, serpro_cnpj")
+      .select("cnpj, serpro_cnpj, digital_certificate_url, digital_certificate_password")
       .limit(1)
       .single();
 
     const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
 
-    // Download certificate
-    const certPath = client.digital_certificate_url;
+    if (!company?.digital_certificate_url || !company?.digital_certificate_password) {
+      return jsonResponse({ error: "Certificado digital do escritório não configurado. Configure em Configurações > Meu Escritório." }, 400);
+    }
+
+    // Download office certificate for mTLS
+    const certPath = company.digital_certificate_url;
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -103,11 +103,11 @@ Deno.serve(async (req) => {
       .download(certPath);
 
     if (certError || !certFile) {
-      return jsonResponse({ error: `Erro ao baixar certificado: ${certError?.message}` }, 500);
+      return jsonResponse({ error: `Erro ao baixar certificado do escritório: ${certError?.message}` }, 500);
     }
 
     const pfxBytes = new Uint8Array(await certFile.arrayBuffer());
-    const { certPem, keyPem } = await parsePfx(pfxBytes, client.digital_certificate_password);
+    const { certPem, keyPem } = await parsePfx(pfxBytes, company.digital_certificate_password);
 
     // Get SERPRO credentials
     const consumerKey = Deno.env.get("SERPRO_CONSUMER_KEY");
