@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SERPRO_AUTH_URL = "https://autenticacao.sapi.serpro.gov.br/authenticate";
+const SERPRO_AUTH_URL = "https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/";
 const SERPRO_API_BASE = "https://gateway.apiserpro.serpro.gov.br/integra-contador/v1";
 
 type ParsedCertificate = {
@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
         headers: {
           "Authorization": `Basic ${authCredentials}`,
           "Content-Type": "application/x-www-form-urlencoded",
-          "Role-Type": "TERCEIROS",
+          
         },
         body: "grant_type=client_credentials",
       },
