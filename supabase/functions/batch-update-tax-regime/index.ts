@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       errors.push(`${cnpj}: ${e.message}`);
     }
 
-    await sleep(1000);
+    await sleep(300);
   }
 
   return new Response(
