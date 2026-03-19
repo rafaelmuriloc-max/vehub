@@ -277,7 +277,7 @@ export default function IntegraContador() {
           idSistema: selectedService.idSistema,
           idServico: selectedService.idServico,
           tipo: selectedService.tipo,
-          dados: JSON.stringify(formData),
+          dados: selectedService.fields.length > 0 ? JSON.stringify(formData) : '',
         },
       });
 
