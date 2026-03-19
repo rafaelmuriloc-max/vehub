@@ -81,18 +81,27 @@ Deno.serve(async (req) => {
     // Load contratante (company_settings) with certificate
     const { data: company } = await supabase
       .from("company_settings")
-      .select("cnpj, serpro_cnpj, digital_certificate_url, digital_certificate_password")
+      .select("cnpj, serpro_cnpj, digital_certificate_url, digital_certificate_password, accountant_certificate_url, accountant_certificate_password, accountant_cpf")
       .limit(1)
       .single();
 
     const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
 
-    if (!company?.digital_certificate_url || !company?.digital_certificate_password) {
-      return jsonResponse({ error: "Certificado digital do escritório não configurado. Configure em Configurações > Meu Escritório." }, 400);
+    // Determine which certificate to use: accountant (e-CPF) takes priority if configured
+    const useAccountantCert = !!(company?.accountant_certificate_url && company?.accountant_certificate_password && company?.accountant_cpf);
+    const certUrl = useAccountantCert ? company!.accountant_certificate_url! : company?.digital_certificate_url;
+    const certPassword = useAccountantCert ? company!.accountant_certificate_password! : company?.digital_certificate_password;
+    const autorPedidoCpfCnpj = useAccountantCert ? company!.accountant_cpf!.replace(/\D/g, "") : contratanteCnpj;
+    const autorPedidoTipo = useAccountantCert ? (autorPedidoCpfCnpj.length <= 11 ? 1 : 2) : 2;
+
+    if (!certUrl || !certPassword) {
+      return jsonResponse({ error: "Certificado digital não configurado. Configure em Configurações > Meu Escritório." }, 400);
     }
 
-    // Download office certificate for mTLS
-    const certPath = company.digital_certificate_url;
+    console.log(`Usando certificado ${useAccountantCert ? "do contador (e-CPF)" : "do escritório (e-CNPJ)"} para mTLS`);
+
+    // Download certificate for mTLS
+    const certPath = certUrl;
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
