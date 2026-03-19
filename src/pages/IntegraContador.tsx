@@ -584,9 +584,13 @@ export default function IntegraContador() {
             <CardContent>
               {result ? (
                 <ScrollArea className="h-[500px]">
-                  <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
-                    {JSON.stringify(result, null, 2)}
-                  </pre>
+                  {isCaixaPostalList() && parseCaixaPostalMessages(result as any) ? (
+                    renderCaixaPostalInbox(parseCaixaPostalMessages(result as any)!)
+                  ) : (
+                    <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                      {JSON.stringify(result, null, 2)}
+                    </pre>
+                  )}
                 </ScrollArea>
               ) : (
                 <div className="flex items-center justify-center h-48 text-muted-foreground">
