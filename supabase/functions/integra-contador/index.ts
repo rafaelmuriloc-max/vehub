@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     const autorPedidoTipo = useAccountantCert ? 1 : 2; // CPF = tipo 1, CNPJ = tipo 2
 
     if (!certUrl || !certPassword) {
-      return jsonResponse({ error: "Certificado digital não configurado. Configure em Configurações > Meu Escritório." }, 400);
+      return jsonResponse({ success: false, error: "Certificado digital não configurado. Configure em Configurações > Meu Escritório." });
     }
 
     console.log(`[integra-contador] Modo: ${useAccountantCert ? "CONTADOR" : "ESCRITÓRIO"} | autorPedidoDados: ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
