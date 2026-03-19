@@ -94,7 +94,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       { idSistema: 'PGMEI', idServico: 'GERARDASPDF21', label: 'DAS MEI (PDF)', description: 'Gera DAS do MEI em formato PDF', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
       { idSistema: 'PGMEI', idServico: 'GERARDASCODBARRA22', label: 'DAS MEI (Cód. Barras)', description: 'Gera DAS do MEI com código de barras', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
       { idSistema: 'PGMEI', idServico: 'ATUBENEFICIO23', label: 'Atualizar Benefício', description: 'Atualiza benefício do MEI', tipo: 'Emitir', fields: [F_CNPJ] },
-      { idSistema: 'PGMEI', idServico: 'DIVIDAATIVA24', label: 'Dívida Ativa MEI', description: 'Consulta dívida ativa do MEI', tipo: 'Consultar', fields: [F_CNPJ] },
+      { idSistema: 'PGMEI', idServico: 'DIVIDAATIVA24', label: 'Dívida Ativa MEI', description: 'Consulta dívida ativa do MEI', tipo: 'Consultar', fields: [F_CNPJ, F_ANO] },
       { idSistema: 'CCMEI', idServico: 'EMITIRCCMEI121', label: 'Certificado Condição MEI', description: 'Emite certificado de condição de MEI', tipo: 'Emitir', fields: [F_CNPJ] },
       { idSistema: 'CCMEI', idServico: 'DADOSCCMEI122', label: 'Dados CCMEI', description: 'Consulta dados do certificado de condição MEI', tipo: 'Consultar', fields: [F_CNPJ] },
       { idSistema: 'CCMEI', idServico: 'CCMEISITCADASTRAL123', label: 'Situação Cadastral MEI por CPF', description: 'Consulta situação cadastral do CNPJ MEI por CPF', tipo: 'Consultar', fields: [{ key: 'cpf', label: 'CPF (11 dígitos)', required: true, placeholder: '12345678901' }] },
