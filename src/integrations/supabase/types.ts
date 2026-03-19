@@ -196,6 +196,10 @@ export type Database = {
       }
       company_settings: {
         Row: {
+          accountant_certificate_expiry: string | null
+          accountant_certificate_password: string | null
+          accountant_certificate_url: string | null
+          accountant_cpf: string | null
           address: string | null
           cnpj: string | null
           company_name: string | null
@@ -211,6 +215,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accountant_certificate_expiry?: string | null
+          accountant_certificate_password?: string | null
+          accountant_certificate_url?: string | null
+          accountant_cpf?: string | null
           address?: string | null
           cnpj?: string | null
           company_name?: string | null
@@ -226,6 +234,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accountant_certificate_expiry?: string | null
+          accountant_certificate_password?: string | null
+          accountant_certificate_url?: string | null
+          accountant_cpf?: string | null
           address?: string | null
           cnpj?: string | null
           company_name?: string | null
