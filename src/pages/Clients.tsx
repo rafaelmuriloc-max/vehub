@@ -218,9 +218,9 @@ export default function Clients() {
 
   useEffect(() => { loadClients(); }, []);
 
-  // One-time batch update of tax_regime for existing clients
+  // One-time batch update of tax_regime for existing clients (v2: SERPRO)
   useEffect(() => {
-    const BATCH_KEY = 'tax_regime_batch_done_v1';
+    const BATCH_KEY = 'tax_regime_batch_done_v2';
     if (localStorage.getItem(BATCH_KEY)) return;
     
     async function batchUpdateTaxRegimes() {
@@ -240,15 +240,12 @@ export default function Clients() {
       for (const client of cnpjClients) {
         const cnpj = client.document!.replace(/\D/g, '');
         try {
-          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
-          if (!res.ok) { await res.text(); errors++; continue; }
-          const data = await res.json();
+          const { data, error } = await supabase.functions.invoke('cnpj-query', { body: { cnpj } });
+          if (error || data?.error) { errors++; continue; }
           
-          const newRegime = data.opcao_pelo_mei
-            ? 'mei'
-            : data.opcao_pelo_simples
-            ? 'simples_nacional'
-            : 'lucro_presumido';
+          const isSimples = data.opcao_pelo_simples === true || data.simples?.opcao_simples === true;
+          const isMei = data.opcao_pelo_mei === true || data.simples?.opcao_mei === true;
+          const newRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
 
           if (client.tax_regime !== newRegime) {
             await supabase
@@ -260,18 +257,18 @@ export default function Clients() {
         } catch {
           errors++;
         }
-        // Small delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 300));
+        // Delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 1000));
       }
 
       localStorage.setItem(BATCH_KEY, 'true');
-      console.log(`[batch-tax-regime] Done: ${updated} updated, ${errors} errors, ${cnpjClients.length} total`);
+      console.log(`[batch-tax-regime-v2] Done: ${updated} updated, ${errors} errors, ${cnpjClients.length} total`);
       
       if (updated > 0) {
-        loadClients(); // Reload to show updated regimes
+        loadClients();
         toast({
           title: 'Regimes tributários atualizados',
-          description: `${updated} cliente(s) atualizado(s) automaticamente.`,
+          description: `${updated} cliente(s) atualizado(s) automaticamente via SERPRO.`,
         });
       }
     }
