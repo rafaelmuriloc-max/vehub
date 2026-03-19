@@ -1,34 +1,42 @@
 
 
-# Atualização Única de Regime Tributário dos Clientes Existentes
+# Migrar consulta CNPJ para API SERPRO (CNPJ-Empresa v2)
 
-## O que será feito
+## Contexto
 
-Criar uma edge function que será chamada uma única vez (manualmente ou via botão temporário) para percorrer todos os clientes com CNPJ cadastrado, consultar a BrasilAPI e atualizar o campo `tax_regime`. Sem botão permanente na interface.
+Atualmente o sistema usa a BrasilAPI (`brasilapi.com.br/api/cnpj/v1`) para consultar dados de CNPJ. O usuário quer migrar para o endpoint SERPRO `https://apigateway.conectagov.estaleiro.serpro.gov.br/api-cnpj-empresa/v2/empresa/{cnpj}` que retorna dados mais completos sobre opção pelo Simples Nacional e MEI.
 
-## Abordagem
+## Alterações
 
-### 1. Edge Function `batch-update-tax-regime`
-- Busca todos os clientes com `document` preenchido (14 dígitos)
-- Para cada um, consulta `https://brasilapi.com.br/api/cnpj/v1/{cnpj}`
-- Aplica a regra: MEI → `mei`, Simples → `simples_nacional`, senão → `lucro_presumido`
-- Atualiza o registro no Supabase se o regime mudou
-- Delay de 1s entre chamadas para evitar rate limit da BrasilAPI
-- Retorna relatório com total atualizado e erros
+### 1. Nova Edge Function `cnpj-query`
 
-### 2. Execução única
-- Após deploy, chamar a function uma vez via curl ou pelo dashboard do Supabase
-- A function pode ser removida depois, ou mantida para uso futuro
+Arquivo: `supabase/functions/cnpj-query/index.ts`
 
-### 3. Cadastro de novos clientes (já implementado)
-- A lógica em `fetchCnpjData()` no `Clients.tsx` já preenche automaticamente o `tax_regime` ao consultar CNPJ — nada muda aqui.
+- Recebe `{ cnpj }` no body
+- Autentica via OAuth2 com `SERPRO_CONSUMER_KEY` / `SERPRO_CONSUMER_SECRET` (já configurados)
+- Chama `GET https://apigateway.conectagov.estaleiro.serpro.gov.br/api-cnpj-empresa/v2/empresa/{cnpj}`
+- Retorna os dados da empresa ao frontend
+- Sem mTLS (esta API usa apenas Bearer token, diferente do Integra Contador)
+
+### 2. Atualizar `src/pages/Clients.tsx`
+
+- **`fetchCnpjData()`**: trocar a chamada direta à BrasilAPI por `supabase.functions.invoke('cnpj-query', { body: { cnpj } })`
+- Mapear os campos da resposta SERPRO para o formulário (razão social, endereço, CNAE, opção Simples/MEI, etc.)
+- Manter a mesma regra de regime tributário: MEI → `mei`, Simples → `simples_nacional`, senão → `lucro_presumido`
+- **Batch update (`useEffect`)**: mesma lógica, mas chamando a edge function em vez da BrasilAPI, com key `tax_regime_batch_done_v2` para re-executar com a nova fonte
+
+### 3. Outros arquivos que usam BrasilAPI (manter inalterados por ora)
+
+- `CertificateImportDialog.tsx` e `InvoiceEmit.tsx` continuam usando BrasilAPI para outros fins (dados cadastrais básicos). Podem ser migrados futuramente se desejado.
 
 ## Detalhes técnicos
 
 | Item | Detalhe |
 |---|---|
-| Arquivo | `supabase/functions/batch-update-tax-regime/index.ts` |
-| API | `brasilapi.com.br/api/cnpj/v1/{cnpj}` |
-| Auth | Requer service role key (já disponível como secret) |
-| Delay | 1s entre chamadas |
+| Endpoint SERPRO | `https://apigateway.conectagov.estaleiro.serpro.gov.br/api-cnpj-empresa/v2/empresa/{cnpj}` |
+| Auth SERPRO | OAuth2 client_credentials com consumer key/secret (já existentes nos secrets) |
+| Auth URL | `https://apigateway.conectagov.estaleiro.serpro.gov.br/oauth2/jwt-token` (padrão ConectaGov) |
+| Secrets necessários | `SERPRO_CONSUMER_KEY`, `SERPRO_CONSUMER_SECRET` (já configurados) |
+| Nova edge function | `supabase/functions/cnpj-query/index.ts` |
+| Config | Adicionar entry em `supabase/config.toml` |
 
