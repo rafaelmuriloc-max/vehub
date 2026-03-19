@@ -142,7 +142,7 @@ async function obtainProcuradorToken(
   const xml = generateAuthorizationXml(contratanteCnpj, contratanteNome, clientCnpj, clientNome);
 
   // 2. Sign XML with client's certificate
-  const signedXml = signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
+  const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
   // 3. Convert to base64
