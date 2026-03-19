@@ -97,8 +97,9 @@ Deno.serve(async (req) => {
       if (!hasAccountantPassword) missing.push("senha do certificado");
       if (!hasAccountantCpf) missing.push("CPF do contador");
       return jsonResponse({
+        success: false,
         error: `Certificado do contador configurado, mas faltam: ${missing.join(", ")}. Complete a configuração em Configurações > Meu Escritório.`,
-      }, 400);
+      });
     }
 
     // Determine which certificate to use: accountant (e-CPF) takes priority if fully configured
