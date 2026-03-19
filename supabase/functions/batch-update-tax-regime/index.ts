@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       if (!res.ok) {
         errors.push(`${cnpj}: HTTP ${res.status}`);
         await res.text();
-        await sleep(1000);
+        await sleep(300);
         continue;
       }
 
