@@ -1,24 +1,23 @@
 
 
-# Corrigir URL de autenticação OAuth2 do SERPRO
+# Corrigir autenticação OAuth2 — usar fetch normal (sem mTLS)
 
 ## Problema
-A edge function usa `https://autenticacao.sapi.serpro.gov.br/authenticate` para OAuth2, mas o curl que você compartilhou mostra que a autenticação do Integra Contador funciona diretamente em `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/` com Basic Auth + `grant_type=client_credentials`.
-
-O endpoint de autenticação correto para o Integra Contador é o próprio gateway, não o servidor de autenticação separado.
+A chamada de autenticação OAuth2 usa `requestWithFetchHttp1` com certificado mTLS, mas o `curl` que funciona não usa certificado cliente — apenas `Authorization: Basic` + `grant_type=client_credentials`. O gateway SERPRO retorna 404 quando recebe mTLS na rota de autenticação.
 
 ## Solução
 
 ### Arquivo: `supabase/functions/integra-contador/index.ts`
 
-1. **Trocar a URL de autenticação** (linha 10):
-   - De: `https://autenticacao.sapi.serpro.gov.br/authenticate`
-   - Para: `https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/`
+1. **Trocar a chamada de auth de `requestWithFetchHttp1` para `fetch` padrão** (linhas 135-149):
+   - Usar `fetch(SERPRO_AUTH_URL, { method: "POST", headers: {...}, body: "grant_type=client_credentials" })` sem certificado cliente
+   - Manter mTLS apenas para as chamadas à API de serviço (que exigem certificado digital)
 
-2. **Remover o header `Role-Type: TERCEIROS`** da chamada de auth (linha 142) — o gateway pode não usar esse header no mesmo formato.
+2. **Ajustar o parsing da resposta** (linhas 151-167):
+   - Adaptar de `authResponse.bodyText` / `authResponse.status` para `await response.text()` / `response.status` do fetch nativo
 
-3. **Manter o restante do fluxo** igual: Basic Auth com consumer key/secret, `grant_type=client_credentials`, e uso do `access_token` retornado para as chamadas subsequentes à API.
+3. **Manter mTLS nas chamadas de serviço** — a chamada real à API continua usando `requestWithFetchHttp1` com certificado
 
 ## Resultado esperado
-A autenticação OAuth2 passará pelo mesmo endpoint que funciona via curl, eliminando possíveis incompatibilidades com o servidor de autenticação separado.
+A autenticação OAuth2 passará igual ao `curl` (sem certificado cliente), e apenas as chamadas à API usarão mTLS com o e-CNPJ.
 
