@@ -58,21 +58,15 @@ function generateAuthorizationXml(
     `</dados></termoDeAutorizacao>`;
 }
 
-function signXmlWithCertificate(
+async function signXmlWithCertificate(
   xml: string,
   privateKey: forge.pki.PrivateKey,
   certificate: forge.pki.Certificate,
-): string {
-  // Canonicalize the <dados> content (C14N — here we use the raw XML since it's already canonical)
-  const dadosMatch = xml.match(/<dados>[\s\S]*<\/dados>/);
-  if (!dadosMatch) throw new Error("Elemento <dados> não encontrado no XML");
-  const dadosContent = dadosMatch[0];
-
-  // Compute SHA-256 digest of the full XML (Reference URI="")
-  const md = forge.md.sha256.create();
-  // For enveloped signature with URI="", digest is computed on the document without Signature
-  md.update(xml, "utf8");
-  const digestValue = forge.util.encode64(md.digest().bytes());
+): Promise<string> {
+  // Compute SHA-256 digest of the full XML (Reference URI="" with enveloped-signature transform)
+  const xmlBytes = new TextEncoder().encode(xml);
+  const digestBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", xmlBytes));
+  const digestValue = btoa(String.fromCharCode(...digestBytes));
 
   // Build SignedInfo (C14N)
   const signedInfo =
@@ -89,11 +83,24 @@ function signXmlWithCertificate(
     `</Reference>` +
     `</SignedInfo>`;
 
-  // Sign the SignedInfo with RSA-SHA256
-  const sigMd = forge.md.sha256.create();
-  sigMd.update(signedInfo, "utf8");
-  const signature = privateKey.sign(sigMd);
-  const signatureValue = forge.util.encode64(signature);
+  // Sign the SignedInfo with RSA-SHA256 using Web Crypto API (Deno compatible)
+  const rsaPrivateKeyInfo = forge.asn1.toDer(forge.pki.privateKeyToAsn1(privateKey)).getBytes();
+  const keyBytes = new Uint8Array(rsaPrivateKeyInfo.length);
+  for (let i = 0; i < rsaPrivateKeyInfo.length; i++) {
+    keyBytes[i] = rsaPrivateKeyInfo.charCodeAt(i);
+  }
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8",
+    keyBytes,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+
+  const signedInfoBytes = new TextEncoder().encode(signedInfo);
+  const signatureBytes = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, signedInfoBytes));
+  const signatureValue = btoa(String.fromCharCode(...signatureBytes));
 
   // Get certificate as base64 DER
   const certDer = forge.asn1.toDer(forge.pki.certificateToAsn1(certificate));
