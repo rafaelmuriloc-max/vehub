@@ -128,42 +128,36 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Credenciais SERPRO não configuradas" }, 500);
     }
 
-    // OAuth2 authenticate with mTLS (certificado digital obrigatório)
-    console.log("Autenticando no SERPRO via OAuth2 com mTLS...");
+    // OAuth2 authenticate via fetch padrão (sem mTLS — igual ao curl)
+    console.log("Autenticando no SERPRO via OAuth2 (fetch padrão, sem mTLS)...");
     const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
 
-    const authResponse = await requestWithFetchHttp1(
-      new URL(SERPRO_AUTH_URL),
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${authCredentials}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          
-        },
-        body: "grant_type=client_credentials",
+    const authFetchResponse = await fetch(SERPRO_AUTH_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${authCredentials}`,
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      certPem,
-      keyPem,
-      "serpro-auth"
-    );
+      body: "grant_type=client_credentials",
+    });
 
-    console.log(`Auth response status: ${authResponse.status}`);
+    const authBodyText = await authFetchResponse.text();
+    console.log(`Auth response status: ${authFetchResponse.status}`);
 
-    if (authResponse.status !== 200) {
-      console.error("Auth error body:", authResponse.bodyText);
+    if (!authFetchResponse.ok) {
+      console.error("Auth error body:", authBodyText);
       return jsonResponse({
         error: "Falha na autenticação SERPRO",
-        details: authResponse.bodyText,
-        status: authResponse.status,
+        details: authBodyText,
+        status: authFetchResponse.status,
       }, 401);
     }
 
     let authData: { access_token?: string; jwt_token?: string };
     try {
-      authData = JSON.parse(authResponse.bodyText);
+      authData = JSON.parse(authBodyText);
     } catch {
-      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponse.bodyText }, 500);
+      return jsonResponse({ error: "Resposta de autenticação inválida", details: authBodyText }, 500);
     }
 
     const bearerToken = authData.access_token;
