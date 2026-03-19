@@ -8,10 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell } from 'lucide-react';
+import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell, MailOpen, MailCheck, Eye } from 'lucide-react';
 
 type Client = {
   id: string;
@@ -222,6 +224,10 @@ export default function IntegraContador() {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<unknown>(null);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [messageDetail, setMessageDetail] = useState<any>(null);
+  const [messageLoading, setMessageLoading] = useState(false);
+  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -295,6 +301,135 @@ export default function IntegraContador() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Parse Caixa Postal messages from result
+  function parseCaixaPostalMessages(res: any): any[] | null {
+    try {
+      if (!res?.success || !res?.dados) return null;
+      const dados = typeof res.dados === 'string' ? JSON.parse(res.dados) : res.dados;
+      // The API returns messages as an array or object with messages
+      if (Array.isArray(dados)) return dados;
+      if (dados?.mensagens && Array.isArray(dados.mensagens)) return dados.mensagens;
+      if (dados?.listaMensagens && Array.isArray(dados.listaMensagens)) return dados.listaMensagens;
+      // Try to find any array property
+      for (const key of Object.keys(dados)) {
+        if (Array.isArray(dados[key]) && dados[key].length > 0) return dados[key];
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  function isCaixaPostalList(): boolean {
+    return selectedService?.idServico === 'MSGCONTRIBUINTE61';
+  }
+
+  async function handleMessageClick(message: any) {
+    setSelectedMessage(message);
+    setMessageDialogOpen(true);
+    setMessageDetail(null);
+
+    const isn = message.isn || message.ISN || message.numeroSequencial;
+    if (!isn || !selectedClientId) return;
+
+    setMessageLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('integra-contador', {
+        body: {
+          client_id: selectedClientId,
+          idSistema: 'CAIXAPOSTAL',
+          idServico: 'MSGDETALHAMENTO62',
+          tipo: 'Consultar',
+          dados: JSON.stringify({ isn: String(isn) }),
+        },
+      });
+      if (error) throw error;
+      if (data?.success && data?.dados) {
+        const parsed = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
+        setMessageDetail(parsed);
+      } else {
+        setMessageDetail({ error: data?.error || 'Erro ao carregar detalhes' });
+      }
+    } catch (err: any) {
+      setMessageDetail({ error: err.message });
+    } finally {
+      setMessageLoading(false);
+    }
+  }
+
+  function renderCaixaPostalInbox(messages: any[]) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 mb-2">
+          <Mail className="h-5 w-5 text-primary" />
+          <h3 className="font-semibold text-foreground">Caixa Postal — {messages.length} mensagem(ns)</h3>
+        </div>
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Remetente</TableHead>
+                <TableHead>Assunto</TableHead>
+                <TableHead className="w-28">Data Envio</TableHead>
+                <TableHead className="w-28">Data Leitura</TableHead>
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {messages.map((msg, idx) => {
+                const isRead = msg.statusLeitura === '1' || msg.statusLeitura === 1 || msg.lida === true || msg.dataLeitura;
+                const subject = msg.assunto || msg.titulo || msg.subject || 'Sem assunto';
+                const sender = msg.remetente || msg.nomeRemetente || msg.sender || 'RFB';
+                const sentDate = msg.dataEnvio || msg.dataCriacao || msg.dataEmissao || '';
+                const readDate = msg.dataLeitura || '';
+                const isn = msg.isn || msg.ISN || msg.numeroSequencial || '';
+
+                return (
+                  <TableRow
+                    key={isn || idx}
+                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                    onClick={() => handleMessageClick(msg)}
+                  >
+                    <TableCell className="text-center">
+                      {isRead ? (
+                        <MailOpen className="h-4 w-4 text-muted-foreground mx-auto" />
+                      ) : (
+                        <Mail className="h-4 w-4 text-primary mx-auto" />
+                      )}
+                    </TableCell>
+                    <TableCell className={!isRead ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                      {sender}
+                    </TableCell>
+                    <TableCell className={!isRead ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                      <span className="line-clamp-1">{subject}</span>
+                      {isn && <span className="text-xs text-muted-foreground ml-2">ISN: {isn}</span>}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{sentDate}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{readDate || '—'}</TableCell>
+                    <TableCell>
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="raw-json">
+            <AccordionTrigger className="text-xs text-muted-foreground">Ver JSON completo</AccordionTrigger>
+            <AccordionContent>
+              <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                {JSON.stringify(result, null, 2)}
+              </pre>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </div>
+    );
   }
 
   return (
@@ -449,9 +584,13 @@ export default function IntegraContador() {
             <CardContent>
               {result ? (
                 <ScrollArea className="h-[500px]">
-                  <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
-                    {JSON.stringify(result, null, 2)}
-                  </pre>
+                  {isCaixaPostalList() && parseCaixaPostalMessages(result as any) ? (
+                    renderCaixaPostalInbox(parseCaixaPostalMessages(result as any)!)
+                  ) : (
+                    <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                      {JSON.stringify(result, null, 2)}
+                    </pre>
+                  )}
                 </ScrollArea>
               ) : (
                 <div className="flex items-center justify-center h-48 text-muted-foreground">
@@ -489,6 +628,113 @@ export default function IntegraContador() {
           </Card>
         </div>
       </div>
+
+      {/* Message Detail Dialog */}
+      <Dialog open={messageDialogOpen} onOpenChange={setMessageDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MailCheck className="h-5 w-5 text-primary" />
+              Detalhes da Mensagem
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMessage && (selectedMessage.assunto || selectedMessage.titulo || selectedMessage.subject || 'Mensagem da Caixa Postal')}
+            </DialogDescription>
+          </DialogHeader>
+
+          {messageLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+              <span className="text-muted-foreground">Carregando detalhes...</span>
+            </div>
+          ) : messageDetail?.error ? (
+            <div className="space-y-4">
+              <div className="bg-destructive/10 text-destructive p-4 rounded-lg text-sm">
+                {messageDetail.error}
+              </div>
+              {selectedMessage && (
+                <div className="space-y-2">
+                  <h4 className="font-medium text-foreground text-sm">Dados da lista:</h4>
+                  <pre className="text-xs font-mono bg-muted p-3 rounded-md whitespace-pre-wrap break-words">
+                    {JSON.stringify(selectedMessage, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          ) : messageDetail ? (
+            <div className="space-y-4">
+              {/* Message metadata */}
+              <div className="grid grid-cols-2 gap-3 bg-muted/50 p-4 rounded-lg">
+                {messageDetail.remetente && (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Remetente</span>
+                    <span className="text-sm font-medium text-foreground">{messageDetail.remetente}</span>
+                  </div>
+                )}
+                {messageDetail.assunto && (
+                  <div className="col-span-2">
+                    <span className="text-xs text-muted-foreground block">Assunto</span>
+                    <span className="text-sm font-medium text-foreground">{messageDetail.assunto}</span>
+                  </div>
+                )}
+                {(messageDetail.dataEnvio || messageDetail.dataCriacao) && (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Data de Envio</span>
+                    <span className="text-sm text-foreground">{messageDetail.dataEnvio || messageDetail.dataCriacao}</span>
+                  </div>
+                )}
+                {messageDetail.dataLeitura && (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Data de Leitura</span>
+                    <span className="text-sm text-foreground">{messageDetail.dataLeitura}</span>
+                  </div>
+                )}
+                {/* Render any other simple key-value pairs */}
+                {Object.entries(messageDetail)
+                  .filter(([key]) => !['remetente', 'assunto', 'dataEnvio', 'dataCriacao', 'dataLeitura', 'corpo', 'textoMensagem', 'conteudo', 'mensagem', 'texto'].includes(key))
+                  .filter(([, val]) => typeof val === 'string' || typeof val === 'number')
+                  .map(([key, val]) => (
+                    <div key={key}>
+                      <span className="text-xs text-muted-foreground block">{key}</span>
+                      <span className="text-sm text-foreground">{String(val)}</span>
+                    </div>
+                  ))
+                }
+              </div>
+
+              {/* Message body */}
+              {(() => {
+                const body = messageDetail.corpo || messageDetail.textoMensagem || messageDetail.conteudo || messageDetail.mensagem || messageDetail.texto;
+                if (!body) return null;
+                return (
+                  <div className="border rounded-lg p-4">
+                    <h4 className="text-xs text-muted-foreground mb-2">Conteúdo da Mensagem</h4>
+                    <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                      {body}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Raw JSON fallback */}
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="raw">
+                  <AccordionTrigger className="text-xs text-muted-foreground">Ver JSON completo</AccordionTrigger>
+                  <AccordionContent>
+                    <pre className="text-xs font-mono bg-muted p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                      {JSON.stringify(messageDetail, null, 2)}
+                    </pre>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          ) : selectedMessage ? (
+            <pre className="text-xs font-mono bg-muted p-3 rounded-md whitespace-pre-wrap break-words">
+              {JSON.stringify(selectedMessage, null, 2)}
+            </pre>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
