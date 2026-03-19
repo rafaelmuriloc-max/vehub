@@ -313,16 +313,40 @@ export function CompanyTab() {
         setUploadingAccountant,
         accountantFileInputRef,
         admin ? (
-          <div className="space-y-1">
-            <Label>CPF do Contador</Label>
-            <Input
-              value={data.accountant_cpf || ''}
-              onChange={e => setData({ ...data, accountant_cpf: e.target.value })}
-              placeholder="000.000.000-00"
-            />
-            <p className="text-xs text-muted-foreground">
-              CPF do contador responsável com procuração no eCAC. Será usado como autorPedidoDados no Integra Contador.
-            </p>
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <Label>CPF do Contador</Label>
+              <Input
+                value={data.accountant_cpf || ''}
+                onChange={e => setData({ ...data, accountant_cpf: e.target.value })}
+                placeholder="000.000.000-00"
+              />
+              <p className="text-xs text-muted-foreground">
+                CPF do contador responsável com procuração no eCAC. Será usado como autorPedidoDados no Integra Contador.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" disabled={saving} onClick={async () => {
+              if (!data.id) return;
+              const raw = (data.accountant_cpf || '').replace(/\D/g, '');
+              if (raw.length !== 11) {
+                toast({ title: 'CPF inválido', description: 'O CPF deve conter exatamente 11 dígitos.', variant: 'destructive' });
+                return;
+              }
+              setSaving(true);
+              await supabase.from('company_settings').update({ accountant_cpf: raw }).eq('id', data.id);
+              setData(prev => ({ ...prev, accountant_cpf: raw }));
+              setSaving(false);
+              toast({ title: 'CPF do contador salvo' });
+            }}>
+              Salvar CPF
+            </Button>
+            {data.accountant_certificate_url && !data.accountant_cpf?.replace(/\D/g, '') && (
+              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3">
+                <p className="text-sm text-destructive font-medium">
+                  ⚠ Certificado do contador configurado sem CPF. O sistema não conseguirá usar o certificado do contador até que o CPF seja salvo.
+                </p>
+              </div>
+            )}
           </div>
         ) : data.accountant_cpf ? (
           <div className="space-y-1">
