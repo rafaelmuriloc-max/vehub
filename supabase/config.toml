@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.integra-contador]
 verify_jwt = false
+
+[functions.batch-update-tax-regime]
+verify_jwt = false
