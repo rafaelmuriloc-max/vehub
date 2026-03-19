@@ -14,6 +14,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const url = new URL(req.url);
+  const offset = parseInt(url.searchParams.get("offset") || "0");
+  const limit = parseInt(url.searchParams.get("limit") || "50");
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -22,7 +26,8 @@ Deno.serve(async (req) => {
   const { data: clients, error } = await supabase
     .from("clients")
     .select("id, document, tax_regime")
-    .not("document", "is", null);
+    .not("document", "is", null)
+    .range(offset, offset + limit - 1);
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
@@ -46,7 +51,7 @@ Deno.serve(async (req) => {
       if (!res.ok) {
         errors.push(`${cnpj}: HTTP ${res.status}`);
         await res.text();
-        await sleep(300);
+        await sleep(200);
         continue;
       }
 
@@ -75,11 +80,18 @@ Deno.serve(async (req) => {
       errors.push(`${cnpj}: ${e.message}`);
     }
 
-    await sleep(300);
+    await sleep(200);
   }
 
   return new Response(
-    JSON.stringify({ total: cnpjClients.length, updated, skipped, errors }),
+    JSON.stringify({
+      batch: { offset, limit },
+      processed: cnpjClients.length,
+      updated,
+      skipped,
+      errors,
+      next_offset: cnpjClients.length === limit ? offset + limit : null,
+    }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });
