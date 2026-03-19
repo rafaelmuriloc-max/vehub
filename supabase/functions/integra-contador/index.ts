@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     }
 
     const pfxBytes = new Uint8Array(await certFile.arrayBuffer());
-    const { certPem, keyPem } = await parsePfx(pfxBytes, company.digital_certificate_password);
+    const { certPem, keyPem } = await parsePfx(pfxBytes, certPassword);
 
     // Get SERPRO credentials
     const consumerKey = Deno.env.get("SERPRO_CONSUMER_KEY");
