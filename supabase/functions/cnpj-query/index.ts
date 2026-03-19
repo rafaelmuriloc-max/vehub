@@ -6,8 +6,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SERPRO_CNPJ_URL =
-  "https://apigateway.conectagov.estaleiro.serpro.gov.br/api-cnpj-empresa/v2/empresa";
+// Try both gateway URLs for the CNPJ query
+const SERPRO_CNPJ_URLS = [
+  "https://gateway.apiserpro.serpro.gov.br/consulta-cnpj-df/v2/empresa",
+  "https://apigateway.conectagov.estaleiro.serpro.gov.br/api-cnpj-empresa/v2/empresa",
+];
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
