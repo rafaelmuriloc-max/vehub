@@ -21,6 +21,10 @@ interface CompanyData {
   digital_certificate_url?: string | null;
   digital_certificate_password?: string | null;
   digital_certificate_expiry?: string | null;
+  accountant_certificate_url?: string | null;
+  accountant_certificate_password?: string | null;
+  accountant_certificate_expiry?: string | null;
+  accountant_cpf?: string | null;
 }
 
 export function CompanyTab() {
@@ -29,7 +33,9 @@ export function CompanyTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingAccountant, setUploadingAccountant] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const accountantFileInputRef = useRef<HTMLInputElement>(null);
   const [data, setData] = useState<CompanyData>({
     company_name: '', cnpj: '', serpro_cnpj: '', address: '', phone: '', email: '',
   });
@@ -56,22 +62,31 @@ export function CompanyTab() {
     }
   };
 
-  const handleCertificateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCertUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    passwordField: 'digital_certificate_password' | 'accountant_certificate_password',
+    urlField: 'digital_certificate_url' | 'accountant_certificate_url',
+    expiryField: 'digital_certificate_expiry' | 'accountant_certificate_expiry',
+    storagePrefixSuffix: string,
+    setUploadingFn: (v: boolean) => void,
+    inputRef: React.RefObject<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (!file || !data.id) return;
-    if (!data.digital_certificate_password) {
+    const password = data[passwordField];
+    if (!password) {
       toast({ title: 'Informe a senha do certificado antes de fazer o upload', variant: 'destructive' });
       return;
     }
 
-    setUploading(true);
+    setUploadingFn(true);
     try {
       const arrayBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       const b64 = forge.util.encode64(String.fromCharCode(...bytes));
       const p12Der = forge.util.decode64(b64);
       const p12Asn1 = forge.asn1.fromDer(p12Der);
-      const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, data.digital_certificate_password);
+      const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password);
 
       let expiry: Date | null = null;
       const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
@@ -83,16 +98,16 @@ export function CompanyTab() {
         }
       }
 
-      const storagePath = `company/${data.id}/${file.name}`;
+      const storagePath = `company/${data.id}/${storagePrefixSuffix}${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from('certificates')
         .upload(storagePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      const updates = {
-        digital_certificate_url: storagePath,
-        digital_certificate_expiry: expiry ? expiry.toISOString().split('T')[0] : null,
+      const updates: Record<string, string | null> = {
+        [urlField]: storagePath,
+        [expiryField]: expiry ? expiry.toISOString().split('T')[0] : null,
       };
 
       const { error: updateError } = await supabase
@@ -107,35 +122,39 @@ export function CompanyTab() {
     } catch (err: any) {
       toast({ title: 'Erro ao processar certificado', description: err.message, variant: 'destructive' });
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setUploadingFn(false);
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 
-  const handleCertificateDownload = async () => {
-    if (!data.digital_certificate_url) return;
-    const { data: blob, error } = await supabase.storage
-      .from('certificates')
-      .download(data.digital_certificate_url);
+  const handleCertDownload = async (urlField: 'digital_certificate_url' | 'accountant_certificate_url') => {
+    const url = data[urlField];
+    if (!url) return;
+    const { data: blob, error } = await supabase.storage.from('certificates').download(url);
     if (error || !blob) {
       toast({ title: 'Erro ao baixar certificado', variant: 'destructive' });
       return;
     }
-    const url = URL.createObjectURL(blob);
+    const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = data.digital_certificate_url.split('/').pop() || 'certificado.pfx';
+    a.href = blobUrl;
+    a.download = url.split('/').pop() || 'certificado.pfx';
     a.click();
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(blobUrl);
   };
 
-  const handleCertificateRemove = async () => {
-    if (!data.digital_certificate_url || !data.id) return;
-    await supabase.storage.from('certificates').remove([data.digital_certificate_url]);
-    const updates = {
-      digital_certificate_url: null,
-      digital_certificate_expiry: null,
-      digital_certificate_password: null,
+  const handleCertRemove = async (
+    urlField: 'digital_certificate_url' | 'accountant_certificate_url',
+    expiryField: 'digital_certificate_expiry' | 'accountant_certificate_expiry',
+    passwordField: 'digital_certificate_password' | 'accountant_certificate_password',
+  ) => {
+    const url = data[urlField];
+    if (!url || !data.id) return;
+    await supabase.storage.from('certificates').remove([url]);
+    const updates: Record<string, null> = {
+      [urlField]: null,
+      [expiryField]: null,
+      [passwordField]: null,
     };
     await supabase.from('company_settings').update(updates).eq('id', data.id);
     setData(prev => ({ ...prev, ...updates }));
@@ -153,10 +172,102 @@ export function CompanyTab() {
     { key: 'email', label: 'Email' },
   ];
 
-  const certExpiry = data.digital_certificate_expiry ? new Date(data.digital_certificate_expiry + 'T00:00:00') : null;
-  const now = new Date();
-  const daysUntilExpiry = certExpiry ? Math.ceil((certExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
-  const certFileName = data.digital_certificate_url?.split('/').pop();
+  const renderCertSection = (
+    title: string,
+    urlField: 'digital_certificate_url' | 'accountant_certificate_url',
+    expiryField: 'digital_certificate_expiry' | 'accountant_certificate_expiry',
+    passwordField: 'digital_certificate_password' | 'accountant_certificate_password',
+    storagePrefixSuffix: string,
+    isUploading: boolean,
+    setUploadingFn: (v: boolean) => void,
+    inputRef: React.RefObject<HTMLInputElement>,
+    extraFields?: React.ReactNode,
+  ) => {
+    const certUrl = data[urlField];
+    const certExpiry = data[expiryField] ? new Date(data[expiryField] + 'T00:00:00') : null;
+    const now = new Date();
+    const daysUntilExpiry = certExpiry ? Math.ceil((certExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+    const certFileName = certUrl?.split('/').pop();
+
+    return (
+      <Card>
+        <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {extraFields}
+          {certUrl && certFileName ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                {daysUntilExpiry !== null && daysUntilExpiry > 30 ? (
+                  <ShieldCheck className="h-5 w-5 text-green-600" />
+                ) : (
+                  <ShieldAlert className="h-5 w-5 text-destructive" />
+                )}
+                <span className="font-medium text-sm">{certFileName}</span>
+                {certExpiry && (
+                  <Badge variant={daysUntilExpiry !== null && daysUntilExpiry > 30 ? 'secondary' : 'destructive'}>
+                    {daysUntilExpiry !== null && daysUntilExpiry > 0
+                      ? `Vence em ${daysUntilExpiry} dias`
+                      : 'Vencido'}
+                  </Badge>
+                )}
+              </div>
+              {admin && (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleCertDownload(urlField)}>
+                    <Download className="h-4 w-4 mr-1" /> Baixar
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => handleCertRemove(urlField, expiryField, passwordField)}>
+                    <Trash2 className="h-4 w-4 mr-1" /> Remover
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhum certificado cadastrado.</p>
+          )}
+
+          {admin && (
+            <>
+              <div className="space-y-1">
+                <Label>Senha do Certificado</Label>
+                <Input
+                  type="password"
+                  value={(data[passwordField] as string) || ''}
+                  onChange={e => setData({ ...data, [passwordField]: e.target.value })}
+                  placeholder="Senha do arquivo .pfx/.p12"
+                />
+              </div>
+              {data[passwordField] && (
+                <Button variant="outline" size="sm" disabled={saving} onClick={async () => {
+                  if (!data.id) return;
+                  setSaving(true);
+                  await supabase.from('company_settings').update({ [passwordField]: data[passwordField] }).eq('id', data.id);
+                  setSaving(false);
+                  toast({ title: 'Senha salva' });
+                }}>
+                  Salvar Senha
+                </Button>
+              )}
+              <div className="space-y-1">
+                <Label>Upload do Certificado (.pfx / .p12)</Label>
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept=".pfx,.p12"
+                  onChange={e => handleCertUpload(e, passwordField, urlField, expiryField, storagePrefixSuffix, setUploadingFn, inputRef)}
+                  disabled={isUploading || !data[passwordField]}
+                  className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
+                />
+                {!data[passwordField] && (
+                  <p className="text-xs text-muted-foreground">Informe a senha antes de fazer upload.</p>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -181,81 +292,45 @@ export function CompanyTab() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Certificado Digital A1</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          {data.digital_certificate_url && certFileName ? (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                {daysUntilExpiry !== null && daysUntilExpiry > 30 ? (
-                  <ShieldCheck className="h-5 w-5 text-green-600" />
-                ) : (
-                  <ShieldAlert className="h-5 w-5 text-destructive" />
-                )}
-                <span className="font-medium text-sm">{certFileName}</span>
-                {certExpiry && (
-                  <Badge variant={daysUntilExpiry !== null && daysUntilExpiry > 30 ? 'secondary' : 'destructive'}>
-                    {daysUntilExpiry !== null && daysUntilExpiry > 0
-                      ? `Vence em ${daysUntilExpiry} dias`
-                      : 'Vencido'}
-                  </Badge>
-                )}
-              </div>
-              {admin && (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleCertificateDownload}>
-                    <Download className="h-4 w-4 mr-1" /> Baixar
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={handleCertificateRemove}>
-                    <Trash2 className="h-4 w-4 mr-1" /> Remover
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nenhum certificado cadastrado.</p>
-          )}
+      {renderCertSection(
+        'Certificado Digital A1 (Escritório)',
+        'digital_certificate_url',
+        'digital_certificate_expiry',
+        'digital_certificate_password',
+        '',
+        uploading,
+        setUploading,
+        fileInputRef,
+      )}
 
-          {admin && (
-            <>
-              <div className="space-y-1">
-                <Label>Senha do Certificado</Label>
-                <Input
-                  type="password"
-                  value={data.digital_certificate_password || ''}
-                  onChange={e => setData({ ...data, digital_certificate_password: e.target.value })}
-                  placeholder="Senha do arquivo .pfx/.p12"
-                />
-              </div>
-              {data.digital_certificate_password && (
-                <Button variant="outline" size="sm" disabled={saving} onClick={async () => {
-                  if (!data.id) return;
-                  setSaving(true);
-                  await supabase.from('company_settings').update({ digital_certificate_password: data.digital_certificate_password }).eq('id', data.id);
-                  setSaving(false);
-                  toast({ title: 'Senha salva' });
-                }}>
-                  Salvar Senha
-                </Button>
-              )}
-              <div className="space-y-1">
-                <Label>Upload do Certificado (.pfx / .p12)</Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pfx,.p12"
-                  onChange={handleCertificateUpload}
-                  disabled={uploading || !data.digital_certificate_password}
-                  className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
-                />
-                {!data.digital_certificate_password && (
-                  <p className="text-xs text-muted-foreground">Informe a senha antes de fazer upload.</p>
-                )}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {renderCertSection(
+        'Certificado do Contador (e-CPF)',
+        'accountant_certificate_url',
+        'accountant_certificate_expiry',
+        'accountant_certificate_password',
+        'accountant-',
+        uploadingAccountant,
+        setUploadingAccountant,
+        accountantFileInputRef,
+        admin ? (
+          <div className="space-y-1">
+            <Label>CPF do Contador</Label>
+            <Input
+              value={data.accountant_cpf || ''}
+              onChange={e => setData({ ...data, accountant_cpf: e.target.value })}
+              placeholder="000.000.000-00"
+            />
+            <p className="text-xs text-muted-foreground">
+              CPF do contador responsável com procuração no eCAC. Será usado como autorPedidoDados no Integra Contador.
+            </p>
+          </div>
+        ) : data.accountant_cpf ? (
+          <div className="space-y-1">
+            <Label>CPF do Contador</Label>
+            <Input value={data.accountant_cpf} disabled />
+          </div>
+        ) : null,
+      )}
     </div>
   );
 }
