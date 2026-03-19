@@ -306,8 +306,11 @@ export default function IntegraContador() {
   // Parse Caixa Postal messages from result
   function parseCaixaPostalMessages(res: any): any[] | null {
     try {
-      if (!res?.success || !res?.dados) return null;
-      const dados = typeof res.dados === 'string' ? JSON.parse(res.dados) : res.dados;
+      if (!res?.success) return null;
+      // Edge function wraps SERPRO response in res.data
+      const rawDados = res?.data?.dados || res?.data?.pedidoDados?.dados || res?.dados;
+      if (!rawDados) return null;
+      const dados = typeof rawDados === 'string' ? JSON.parse(rawDados) : rawDados;
       // The API returns messages as an array or object with messages
       if (Array.isArray(dados)) return dados;
       if (dados?.mensagens && Array.isArray(dados.mensagens)) return dados.mensagens;
