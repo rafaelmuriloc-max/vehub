@@ -87,8 +87,8 @@ Deno.serve(async (req) => {
 
     const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
 
-    // --- autorPedidoDados = própria empresa (CNPJ do escritório) ---
-    const autorPedidoCpfCnpj = contratanteCnpj;
+    // --- autorPedidoDados = CNPJ do cliente (contribuinte) ---
+    const autorPedidoCpfCnpj = client.document.replace(/\D/g, "");
     const autorPedidoTipo = 2; // CNPJ = tipo 2
 
     // --- mTLS always uses the office's e-CNPJ certificate ---
