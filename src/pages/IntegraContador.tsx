@@ -41,16 +41,22 @@ const F_PA = { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true,
 const F_ANO = { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' };
 const F_PROTOCOLO = { key: 'protocolo', label: 'Protocolo', required: true, placeholder: '' };
 const F_NUM_PEDIDO = { key: 'numeroPedido', label: 'Número do Pedido', required: true, placeholder: '' };
+const F_NUM_DECLARACAO = { key: 'numeroDeclaracao', label: 'Nº Declaração', required: true, placeholder: '00000000201801001' };
+const F_NUM_DAS = { key: 'numeroDas', label: 'Nº DAS', required: true, placeholder: '07202136999997159' };
+const F_NUM_PROCESSO = { key: 'numeroProcesso', label: 'Nº Processo', required: true, placeholder: '' };
+const F_NUM_PARCELAMENTO = { key: 'numeroParcelamento', label: 'Nº Parcelamento', required: true, placeholder: '' };
+const F_ANOMES_PARCELA = { key: 'anoMesParcela', label: 'Ano/Mês Parcela (AAAAMM)', required: true, placeholder: '202401' };
+const F_PARCELA_EMITIR = { key: 'parcelaParaEmitir', label: 'Parcela p/ Emitir (AAAAMM)', required: true, placeholder: '202401' };
 
 // Gera os 5 serviços padrão de uma modalidade de parcelamento
 function parcServices(modalidade: string, desc: string, idSuffix: number[]): ServiceDefinition[] {
   const idSistema = modalidade;
   return [
-    { idSistema, idServico: `GERARDAS${idSuffix[0]}`, label: `Gerar DAS – ${desc}`, description: `Gera DAS do parcelamento ${desc}`, tipo: 'Emitir', fields: [F_CNPJ, F_NUM_PEDIDO] },
-    { idSistema, idServico: `PARCELASPARAGERAR${idSuffix[1]}`, label: `Parcelas p/ Gerar – ${desc}`, description: `Consulta parcelas disponíveis para gerar DAS – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PEDIDO] },
+    { idSistema, idServico: `GERARDAS${idSuffix[0]}`, label: `Gerar DAS – ${desc}`, description: `Gera DAS do parcelamento ${desc}`, tipo: 'Emitir', fields: [F_CNPJ, F_PARCELA_EMITIR] },
+    { idSistema, idServico: `PARCELASPARAGERAR${idSuffix[1]}`, label: `Parcelas p/ Gerar – ${desc}`, description: `Consulta parcelas disponíveis para gerar DAS – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ] },
     { idSistema, idServico: `PEDIDOSPARC${idSuffix[2]}`, label: `Pedidos – ${desc}`, description: `Consulta pedidos de parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ] },
-    { idSistema, idServico: `OBTERPARC${idSuffix[3]}`, label: `Obter Parcelamento – ${desc}`, description: `Obtém detalhes do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PEDIDO] },
-    { idSistema, idServico: `DETPAGTOPARC${idSuffix[4]}`, label: `Det. Pagamento – ${desc}`, description: `Detalhes de pagamento do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PEDIDO] },
+    { idSistema, idServico: `OBTERPARC${idSuffix[3]}`, label: `Obter Parcelamento – ${desc}`, description: `Obtém detalhes do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PARCELAMENTO] },
+    { idSistema, idServico: `DETPAGTOPARC${idSuffix[4]}`, label: `Det. Pagamento – ${desc}`, description: `Detalhes de pagamento do parcelamento – ${desc}`, tipo: 'Consultar', fields: [F_CNPJ, F_NUM_PARCELAMENTO, F_ANOMES_PARCELA] },
   ];
 }
 
