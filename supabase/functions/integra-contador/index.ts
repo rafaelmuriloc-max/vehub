@@ -33,6 +33,193 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
+// ============= Termo de Autorização (Autentica Procurador) =============
+
+function generateAuthorizationXml(
+  contratanteCnpj: string,
+  contratanteNome: string,
+  clientCnpj: string,
+  clientNome: string,
+): string {
+  const now = new Date();
+  const dataAssinatura = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const vigencia = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+  const dataVigencia = vigencia.toISOString().slice(0, 10).replace(/-/g, "");
+
+  return `<termoDeAutorizacao><dados>` +
+    `<sistema id="API Integra Contador" />` +
+    `<termo texto="Autorizo a empresa CONTRATANTE, identificada neste termo de autorização como DESTINATÁRIO, a executar as requisições dos serviços web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisição do serviço web. Esse termo de autorização está assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsável, identificado como AUTOR DO PEDIDO DE DADOS." />` +
+    `<avisoLegal texto="O acesso a estas informações foi autorizado pelo próprio PROCURADOR ou OUTORGADO DO CONTRIBUINTE, responsável pela informação, via assinatura digital. É dever do destinatário da autorização e consumidor deste acesso observar a adoção de base legal para o tratamento dos dados recebidos conforme artigos 7º ou 11º da LGPD (Lei n.º 13.709, de 14 de agosto de 2018), aos direitos do titular dos dados (art. 9º, 17 e 18, da LGPD) e aos princípios que norteiam todos os tratamentos de dados no Brasil (art. 6º, da LGPD)." />` +
+    `<finalidade texto="A finalidade única e exclusiva desse TERMO DE AUTORIZAÇÃO, é garantir que o CONTRATANTE apresente a API INTEGRA CONTADOR esse consentimento do PROCURADOR ou OUTORGADO DO CONTRIBUINTE assinado digitalmente, para que possa realizar as requisições dos serviços web da API INTEGRA CONTADOR em nome do AUTOR PEDIDO DE DADOS (PROCURADOR ou OUTORGADO DO CONTRIBUINTE)." />` +
+    `<dataAssinatura data="${dataAssinatura}" />` +
+    `<vigencia data="${dataVigencia}" />` +
+    `<destinatario numero="${contratanteCnpj}" nome="${contratanteNome}" tipo="PJ" papel="contratante" />` +
+    `<assinadoPor numero="${clientCnpj}" nome="${clientNome}" tipo="PJ" papel="autor pedido de dados" />` +
+    `</dados></termoDeAutorizacao>`;
+}
+
+function signXmlWithCertificate(
+  xml: string,
+  privateKey: forge.pki.PrivateKey,
+  certificate: forge.pki.Certificate,
+): string {
+  // Canonicalize the <dados> content (C14N — here we use the raw XML since it's already canonical)
+  const dadosMatch = xml.match(/<dados>[\s\S]*<\/dados>/);
+  if (!dadosMatch) throw new Error("Elemento <dados> não encontrado no XML");
+  const dadosContent = dadosMatch[0];
+
+  // Compute SHA-256 digest of the full XML (Reference URI="")
+  const md = forge.md.sha256.create();
+  // For enveloped signature with URI="", digest is computed on the document without Signature
+  md.update(xml, "utf8");
+  const digestValue = forge.util.encode64(md.digest().bytes());
+
+  // Build SignedInfo (C14N)
+  const signedInfo =
+    `<SignedInfo>` +
+    `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" />` +
+    `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" />` +
+    `<Reference URI="">` +
+    `<Transforms>` +
+    `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />` +
+    `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" />` +
+    `</Transforms>` +
+    `<DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256" />` +
+    `<DigestValue>${digestValue}</DigestValue>` +
+    `</Reference>` +
+    `</SignedInfo>`;
+
+  // Sign the SignedInfo with RSA-SHA256
+  const sigMd = forge.md.sha256.create();
+  sigMd.update(signedInfo, "utf8");
+  const signature = privateKey.sign(sigMd);
+  const signatureValue = forge.util.encode64(signature);
+
+  // Get certificate as base64 DER
+  const certDer = forge.asn1.toDer(forge.pki.certificateToAsn1(certificate));
+  const certBase64 = forge.util.encode64(certDer.getBytes());
+
+  // Build the Signature element
+  const signatureElement =
+    `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+    signedInfo +
+    `<SignatureValue>${signatureValue}</SignatureValue>` +
+    `<KeyInfo>` +
+    `<X509Data>` +
+    `<X509Certificate>${certBase64}</X509Certificate>` +
+    `</X509Data>` +
+    `</KeyInfo>` +
+    `</Signature>`;
+
+  // Insert Signature before </termoDeAutorizacao>
+  return xml.replace("</termoDeAutorizacao>", signatureElement + "</termoDeAutorizacao>");
+}
+
+async function obtainProcuradorToken(
+  contratanteCnpj: string,
+  contratanteNome: string,
+  clientCnpj: string,
+  clientNome: string,
+  clientCertPem: string,
+  clientKeyPem: string,
+  clientCertObj: forge.pki.Certificate,
+  clientPrivateKey: forge.pki.PrivateKey,
+  officeCertPem: string,
+  officeKeyPem: string,
+  bearerToken: string,
+  jwtToken: string | undefined,
+): Promise<string | null> {
+  console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
+
+  // 1. Generate XML
+  const xml = generateAuthorizationXml(contratanteCnpj, contratanteNome, clientCnpj, clientNome);
+
+  // 2. Sign XML with client's certificate
+  const signedXml = signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
+  console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
+
+  // 3. Convert to base64
+  const xmlBase64 = btoa(signedXml);
+
+  // 4. Build request body for AUTENTICAPROCURADOR
+  const requestBody = {
+    contratante: { numero: contratanteCnpj, tipo: 2 },
+    autorPedidoDados: { numero: clientCnpj, tipo: 2 },
+    contribuinte: { numero: clientCnpj, tipo: 2 },
+    pedidoDados: {
+      idSistema: "AUTENTICAPROCURADOR",
+      idServico: "ENVIOXMLASSINADO81",
+      versaoSistema: "1.0",
+      dados: JSON.stringify({ xml: xmlBase64 }),
+    },
+  };
+
+  // 5. Call /Apoiar using the office's mTLS certificate
+  const apiUrl = new URL(`${SERPRO_API_BASE}/Apoiar`);
+  const apiHeaders: Record<string, string> = {
+    "Authorization": `Bearer ${bearerToken}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  };
+  if (jwtToken) {
+    apiHeaders["jwt_token"] = jwtToken;
+  }
+
+  console.log(`[procurador] Chamando ${apiUrl.toString()}...`);
+  const response = await requestWithFetchHttp1(
+    apiUrl,
+    {
+      method: "POST",
+      headers: apiHeaders,
+      body: JSON.stringify(requestBody),
+    },
+    officeCertPem,
+    officeKeyPem,
+    "procurador-apoiar",
+  );
+
+  console.log(`[procurador] Resposta status: ${response.status}`);
+  console.log(`[procurador] Resposta body: ${response.bodyText.substring(0, 500)}`);
+
+  if (response.status < 200 || response.status >= 300) {
+    console.error(`[procurador] Erro ao obter token de procurador: ${response.bodyText}`);
+    return null;
+  }
+
+  // 6. Extract the autenticar_procurador_token from the response
+  try {
+    const data = JSON.parse(response.bodyText);
+    // The token may come in the response body or in the dados field
+    if (data.dados) {
+      try {
+        const dadosParsed = typeof data.dados === "string" ? JSON.parse(data.dados) : data.dados;
+        if (dadosParsed.token || dadosParsed.autenticar_procurador_token) {
+          const token = dadosParsed.token || dadosParsed.autenticar_procurador_token;
+          console.log(`[procurador] Token obtido com sucesso (${token.length} chars)`);
+          return token;
+        }
+      } catch {
+        // dados might not be JSON
+      }
+    }
+    // Try response headers
+    const headerToken = response.headers.get("autenticar_procurador_token");
+    if (headerToken) {
+      console.log(`[procurador] Token obtido do header (${headerToken.length} chars)`);
+      return headerToken;
+    }
+
+    console.log(`[procurador] Token não encontrado na resposta. Dados completos: ${response.bodyText.substring(0, 1000)}`);
+    // Return the full response body text as a fallback — the API might return the token directly
+    return null;
+  } catch {
+    console.error(`[procurador] Erro ao parsear resposta: ${response.bodyText}`);
+    return null;
+  }
+}
+
+// ============= Main handler =============
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -63,10 +250,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Campos obrigatórios: client_id, idSistema, idServico, tipo" }, 400);
     }
 
-    // Load client
+    // Load client (including certificate fields for procurador flow)
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("document, company_name")
+      .select("document, company_name, digital_certificate_url, digital_certificate_password")
       .eq("id", client_id)
       .single();
 
@@ -81,11 +268,12 @@ Deno.serve(async (req) => {
     // Load contratante (company_settings) with certificate
     const { data: company } = await supabase
       .from("company_settings")
-      .select("cnpj, serpro_cnpj, digital_certificate_url, digital_certificate_password, accountant_certificate_url, accountant_certificate_password, accountant_cpf")
+      .select("cnpj, serpro_cnpj, company_name, digital_certificate_url, digital_certificate_password, accountant_certificate_url, accountant_certificate_password, accountant_cpf")
       .limit(1)
       .single();
 
     const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
+    const contratanteNome = company?.company_name || "Escritório Contábil";
 
     // --- autorPedidoDados = CNPJ do cliente (contribuinte) ---
     const autorPedidoCpfCnpj = client.document.replace(/\D/g, "");
@@ -101,8 +289,7 @@ Deno.serve(async (req) => {
 
     console.log(`[integra-contador] mTLS: e-CNPJ do escritório | autorPedidoDados (cliente): ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
 
-    // Download certificate for mTLS
-    const certPath = certUrl;
+    // Download office certificate for mTLS
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -110,7 +297,7 @@ Deno.serve(async (req) => {
 
     const { data: certFile, error: certError } = await serviceClient.storage
       .from("certificates")
-      .download(certPath);
+      .download(certUrl);
 
     if (certError || !certFile) {
       return jsonResponse({ error: `Erro ao baixar certificado do escritório: ${certError?.message}` }, 500);
@@ -127,7 +314,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Credenciais SERPRO não configuradas" }, 500);
     }
 
-    // OAuth2 authenticate via mTLS + Role-Type: TERCEIROS (conforme documentação oficial SERPRO)
+    // OAuth2 authenticate via mTLS + Role-Type: TERCEIROS
     console.log("Autenticando no SERPRO via OAuth2 (mTLS + Role-Type: TERCEIROS)...");
     const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
 
@@ -158,13 +345,11 @@ Deno.serve(async (req) => {
       }, 401);
     }
 
-    const authBodyText = authResponse.bodyText;
-
     let authData: { access_token?: string; jwt_token?: string };
     try {
-      authData = JSON.parse(authBodyText);
+      authData = JSON.parse(authResponse.bodyText);
     } catch {
-      return jsonResponse({ error: "Resposta de autenticação inválida", details: authBodyText }, 500);
+      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponse.bodyText }, 500);
     }
 
     const bearerToken = authData.access_token;
@@ -172,6 +357,59 @@ Deno.serve(async (req) => {
 
     if (!bearerToken) {
       return jsonResponse({ error: "Token de acesso não retornado pelo SERPRO" }, 500);
+    }
+
+    // ============= Autentica Procurador Flow =============
+    // When autorPedidoDados (client) differs from contratante (office), we need the procurador token
+    let procuradorToken: string | null = null;
+
+    if (autorPedidoCpfCnpj !== contratanteCnpj) {
+      console.log(`[integra-contador] autorPedidoDados (${autorPedidoCpfCnpj}) != contratante (${contratanteCnpj}) — iniciando fluxo de procurador`);
+
+      // Check if client has a certificate
+      if (!client.digital_certificate_url || !client.digital_certificate_password) {
+        return jsonResponse({
+          success: false,
+          error: "Certificado digital do cliente não encontrado. Para consultar dados de terceiros via Integra Contador, o cliente precisa ter um certificado digital (A1) cadastrado.",
+          hint: "Faça o upload do certificado digital do cliente na tela de Clientes > editar > aba Fiscal.",
+        });
+      }
+
+      // Download client's certificate
+      const { data: clientCertFile, error: clientCertError } = await serviceClient.storage
+        .from("certificates")
+        .download(client.digital_certificate_url);
+
+      if (clientCertError || !clientCertFile) {
+        return jsonResponse({ error: `Erro ao baixar certificado do cliente: ${clientCertError?.message}` }, 500);
+      }
+
+      const clientPfxBytes = new Uint8Array(await clientCertFile.arrayBuffer());
+      const { certPem: clientCertPem, keyPem: clientKeyPem } = await parsePfx(clientPfxBytes, client.digital_certificate_password);
+
+      // Parse client's PFX to get the certificate object and private key for signing
+      const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
+
+      procuradorToken = await obtainProcuradorToken(
+        contratanteCnpj,
+        contratanteNome,
+        autorPedidoCpfCnpj,
+        client.company_name || "Cliente",
+        clientCertPem,
+        clientKeyPem,
+        clientCertObj,
+        clientPrivateKey,
+        certPem,
+        keyPem,
+        bearerToken,
+        jwtToken,
+      );
+
+      if (!procuradorToken) {
+        console.warn("[integra-contador] Não foi possível obter o token de procurador. Tentando a requisição sem ele...");
+      } else {
+        console.log(`[integra-contador] Token de procurador obtido com sucesso`);
+      }
     }
 
     // Build request body for Integra Contador
@@ -201,6 +439,11 @@ Deno.serve(async (req) => {
 
     if (jwtToken) {
       apiHeaders["jwt_token"] = jwtToken;
+    }
+
+    if (procuradorToken) {
+      apiHeaders["autenticar_procurador_token"] = procuradorToken;
+      console.log(`[integra-contador] Header autenticar_procurador_token incluído na requisição`);
     }
 
     const apiResponse = await requestWithFetchHttp1(
@@ -237,7 +480,7 @@ Deno.serve(async (req) => {
   }
 });
 
-// ============= mTLS & Certificate utilities (from nfse-query) =============
+// ============= mTLS & Certificate utilities =============
 
 async function requestWithFetchHttp1(
   url: URL,
@@ -318,6 +561,45 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
   return {
     certPem: chain.map((cert) => cert.pem.trim()).join("\n"),
     keyPem,
+  };
+}
+
+function parsePfxForSigning(
+  pfxBytes: Uint8Array,
+  password: string,
+): { certificate: forge.pki.Certificate; privateKey: forge.pki.PrivateKey } {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < pfxBytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...pfxBytes.subarray(i, i + chunkSize));
+  }
+
+  const asn1 = forge.asn1.fromDer(binary);
+  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
+
+  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+  const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
+  if (!keyBag?.key) {
+    throw new Error("Chave privada não encontrada no certificado do cliente");
+  }
+
+  const keyLocalKeyId = normalizeLocalKeyId(keyBag.attributes?.localKeyId?.[0]);
+
+  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+  const allBags = (certBags[forge.pki.oids.certBag] || []) as Array<any>;
+
+  const leafBag = allBags.find(
+    (bag) => bag?.cert && keyLocalKeyId && normalizeLocalKeyId(bag.attributes?.localKeyId?.[0]) === keyLocalKeyId,
+  ) || allBags.find((bag) => bag?.cert);
+
+  if (!leafBag?.cert) {
+    throw new Error("Certificado leaf não encontrado no PFX do cliente");
+  }
+
+  return {
+    certificate: leafBag.cert,
+    privateKey: keyBag.key,
   };
 }
 
