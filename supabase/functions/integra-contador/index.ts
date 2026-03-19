@@ -83,11 +83,13 @@ async function signXmlWithCertificate(
     `</Reference>` +
     `</SignedInfo>`;
 
-  // Sign the SignedInfo with RSA-SHA256 using Web Crypto API (Deno compatible)
-  const rsaPrivateKeyInfo = forge.asn1.toDer(forge.pki.privateKeyToAsn1(privateKey)).getBytes();
-  const keyBytes = new Uint8Array(rsaPrivateKeyInfo.length);
-  for (let i = 0; i < rsaPrivateKeyInfo.length; i++) {
-    keyBytes[i] = rsaPrivateKeyInfo.charCodeAt(i);
+  // Convert forge private key to PKCS#8 DER for Web Crypto
+  const rsaPrivateKeyAsn1 = forge.pki.privateKeyToAsn1(privateKey);
+  const privateKeyInfo = forge.pki.wrapRsaPrivateKey(rsaPrivateKeyAsn1);
+  const pkcs8Der = forge.asn1.toDer(privateKeyInfo).getBytes();
+  const keyBytes = new Uint8Array(pkcs8Der.length);
+  for (let i = 0; i < pkcs8Der.length; i++) {
+    keyBytes[i] = pkcs8Der.charCodeAt(i);
   }
 
   const cryptoKey = await crypto.subtle.importKey(
