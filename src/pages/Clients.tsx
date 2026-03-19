@@ -190,7 +190,7 @@ export default function Clients() {
         contact_email: data.email || prev.contact_email,
         main_activity: mainCnae || prev.main_activity,
         secondary_activities: secondaryCnaes || prev.secondary_activities,
-        tax_regime: data.porte ? data.porte.toLowerCase().replace(/ /g, '_') : prev.tax_regime,
+        tax_regime: data.opcao_pelo_mei ? 'mei' : data.opcao_pelo_simples ? 'simples_nacional' : 'lucro_presumido',
         partners_info: partners || prev.partners_info,
         foundation_date: data.data_inicio_atividade || prev.foundation_date,
         opening_date: data.data_inicio_atividade || prev.opening_date,
