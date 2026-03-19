@@ -391,11 +391,22 @@ export default function IntegraContador() {
                       {field.label}
                       {field.required && <span className="text-destructive ml-1">*</span>}
                     </Label>
-                    <Input
-                      value={formData[field.key] || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                    />
+                    {field.options ? (
+                      <Select value={formData[field.key] || ''} onValueChange={(val) => setFormData((prev) => ({ ...prev, [field.key]: val }))}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                          {field.options.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={formData[field.key] || ''}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                      />
+                    )}
                   </div>
                 ))}
 
