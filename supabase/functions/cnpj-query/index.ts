@@ -81,30 +81,50 @@ serve(async (req) => {
       throw new Error("Failed to authenticate with SERPRO on all auth endpoints");
     }
 
-    // Query CNPJ
-    const cnpjUrl = `${SERPRO_CNPJ_URL}/${digits}`;
-    console.log("[cnpj-query] Querying:", cnpjUrl);
+    // Query CNPJ - try multiple endpoints
+    let cnpjData: any = null;
+    let lastError = "";
 
-    const cnpjRes = await fetch(cnpjUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-    });
+    for (const baseUrl of SERPRO_CNPJ_URLS) {
+      try {
+        const cnpjUrl = `${baseUrl}/${digits}`;
+        console.log("[cnpj-query] Querying:", cnpjUrl);
+        
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
-    const responseText = await cnpjRes.text();
-    console.log(`[cnpj-query] CNPJ response [${cnpjRes.status}]: ${responseText.substring(0, 500)}`);
+        const cnpjRes = await fetch(cnpjUrl, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+          signal: controller.signal,
+        });
 
-    if (!cnpjRes.ok) {
+        clearTimeout(timeout);
+        const responseText = await cnpjRes.text();
+        console.log(`[cnpj-query] CNPJ response [${cnpjRes.status}]: ${responseText.substring(0, 500)}`);
+
+        if (cnpjRes.ok) {
+          cnpjData = JSON.parse(responseText);
+          break;
+        } else {
+          lastError = responseText;
+        }
+      } catch (queryErr) {
+        console.log(`[cnpj-query] Query failed at ${baseUrl}:`, queryErr.message);
+        lastError = queryErr.message;
+      }
+    }
+
+    if (!cnpjData) {
       return new Response(
-        JSON.stringify({ error: `CNPJ não encontrado [${cnpjRes.status}]`, details: responseText }),
-        { status: cnpjRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: `CNPJ não encontrado`, details: lastError }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const data = JSON.parse(responseText);
-
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify(cnpjData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
