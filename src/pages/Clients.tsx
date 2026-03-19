@@ -162,53 +162,46 @@ export default function Clients() {
     }
     setCnpjLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('cnpj-query', { body: { cnpj: digits } });
-      if (error) throw new Error(error.message || 'Erro na consulta CNPJ');
-      if (data?.error) throw new Error(data.error);
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+      if (!res.ok) throw new Error('CNPJ não encontrado');
+      const data = await res.json();
 
-      console.log('[cnpj-query] SERPRO response:', data);
-
-      const endereco = data.endereco || {};
-      const address = [endereco.logradouro, endereco.numero, endereco.complemento, endereco.bairro, `${endereco.municipio || ''}/${endereco.uf || ''}`, endereco.cep]
+      const address = [data.logradouro, data.numero, data.complemento, data.bairro, `${data.municipio || ''}/${data.uf || ''}`, data.cep]
         .filter(Boolean).join(', ');
 
-      const cnaePrincipal = data.cnae_principal
-        ? `${String(data.cnae_principal.codigo).padStart(7, '0')} - ${data.cnae_principal.descricao}`
+      const cnaePrincipal = data.cnae_fiscal
+        ? `${String(data.cnae_fiscal).padStart(7, '0')} - ${data.cnae_fiscal_descricao || ''}`
         : '';
 
       const secondaryCnaes = (data.cnaes_secundarios || [])
-        .filter((c: any) => c.codigo && c.codigo !== '0000000')
+        .filter((c: any) => c.codigo && c.codigo !== 0)
         .map((c: any) => `${String(c.codigo).padStart(7, '0')} - ${c.descricao}`)
         .join(', ');
 
-      const partners = (data.socios || data.qsa || [])
-        .map((s: any) => `${s.nome || s.nome_socio} (${s.qualificacao || s.qualificacao_socio || ''})`)
+      const partners = (data.qsa || [])
+        .map((s: any) => `${s.nome_socio} (${s.qualificacao_socio || ''})`)
         .join('\n');
 
-      // Determine tax regime from SERPRO data
-      const isSimples = data.opcao_pelo_simples === true || data.simples?.opcao_simples === true;
-      const isMei = data.opcao_pelo_mei === true || data.simples?.opcao_mei === true;
+      const isSimples = data.opcao_pelo_simples === true;
+      const isMei = data.opcao_pelo_mei === true;
       const taxRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
-
-      const telefones = data.telefones || [];
-      const phone = telefones.length > 0 ? `(${telefones[0].ddd}) ${telefones[0].numero}` : '';
 
       setForm(prev => ({
         ...prev,
-        company_name: data.nome_empresarial || data.razao_social || prev.company_name,
+        company_name: data.razao_social || prev.company_name,
         address: address || prev.address,
-        contact_phone: phone || prev.contact_phone,
-        contact_email: data.correio_eletronico || data.email || prev.contact_email,
+        contact_phone: data.ddd_telefone_1 ? `(${data.ddd_telefone_1.substring(0,2)}) ${data.ddd_telefone_1.substring(2)}` : prev.contact_phone,
+        contact_email: data.email || prev.contact_email,
         main_activity: cnaePrincipal || prev.main_activity,
         secondary_activities: secondaryCnaes || prev.secondary_activities,
         tax_regime: taxRegime,
         partners_info: partners || prev.partners_info,
-        foundation_date: data.data_abertura || data.data_inicio_atividade || prev.foundation_date,
-        opening_date: data.data_abertura || data.data_inicio_atividade || prev.opening_date,
-        business_segment: data.cnae_principal?.descricao || prev.business_segment,
+        foundation_date: data.data_inicio_atividade || prev.foundation_date,
+        opening_date: data.data_inicio_atividade || prev.opening_date,
+        business_segment: data.cnae_fiscal_descricao || prev.business_segment,
       }));
 
-      toast({ title: 'Dados carregados', description: `Dados de ${data.nome_empresarial || data.razao_social || digits} preenchidos automaticamente.` });
+      toast({ title: 'Dados carregados', description: `Dados de ${data.razao_social || digits} preenchidos automaticamente.` });
     } catch (err: any) {
       toast({ title: 'Erro na busca', description: err.message || 'Não foi possível consultar o CNPJ.', variant: 'destructive' });
     } finally {
@@ -218,9 +211,9 @@ export default function Clients() {
 
   useEffect(() => { loadClients(); }, []);
 
-  // One-time batch update of tax_regime for existing clients (v2: SERPRO)
+  // One-time batch update of tax_regime for existing clients
   useEffect(() => {
-    const BATCH_KEY = 'tax_regime_batch_done_v2';
+    const BATCH_KEY = 'tax_regime_batch_done';
     if (localStorage.getItem(BATCH_KEY)) return;
     
     async function batchUpdateTaxRegimes() {
@@ -240,11 +233,12 @@ export default function Clients() {
       for (const client of cnpjClients) {
         const cnpj = client.document!.replace(/\D/g, '');
         try {
-          const { data, error } = await supabase.functions.invoke('cnpj-query', { body: { cnpj } });
-          if (error || data?.error) { errors++; continue; }
+          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+          if (!res.ok) { errors++; continue; }
+          const data = await res.json();
           
-          const isSimples = data.opcao_pelo_simples === true || data.simples?.opcao_simples === true;
-          const isMei = data.opcao_pelo_mei === true || data.simples?.opcao_mei === true;
+          const isSimples = data.opcao_pelo_simples === true;
+          const isMei = data.opcao_pelo_mei === true;
           const newRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
 
           if (client.tax_regime !== newRegime) {
@@ -257,18 +251,17 @@ export default function Clients() {
         } catch {
           errors++;
         }
-        // Delay to avoid rate limiting
         await new Promise(r => setTimeout(r, 1000));
       }
 
       localStorage.setItem(BATCH_KEY, 'true');
-      console.log(`[batch-tax-regime-v2] Done: ${updated} updated, ${errors} errors, ${cnpjClients.length} total`);
+      console.log(`[batch-tax-regime] Done: ${updated} updated, ${errors} errors, ${cnpjClients.length} total`);
       
       if (updated > 0) {
         loadClients();
         toast({
           title: 'Regimes tributários atualizados',
-          description: `${updated} cliente(s) atualizado(s) automaticamente via SERPRO.`,
+          description: `${updated} cliente(s) atualizado(s) automaticamente.`,
         });
       }
     }
