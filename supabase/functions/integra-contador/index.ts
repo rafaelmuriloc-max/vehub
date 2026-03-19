@@ -296,7 +296,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: "Certificado digital do escritório (e-CNPJ) não configurado. Configure em Configurações > Meu Escritório." });
     }
 
-    console.log(`[integra-contador] mTLS: e-CNPJ do escritório | autorPedidoDados (cliente): ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
+    console.log(`[integra-contador] mTLS: e-CNPJ do escritório | autorPedidoDados (escritório): ${autorPedidoCpfCnpj} (tipo ${autorPedidoTipo}) | contratante: ${contratanteCnpj}`);
 
     // Download office certificate for mTLS
     const serviceClient = createClient(
