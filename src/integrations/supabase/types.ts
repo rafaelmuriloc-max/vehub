@@ -642,30 +642,39 @@ export type Database = {
       }
       obligations: {
         Row: {
+          alert_day: number | null
           created_at: string
           department_id: string
           description: string | null
+          due_day: number | null
           id: string
           name: string
           recurrence: string
+          target_day: number | null
           updated_at: string
         }
         Insert: {
+          alert_day?: number | null
           created_at?: string
           department_id: string
           description?: string | null
+          due_day?: number | null
           id?: string
           name: string
           recurrence?: string
+          target_day?: number | null
           updated_at?: string
         }
         Update: {
+          alert_day?: number | null
           created_at?: string
           department_id?: string
           description?: string | null
+          due_day?: number | null
           id?: string
           name?: string
           recurrence?: string
+          target_day?: number | null
           updated_at?: string
         }
         Relationships: [
