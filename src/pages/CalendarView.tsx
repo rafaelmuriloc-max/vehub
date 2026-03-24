@@ -287,18 +287,24 @@ export default function CalendarView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedEvents.map((ev, idx) => (
-                    <TableRow key={idx} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailInstanceId(ev.instanceId)}>
-                      <TableCell>{ev.clientName}</TableCell>
-                      <TableCell>{ev.obligationName}</TableCell>
-                      <TableCell>{ev.deptName}</TableCell>
-                      <TableCell>
-                        <Badge className={`${typeConfig[ev.type].color} text-white border-0`}>
-                          {typeConfig[ev.type].label}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {selectedEvents.map((ev, idx) => {
+                    const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                    return (
+                      <TableRow key={idx} className={`cursor-pointer hover:bg-muted/50 ${completed ? 'bg-green-100 dark:bg-green-900/40' : ''}`} onClick={() => setDetailInstanceId(ev.instanceId)}>
+                        <TableCell>{ev.clientName}</TableCell>
+                        <TableCell>{ev.obligationName}</TableCell>
+                        <TableCell>{ev.deptName}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Badge className={`${typeConfig[ev.type].color} text-white border-0`}>
+                              {typeConfig[ev.type].label}
+                            </Badge>
+                            {completed && <Badge className="bg-green-600 text-white border-0">Concluída</Badge>}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

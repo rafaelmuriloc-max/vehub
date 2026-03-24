@@ -169,6 +169,15 @@ export default function ClientObligationsTab({ clientId }: Props) {
     window.open(data.signedUrl, '_blank');
   }
 
+  function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
+    const oblActivities = activities.filter(a => a.obligation_id === obligationId);
+    if (oblActivities.length === 0) return false;
+    return oblActivities.every(act => {
+      const comp = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+      return comp?.completed === true;
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
