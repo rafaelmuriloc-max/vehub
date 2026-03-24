@@ -1,52 +1,61 @@
 
 
-# Substituir "Nova Competência" por "Gerar Obrigações" com Tabela de Acompanhamento
+# Calendário de Obrigações com Filtros e Lista Diária
 
 ## Objetivo
-Trocar o botão "Nova Competência" por "Gerar Obrigações" que cria automaticamente instâncias (`obligation_instances`) para todas as obrigações vinculadas ao cliente, para cada mês restante do ano. Exibir o resultado como tabela: obrigações nas linhas, meses nas colunas, com checks para instâncias existentes.
+Reescrever a página de calendário para exibir obrigações geradas (`obligation_instances`) com marcações coloridas nas 3 datas (Alerta/Verde, Meta/Laranja, Vencimento/Vermelho). Abaixo do calendário, exibir a lista de empresas e obrigações do dia selecionado. Incluir filtros por departamento e por empresa.
 
 ## Mudanças
 
-### Arquivo: `src/components/ClientObligationsTab.tsx`
+### Arquivo: `src/pages/CalendarView.tsx` (reescrita completa)
 
-1. **Carregar obrigações vinculadas ao cliente**: Fetch `client_department_obligations` filtrado por `client_id` para saber quais obrigações se aplicam ao cliente (ao invés de mostrar todas).
+**Dados carregados**:
+- `obligation_instances` (todas, com client_id, obligation_id, reference_month)
+- `obligations` (name, department_id, alert_day, target_day, due_day)
+- `clients` (id, company_name)
+- `departments` (id, name)
 
-2. **Botão "Gerar Obrigações"**: Substitui "Nova Competência". Ao clicar:
-   - Identifica os meses restantes do ano (mês atual até dezembro)
-   - Para cada obrigação vinculada ao cliente, para cada mês, verifica se já existe `obligation_instance`
-   - Insere em lote as instâncias faltantes
-   - Recarrega os dados
+**Cálculo de datas por instância**:
+Para cada instance, calcular 3 datas reais a partir do `reference_month` + dias da obligation:
+- `alert_date` = reference_month.setDate(alert_day)
+- `target_date` = reference_month.setDate(target_day)  
+- `due_date` = reference_month.setDate(due_day)
 
-3. **Tabela visual (substitui os Cards atuais)**:
+**Calendário**:
+- Manter o grid mensal atual com navegação
+- Em cada célula do dia, mostrar dots/badges coloridos (verde/laranja/vermelho) indicando quantas obrigações têm aquela data naquele dia
+- Dia clicável para selecionar
 
-```text
-┌──────────────────┬──────────────┬─────┬─────┬─────┬─────┬─────┐
-│ Obrigação        │ Departamento │ Mar │ Abr │ Mai │ Jun │ ... │
-├──────────────────┼──────────────┼─────┼─────┼─────┼─────┼─────┤
-│ DCTF Mensal      │ Fiscal       │ ✅  │ ✅  │ ✅  │ ✅  │     │
-│ eSocial          │ Pessoal      │ ✅  │ ✅  │ ✅  │ ✅  │     │
-│ ECD              │ Fiscal       │ ✅  │ ✅  │ ✅  │ ✅  │     │
-└──────────────────┴──────────────┴─────┴─────┴─────┴─────┴─────┘
-```
+**Lista abaixo do calendário**:
+- Ao selecionar um dia, exibir tabela com: Empresa, Obrigação, Departamento, Tipo de data (Alerta/Meta/Vencimento) com badge colorido correspondente
 
-   - Linhas: obrigações vinculadas ao cliente (via `client_department_obligations`)
-   - Coluna "Obrigação": nome
-   - Coluna "Departamento": nome do departamento
-   - Colunas de meses: do mês atual até dezembro do ano corrente
-   - Check verde (✅) se existe `obligation_instance` para aquela obrigação+mês
-   - Célula vazia se não existe
-   - Clique na célula com check abre o dialog de detalhes existente
-
-4. **Remover dialog "Nova Competência"**: Não é mais necessário, já que a geração é automática em lote.
-
-5. **Manter dialog de detalhes**: O dialog que mostra atividades da instância continua funcionando ao clicar numa célula com check.
+**Filtros** (acima do calendário):
+- Select de Departamento (todos / específico)
+- Select de Empresa (todos / específica)
+- Filtros aplicados tanto ao calendário quanto à lista
 
 ### Detalhes técnicos
 
-- Fetch `client_department_obligations` para obter as obrigações do cliente
-- Gerar meses: `Array.from({length: 12 - currentMonth + 1}, (_, i) => currentMonth + i)` formatados como `yyyy-MM-01`
-- Bulk insert: construir array de `{obligation_id, client_id, reference_month}` para meses sem instância existente
-- Usar `Table` components para a tabela
-- Cada célula de mês verifica `instances.find(i => i.obligation_id === oblId && i.reference_month === monthStr)`
-- Imports: adicionar `Table, TableHeader, TableBody, TableRow, TableHead, TableCell` e `Check` icon
+```text
+Layout:
+┌─────────────────────────────────────────────┐
+│ [Filtro Departamento ▼] [Filtro Empresa ▼]  │
+├─────────────────────────────────────────────┤
+│        ◀  Março 2026  ▶                     │
+│ Dom Seg Ter ... Sáb                         │
+│  1   2   3  ...                             │
+│     🟢🟠  🔴   (dots por tipo de data)     │
+├─────────────────────────────────────────────┤
+│ Obrigações do dia 15/03/2026                │
+│ ┌────────────┬──────────┬──────┬──────────┐ │
+│ │ Empresa    │Obrigação │Depto │ Tipo     │ │
+│ │ Acme Ltda  │ DCTF     │Fiscal│🟠 Meta  │ │
+│ │ Beta SA    │ eSocial  │Pessoal│🟢Alerta│ │
+│ └────────────┴──────────┴──────┴──────────┘ │
+└─────────────────────────────────────────────┘
+```
+
+- Cores: verde (`bg-green-500`) para alerta, laranja (`bg-orange-500`) para meta, vermelho (`bg-red-500`) para vencimento
+- Dots pequenos no calendário para não sobrecarregar visualmente
+- Sem mudanças no banco de dados
 
