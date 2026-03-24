@@ -585,6 +585,37 @@ export default function Clients() {
 
   const isAdmin_ = isAdmin;
 
+  function renderDeptObligations(deptNameFragment: string) {
+    const dept = departments.find(d => d.name.toLowerCase().includes(deptNameFragment.toLowerCase()));
+    if (!dept) return null;
+    const obls = allObligations.filter(o => o.department_id === dept.id);
+    if (obls.length === 0) return null;
+    return (
+      <div className="space-y-2 border-t border-border pt-4 mt-2">
+        <Label className="text-base font-semibold">Obrigações</Label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {obls.map(obl => (
+            <div key={obl.id} className="flex items-center gap-2">
+              <Checkbox
+                checked={selectedObligations.has(obl.id)}
+                disabled={viewOnly}
+                onCheckedChange={(checked) => {
+                  setSelectedObligations(prev => {
+                    const next = new Set(prev);
+                    if (checked) next.add(obl.id);
+                    else next.delete(obl.id);
+                    return next;
+                  });
+                }}
+              />
+              <span className="text-sm">{obl.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -886,6 +917,7 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
                   <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...f('municipal_registration')} /></div>
                 </div>
+                {renderDeptObligations('fiscal')}
               </TabsContent>
 
               {/* ── Pessoal ── */}
@@ -904,6 +936,7 @@ export default function Clients() {
                   </div>
                   <div className="col-span-2 space-y-2"><Label>Observações sobre Folha</Label><Textarea {...f('payroll_notes')} /></div>
                 </div>
+                {renderDeptObligations('pessoal')}
               </TabsContent>
 
               {/* ── Societário ── */}
@@ -991,6 +1024,7 @@ export default function Clients() {
                   )}
                   <div className="col-span-2 space-y-2"><Label>Informações dos Sócios</Label><Textarea {...f('partners_info')} /></div>
                 </div>
+                {renderDeptObligations('societár')}
               </TabsContent>
 
               {/* ── Sucesso do Cliente ── */}
@@ -1001,6 +1035,7 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Data de Fundação</Label><Input type="date" {...f('foundation_date')} /></div>
                   <div className="col-span-2 space-y-2"><Label>Observações</Label><Textarea {...f('success_notes')} /></div>
                 </div>
+                {renderDeptObligations('sucesso')}
               </TabsContent>
 
               {/* ── Contatos por Departamento ── */}
@@ -1050,36 +1085,6 @@ export default function Clients() {
                           />
                         </div>
                       </div>
-                      {/* Obrigações do departamento */}
-                      {(() => {
-                        const deptObls = allObligations.filter(o => o.department_id === dep.id);
-                        if (deptObls.length === 0) return null;
-                        return (
-                          <div className="mt-3 space-y-2">
-                            <Separator />
-                            <Label className="text-xs text-muted-foreground">Obrigações</Label>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2">
-                              {deptObls.map(obl => (
-                                <div key={obl.id} className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={selectedObligations.has(obl.id)}
-                                    disabled={viewOnly}
-                                    onCheckedChange={(checked) => {
-                                      setSelectedObligations(prev => {
-                                        const next = new Set(prev);
-                                        if (checked) next.add(obl.id);
-                                        else next.delete(obl.id);
-                                        return next;
-                                      });
-                                    }}
-                                  />
-                                  <span className="text-sm">{obl.name}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   ))
                 )}
