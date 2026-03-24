@@ -1054,36 +1054,6 @@ export default function Clients() {
                           />
                         </div>
                       </div>
-                      {/* Obrigações do departamento */}
-                      {(() => {
-                        const deptObls = allObligations.filter(o => o.department_id === dep.id);
-                        if (deptObls.length === 0) return null;
-                        return (
-                          <div className="mt-3 space-y-2">
-                            <Separator />
-                            <Label className="text-xs text-muted-foreground">Obrigações</Label>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2">
-                              {deptObls.map(obl => (
-                                <div key={obl.id} className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={selectedObligations.has(obl.id)}
-                                    disabled={viewOnly}
-                                    onCheckedChange={(checked) => {
-                                      setSelectedObligations(prev => {
-                                        const next = new Set(prev);
-                                        if (checked) next.add(obl.id);
-                                        else next.delete(obl.id);
-                                        return next;
-                                      });
-                                    }}
-                                  />
-                                  <span className="text-sm">{obl.name}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   ))
                 )}
