@@ -86,6 +86,7 @@ const emptyForm = {
 
 type Department = { id: string; name: string };
 type DeptContact = { contact_name: string; contact_phone: string; contact_email: string };
+type ObligationOption = { id: string; name: string; department_id: string };
 
 const PAGE_SIZE = 10;
 
