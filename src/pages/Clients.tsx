@@ -110,6 +110,8 @@ export default function Clients() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [allObligations, setAllObligations] = useState<ObligationOption[]>([]);
+  const [selectedObligations, setSelectedObligations] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
   async function loadDepartments() {
