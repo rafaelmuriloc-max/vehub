@@ -905,6 +905,7 @@ export default function Clients() {
                   </div>
                   <div className="col-span-2 space-y-2"><Label>Observações sobre Folha</Label><Textarea {...f('payroll_notes')} /></div>
                 </div>
+                {renderDeptObligations('pessoal')}
               </TabsContent>
 
               {/* ── Societário ── */}
