@@ -1004,6 +1004,7 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Data de Fundação</Label><Input type="date" {...f('foundation_date')} /></div>
                   <div className="col-span-2 space-y-2"><Label>Observações</Label><Textarea {...f('success_notes')} /></div>
                 </div>
+                {renderDeptObligations('sucesso')}
               </TabsContent>
 
               {/* ── Contatos por Departamento ── */}
