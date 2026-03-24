@@ -1,14 +1,15 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
@@ -41,24 +42,29 @@ const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const ITEMS_PER_PAGE = 10;
 
-function PaginationBlock({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+function PaginationBlock({ page, totalPages, total, onPageChange }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void }) {
   if (totalPages <= 1) return null;
+  const start = (page - 1) * ITEMS_PER_PAGE + 1;
+  const end = Math.min(page * ITEMS_PER_PAGE, total);
   return (
-    <Pagination className="mt-4">
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) onPageChange(page - 1); }} />
-        </PaginationItem>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-          <PaginationItem key={p}>
-            <PaginationLink href="#" isActive={p === page} onClick={e => { e.preventDefault(); onPageChange(p); }}>{p}</PaginationLink>
+    <div className="flex items-center justify-between mt-4">
+      <span className="text-xs text-muted-foreground">Mostrando {start}-{end} de {total}</span>
+      <Pagination className="mx-0 w-auto">
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) onPageChange(page - 1); }} />
           </PaginationItem>
-        ))}
-        <PaginationItem>
-          <PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < totalPages) onPageChange(page + 1); }} />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <PaginationItem key={p}>
+              <PaginationLink href="#" isActive={p === page} onClick={e => { e.preventDefault(); onPageChange(p); }}>{p}</PaginationLink>
+            </PaginationItem>
+          ))}
+          <PaginationItem>
+            <PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < totalPages) onPageChange(page + 1); }} />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
   );
 }
 
@@ -150,24 +156,21 @@ export default function CalendarView() {
 
   function getDayDots(day: number) {
     const dayEvents = getEventsForDay(day);
-    const has = { alert: false, target: false, due: false };
-    for (const e of dayEvents) has[e.type] = true;
-    return has;
+    const counts = { alert: 0, target: 0, due: 0 };
+    for (const e of dayEvents) counts[e.type]++;
+    return counts;
   }
 
   const selectedEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
-  // Month events: all events in the current month, sorted by date
   const monthEvents = useMemo(() => {
     const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
     return events.filter(e => e.date.startsWith(prefix) && e.type === 'target').sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
-  // Reset pages when context changes
   useEffect(() => { setDayPage(1); }, [selectedDay]);
   useEffect(() => { setMonthPage(1); }, [year, month, filterDept, filterClient]);
 
-  // Detail dialog logic
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
   const detailActivities = detailObligation
@@ -177,6 +180,25 @@ export default function CalendarView() {
   function getCompletion(activityId: string) {
     if (!detailInstanceId) return null;
     return completions.find(c => c.instance_id === detailInstanceId && c.activity_id === activityId) || null;
+  }
+
+  function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
+    const oblActivities = activities.filter(a => a.obligation_id === obligationId);
+    if (oblActivities.length === 0) return false;
+    return oblActivities.every(act => {
+      const comp = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+      return comp?.completed === true;
+    });
+  }
+
+  function getInstanceProgress(instanceId: string, obligationId: string) {
+    const oblActivities = activities.filter(a => a.obligation_id === obligationId);
+    if (oblActivities.length === 0) return { completed: 0, total: 0, percent: 0 };
+    const completedCount = oblActivities.filter(act => {
+      const comp = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+      return comp?.completed === true;
+    }).length;
+    return { completed: completedCount, total: oblActivities.length, percent: Math.round((completedCount / oblActivities.length) * 100) };
   }
 
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
@@ -219,82 +241,126 @@ export default function CalendarView() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   }
 
-  function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
-    const oblActivities = activities.filter(a => a.obligation_id === obligationId);
-    if (oblActivities.length === 0) return false;
-    return oblActivities.every(act => {
-      const comp = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
-      return comp?.completed === true;
-    });
-  }
-
-  // Pagination helpers
   const dayTotalPages = Math.ceil(selectedEvents.length / ITEMS_PER_PAGE);
   const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * ITEMS_PER_PAGE, dayPage * ITEMS_PER_PAGE);
   const monthTotalPages = Math.ceil(monthEvents.length / ITEMS_PER_PAGE);
   const paginatedMonthEvents = monthEvents.slice((monthPage - 1) * ITEMS_PER_PAGE, monthPage * ITEMS_PER_PAGE);
 
+  // Dialog progress
+  const dialogProgress = detailInstance
+    ? getInstanceProgress(detailInstance.id, detailInstance.obligation_id)
+    : { completed: 0, total: 0, percent: 0 };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-foreground">Calendário</h1>
-
-      <div className="flex flex-wrap gap-4">
-        <Select value={filterDept} onValueChange={v => { setFilterDept(v); setSelectedDay(null); }}>
-          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os departamentos</SelectItem>
-            {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterClient} onValueChange={v => { setFilterClient(v); setSelectedDay(null); }}>
-          <SelectTrigger className="w-[280px]"><SelectValue placeholder="Empresa" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as empresas</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <CalendarDays className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Calendário</h1>
+            <p className="text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
+          </div>
+        </div>
       </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">Filtros</span>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Departamento</label>
+              <Select value={filterDept} onValueChange={v => { setFilterDept(v); setSelectedDay(null); }}>
+                <SelectTrigger className="w-[220px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os departamentos</SelectItem>
+                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Empresa</label>
+              <Select value={filterClient} onValueChange={v => { setFilterClient(v); setSelectedDay(null); }}>
+                <SelectTrigger className="w-[280px]"><SelectValue placeholder="Empresa" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as empresas</SelectItem>
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Calendar + Day list side by side */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Calendar */}
         <Card className="flex-1 lg:flex-[2]">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null); }}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <CardTitle className="capitalize">{monthNames[month]} {year}</CardTitle>
+              <CardTitle className="capitalize text-xl">{monthNames[month]} {year}</CardTitle>
               <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null); }}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-px">
+            <div className="grid grid-cols-7 gap-1">
               {weekdays.map(d => (
-                <div key={d} className="p-2 text-center text-sm font-medium text-muted-foreground">{d}</div>
+                <div key={d} className="p-2 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">{d}</div>
               ))}
               {days.map((day, i) => {
-                if (!day) return <div key={i} className="min-h-[70px] p-1" />;
+                if (!day) return <div key={i} className="min-h-[80px] p-1" />;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
-                const dots = getDayDots(day);
-                const hasAny = dots.alert || dots.target || dots.due;
+                const counts = getDayDots(day);
+                const hasAny = counts.alert > 0 || counts.target > 0 || counts.due > 0;
                 return (
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
-                    className={`min-h-[70px] border rounded-md p-1 cursor-pointer transition-colors
-                      ${isSelected ? 'bg-primary/20 border-primary ring-1 ring-primary' : isToday ? 'bg-primary/10 border-primary' : 'border-border hover:bg-muted/50'}`}
+                    className={`min-h-[80px] rounded-lg p-2 cursor-pointer transition-all duration-200
+                      ${isSelected
+                        ? 'bg-primary/15 border-2 border-primary shadow-md'
+                        : isToday
+                          ? 'bg-accent/50 border border-primary/40'
+                          : 'border border-border hover:bg-muted/60 hover:shadow-sm'
+                      }`}
                   >
-                    <span className={`text-xs font-medium ${isToday ? 'text-primary' : 'text-foreground'}`}>{day}</span>
+                    <span className={`inline-flex items-center justify-center text-xs font-semibold w-6 h-6 rounded-full
+                      ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
+                      {day}
+                    </span>
                     {hasAny && (
-                      <div className="flex gap-1 mt-1 flex-wrap">
-                        {dots.alert && <span className="w-2.5 h-2.5 rounded-full bg-green-500" />}
-                        {dots.target && <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
-                        {dots.due && <span className="w-2.5 h-2.5 rounded-full bg-red-500" />}
+                      <div className="flex gap-1 mt-1.5 flex-wrap">
+                        {counts.alert > 0 && (
+                          <span className="flex items-center gap-0.5">
+                            <span className="w-2 h-2 rounded-full bg-green-500" />
+                            <span className="text-[10px] text-muted-foreground">{counts.alert}</span>
+                          </span>
+                        )}
+                        {counts.target > 0 && (
+                          <span className="flex items-center gap-0.5">
+                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                            <span className="text-[10px] text-muted-foreground">{counts.target}</span>
+                          </span>
+                        )}
+                        {counts.due > 0 && (
+                          <span className="flex items-center gap-0.5">
+                            <span className="w-2 h-2 rounded-full bg-red-500" />
+                            <span className="text-[10px] text-muted-foreground">{counts.due}</span>
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -302,59 +368,91 @@ export default function CalendarView() {
               })}
             </div>
 
-            <div className="flex gap-4 mt-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
-              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
-              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
+            {/* Legend */}
+            <div className="flex gap-5 mt-4 px-3 py-2 rounded-md bg-muted/40 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
             </div>
           </CardContent>
         </Card>
 
         {/* Day obligations - right side */}
         <Card className="flex-1 lg:flex-[1]">
-          <CardHeader>
-            <CardTitle className="text-lg">
-              {selectedDay
-                ? `Obrigações do dia ${String(selectedDay).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`
-                : 'Obrigações do dia'}
-            </CardTitle>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ListChecks className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">
+                  {selectedDay
+                    ? `Dia ${String(selectedDay).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`
+                    : 'Obrigações do dia'}
+                </CardTitle>
+              </div>
+              {selectedDay && selectedEvents.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{selectedEvents.length}</Badge>
+              )}
+            </div>
+            {selectedDay && (
+              <CardDescription className="mt-1">
+                {selectedEvents.length === 0 ? 'Nenhuma obrigação neste dia' : `${selectedEvents.length} obrigação(ões) encontrada(s)`}
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent>
             {!selectedDay ? (
-              <p className="text-muted-foreground text-sm">Selecione um dia no calendário.</p>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <CalendarDays className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                <p className="text-muted-foreground text-sm">Selecione um dia no calendário</p>
+              </div>
             ) : selectedEvents.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Nenhuma obrigação neste dia.</p>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <CheckSquare className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-muted-foreground text-sm">Nenhuma obrigação neste dia</p>
+              </div>
             ) : (
               <>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Empresa</TableHead>
-                      <TableHead>Obrigação</TableHead>
-                      <TableHead>Tipo</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedDayEvents.map((ev, idx) => {
-                      const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
-                      return (
-                        <TableRow key={idx} className={`cursor-pointer hover:bg-muted/50 ${completed ? 'bg-green-100 dark:bg-green-900/40' : ''}`} onClick={() => setDetailInstanceId(ev.instanceId)}>
-                          <TableCell className="text-sm">{ev.clientName}</TableCell>
-                          <TableCell className="text-sm">{ev.obligationName}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-xs`}>
-                                {typeConfig[ev.type].label}
-                              </Badge>
-                              {completed && <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-                <PaginationBlock page={dayPage} totalPages={dayTotalPages} onPageChange={setDayPage} />
+                <div className="space-y-2">
+                  {paginatedDayEvents.map((ev, idx) => {
+                    const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                    const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => setDetailInstanceId(ev.instanceId)}
+                        className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
+                          ${completed
+                            ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+                            : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                          }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                            </p>
+                          </div>
+                          <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
+                            {typeConfig[ev.type].label}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                          {progress.total > 0 && (
+                            <span className={`text-[10px] font-medium ${completed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                              {progress.completed}/{progress.total} atividades
+                            </span>
+                          )}
+                        </div>
+                        {progress.total > 0 && (
+                          <Progress value={progress.percent} className="h-1 mt-2" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <PaginationBlock page={dayPage} totalPages={dayTotalPages} total={selectedEvents.length} onPageChange={setDayPage} />
               </>
             )}
           </CardContent>
@@ -363,46 +461,73 @@ export default function CalendarView() {
 
       {/* Month obligations - below */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Todas as obrigações de {monthNames[month]} {year}</CardTitle>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle className="text-lg">Obrigações de {monthNames[month]} {year}</CardTitle>
+                <CardDescription className="mt-0.5">{monthEvents.length} obrigação(ões) com data de meta</CardDescription>
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {monthEvents.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Nenhuma obrigação neste mês.</p>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-muted-foreground text-sm">Nenhuma obrigação com data de meta neste mês</p>
+            </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Dia</TableHead>
+                    <TableHead>Data Meta</TableHead>
                     <TableHead>Empresa</TableHead>
                     <TableHead>Obrigação</TableHead>
                     <TableHead>Departamento</TableHead>
-                    <TableHead>Data Meta</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedMonthEvents.map((ev, idx) => {
-                    const dayNum = ev.date.split('-')[2];
                     const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                    const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                     return (
-                      <TableRow key={idx} className={`cursor-pointer hover:bg-muted/50 ${completed ? 'bg-green-100 dark:bg-green-900/40' : ''}`} onClick={() => setDetailInstanceId(ev.instanceId)}>
-                        <TableCell>{dayNum}</TableCell>
-                        <TableCell>{ev.clientName}</TableCell>
-                        <TableCell>{ev.obligationName}</TableCell>
-                        <TableCell>{ev.deptName}</TableCell>
+                      <TableRow
+                        key={idx}
+                        className={`cursor-pointer transition-colors even:bg-muted/30
+                          ${completed
+                            ? 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
+                            : 'hover:bg-muted/50'
+                          }`}
+                        onClick={() => setDetailInstanceId(ev.instanceId)}
+                      >
                         <TableCell>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <span className="text-sm">{ev.date.split('-').reverse().join('/')}</span>
-                            {completed && <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>}
-                          </div>
+                          <span className="text-sm font-medium">{ev.date.split('-').reverse().join('/')}</span>
+                        </TableCell>
+                        <TableCell className="text-sm">{ev.clientName}</TableCell>
+                        <TableCell className="text-sm font-medium">{ev.obligationName}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">{ev.deptName}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {completed ? (
+                            <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <Progress value={progress.percent} className="h-1.5 w-16" />
+                              <span className="text-xs text-muted-foreground">{progress.completed}/{progress.total}</span>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
-              <PaginationBlock page={monthPage} totalPages={monthTotalPages} onPageChange={setMonthPage} />
+              <PaginationBlock page={monthPage} totalPages={monthTotalPages} total={monthEvents.length} onPageChange={setMonthPage} />
             </>
           )}
         </CardContent>
@@ -412,35 +537,68 @@ export default function CalendarView() {
       <Dialog open={!!detailInstanceId} onOpenChange={open => { if (!open) setDetailInstanceId(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              {detailObligation?.name} — {detailInstance ? clientMap.get(detailInstance.client_id)?.company_name : ''}
+            <DialogTitle className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-primary" />
+              {detailObligation?.name}
             </DialogTitle>
+            {detailInstance && (
+              <p className="text-sm text-muted-foreground mt-1">
+                <Building2 className="h-3.5 w-3.5 inline mr-1" />
+                {clientMap.get(detailInstance.client_id)?.company_name}
+              </p>
+            )}
           </DialogHeader>
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+
+          {/* Progress bar */}
+          {dialogProgress.total > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Progresso</span>
+                <span className={`text-xs font-medium ${dialogProgress.percent === 100 ? 'text-green-600 dark:text-green-400' : 'text-foreground'}`}>
+                  {dialogProgress.completed}/{dialogProgress.total} concluída(s)
+                </span>
+              </div>
+              <Progress value={dialogProgress.percent} className="h-2" />
+            </div>
+          )}
+
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
             {detailActivities.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhuma atividade cadastrada para esta obrigação.</p>
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <CheckSquare className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">Nenhuma atividade cadastrada para esta obrigação.</p>
+              </div>
             )}
             {detailActivities.map(act => {
               const comp = getCompletion(act.id);
               const isCompleted = comp?.completed ?? false;
               return (
-                <div key={act.id} className={`flex items-start gap-3 p-3 rounded-md border ${isCompleted ? 'bg-muted/50' : ''}`}>
-                  <div className="mt-0.5 text-muted-foreground">{activityTypeIcons[act.type] || <CheckSquare className="h-4 w-4" />}</div>
+                <div
+                  key={act.id}
+                  className={`flex items-start gap-3 p-3 rounded-lg border transition-all duration-200
+                    ${isCompleted
+                      ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+                      : 'border-border hover:border-muted-foreground/30'
+                    }`}
+                >
+                  <div className={`mt-0.5 ${isCompleted ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                    {activityTypeIcons[act.type] || <CheckSquare className="h-4 w-4" />}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{act.title}</p>
                     {act.description && <p className="text-xs text-muted-foreground mt-0.5">{act.description}</p>}
                     {act.type === 'document' && (
                       <div className="flex items-center gap-2 mt-2">
-                        <label className="cursor-pointer">
-                          <input type="file" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(act.id, e.target.files[0]); }} />
-                          <span className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                            <Upload className="h-3 w-3" /> {comp?.file_url ? 'Substituir' : 'Anexar'}
-                          </span>
-                        </label>
+                        <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                          <label className="cursor-pointer">
+                            <input type="file" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(act.id, e.target.files[0]); }} />
+                            <Upload className="h-3 w-3 mr-1" /> {comp?.file_url ? 'Substituir' : 'Anexar'}
+                          </label>
+                        </Button>
                         {comp?.file_url && (
-                          <button onClick={() => downloadFile(comp.file_url!)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                            <Download className="h-3 w-3" /> Baixar
-                          </button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => downloadFile(comp.file_url!)}>
+                            <Download className="h-3 w-3 mr-1" /> Baixar
+                          </Button>
                         )}
                       </div>
                     )}
