@@ -1,61 +1,33 @@
 
 
-# Calendário de Obrigações com Filtros e Lista Diária
+# Popup de Atividades ao Clicar na Obrigação no Calendário
 
 ## Objetivo
-Reescrever a página de calendário para exibir obrigações geradas (`obligation_instances`) com marcações coloridas nas 3 datas (Alerta/Verde, Meta/Laranja, Vencimento/Vermelho). Abaixo do calendário, exibir a lista de empresas e obrigações do dia selecionado. Incluir filtros por departamento e por empresa.
+Ao clicar numa linha da tabela de obrigações do dia selecionado no calendário, abrir um dialog mostrando as atividades (tarefas) daquela obrigação/instância. Atividades do tipo "document" permitem anexar/baixar arquivo. Atividades do tipo "checklist" têm checkbox para marcar conclusão.
 
 ## Mudanças
 
-### Arquivo: `src/pages/CalendarView.tsx` (reescrita completa)
+### Arquivo: `src/pages/CalendarView.tsx`
 
-**Dados carregados**:
-- `obligation_instances` (todas, com client_id, obligation_id, reference_month)
-- `obligations` (name, department_id, alert_day, target_day, due_day)
-- `clients` (id, company_name)
-- `departments` (id, name)
+1. **Adicionar ao CalendarEvent o `instanceId`** para poder buscar a instância correta ao clicar.
 
-**Cálculo de datas por instância**:
-Para cada instance, calcular 3 datas reais a partir do `reference_month` + dias da obligation:
-- `alert_date` = reference_month.setDate(alert_day)
-- `target_date` = reference_month.setDate(target_day)  
-- `due_date` = reference_month.setDate(due_day)
+2. **Carregar dados adicionais**: `obligation_activities` e `obligation_activity_completions` (mesma abordagem do ClientObligationsTab).
 
-**Calendário**:
-- Manter o grid mensal atual com navegação
-- Em cada célula do dia, mostrar dots/badges coloridos (verde/laranja/vermelho) indicando quantas obrigações têm aquela data naquele dia
-- Dia clicável para selecionar
+3. **State para dialog**: `detailInstance` (Instance selecionada) e estado para controle do dialog.
 
-**Lista abaixo do calendário**:
-- Ao selecionar um dia, exibir tabela com: Empresa, Obrigação, Departamento, Tipo de data (Alerta/Meta/Vencimento) com badge colorido correspondente
+4. **Tornar linhas da tabela clicáveis**: cada `TableRow` na lista do dia selecionado abre o dialog com a instância correspondente.
 
-**Filtros** (acima do calendário):
-- Select de Departamento (todos / específico)
-- Select de Empresa (todos / específica)
-- Filtros aplicados tanto ao calendário quanto à lista
+5. **Dialog de atividades**: Reutilizar o mesmo padrão do ClientObligationsTab:
+   - Lista as atividades da obrigação
+   - Tipo `document`: ícone FileText + botão Upload/Anexar + botão Baixar (se já tem arquivo)
+   - Tipo `checklist`/outros: Checkbox para marcar/desmarcar + ícone + título
+   - Atividades completadas ficam com `line-through`
+
+6. **Funções de ação**: `toggleCompletion` e `handleFileUpload` + `downloadFile` (mesma lógica do ClientObligationsTab).
 
 ### Detalhes técnicos
-
-```text
-Layout:
-┌─────────────────────────────────────────────┐
-│ [Filtro Departamento ▼] [Filtro Empresa ▼]  │
-├─────────────────────────────────────────────┤
-│        ◀  Março 2026  ▶                     │
-│ Dom Seg Ter ... Sáb                         │
-│  1   2   3  ...                             │
-│     🟢🟠  🔴   (dots por tipo de data)     │
-├─────────────────────────────────────────────┤
-│ Obrigações do dia 15/03/2026                │
-│ ┌────────────┬──────────┬──────┬──────────┐ │
-│ │ Empresa    │Obrigação │Depto │ Tipo     │ │
-│ │ Acme Ltda  │ DCTF     │Fiscal│🟠 Meta  │ │
-│ │ Beta SA    │ eSocial  │Pessoal│🟢Alerta│ │
-│ └────────────┴──────────┴──────┴──────────┘ │
-└─────────────────────────────────────────────┘
-```
-
-- Cores: verde (`bg-green-500`) para alerta, laranja (`bg-orange-500`) para meta, vermelho (`bg-red-500`) para vencimento
-- Dots pequenos no calendário para não sobrecarregar visualmente
 - Sem mudanças no banco de dados
+- Imports adicionais: `Dialog, DialogContent, DialogHeader, DialogTitle`, `Checkbox`, `FileText, CheckSquare, MessageCircle, Mail, Upload, Download`, `format` do date-fns
+- O `CalendarEvent` type ganha campo `instanceId: string` para vincular ao dialog
+- As funções de toggle/upload/download são cópias diretas do padrão já existente
 
