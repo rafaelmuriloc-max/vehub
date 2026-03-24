@@ -519,7 +519,28 @@ export default function Clients() {
       }
     }
 
-    if (clientId && pendingCertFile) {
+    // Sync obligation selections
+    if (clientId && selectedObligations.size > 0) {
+      await (supabase as any).from('client_department_obligations').delete().eq('client_id', clientId);
+      const oblRows = Array.from(selectedObligations).map(oblId => {
+        const obl = allObligations.find(o => o.id === oblId);
+        return {
+          client_id: clientId,
+          department_id: obl?.department_id,
+          obligation_id: oblId,
+        };
+      }).filter(r => r.department_id);
+      if (oblRows.length > 0) {
+        const { error: oblError } = await (supabase as any)
+          .from('client_department_obligations')
+          .insert(oblRows);
+        if (oblError) {
+          toast({ title: 'Erro ao salvar obrigações', description: oblError.message, variant: 'destructive' });
+        }
+      }
+    } else if (clientId && selectedObligations.size === 0 && editing) {
+      await (supabase as any).from('client_department_obligations').delete().eq('client_id', clientId);
+    }
       try {
         const filePath = `${clientId}/${pendingCertFile.name}`;
         const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, pendingCertFile, { upsert: true });
