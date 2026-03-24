@@ -121,6 +121,22 @@ export default function Clients() {
     return deps;
   }
 
+  async function loadObligations() {
+    const { data } = await supabase.from('obligations').select('id, name, department_id').order('name');
+    const obls = (data || []) as ObligationOption[];
+    setAllObligations(obls);
+    return obls;
+  }
+
+  async function loadClientObligations(clientId: string) {
+    const { data } = await (supabase as any)
+      .from('client_department_obligations')
+      .select('obligation_id')
+      .eq('client_id', clientId);
+    const ids = new Set<string>((data || []).map((r: any) => r.obligation_id));
+    setSelectedObligations(ids);
+  }
+
   async function loadDeptContacts(clientId: string, deps: Department[]) {
     const { data } = await (supabase as any)
       .from('client_department_contacts')
