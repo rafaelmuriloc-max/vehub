@@ -3,16 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
-  Plus, Trash2, FileText, CheckSquare, MessageCircle, Mail, Upload, Download,
+  FileText, CheckSquare, MessageCircle, Mail, Upload, Download, Check, Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,6 +18,7 @@ type Activity = { id: string; obligation_id: string; title: string; type: string
 type Instance = { id: string; obligation_id: string; client_id: string; reference_month: string; status: string; assigned_to: string | null; due_date: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null; file_url: string | null; notes: string | null };
 type Department = { id: string; name: string };
+type ClientObligation = { obligation_id: string; department_id: string };
 
 const activityTypeIcons: Record<string, React.ReactNode> = {
   document: <FileText className="h-4 w-4" />,
@@ -30,7 +27,7 @@ const activityTypeIcons: Record<string, React.ReactNode> = {
   email: <Mail className="h-4 w-4" />,
 };
 
-const statusLabels: Record<string, string> = { pending: 'Pendente', in_progress: 'Em andamento', done: 'Concluído' };
+const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 interface Props {
   clientId: string;
@@ -45,46 +42,91 @@ export default function ClientObligationsTab({ clientId }: Props) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [completions, setCompletions] = useState<Completion[]>([]);
-
-  const [newInstanceOpen, setNewInstanceOpen] = useState(false);
-  const [instanceForm, setInstanceForm] = useState({ obligation_id: '', reference_month: '', due_date: '' });
+  const [clientObligations, setClientObligations] = useState<ClientObligation[]>([]);
+  const [generating, setGenerating] = useState(false);
 
   const [detailInstance, setDetailInstance] = useState<Instance | null>(null);
 
   useEffect(() => { loadData(); }, [clientId]);
 
   async function loadData() {
-    const [dRes, oRes, aRes, iRes, cRes] = await Promise.all([
+    const [dRes, oRes, aRes, iRes, cRes, coRes] = await Promise.all([
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('obligations').select('*').order('name'),
       supabase.from('obligation_activities').select('*').order('order'),
-      supabase.from('obligation_instances').select('*').eq('client_id', clientId).order('reference_month', { ascending: false }),
+      supabase.from('obligation_instances').select('*').eq('client_id', clientId).order('reference_month'),
       supabase.from('obligation_activity_completions').select('*'),
+      supabase.from('client_department_obligations').select('obligation_id, department_id').eq('client_id', clientId),
     ]);
     if (dRes.data) setDepartments(dRes.data);
     if (oRes.data) setObligations(oRes.data);
     if (aRes.data) setActivities(aRes.data as Activity[]);
     if (iRes.data) setInstances(iRes.data as Instance[]);
     if (cRes.data) setCompletions(cRes.data as Completion[]);
+    if (coRes.data) setClientObligations(coRes.data as ClientObligation[]);
   }
 
-  async function createInstance(e: React.FormEvent) {
-    e.preventDefault();
-    const { error } = await supabase.from('obligation_instances').insert({
-      obligation_id: instanceForm.obligation_id,
-      client_id: clientId,
-      reference_month: instanceForm.reference_month,
-      due_date: instanceForm.due_date || null,
-    } as any);
-    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Competência criada' });
-    setNewInstanceOpen(false);
-    loadData();
+  // Months from current month to December
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+  const months = Array.from({ length: 12 - currentMonth }, (_, i) => currentMonth + i);
+
+  function monthKey(monthIdx: number) {
+    const m = (monthIdx + 1).toString().padStart(2, '0');
+    return `${currentYear}-${m}-01`;
   }
 
-  async function deleteInstance(id: string) {
-    await supabase.from('obligation_instances').delete().eq('id', id);
-    loadData();
+  function findInstance(obligationId: string, monthIdx: number): Instance | undefined {
+    const key = monthKey(monthIdx);
+    return instances.find(i => i.obligation_id === obligationId && i.reference_month === key);
+  }
+
+  // Linked obligations with their details
+  const linkedObligations = clientObligations
+    .map(co => {
+      const obl = obligations.find(o => o.id === co.obligation_id);
+      const dept = departments.find(d => d.id === co.department_id);
+      return obl ? { obligation: obl, deptName: dept?.name || '' } : null;
+    })
+    .filter(Boolean) as { obligation: Obligation; deptName: string }[];
+
+  async function generateObligations() {
+    if (linkedObligations.length === 0) {
+      toast({ title: 'Nenhuma obrigação vinculada', description: 'Vincule obrigações nas abas do departamento primeiro.', variant: 'destructive' });
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const toInsert: { obligation_id: string; client_id: string; reference_month: string }[] = [];
+
+      for (const { obligation } of linkedObligations) {
+        for (const monthIdx of months) {
+          const key = monthKey(monthIdx);
+          const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === key);
+          if (!exists) {
+            toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: key });
+          }
+        }
+      }
+
+      if (toInsert.length === 0) {
+        toast({ title: 'Todas as obrigações já foram geradas para os meses restantes.' });
+        setGenerating(false);
+        return;
+      }
+
+      const { error } = await supabase.from('obligation_instances').insert(toInsert as any);
+      if (error) {
+        toast({ title: 'Erro ao gerar', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: `${toInsert.length} obrigações geradas com sucesso!` });
+        await loadData();
+      }
+    } finally {
+      setGenerating(false);
+    }
   }
 
   async function toggleCompletion(instanceId: string, activityId: string, currentlyCompleted: boolean) {
@@ -127,96 +169,63 @@ export default function ClientObligationsTab({ clientId }: Props) {
     window.open(data.signedUrl, '_blank');
   }
 
-  function getDeptName(id: string) { return departments.find(d => d.id === id)?.name || ''; }
-
-  // Group instances by obligation
-  const instancesByObligation = obligations.map(ob => ({
-    obligation: ob,
-    dept: getDeptName(ob.department_id),
-    obActivities: activities.filter(a => a.obligation_id === ob.id),
-    obInstances: instances.filter(i => i.obligation_id === ob.id),
-  })).filter(g => g.obInstances.length > 0);
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Obrigações do Cliente</h3>
         {isAdmin && (
-          <Button size="sm" variant="outline" onClick={() => {
-            setInstanceForm({ obligation_id: obligations[0]?.id || '', reference_month: format(new Date(), 'yyyy-MM-01'), due_date: '' });
-            setNewInstanceOpen(true);
-          }}>
-            <Plus className="h-3 w-3 mr-1" />Nova Competência
+          <Button size="sm" onClick={generateObligations} disabled={generating}>
+            {generating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+            Gerar Obrigações
           </Button>
         )}
       </div>
 
-      {instancesByObligation.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-4">Nenhuma competência gerada para este cliente.</p>
+      {linkedObligations.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">
+          Nenhuma obrigação vinculada a este cliente. Vincule obrigações nas abas do departamento.
+        </p>
+      ) : (
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[160px]">Obrigação</TableHead>
+                <TableHead className="min-w-[100px]">Departamento</TableHead>
+                {months.map(m => (
+                  <TableHead key={m} className="text-center min-w-[50px]">{monthNames[m]}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {linkedObligations.map(({ obligation, deptName }) => (
+                <TableRow key={obligation.id}>
+                  <TableCell className="font-medium text-sm">{obligation.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">{deptName}</Badge>
+                  </TableCell>
+                  {months.map(m => {
+                    const inst = findInstance(obligation.id, m);
+                    return (
+                      <TableCell key={m} className="text-center">
+                        {inst ? (
+                          <button
+                            onClick={() => setDetailInstance(inst)}
+                            className="inline-flex items-center justify-center text-green-600 hover:text-green-800 transition-colors"
+                            title="Ver detalhes"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
-
-      {instancesByObligation.map(({ obligation, dept, obActivities, obInstances }) => (
-        <Card key={obligation.id}>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-sm flex items-center gap-2">
-              {obligation.name}
-              <Badge variant="outline" className="text-xs">{dept}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2">
-            {obInstances.map(inst => {
-              const instCompletions = completions.filter(c => c.instance_id === inst.id);
-              const total = obActivities.length;
-              const done = obActivities.filter(a => instCompletions.find(c => c.activity_id === a.id && c.completed)).length;
-              const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-              return (
-                <div key={inst.id} className="border rounded p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">
-                        {format(new Date(inst.reference_month + 'T00:00:00'), 'MMMM yyyy', { locale: ptBR })}
-                      </span>
-                      <Badge variant="secondary" className="text-xs">{statusLabels[inst.status] || inst.status}</Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{done}/{total}</span>
-                      <Button size="sm" variant="ghost" onClick={() => setDetailInstance(inst)}>Detalhes</Button>
-                      {isAdmin && <Button size="icon" variant="ghost" onClick={() => deleteInstance(inst.id)}><Trash2 className="h-3 w-3" /></Button>}
-                    </div>
-                  </div>
-                  <Progress value={pct} className="h-2" />
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      ))}
-
-      {/* New Instance Dialog */}
-      <Dialog open={newInstanceOpen} onOpenChange={setNewInstanceOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Nova Competência</DialogTitle></DialogHeader>
-          <form onSubmit={createInstance} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Obrigação *</Label>
-              <Select value={instanceForm.obligation_id} onValueChange={v => setInstanceForm({ ...instanceForm, obligation_id: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{obligations.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Competência *</Label>
-              <Input type="date" value={instanceForm.reference_month} onChange={e => setInstanceForm({ ...instanceForm, reference_month: e.target.value })} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Vencimento</Label>
-              <Input type="date" value={instanceForm.due_date} onChange={e => setInstanceForm({ ...instanceForm, due_date: e.target.value })} />
-            </div>
-            <Button type="submit" className="w-full" disabled={!instanceForm.obligation_id || !instanceForm.reference_month}>Criar</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* Detail Dialog */}
       <Dialog open={!!detailInstance} onOpenChange={() => setDetailInstance(null)}>
