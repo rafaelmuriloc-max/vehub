@@ -1,42 +1,42 @@
 
 
-# Fix: Caixa Postal inbox not rendering (wrong response field name)
+# Adicionar 3 Datas e Periodicidade nas Obrigações
 
-## Problem
+## Problema
+As obrigações atualmente só possuem o campo `recurrence` com opções limitadas (mensal, trimestral, anual). Faltam:
+- 3 campos de data com cores (Vencimento/Vermelho, Meta/Laranja, Alerta/Verde)
+- Opções de periodicidade: diária, semanal, quinzenal, mensal, anual
 
-The edge function returns the SERPRO response in a field called `data`, but `parseCaixaPostalMessages` looks for `res.dados`. The actual SERPRO response structure is:
+## Mudanças
 
-```text
-Edge function returns:
-{
-  success: true,
-  status: 200,
-  data: {                          ← SERPRO full response
-    contratante: {...},
-    pedidoDados: {
-      idSistema: "CAIXAPOSTAL",
-      idServico: "MSGCONTRIBUINTE61",
-      dados: "{\"quantidadeMensagens\":...}"   ← messages JSON string
-    },
-    status: 200,
-    responseId: "...",
-    dados: "{\"quantidadeMensagens\":...}"     ← also at top level
-  }
-}
+### 1. Migration: Adicionar colunas na tabela `obligations`
+```sql
+ALTER TABLE obligations
+  ADD COLUMN due_day integer,          -- dia do vencimento (ex: dia 20)
+  ADD COLUMN target_day integer,       -- dia meta (ex: dia 15)
+  ADD COLUMN alert_day integer;        -- dia alerta/início (ex: dia 1)
 ```
+Os campos são "dia do mês/período" (integer) pois as datas reais são calculadas por competência na instância. Isso permite definir: "alerta no dia 1, meta no dia 15, vencimento no dia 20" de cada período.
 
-The `parseCaixaPostalMessages` function checks `res?.dados` but should check `res?.data?.dados` or `res?.data?.pedidoDados?.dados`.
+### 2. Atualizar `src/pages/Obligations.tsx`
 
-## Fix
+**Type**: Adicionar `due_day`, `target_day`, `alert_day` ao tipo `Obligation`.
 
-### File: `src/pages/IntegraContador.tsx`
+**Form**: Adicionar 3 campos numéricos com indicadores coloridos:
+- 🟢 **Dia Alerta** (verde) - início da execução
+- 🟠 **Dia Meta** (laranja) - prazo interno do escritório
+- 🔴 **Dia Vencimento** (vermelho) - prazo final com multa
 
-Update `parseCaixaPostalMessages` (lines 307-323) to look in the correct path:
+**Periodicidade**: Substituir as opções atuais (mensal/trimestral/anual) por: `diária`, `semanal`, `quinzenal`, `mensal`, `anual`.
 
-1. Try `res.data.dados` (SERPRO top-level dados)
-2. Try `res.data.pedidoDados.dados` (nested in pedidoDados)
-3. Try `res.dados` as fallback
-4. Parse the string and extract the messages array from within
+**Listagem**: Exibir as 3 datas com badges coloridos ao lado do nome da obrigação (ex: `🟢 D1 🟠 D15 🔴 D20`).
 
-The messages are likely inside an object like `{"quantidadeMensagens": N, "mensagens": [...]}` or similar structure with a `codigoSistemaRemetente` field per message.
+**Save**: Incluir os novos campos no payload de insert/update.
+
+### Detalhes técnicos
+
+- A migration adiciona 3 colunas nullable integer à tabela `obligations`
+- O formulário usa `Input type="number"` com min=1 max=31 para cada dia
+- Cada campo tem um indicador de cor (dot ou border colorido)
+- As opções de `recurrence` passam de 3 para 5
 
