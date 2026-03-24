@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null };
 type DocumentType = { id: string; name: string };
 
@@ -42,7 +42,7 @@ export default function Obligations() {
 
   const [obligationOpen, setObligationOpen] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
-  const [obligationForm, setObligationForm] = useState({ name: '', description: '', department_id: '', recurrence: 'mensal' });
+  const [obligationForm, setObligationForm] = useState({ name: '', description: '', department_id: '', recurrence: 'mensal', alert_day: '' as string, target_day: '' as string, due_day: '' as string });
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -68,17 +68,25 @@ export default function Obligations() {
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '' });
     setObligationOpen(true);
   }
   function openEditObligation(o: Obligation) {
     setEditingObligation(o);
-    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence });
+    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '' });
     setObligationOpen(true);
   }
   async function saveObligation(e: React.FormEvent) {
     e.preventDefault();
-    const payload = { name: obligationForm.name, description: obligationForm.description || null, department_id: obligationForm.department_id, recurrence: obligationForm.recurrence };
+    const payload = {
+      name: obligationForm.name,
+      description: obligationForm.description || null,
+      department_id: obligationForm.department_id,
+      recurrence: obligationForm.recurrence,
+      alert_day: obligationForm.alert_day ? Number(obligationForm.alert_day) : null,
+      target_day: obligationForm.target_day ? Number(obligationForm.target_day) : null,
+      due_day: obligationForm.due_day ? Number(obligationForm.due_day) : null,
+    };
     const { error } = editingObligation
       ? await supabase.from('obligations').update(payload).eq('id', editingObligation.id)
       : await supabase.from('obligations').insert(payload);
@@ -165,6 +173,9 @@ export default function Obligations() {
                       <ClipboardList className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{ob.name}</span>
                       <Badge variant="outline" className="ml-2">{ob.recurrence}</Badge>
+                      {ob.alert_day && <Badge className="ml-1 bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
+                      {ob.target_day && <Badge className="ml-1 bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
+                      {ob.due_day && <Badge className="ml-1 bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
                     </div>
                     {admin && (
                       <div className="flex gap-1" onClick={e => e.stopPropagation()}>
@@ -244,15 +255,43 @@ export default function Obligations() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Recorrência</Label>
+              <Label>Periodicidade</Label>
               <Select value={obligationForm.recurrence} onValueChange={v => setObligationForm({ ...obligationForm, recurrence: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="diaria">Diária</SelectItem>
+                  <SelectItem value="semanal">Semanal</SelectItem>
+                  <SelectItem value="quinzenal">Quinzenal</SelectItem>
                   <SelectItem value="mensal">Mensal</SelectItem>
-                  <SelectItem value="trimestral">Trimestral</SelectItem>
                   <SelectItem value="anual">Anual</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-green-500 inline-block" />
+                  Dia Alerta
+                </Label>
+                <Input type="number" min={1} max={31} placeholder="Ex: 1" value={obligationForm.alert_day} onChange={e => setObligationForm({ ...obligationForm, alert_day: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Início da execução</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-orange-500 inline-block" />
+                  Dia Meta
+                </Label>
+                <Input type="number" min={1} max={31} placeholder="Ex: 15" value={obligationForm.target_day} onChange={e => setObligationForm({ ...obligationForm, target_day: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Prazo interno</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-red-500 inline-block" />
+                  Dia Vencimento
+                </Label>
+                <Input type="number" min={1} max={31} placeholder="Ex: 20" value={obligationForm.due_day} onChange={e => setObligationForm({ ...obligationForm, due_day: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Prazo final (multa)</p>
+              </div>
             </div>
             <Button type="submit" className="w-full" disabled={!obligationForm.name || !obligationForm.department_id}>Salvar</Button>
           </form>
