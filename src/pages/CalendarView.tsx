@@ -160,7 +160,7 @@ export default function CalendarView() {
   // Month events: all events in the current month, sorted by date
   const monthEvents = useMemo(() => {
     const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-    return events.filter(e => e.date.startsWith(prefix)).sort((a, b) => a.date.localeCompare(b.date));
+    return events.filter(e => e.date.startsWith(prefix) && e.type === 'target').sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
   // Reset pages when context changes
@@ -378,7 +378,7 @@ export default function CalendarView() {
                     <TableHead>Empresa</TableHead>
                     <TableHead>Obrigação</TableHead>
                     <TableHead>Departamento</TableHead>
-                    <TableHead>Tipo</TableHead>
+                    <TableHead>Data Meta</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -393,9 +393,7 @@ export default function CalendarView() {
                         <TableCell>{ev.deptName}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 flex-wrap">
-                            <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-xs`}>
-                              {typeConfig[ev.type].label}
-                            </Badge>
+                            <span className="text-sm">{ev.date.split('-').reverse().join('/')}</span>
                             {completed && <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>}
                           </div>
                         </TableCell>
