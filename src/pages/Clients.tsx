@@ -541,6 +541,8 @@ export default function Clients() {
     } else if (clientId && selectedObligations.size === 0 && editing) {
       await (supabase as any).from('client_department_obligations').delete().eq('client_id', clientId);
     }
+
+    if (clientId && pendingCertFile) {
       try {
         const filePath = `${clientId}/${pendingCertFile.name}`;
         const { error: uploadError } = await supabase.storage.from('certificates').upload(filePath, pendingCertFile, { upsert: true });
