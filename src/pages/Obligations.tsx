@@ -173,6 +173,9 @@ export default function Obligations() {
                       <ClipboardList className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{ob.name}</span>
                       <Badge variant="outline" className="ml-2">{ob.recurrence}</Badge>
+                      {ob.alert_day && <Badge className="ml-1 bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
+                      {ob.target_day && <Badge className="ml-1 bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
+                      {ob.due_day && <Badge className="ml-1 bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
                     </div>
                     {admin && (
                       <div className="flex gap-1" onClick={e => e.stopPropagation()}>
