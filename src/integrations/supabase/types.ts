@@ -62,6 +62,52 @@ export type Database = {
           },
         ]
       }
+      client_department_obligations: {
+        Row: {
+          client_id: string
+          created_at: string
+          department_id: string
+          id: string
+          obligation_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          department_id: string
+          id?: string
+          obligation_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          department_id?: string
+          id?: string
+          obligation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_department_obligations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_department_obligations_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_department_obligations_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           address: string | null

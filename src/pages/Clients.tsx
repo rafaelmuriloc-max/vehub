@@ -86,6 +86,7 @@ const emptyForm = {
 
 type Department = { id: string; name: string };
 type DeptContact = { contact_name: string; contact_phone: string; contact_email: string };
+type ObligationOption = { id: string; name: string; department_id: string };
 
 const PAGE_SIZE = 10;
 
@@ -109,6 +110,8 @@ export default function Clients() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [allObligations, setAllObligations] = useState<ObligationOption[]>([]);
+  const [selectedObligations, setSelectedObligations] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
   async function loadDepartments() {
@@ -116,6 +119,22 @@ export default function Clients() {
     const deps = (data || []) as Department[];
     setDepartments(deps);
     return deps;
+  }
+
+  async function loadObligations() {
+    const { data } = await supabase.from('obligations').select('id, name, department_id').order('name');
+    const obls = (data || []) as ObligationOption[];
+    setAllObligations(obls);
+    return obls;
+  }
+
+  async function loadClientObligations(clientId: string) {
+    const { data } = await (supabase as any)
+      .from('client_department_obligations')
+      .select('obligation_id')
+      .eq('client_id', clientId);
+    const ids = new Set<string>((data || []).map((r: any) => r.obligation_id));
+    setSelectedObligations(ids);
   }
 
   async function loadDeptContacts(clientId: string, deps: Department[]) {
@@ -280,7 +299,8 @@ export default function Clients() {
     setForm({ ...emptyForm, start_date: new Date().toISOString().split('T')[0] });
     setPermits(defaultPermits.map(p => ({ ...p })));
     setCertificateUrl(null);
-    const deps = await loadDepartments();
+    setSelectedObligations(new Set());
+    const [deps] = await Promise.all([loadDepartments(), loadObligations()]);
     initEmptyDeptContacts(deps);
     setDialogOpen(true);
   }
@@ -291,7 +311,7 @@ export default function Clients() {
     populateForm(c);
     setPermits(parsePermits(c.permits));
     setCertificateUrl(c.digital_certificate_url || null);
-    const deps = await loadDepartments();
+    const [deps] = await Promise.all([loadDepartments(), loadObligations(), loadClientObligations(c.id)]);
     await loadDeptContacts(c.id, deps);
     setDialogOpen(true);
   }
@@ -302,7 +322,7 @@ export default function Clients() {
     populateForm(c);
     setPermits(parsePermits(c.permits));
     setCertificateUrl(c.digital_certificate_url || null);
-    const deps = await loadDepartments();
+    const [deps] = await Promise.all([loadDepartments(), loadObligations(), loadClientObligations(c.id)]);
     await loadDeptContacts(c.id, deps);
     setDialogOpen(true);
   }
@@ -497,6 +517,29 @@ export default function Clients() {
           toast({ title: 'Erro ao salvar contatos', description: contactError.message, variant: 'destructive' });
         }
       }
+    }
+
+    // Sync obligation selections
+    if (clientId && selectedObligations.size > 0) {
+      await (supabase as any).from('client_department_obligations').delete().eq('client_id', clientId);
+      const oblRows = Array.from(selectedObligations).map(oblId => {
+        const obl = allObligations.find(o => o.id === oblId);
+        return {
+          client_id: clientId,
+          department_id: obl?.department_id,
+          obligation_id: oblId,
+        };
+      }).filter(r => r.department_id);
+      if (oblRows.length > 0) {
+        const { error: oblError } = await (supabase as any)
+          .from('client_department_obligations')
+          .insert(oblRows);
+        if (oblError) {
+          toast({ title: 'Erro ao salvar obrigações', description: oblError.message, variant: 'destructive' });
+        }
+      }
+    } else if (clientId && selectedObligations.size === 0 && editing) {
+      await (supabase as any).from('client_department_obligations').delete().eq('client_id', clientId);
     }
 
     if (clientId && pendingCertFile) {
@@ -1007,6 +1050,36 @@ export default function Clients() {
                           />
                         </div>
                       </div>
+                      {/* Obrigações do departamento */}
+                      {(() => {
+                        const deptObls = allObligations.filter(o => o.department_id === dep.id);
+                        if (deptObls.length === 0) return null;
+                        return (
+                          <div className="mt-3 space-y-2">
+                            <Separator />
+                            <Label className="text-xs text-muted-foreground">Obrigações</Label>
+                            <div className="flex flex-wrap gap-x-4 gap-y-2">
+                              {deptObls.map(obl => (
+                                <div key={obl.id} className="flex items-center gap-2">
+                                  <Checkbox
+                                    checked={selectedObligations.has(obl.id)}
+                                    disabled={viewOnly}
+                                    onCheckedChange={(checked) => {
+                                      setSelectedObligations(prev => {
+                                        const next = new Set(prev);
+                                        if (checked) next.add(obl.id);
+                                        else next.delete(obl.id);
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-sm">{obl.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))
                 )}
