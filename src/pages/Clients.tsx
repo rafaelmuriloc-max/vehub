@@ -585,6 +585,37 @@ export default function Clients() {
 
   const isAdmin_ = isAdmin;
 
+  function renderDeptObligations(deptNameFragment: string) {
+    const dept = departments.find(d => d.name.toLowerCase().includes(deptNameFragment.toLowerCase()));
+    if (!dept) return null;
+    const obls = allObligations.filter(o => o.department_id === dept.id);
+    if (obls.length === 0) return null;
+    return (
+      <div className="space-y-2 border-t border-border pt-4 mt-2">
+        <Label className="text-base font-semibold">Obrigações</Label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {obls.map(obl => (
+            <div key={obl.id} className="flex items-center gap-2">
+              <Checkbox
+                checked={selectedObligations.has(obl.id)}
+                disabled={viewOnly}
+                onCheckedChange={(checked) => {
+                  setSelectedObligations(prev => {
+                    const next = new Set(prev);
+                    if (checked) next.add(obl.id);
+                    else next.delete(obl.id);
+                    return next;
+                  });
+                }}
+              />
+              <span className="text-sm">{obl.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
