@@ -886,6 +886,7 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
                   <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...f('municipal_registration')} /></div>
                 </div>
+                {renderDeptObligations('fiscal')}
               </TabsContent>
 
               {/* ── Pessoal ── */}
