@@ -378,7 +378,7 @@ export default function CalendarView() {
                     <TableHead>Empresa</TableHead>
                     <TableHead>Obrigação</TableHead>
                     <TableHead>Departamento</TableHead>
-                    <TableHead>Tipo</TableHead>
+                    <TableHead>Data Meta</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
