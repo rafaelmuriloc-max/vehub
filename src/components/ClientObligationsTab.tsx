@@ -198,30 +198,38 @@ export default function ClientObligationsTab({ clientId }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {linkedObligations.map(({ obligation, deptName }) => (
-                <TableRow key={obligation.id}>
-                  <TableCell className="font-medium text-sm">{obligation.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">{deptName}</Badge>
-                  </TableCell>
-                  {months.map(m => {
-                    const inst = findInstance(obligation.id, m);
-                    return (
-                      <TableCell key={m} className="text-center">
-                        {inst ? (
-                          <button
-                            onClick={() => setDetailInstance(inst)}
-                            className="inline-flex items-center justify-center text-green-600 hover:text-green-800 transition-colors"
-                            title="Ver detalhes"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                        ) : null}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              ))}
+              {linkedObligations.map(({ obligation, deptName }) => {
+                const allMonthsCompleted = months.every(m => {
+                  const inst = findInstance(obligation.id, m);
+                  return inst ? isInstanceCompleted(inst.id, obligation.id) : true;
+                }) && months.some(m => findInstance(obligation.id, m));
+
+                return (
+                  <TableRow key={obligation.id} className={allMonthsCompleted ? 'bg-green-50 dark:bg-green-950/30' : ''}>
+                    <TableCell className="font-medium text-sm">{obligation.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">{deptName}</Badge>
+                    </TableCell>
+                    {months.map(m => {
+                      const inst = findInstance(obligation.id, m);
+                      const completed = inst ? isInstanceCompleted(inst.id, obligation.id) : false;
+                      return (
+                        <TableCell key={m} className={`text-center ${completed ? 'bg-green-100 dark:bg-green-900/40' : ''}`}>
+                          {inst ? (
+                            <button
+                              onClick={() => setDetailInstance(inst)}
+                              className={`inline-flex items-center justify-center transition-colors ${completed ? 'text-green-700 font-bold' : 'text-green-600 hover:text-green-800'}`}
+                              title="Ver detalhes"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
