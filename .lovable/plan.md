@@ -1,33 +1,38 @@
 
 
-# Popup de Atividades ao Clicar na Obrigação no Calendário
+# Destacar Obrigações Concluídas (Linha Verde)
 
 ## Objetivo
-Ao clicar numa linha da tabela de obrigações do dia selecionado no calendário, abrir um dialog mostrando as atividades (tarefas) daquela obrigação/instância. Atividades do tipo "document" permitem anexar/baixar arquivo. Atividades do tipo "checklist" têm checkbox para marcar conclusão.
+Quando todas as atividades de uma instância de obrigação estiverem concluídas, a obrigação deve ser visualmente marcada como concluída com destaque verde na linha inteira. Isso se aplica à tabela na aba de obrigações do cliente e à lista do calendário.
 
 ## Mudanças
 
-### Arquivo: `src/pages/CalendarView.tsx`
+### 1. `src/components/ClientObligationsTab.tsx`
 
-1. **Adicionar ao CalendarEvent o `instanceId`** para poder buscar a instância correta ao clicar.
+- **Helper `isInstanceCompleted(inst)`**: Verifica se todas as atividades da obrigação possuem completion `completed: true`. Se não há atividades, não é considerado concluído.
+- **Destaque verde na linha**: No `TableRow` de cada obrigação, para cada mês com instância, se `isInstanceCompleted` retorna true, aplicar `bg-green-100` na célula e trocar o ícone Check para um estilo mais destacado (ex: `text-green-700 font-bold`).
+- **Linha inteira verde**: Se TODAS as instâncias daquela obrigação (em todos os meses exibidos) estão concluídas, aplicar `bg-green-50` no `TableRow` inteiro.
 
-2. **Carregar dados adicionais**: `obligation_activities` e `obligation_activity_completions` (mesma abordagem do ClientObligationsTab).
+### 2. `src/pages/CalendarView.tsx`
 
-3. **State para dialog**: `detailInstance` (Instance selecionada) e estado para controle do dialog.
-
-4. **Tornar linhas da tabela clicáveis**: cada `TableRow` na lista do dia selecionado abre o dialog com a instância correspondente.
-
-5. **Dialog de atividades**: Reutilizar o mesmo padrão do ClientObligationsTab:
-   - Lista as atividades da obrigação
-   - Tipo `document`: ícone FileText + botão Upload/Anexar + botão Baixar (se já tem arquivo)
-   - Tipo `checklist`/outros: Checkbox para marcar/desmarcar + ícone + título
-   - Atividades completadas ficam com `line-through`
-
-6. **Funções de ação**: `toggleCompletion` e `handleFileUpload` + `downloadFile` (mesma lógica do ClientObligationsTab).
+- **Mesmo helper**: Calcular se a instância está concluída (todas as atividades completadas).
+- **Na tabela do dia selecionado**: Aplicar `bg-green-100` no `TableRow` se a instância está concluída.
+- **Badge "Concluída"**: Adicionar badge verde quando concluída.
 
 ### Detalhes técnicos
-- Sem mudanças no banco de dados
-- Imports adicionais: `Dialog, DialogContent, DialogHeader, DialogTitle`, `Checkbox`, `FileText, CheckSquare, MessageCircle, Mail, Upload, Download`, `format` do date-fns
-- O `CalendarEvent` type ganha campo `instanceId: string` para vincular ao dialog
-- As funções de toggle/upload/download são cópias diretas do padrão já existente
+
+```typescript
+// Helper function (same in both files)
+function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
+  const oblActivities = activities.filter(a => a.obligation_id === obligationId);
+  if (oblActivities.length === 0) return false;
+  return oblActivities.every(act => {
+    const comp = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+    return comp?.completed === true;
+  });
+}
+```
+
+- No ClientObligationsTab: `<TableRow className={allMonthsCompleted ? 'bg-green-50' : ''}>` e cada célula de mês com instância concluída recebe `bg-green-100`
+- No CalendarView: `<TableRow className={completed ? 'bg-green-100' : ''}>` na lista diária
 
