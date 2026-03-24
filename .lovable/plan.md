@@ -1,46 +1,52 @@
 
 
-# Mover Checkboxes de Obrigações para as Abas Corretas
+# Substituir "Nova Competência" por "Gerar Obrigações" com Tabela de Acompanhamento
 
-## Problema
-Os checkboxes de obrigações estão na aba "Contatos", agrupados por departamento. Mas devem estar nas abas correspondentes: obrigações do departamento "Fiscal" na aba Fiscal, do "Pessoal" na aba Pessoal, etc.
+## Objetivo
+Trocar o botão "Nova Competência" por "Gerar Obrigações" que cria automaticamente instâncias (`obligation_instances`) para todas as obrigações vinculadas ao cliente, para cada mês restante do ano. Exibir o resultado como tabela: obrigações nas linhas, meses nas colunas, com checks para instâncias existentes.
 
 ## Mudanças
 
-### Arquivo: `src/pages/Clients.tsx`
+### Arquivo: `src/components/ClientObligationsTab.tsx`
 
-1. **Remover** o bloco de checkboxes de obrigações da aba "Contatos" (o trecho que filtra `allObligations` por `dep.id` e renderiza checkboxes dentro do loop de departamentos).
+1. **Carregar obrigações vinculadas ao cliente**: Fetch `client_department_obligations` filtrado por `client_id` para saber quais obrigações se aplicam ao cliente (ao invés de mostrar todas).
 
-2. **Adicionar** em cada aba de departamento (Fiscal, Pessoal, Societário, Sucesso) uma seção "Obrigações" no final, com checkboxes filtrados pelo `department_id` correspondente. A lógica precisa mapear o nome do departamento ao tab:
-   - Buscar o departamento cujo `name` corresponde à aba (ex: "Fiscal", "Pessoal", "Societário", "Sucesso")
-   - Filtrar `allObligations` por esse `department_id`
-   - Renderizar os checkboxes usando o mesmo padrão já existente (`selectedObligations` Set + `Checkbox`)
+2. **Botão "Gerar Obrigações"**: Substitui "Nova Competência". Ao clicar:
+   - Identifica os meses restantes do ano (mês atual até dezembro)
+   - Para cada obrigação vinculada ao cliente, para cada mês, verifica se já existe `obligation_instance`
+   - Insere em lote as instâncias faltantes
+   - Recarrega os dados
 
-3. **Criar helper reutilizável** para evitar duplicação -- uma função inline ou pequeno componente que recebe o nome do departamento e renderiza a seção de checkboxes:
+3. **Tabela visual (substitui os Cards atuais)**:
 
 ```text
-function renderDeptObligations(deptName: string) {
-  const dept = departments.find(d => d.name.toLowerCase().includes(deptName));
-  if (!dept) return null;
-  const obls = allObligations.filter(o => o.department_id === dept.id);
-  if (obls.length === 0) return null;
-  return (
-    <div className="col-span-2 space-y-2 border-t pt-4 mt-2">
-      <Label className="text-base font-semibold">Obrigações</Label>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {obls.map(obl => (
-          <Checkbox + Label para cada obrigação>
-        ))}
-      </div>
-    </div>
-  );
-}
+┌──────────────────┬──────────────┬─────┬─────┬─────┬─────┬─────┐
+│ Obrigação        │ Departamento │ Mar │ Abr │ Mai │ Jun │ ... │
+├──────────────────┼──────────────┼─────┼─────┼─────┼─────┼─────┤
+│ DCTF Mensal      │ Fiscal       │ ✅  │ ✅  │ ✅  │ ✅  │     │
+│ eSocial          │ Pessoal      │ ✅  │ ✅  │ ✅  │ ✅  │     │
+│ ECD              │ Fiscal       │ ✅  │ ✅  │ ✅  │ ✅  │     │
+└──────────────────┴──────────────┴─────┴─────┴─────┴─────┴─────┘
 ```
 
-4. **Inserir** `renderDeptObligations('fiscal')` no final da TabsContent "fiscal", `renderDeptObligations('pessoal')` no final da "pessoal", etc.
+   - Linhas: obrigações vinculadas ao cliente (via `client_department_obligations`)
+   - Coluna "Obrigação": nome
+   - Coluna "Departamento": nome do departamento
+   - Colunas de meses: do mês atual até dezembro do ano corrente
+   - Check verde (✅) se existe `obligation_instance` para aquela obrigação+mês
+   - Célula vazia se não existe
+   - Clique na célula com check abre o dialog de detalhes existente
+
+4. **Remover dialog "Nova Competência"**: Não é mais necessário, já que a geração é automática em lote.
+
+5. **Manter dialog de detalhes**: O dialog que mostra atividades da instância continua funcionando ao clicar numa célula com check.
 
 ### Detalhes técnicos
-- O mapeamento tab→departamento usa `departments` (já carregado no state) buscando por nome
-- Nenhuma mudança no banco de dados -- a tabela `client_department_obligations` já está correta
-- A lógica de save permanece idêntica (já salva por `obligation_id` + `department_id`)
+
+- Fetch `client_department_obligations` para obter as obrigações do cliente
+- Gerar meses: `Array.from({length: 12 - currentMonth + 1}, (_, i) => currentMonth + i)` formatados como `yyyy-MM-01`
+- Bulk insert: construir array de `{obligation_id, client_id, reference_month}` para meses sem instância existente
+- Usar `Table` components para a tabela
+- Cada célula de mês verifica `instances.find(i => i.obligation_id === oblId && i.reference_month === monthStr)`
+- Imports: adicionar `Table, TableHeader, TableBody, TableRow, TableHead, TableCell` e `Check` icon
 
