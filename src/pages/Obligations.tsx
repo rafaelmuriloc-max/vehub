@@ -78,7 +78,15 @@ export default function Obligations() {
   }
   async function saveObligation(e: React.FormEvent) {
     e.preventDefault();
-    const payload = { name: obligationForm.name, description: obligationForm.description || null, department_id: obligationForm.department_id, recurrence: obligationForm.recurrence };
+    const payload = {
+      name: obligationForm.name,
+      description: obligationForm.description || null,
+      department_id: obligationForm.department_id,
+      recurrence: obligationForm.recurrence,
+      alert_day: obligationForm.alert_day ? Number(obligationForm.alert_day) : null,
+      target_day: obligationForm.target_day ? Number(obligationForm.target_day) : null,
+      due_day: obligationForm.due_day ? Number(obligationForm.due_day) : null,
+    };
     const { error } = editingObligation
       ? await supabase.from('obligations').update(payload).eq('id', editingObligation.id)
       : await supabase.from('obligations').insert(payload);
