@@ -311,7 +311,7 @@ export default function Clients() {
     populateForm(c);
     setPermits(parsePermits(c.permits));
     setCertificateUrl(c.digital_certificate_url || null);
-    const deps = await loadDepartments();
+    const [deps] = await Promise.all([loadDepartments(), loadObligations(), loadClientObligations(c.id)]);
     await loadDeptContacts(c.id, deps);
     setDialogOpen(true);
   }
