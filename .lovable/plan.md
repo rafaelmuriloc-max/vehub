@@ -1,38 +1,28 @@
 
 
-# Destacar Obrigações Concluídas (Linha Verde)
+# Reestruturar Layout do Calendário com Listas Lateral e Inferior + Paginação
 
 ## Objetivo
-Quando todas as atividades de uma instância de obrigação estiverem concluídas, a obrigação deve ser visualmente marcada como concluída com destaque verde na linha inteira. Isso se aplica à tabela na aba de obrigações do cliente e à lista do calendário.
+Mover a lista de obrigações do dia para o lado direito do calendário. Adicionar abaixo do calendário uma lista com todas as obrigações do mês. Ambas as listas com paginação.
 
 ## Mudanças
 
-### 1. `src/components/ClientObligationsTab.tsx`
+### Arquivo: `src/pages/CalendarView.tsx`
 
-- **Helper `isInstanceCompleted(inst)`**: Verifica se todas as atividades da obrigação possuem completion `completed: true`. Se não há atividades, não é considerado concluído.
-- **Destaque verde na linha**: No `TableRow` de cada obrigação, para cada mês com instância, se `isInstanceCompleted` retorna true, aplicar `bg-green-100` na célula e trocar o ícone Check para um estilo mais destacado (ex: `text-green-700 font-bold`).
-- **Linha inteira verde**: Se TODAS as instâncias daquela obrigação (em todos os meses exibidos) estão concluídas, aplicar `bg-green-50` no `TableRow` inteiro.
+1. **Layout lado a lado**: Envolver calendário e lista do dia num `flex` row:
+   - Esquerda (2/3): Card do calendário (grid mensal + legenda)
+   - Direita (1/3): Card "Obrigações do dia DD/MM/YYYY" com tabela paginada (aparece sempre, mostra "Selecione um dia" se nenhum selecionado)
 
-### 2. `src/pages/CalendarView.tsx`
+2. **Lista do mês abaixo**: Novo Card abaixo do flex row com todas as obrigações do mês corrente (todos os events filtrados), em tabela paginada com colunas: Dia, Empresa, Obrigação, Departamento, Tipo.
 
-- **Mesmo helper**: Calcular se a instância está concluída (todas as atividades completadas).
-- **Na tabela do dia selecionado**: Aplicar `bg-green-100` no `TableRow` se a instância está concluída.
-- **Badge "Concluída"**: Adicionar badge verde quando concluída.
+3. **Paginação**: Adicionar state `dayPage` e `monthPage` (default 1), com 10 itens por página. Usar componentes `Pagination` já existentes. Calcular `totalPages`, fatiar o array com `slice((page-1)*10, page*10)`.
+
+4. **Computar `monthEvents`**: Todos os events cujo mês/ano correspondem ao `currentDate`, ordenados por data.
 
 ### Detalhes técnicos
-
-```typescript
-// Helper function (same in both files)
-function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
-  const oblActivities = activities.filter(a => a.obligation_id === obligationId);
-  if (oblActivities.length === 0) return false;
-  return oblActivities.every(act => {
-    const comp = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
-    return comp?.completed === true;
-  });
-}
-```
-
-- No ClientObligationsTab: `<TableRow className={allMonthsCompleted ? 'bg-green-50' : ''}>` e cada célula de mês com instância concluída recebe `bg-green-100`
-- No CalendarView: `<TableRow className={completed ? 'bg-green-100' : ''}>` na lista diária
+- Import `Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext` de `@/components/ui/pagination`
+- `dayPage` reseta ao mudar `selectedDay`; `monthPage` reseta ao mudar mês
+- Layout responsivo: `flex-col lg:flex-row` para mobile vs desktop
+- Manter dialog de detalhes inalterado
+- Linhas verdes para instâncias concluídas mantidas em ambas as tabelas
 
