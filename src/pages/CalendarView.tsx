@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
 import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -38,6 +39,29 @@ const activityTypeIcons: Record<string, React.ReactNode> = {
 const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+const ITEMS_PER_PAGE = 10;
+
+function PaginationBlock({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) onPageChange(page - 1); }} />
+        </PaginationItem>
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+          <PaginationItem key={p}>
+            <PaginationLink href="#" isActive={p === page} onClick={e => { e.preventDefault(); onPageChange(p); }}>{p}</PaginationLink>
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < totalPages) onPageChange(page + 1); }} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
+
 export default function CalendarView() {
   const { toast } = useToast();
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -51,6 +75,8 @@ export default function CalendarView() {
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
+  const [dayPage, setDayPage] = useState(1);
+  const [monthPage, setMonthPage] = useState(1);
 
   const loadData = useCallback(async () => {
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
@@ -131,6 +157,16 @@ export default function CalendarView() {
 
   const selectedEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
+  // Month events: all events in the current month, sorted by date
+  const monthEvents = useMemo(() => {
+    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+    return events.filter(e => e.date.startsWith(prefix)).sort((a, b) => a.date.localeCompare(b.date));
+  }, [events, year, month]);
+
+  // Reset pages when context changes
+  useEffect(() => { setDayPage(1); }, [selectedDay]);
+  useEffect(() => { setMonthPage(1); }, [year, month, filterDept, filterClient]);
+
   // Detail dialog logic
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
@@ -183,7 +219,6 @@ export default function CalendarView() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   }
 
-  // Deduplicate events by instanceId for the table (same instance may appear for alert/target/due)
   function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
     const oblActivities = activities.filter(a => a.obligation_id === obligationId);
     if (oblActivities.length === 0) return false;
@@ -192,6 +227,12 @@ export default function CalendarView() {
       return comp?.completed === true;
     });
   }
+
+  // Pagination helpers
+  const dayTotalPages = Math.ceil(selectedEvents.length / ITEMS_PER_PAGE);
+  const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * ITEMS_PER_PAGE, dayPage * ITEMS_PER_PAGE);
+  const monthTotalPages = Math.ceil(monthEvents.length / ITEMS_PER_PAGE);
+  const paginatedMonthEvents = monthEvents.slice((monthPage - 1) * ITEMS_PER_PAGE, monthPage * ITEMS_PER_PAGE);
 
   return (
     <div className="space-y-6">
@@ -214,72 +255,126 @@ export default function CalendarView() {
         </Select>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null); }}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <CardTitle className="capitalize">{monthNames[month]} {year}</CardTitle>
-            <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null); }}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-px">
-            {weekdays.map(d => (
-              <div key={d} className="p-2 text-center text-sm font-medium text-muted-foreground">{d}</div>
-            ))}
-            {days.map((day, i) => {
-              if (!day) return <div key={i} className="min-h-[70px] p-1" />;
-              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const isToday = dateStr === today;
-              const isSelected = selectedDay === day;
-              const dots = getDayDots(day);
-              const hasAny = dots.alert || dots.target || dots.due;
-              return (
-                <div
-                  key={i}
-                  onClick={() => setSelectedDay(day)}
-                  className={`min-h-[70px] border rounded-md p-1 cursor-pointer transition-colors
-                    ${isSelected ? 'bg-primary/20 border-primary ring-1 ring-primary' : isToday ? 'bg-primary/10 border-primary' : 'border-border hover:bg-muted/50'}`}
-                >
-                  <span className={`text-xs font-medium ${isToday ? 'text-primary' : 'text-foreground'}`}>{day}</span>
-                  {hasAny && (
-                    <div className="flex gap-1 mt-1 flex-wrap">
-                      {dots.alert && <span className="w-2.5 h-2.5 rounded-full bg-green-500" />}
-                      {dots.target && <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
-                      {dots.due && <span className="w-2.5 h-2.5 rounded-full bg-red-500" />}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+      {/* Calendar + Day list side by side */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Calendar */}
+        <Card className="flex-1 lg:flex-[2]">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null); }}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <CardTitle className="capitalize">{monthNames[month]} {year}</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null); }}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-7 gap-px">
+              {weekdays.map(d => (
+                <div key={d} className="p-2 text-center text-sm font-medium text-muted-foreground">{d}</div>
+              ))}
+              {days.map((day, i) => {
+                if (!day) return <div key={i} className="min-h-[70px] p-1" />;
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = dateStr === today;
+                const isSelected = selectedDay === day;
+                const dots = getDayDots(day);
+                const hasAny = dots.alert || dots.target || dots.due;
+                return (
+                  <div
+                    key={i}
+                    onClick={() => setSelectedDay(day)}
+                    className={`min-h-[70px] border rounded-md p-1 cursor-pointer transition-colors
+                      ${isSelected ? 'bg-primary/20 border-primary ring-1 ring-primary' : isToday ? 'bg-primary/10 border-primary' : 'border-border hover:bg-muted/50'}`}
+                  >
+                    <span className={`text-xs font-medium ${isToday ? 'text-primary' : 'text-foreground'}`}>{day}</span>
+                    {hasAny && (
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {dots.alert && <span className="w-2.5 h-2.5 rounded-full bg-green-500" />}
+                        {dots.target && <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
+                        {dots.due && <span className="w-2.5 h-2.5 rounded-full bg-red-500" />}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-          <div className="flex gap-4 mt-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
-            <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
-            <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex gap-4 mt-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
+              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
+              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {selectedDay && (
-        <Card>
+        {/* Day obligations - right side */}
+        <Card className="flex-1 lg:flex-[1]">
           <CardHeader>
             <CardTitle className="text-lg">
-              Obrigações do dia {String(selectedDay).padStart(2, '0')}/{String(month + 1).padStart(2, '0')}/{year}
+              {selectedDay
+                ? `Obrigações do dia ${String(selectedDay).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`
+                : 'Obrigações do dia'}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {selectedEvents.length === 0 ? (
+            {!selectedDay ? (
+              <p className="text-muted-foreground text-sm">Selecione um dia no calendário.</p>
+            ) : selectedEvents.length === 0 ? (
               <p className="text-muted-foreground text-sm">Nenhuma obrigação neste dia.</p>
             ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>Obrigação</TableHead>
+                      <TableHead>Tipo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedDayEvents.map((ev, idx) => {
+                      const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                      return (
+                        <TableRow key={idx} className={`cursor-pointer hover:bg-muted/50 ${completed ? 'bg-green-100 dark:bg-green-900/40' : ''}`} onClick={() => setDetailInstanceId(ev.instanceId)}>
+                          <TableCell className="text-sm">{ev.clientName}</TableCell>
+                          <TableCell className="text-sm">{ev.obligationName}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-xs`}>
+                                {typeConfig[ev.type].label}
+                              </Badge>
+                              {completed && <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                <PaginationBlock page={dayPage} totalPages={dayTotalPages} onPageChange={setDayPage} />
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Month obligations - below */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Todas as obrigações de {monthNames[month]} {year}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {monthEvents.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Nenhuma obrigação neste mês.</p>
+          ) : (
+            <>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Dia</TableHead>
                     <TableHead>Empresa</TableHead>
                     <TableHead>Obrigação</TableHead>
                     <TableHead>Departamento</TableHead>
@@ -287,19 +382,21 @@ export default function CalendarView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedEvents.map((ev, idx) => {
+                  {paginatedMonthEvents.map((ev, idx) => {
+                    const dayNum = ev.date.split('-')[2];
                     const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
                     return (
                       <TableRow key={idx} className={`cursor-pointer hover:bg-muted/50 ${completed ? 'bg-green-100 dark:bg-green-900/40' : ''}`} onClick={() => setDetailInstanceId(ev.instanceId)}>
+                        <TableCell>{dayNum}</TableCell>
                         <TableCell>{ev.clientName}</TableCell>
                         <TableCell>{ev.obligationName}</TableCell>
                         <TableCell>{ev.deptName}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Badge className={`${typeConfig[ev.type].color} text-white border-0`}>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-xs`}>
                               {typeConfig[ev.type].label}
                             </Badge>
-                            {completed && <Badge className="bg-green-600 text-white border-0">Concluída</Badge>}
+                            {completed && <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -307,10 +404,11 @@ export default function CalendarView() {
                   })}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              <PaginationBlock page={monthPage} totalPages={monthTotalPages} onPageChange={setMonthPage} />
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Detail Dialog */}
       <Dialog open={!!detailInstanceId} onOpenChange={open => { if (!open) setDetailInstanceId(null); }}>
