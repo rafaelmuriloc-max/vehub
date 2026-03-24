@@ -255,15 +255,43 @@ export default function Obligations() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Recorrência</Label>
+              <Label>Periodicidade</Label>
               <Select value={obligationForm.recurrence} onValueChange={v => setObligationForm({ ...obligationForm, recurrence: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="diaria">Diária</SelectItem>
+                  <SelectItem value="semanal">Semanal</SelectItem>
+                  <SelectItem value="quinzenal">Quinzenal</SelectItem>
                   <SelectItem value="mensal">Mensal</SelectItem>
-                  <SelectItem value="trimestral">Trimestral</SelectItem>
                   <SelectItem value="anual">Anual</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-green-500 inline-block" />
+                  Dia Alerta
+                </Label>
+                <Input type="number" min={1} max={31} placeholder="Ex: 1" value={obligationForm.alert_day} onChange={e => setObligationForm({ ...obligationForm, alert_day: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Início da execução</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-orange-500 inline-block" />
+                  Dia Meta
+                </Label>
+                <Input type="number" min={1} max={31} placeholder="Ex: 15" value={obligationForm.target_day} onChange={e => setObligationForm({ ...obligationForm, target_day: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Prazo interno</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-red-500 inline-block" />
+                  Dia Vencimento
+                </Label>
+                <Input type="number" min={1} max={31} placeholder="Ex: 20" value={obligationForm.due_day} onChange={e => setObligationForm({ ...obligationForm, due_day: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Prazo final (multa)</p>
+              </div>
             </div>
             <Button type="submit" className="w-full" disabled={!obligationForm.name || !obligationForm.department_id}>Salvar</Button>
           </form>
