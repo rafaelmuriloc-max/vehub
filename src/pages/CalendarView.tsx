@@ -160,7 +160,7 @@ export default function CalendarView() {
   // Month events: all events in the current month, sorted by date
   const monthEvents = useMemo(() => {
     const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-    return events.filter(e => e.date.startsWith(prefix)).sort((a, b) => a.date.localeCompare(b.date));
+    return events.filter(e => e.date.startsWith(prefix) && e.type === 'target').sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
   // Reset pages when context changes
