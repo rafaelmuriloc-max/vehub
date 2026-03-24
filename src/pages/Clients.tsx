@@ -993,6 +993,7 @@ export default function Clients() {
                   )}
                   <div className="col-span-2 space-y-2"><Label>Informações dos Sócios</Label><Textarea {...f('partners_info')} /></div>
                 </div>
+                {renderDeptObligations('societár')}
               </TabsContent>
 
               {/* ── Sucesso do Cliente ── */}
