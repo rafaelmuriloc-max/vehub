@@ -1,66 +1,46 @@
 
 
-# Seleção de Obrigações por Departamento no Cadastro do Cliente
+# Mover Checkboxes de Obrigações para as Abas Corretas
 
-## Objetivo
-Na aba "Contatos" do cadastro de cliente, abaixo dos campos de contato de cada departamento, exibir checkboxes com as obrigações daquele departamento para que o usuário selecione quais se aplicam ao cliente.
+## Problema
+Os checkboxes de obrigações estão na aba "Contatos", agrupados por departamento. Mas devem estar nas abas correspondentes: obrigações do departamento "Fiscal" na aba Fiscal, do "Pessoal" na aba Pessoal, etc.
 
 ## Mudanças
 
-### 1. Migration: Criar tabela `client_department_obligations`
+### Arquivo: `src/pages/Clients.tsx`
 
-Nova tabela de vínculo entre cliente, departamento e obrigação:
+1. **Remover** o bloco de checkboxes de obrigações da aba "Contatos" (o trecho que filtra `allObligations` por `dep.id` e renderiza checkboxes dentro do loop de departamentos).
 
-```sql
-CREATE TABLE client_department_obligations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id uuid NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  department_id uuid NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
-  obligation_id uuid NOT NULL REFERENCES obligations(id) ON DELETE CASCADE,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (client_id, department_id, obligation_id)
-);
+2. **Adicionar** em cada aba de departamento (Fiscal, Pessoal, Societário, Sucesso) uma seção "Obrigações" no final, com checkboxes filtrados pelo `department_id` correspondente. A lógica precisa mapear o nome do departamento ao tab:
+   - Buscar o departamento cujo `name` corresponde à aba (ex: "Fiscal", "Pessoal", "Societário", "Sucesso")
+   - Filtrar `allObligations` por esse `department_id`
+   - Renderizar os checkboxes usando o mesmo padrão já existente (`selectedObligations` Set + `Checkbox`)
 
--- RLS policies (same pattern as other tables)
-ALTER TABLE client_department_obligations ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Authenticated can view" ON client_department_obligations
-  FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admins can insert" ON client_department_obligations
-  FOR INSERT TO authenticated WITH CHECK (has_role(auth.uid(), 'admin'));
-CREATE POLICY "Admins can delete" ON client_department_obligations
-  FOR DELETE TO authenticated USING (has_role(auth.uid(), 'admin'));
-```
-
-### 2. Atualizar `src/pages/Clients.tsx`
-
-- **Carregar obrigações por departamento**: Fetch `obligations` agrupadas por `department_id`.
-- **Carregar vínculos existentes**: Quando editando, fetch `client_department_obligations` do cliente.
-- **State**: Adicionar `obligations` (lista) e `selectedObligations` (Set de obligation_ids selecionados).
-- **UI na aba Contatos**: Abaixo dos campos de contato de cada departamento, listar as obrigações daquele departamento como checkboxes. Cada checkbox marca/desmarca a obrigação para o cliente.
-- **Save**: No `handleSave`, sincronizar os vínculos -- deletar os desmarcados e inserir os marcados (ou fazer delete all + insert dos selecionados).
-
-### Detalhes técnicos
+3. **Criar helper reutilizável** para evitar duplicação -- uma função inline ou pequeno componente que recebe o nome do departamento e renderiza a seção de checkboxes:
 
 ```text
-Aba Contatos - Layout por departamento:
-
-┌─────────────────────────────────────────────┐
-│ Departamento Fiscal                         │
-│ [Nome contato] [Telefone] [E-mail]          │
-│                                             │
-│ Obrigações:                                 │
-│ ☑ DCTF Mensal  ☑ ECD  ☐ ECF  ☑ SPED Fiscal│
-└─────────────────────────────────────────────┘
-│ Departamento Pessoal                        │
-│ [Nome contato] [Telefone] [E-mail]          │
-│                                             │
-│ Obrigações:                                 │
-│ ☑ eSocial  ☐ RAIS  ☑ CAGED                │
-└─────────────────────────────────────────────┘
+function renderDeptObligations(deptName: string) {
+  const dept = departments.find(d => d.name.toLowerCase().includes(deptName));
+  if (!dept) return null;
+  const obls = allObligations.filter(o => o.department_id === dept.id);
+  if (obls.length === 0) return null;
+  return (
+    <div className="col-span-2 space-y-2 border-t pt-4 mt-2">
+      <Label className="text-base font-semibold">Obrigações</Label>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {obls.map(obl => (
+          <Checkbox + Label para cada obrigação>
+        ))}
+      </div>
+    </div>
+  );
+}
 ```
 
-- As obrigações já possuem `department_id`, então o filtro é direto.
-- O save faz `DELETE FROM client_department_obligations WHERE client_id = X` seguido de bulk insert dos selecionados.
-- Os checkboxes ficam desabilitados em modo `viewOnly`.
+4. **Inserir** `renderDeptObligations('fiscal')` no final da TabsContent "fiscal", `renderDeptObligations('pessoal')` no final da "pessoal", etc.
+
+### Detalhes técnicos
+- O mapeamento tab→departamento usa `departments` (já carregado no state) buscando por nome
+- Nenhuma mudança no banco de dados -- a tabela `client_department_obligations` já está correta
+- A lógica de save permanece idêntica (já salva por `obligation_id` + `department_id`)
 
