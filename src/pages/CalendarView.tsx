@@ -184,10 +184,14 @@ export default function CalendarView() {
   }
 
   // Deduplicate events by instanceId for the table (same instance may appear for alert/target/due)
-  const uniqueSelectedEvents = selectedEvents.reduce<CalendarEvent[]>((acc, ev) => {
-    if (!acc.some(e => e.instanceId === ev.instanceId)) acc.push(ev);
-    return acc;
-  }, []);
+  function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
+    const oblActivities = activities.filter(a => a.obligation_id === obligationId);
+    if (oblActivities.length === 0) return false;
+    return oblActivities.every(act => {
+      const comp = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+      return comp?.completed === true;
+    });
+  }
 
   return (
     <div className="space-y-6">
