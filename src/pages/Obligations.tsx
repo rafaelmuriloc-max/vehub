@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null };
 type DocumentType = { id: string; name: string };
 
