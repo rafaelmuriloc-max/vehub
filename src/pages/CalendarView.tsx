@@ -1,20 +1,25 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number };
+type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
 
 type CalendarEvent = {
   clientId: string; clientName: string; obligationName: string; deptName: string;
-  type: 'alert' | 'target' | 'due'; date: string;
+  type: 'alert' | 'target' | 'due'; date: string; instanceId: string; obligationId: string;
 };
 
 const typeConfig = {
@@ -23,32 +28,48 @@ const typeConfig = {
   due: { label: 'Vencimento', color: 'bg-red-500' },
 };
 
+const activityTypeIcons: Record<string, React.ReactNode> = {
+  document: <FileText className="h-4 w-4" />,
+  checklist: <CheckSquare className="h-4 w-4" />,
+  whatsapp: <MessageCircle className="h-4 w-4" />,
+  email: <Mail className="h-4 w-4" />,
+};
+
 const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export default function CalendarView() {
+  const { toast } = useToast();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [completions, setCompletions] = useState<Completion[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
+  const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([
+  const loadData = useCallback(async () => {
+    const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
       supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month'),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
-    ]).then(([instRes, oblRes, cliRes, deptRes]) => {
-      setInstances((instRes.data as Instance[]) || []);
-      setObligations((oblRes.data as Obligation[]) || []);
-      setClients((cliRes.data as Client[]) || []);
-      setDepartments((deptRes.data as Department[]) || []);
-    });
+      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order'),
+      supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url'),
+    ]);
+    setInstances((instRes.data as Instance[]) || []);
+    setObligations((oblRes.data as Obligation[]) || []);
+    setClients((cliRes.data as Client[]) || []);
+    setDepartments((deptRes.data as Department[]) || []);
+    setActivities((actRes.data as Activity[]) || []);
+    setCompletions((compRes.data as Completion[]) || []);
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const oblMap = useMemo(() => new Map(obligations.map(o => [o.id, o])), [obligations]);
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
@@ -63,25 +84,21 @@ export default function CalendarView() {
       if (!client) continue;
       const dept = deptMap.get(obl.department_id);
       if (!dept) continue;
-
       if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
 
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const y = refDate.getFullYear();
       const m = refDate.getMonth();
-
       const makeDate = (day: number | null) => {
         if (!day) return null;
         return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       };
 
-      const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name };
-
+      const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id };
       const alertDate = makeDate(obl.alert_day);
       const targetDate = makeDate(obl.target_day);
       const dueDate = makeDate(obl.due_day);
-
       if (alertDate) result.push({ ...base, type: 'alert', date: alertDate });
       if (targetDate) result.push({ ...base, type: 'target', date: targetDate });
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
@@ -112,10 +129,65 @@ export default function CalendarView() {
     return has;
   }
 
-  const selectedDateStr = selectedDay
-    ? `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
-    : null;
   const selectedEvents = selectedDay ? getEventsForDay(selectedDay) : [];
+
+  // Detail dialog logic
+  const detailInstance = instances.find(i => i.id === detailInstanceId);
+  const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
+  const detailActivities = detailObligation
+    ? activities.filter(a => a.obligation_id === detailObligation.id).sort((a, b) => a.order - b.order)
+    : [];
+
+  function getCompletion(activityId: string) {
+    if (!detailInstanceId) return null;
+    return completions.find(c => c.instance_id === detailInstanceId && c.activity_id === activityId) || null;
+  }
+
+  async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
+    if (!detailInstanceId) return;
+    const existing = getCompletion(activityId);
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({
+        completed: !currentlyCompleted,
+        completed_at: !currentlyCompleted ? new Date().toISOString() : null,
+      }).eq('id', existing.id);
+    } else {
+      await supabase.from('obligation_activity_completions').insert({
+        instance_id: detailInstanceId,
+        activity_id: activityId,
+        completed: true,
+        completed_at: new Date().toISOString(),
+      });
+    }
+    await loadData();
+  }
+
+  async function handleFileUpload(activityId: string, file: File) {
+    if (!detailInstanceId) return;
+    const path = `obligations/${detailInstanceId}/${activityId}/${file.name}`;
+    const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
+    if (upErr) { toast({ title: 'Erro ao enviar arquivo', description: upErr.message, variant: 'destructive' }); return; }
+
+    const existing = getCompletion(activityId);
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({ file_url: path, completed: true, completed_at: new Date().toISOString() }).eq('id', existing.id);
+    } else {
+      await supabase.from('obligation_activity_completions').insert({ instance_id: detailInstanceId, activity_id: activityId, completed: true, completed_at: new Date().toISOString(), file_url: path });
+    }
+    toast({ title: 'Arquivo enviado com sucesso' });
+    await loadData();
+  }
+
+  async function downloadFile(fileUrl: string) {
+    const { data } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 300);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
+  // Deduplicate events by instanceId for the table (same instance may appear for alert/target/due)
+  const uniqueSelectedEvents = selectedEvents.reduce<CalendarEvent[]>((acc, ev) => {
+    if (!acc.some(e => e.instanceId === ev.instanceId)) acc.push(ev);
+    return acc;
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -212,7 +284,7 @@ export default function CalendarView() {
                 </TableHeader>
                 <TableBody>
                   {selectedEvents.map((ev, idx) => (
-                    <TableRow key={idx}>
+                    <TableRow key={idx} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailInstanceId(ev.instanceId)}>
                       <TableCell>{ev.clientName}</TableCell>
                       <TableCell>{ev.obligationName}</TableCell>
                       <TableCell>{ev.deptName}</TableCell>
@@ -229,6 +301,53 @@ export default function CalendarView() {
           </CardContent>
         </Card>
       )}
+
+      {/* Detail Dialog */}
+      <Dialog open={!!detailInstanceId} onOpenChange={open => { if (!open) setDetailInstanceId(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {detailObligation?.name} — {detailInstance ? clientMap.get(detailInstance.client_id)?.company_name : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {detailActivities.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhuma atividade cadastrada para esta obrigação.</p>
+            )}
+            {detailActivities.map(act => {
+              const comp = getCompletion(act.id);
+              const isCompleted = comp?.completed ?? false;
+              return (
+                <div key={act.id} className={`flex items-start gap-3 p-3 rounded-md border ${isCompleted ? 'bg-muted/50' : ''}`}>
+                  <div className="mt-0.5 text-muted-foreground">{activityTypeIcons[act.type] || <CheckSquare className="h-4 w-4" />}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{act.title}</p>
+                    {act.description && <p className="text-xs text-muted-foreground mt-0.5">{act.description}</p>}
+                    {act.type === 'document' && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <label className="cursor-pointer">
+                          <input type="file" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFileUpload(act.id, e.target.files[0]); }} />
+                          <span className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                            <Upload className="h-3 w-3" /> {comp?.file_url ? 'Substituir' : 'Anexar'}
+                          </span>
+                        </label>
+                        {comp?.file_url && (
+                          <button onClick={() => downloadFile(comp.file_url!)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                            <Download className="h-3 w-3" /> Baixar
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {act.type !== 'document' && (
+                    <Checkbox checked={isCompleted} onCheckedChange={() => toggleCompletion(act.id, isCompleted)} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
