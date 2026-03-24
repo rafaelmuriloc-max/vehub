@@ -393,9 +393,7 @@ export default function CalendarView() {
                         <TableCell>{ev.deptName}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 flex-wrap">
-                            <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-xs`}>
-                              {typeConfig[ev.type].label}
-                            </Badge>
+                            <span className="text-sm">{ev.date.split('-').reverse().join('/')}</span>
                             {completed && <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>}
                           </div>
                         </TableCell>
