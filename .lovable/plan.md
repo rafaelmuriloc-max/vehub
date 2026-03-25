@@ -1,22 +1,26 @@
 
 
-# Converter lista mensal para cards (igual à lista do dia)
+# Mover Data da Meta para coluna separada no card mensal
 
 ## Objetivo
-Substituir a tabela da lista mensal por cards empilhados idênticos aos da lista do dia selecionado.
+Exibir a data da meta como uma coluna à esquerda do nome da obrigação, em vez de dentro do badge de tipo.
 
-## Mudança em `src/pages/CalendarView.tsx`
+## Mudança em `src/pages/CalendarView.tsx` (linhas 497-506)
 
-### Substituir a `<Table>` (linhas 483-529) por cards no mesmo formato da lista do dia (linhas 415-454)
+Reestruturar o layout do card para ter 3 colunas:
+1. **Data da meta** (coluna fixa à esquerda) — data formatada (ex: `15/03`) em texto destaque
+2. **Nome da obrigação + empresa** (coluna flexível central)
+3. **Badge do tipo** (sem a data, apenas "Meta")
 
-Cada card terá:
-- Nome da obrigação + badge do tipo (Meta, com cor laranja)
-- Nome da empresa com ícone Building2
-- Badge do departamento + contagem de atividades
-- Barra de progresso
-- Fundo verde se concluída
-- Data da meta exibida junto ao badge de tipo (ex: `15/03/2026`)
-- Click abre o dialog de detalhes
+Estrutura:
+```
+[15/03] [Nome da obrigação          ] [Meta]
+        [🏢 Nome da empresa         ]
+```
 
-Layout idêntico ao `paginatedDayEvents.map(...)`, com a adição da data da meta como informação extra.
+### Detalhes
+- Linha 497-506: trocar o `flex items-start justify-between` por um layout com 3 seções
+- Data formatada: `ev.date.split('-').reverse().slice(0,2).join('/')` (DD/MM)
+- Remover ` · {ev.date...}` do badge (linha 505)
+- Estilizar a data com `text-sm font-semibold text-primary` em um bloco fixo (`w-14 shrink-0`)
 
