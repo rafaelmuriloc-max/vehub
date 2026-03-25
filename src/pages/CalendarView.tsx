@@ -494,7 +494,10 @@ export default function CalendarView() {
                           : 'border-border hover:border-primary/30 hover:bg-muted/30'
                         }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 shrink-0 text-sm font-semibold text-primary">
+                          {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                        </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
                           <p className="text-xs text-muted-foreground truncate mt-0.5">
@@ -502,7 +505,7 @@ export default function CalendarView() {
                           </p>
                         </div>
                         <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
-                          {typeConfig[ev.type].label} · {ev.date.split('-').reverse().join('/')}
+                          {typeConfig[ev.type].label}
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between mt-2">
