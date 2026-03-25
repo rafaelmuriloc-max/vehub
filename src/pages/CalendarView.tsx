@@ -480,53 +480,46 @@ export default function CalendarView() {
             </div>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data Meta</TableHead>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Obrigação</TableHead>
-                    <TableHead>Departamento</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedMonthEvents.map((ev, idx) => {
-                    const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
-                    const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
-                    return (
-                      <TableRow
-                        key={idx}
-                        className={`cursor-pointer transition-colors even:bg-muted/30
-                          ${completed
-                            ? 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
-                            : 'hover:bg-muted/50'
-                          }`}
-                        onClick={() => setDetailInstanceId(ev.instanceId)}
-                      >
-                        <TableCell>
-                          <span className="text-sm font-medium">{ev.date.split('-').reverse().join('/')}</span>
-                        </TableCell>
-                        <TableCell className="text-sm">{ev.clientName}</TableCell>
-                        <TableCell className="text-sm font-medium">{ev.obligationName}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{ev.deptName}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {completed ? (
-                            <Badge className="bg-green-600 text-white border-0 text-xs">Concluída</Badge>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <Progress value={progress.percent} className="h-1.5 w-16" />
-                              <span className="text-xs text-muted-foreground">{progress.completed}/{progress.total}</span>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="space-y-2">
+                {paginatedMonthEvents.map((ev, idx) => {
+                  const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                  const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => setDetailInstanceId(ev.instanceId)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
+                        ${completed
+                          ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+                          : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                        }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                          </p>
+                        </div>
+                        <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
+                          {typeConfig[ev.type].label} · {ev.date.split('-').reverse().join('/')}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                        {progress.total > 0 && (
+                          <span className={`text-[10px] font-medium ${completed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                            {progress.completed}/{progress.total} atividades
+                          </span>
+                        )}
+                      </div>
+                      {progress.total > 0 && (
+                        <Progress value={progress.percent} className="h-1 mt-2" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
               <PaginationBlock page={monthPage} totalPages={monthTotalPages} total={monthEvents.length} onPageChange={setMonthPage} />
             </>
           )}
