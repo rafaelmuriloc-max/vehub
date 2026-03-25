@@ -1,15 +1,22 @@
 
 
-# Destacar Dia Atual com Fundo Azul
+# Converter lista mensal para cards (igual à lista do dia)
 
 ## Objetivo
-Alterar o destaque do dia atual no calendário de fundo cinza/accent para fundo azul.
+Substituir a tabela da lista mensal por cards empilhados idênticos aos da lista do dia selecionado.
 
-## Mudança
+## Mudança em `src/pages/CalendarView.tsx`
 
-### Arquivo: `src/pages/CalendarView.tsx`
+### Substituir a `<Table>` (linhas 483-529) por cards no mesmo formato da lista do dia (linhas 415-454)
 
-Na renderização das células do calendário, onde o dia atual (`isToday`) recebe classes de destaque, trocar o fundo atual (provavelmente `bg-accent` ou `bg-primary/10`) por `bg-blue-500 text-white` (ou `bg-blue-100` se preferir sutil). Ajustar também o número do dia que já tem destaque circular para usar azul.
+Cada card terá:
+- Nome da obrigação + badge do tipo (Meta, com cor laranja)
+- Nome da empresa com ícone Building2
+- Badge do departamento + contagem de atividades
+- Barra de progresso
+- Fundo verde se concluída
+- Data da meta exibida junto ao badge de tipo (ex: `15/03/2026`)
+- Click abre o dialog de detalhes
 
-Preciso verificar o código atual para identificar as classes exatas.
+Layout idêntico ao `paginatedDayEvents.map(...)`, com a adição da data da meta como informação extra.
 
