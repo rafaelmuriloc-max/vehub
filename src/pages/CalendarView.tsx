@@ -333,12 +333,12 @@ export default function CalendarView() {
                       ${isSelected
                         ? 'bg-primary/15 border-2 border-primary shadow-md'
                         : isToday
-                          ? 'bg-accent/50 border border-primary/40'
+                          ? 'bg-blue-50 border border-blue-400 dark:bg-blue-950 dark:border-blue-500'
                           : 'border border-border hover:bg-muted/60 hover:shadow-sm'
                       }`}
                   >
                     <span className={`inline-flex items-center justify-center text-xs font-semibold w-6 h-6 rounded-full
-                      ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
+                      ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
                       {day}
                     </span>
                     {hasAny && (
