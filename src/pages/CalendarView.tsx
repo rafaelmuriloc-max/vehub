@@ -338,7 +338,7 @@ export default function CalendarView() {
                       }`}
                   >
                     <span className={`inline-flex items-center justify-center text-xs font-semibold w-6 h-6 rounded-full
-                      ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
+                      ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
                       {day}
                     </span>
                     {hasAny && (
