@@ -932,9 +932,12 @@ export default function Clients() {
                     </Select>
                   </div>
                   <div className="col-span-2 space-y-2">
-                    <Label>Segmento</Label>
-                    <Select value={form.business_classification} onValueChange={v => setForm({ ...form, business_classification: v })} disabled={viewOnly}>
-                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <Label className="flex items-center gap-2">
+                      Segmento
+                      {classifyingSegment && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                    </Label>
+                    <Select value={form.business_classification} onValueChange={v => setForm({ ...form, business_classification: v })} disabled={viewOnly || classifyingSegment}>
+                      <SelectTrigger><SelectValue placeholder={classifyingSegment ? "Classificando..." : "Selecione..."} /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Comércio">Comércio</SelectItem>
                         <SelectItem value="Serviço">Serviço</SelectItem>
