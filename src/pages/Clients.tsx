@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -132,6 +133,8 @@ export default function Clients() {
   const [allObligations, setAllObligations] = useState<ObligationOption[]>([]);
   const [selectedObligations, setSelectedObligations] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [batchUpdating, setBatchUpdating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
@@ -315,6 +318,89 @@ export default function Clients() {
   async function loadClients() {
     const { data } = await supabase.from('clients').select('*').order('company_name');
     setClients((data as unknown as Client[]) || []);
+  }
+
+  async function batchUpdateAllCnpj() {
+    setBatchUpdating(true);
+    let updated = 0;
+    let errors = 0;
+
+    const { data: allClients } = await supabase.from('clients').select('*');
+    const cnpjClients = ((allClients || []) as unknown as Client[]).filter(
+      c => c.document && c.document.replace(/\D/g, '').length === 14
+    );
+    setBatchProgress({ current: 0, total: cnpjClients.length });
+
+    for (let i = 0; i < cnpjClients.length; i++) {
+      const client = cnpjClients[i];
+      const cnpj = client.document!.replace(/\D/g, '');
+      setBatchProgress({ current: i + 1, total: cnpjClients.length });
+
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke('cnpj-lookup', { body: { cnpj } });
+        if (fnError || !data || data.error) { errors++; continue; }
+
+        const address = [data.logradouro, data.numero, data.complemento, data.bairro, `${data.municipio || ''}/${data.uf || ''}`, data.cep]
+          .filter(Boolean).join(', ');
+
+        const cnaePrincipal = data.cnae_fiscal
+          ? `${String(data.cnae_fiscal).padStart(7, '0')} - ${data.cnae_fiscal_descricao || ''}`
+          : '';
+
+        const secondaryCnaes = (data.cnaes_secundarios || [])
+          .filter((c: any) => c.codigo && c.codigo !== 0)
+          .map((c: any) => `${String(c.codigo).padStart(7, '0')} - ${c.descricao}`)
+          .join(', ');
+
+        const partners = (data.qsa || [])
+          .map((s: any) => `${s.nome_socio} (${s.qualificacao_socio || ''})`)
+          .join('\n');
+
+        const isSimples = data.opcao_pelo_simples === true;
+        const isMei = data.opcao_pelo_mei === true;
+        const taxRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
+
+        let classification = client.business_classification || '';
+        if (!classification && (cnaePrincipal || secondaryCnaes)) {
+          try {
+            classification = await classifyByAI(cnaePrincipal, secondaryCnaes);
+          } catch { /* keep empty */ }
+        }
+
+        const updatePayload: any = {
+          company_name: data.razao_social || client.company_name,
+          address: address || client.address,
+          contact_phone: data.ddd_telefone_1 ? `(${data.ddd_telefone_1.substring(0,2)}) ${data.ddd_telefone_1.substring(2)}` : client.contact_phone,
+          contact_email: data.email || client.contact_email,
+          main_activity: cnaePrincipal || client.main_activity,
+          secondary_activities: secondaryCnaes || client.secondary_activities,
+          tax_regime: taxRegime,
+          partners_info: partners || client.partners_info,
+          foundation_date: data.data_inicio_atividade || client.foundation_date,
+          opening_date: data.data_inicio_atividade || client.opening_date,
+          business_segment: data.cnae_fiscal_descricao || client.business_segment,
+          trade_name: data.nome_fantasia || client.trade_name,
+        };
+
+        if (classification) {
+          updatePayload.business_classification = classification;
+        }
+
+        await supabase.from('clients').update(updatePayload).eq('id', client.id);
+        updated++;
+      } catch {
+        errors++;
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    setBatchUpdating(false);
+    setBatchProgress({ current: 0, total: 0 });
+    loadClients();
+    toast({
+      title: 'Atualização concluída',
+      description: `${updated} atualizado(s), ${errors} erro(s) de ${cnpjClients.length} clientes.`,
+    });
   }
 
   async function openNew() {
@@ -650,6 +736,10 @@ export default function Clients() {
         <h1 className="text-3xl font-bold text-foreground">Clientes</h1>
         {isAdmin_ && (
           <div className="flex gap-2">
+            <Button variant="outline" onClick={batchUpdateAllCnpj} disabled={batchUpdating}>
+              {batchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              {batchUpdating ? `Atualizando ${batchProgress.current}/${batchProgress.total}` : 'Atualizar Cadastros'}
+            </Button>
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <Upload className="mr-2 h-4 w-4" />Importar Certificados
             </Button>
@@ -657,6 +747,9 @@ export default function Clients() {
           </div>
         )}
       </div>
+      {batchUpdating && (
+        <Progress value={(batchProgress.current / Math.max(batchProgress.total, 1)) * 100} className="h-2" />
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold">{clients.length}</p></CardContent></Card>
