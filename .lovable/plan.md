@@ -1,28 +1,33 @@
 
 
-# Inserir os 93 clientes faltantes da planilha
+# Corrigir erro na busca de CNPJ (BrasilAPI bloqueada por CORS)
 
 ## Problema
-A sincronização anterior executou o DELETE (removeu clientes fora da planilha) e os UPDATEs, mas os INSERTs dos clientes novos nunca foram aplicados. Resultado: 98 clientes no sistema em vez de 191.
+As chamadas diretas do frontend para `https://brasilapi.com.br/api/cnpj/v1/` estão falhando com "Failed to fetch". Isso ocorre porque a BrasilAPI bloqueia requisições CORS vindas do domínio do preview/produção.
 
 ## Solução
+Criar uma Edge Function `cnpj-lookup` que faz a chamada para a BrasilAPI no servidor (sem restrição CORS) e atualizar o frontend para usar essa função.
 
-### 1. Extrair dados da planilha
-- Ler `user-uploads://01_-_Base_Clientes-2.xlsx` com pandas (Page 1 linhas 9-194 + Page 2)
-- Coletar todos os 191 CNPJs com seus dados
+## Mudanças
 
-### 2. Identificar faltantes
-- Consultar CNPJs atuais no banco (98 registros)
-- Comparar com os 191 da planilha
-- Gerar lista dos ~93 CNPJs ausentes
+### 1. Nova Edge Function `supabase/functions/cnpj-lookup/index.ts`
+- Recebe `{ cnpj: string }` no body
+- Chama `https://brasilapi.com.br/api/cnpj/v1/{digits}` no servidor
+- Retorna os dados com headers CORS adequados
+- Fallback: se BrasilAPI falhar, tenta `https://receitaws.com.br/v1/cnpj/{digits}`
 
-### 3. Executar INSERTs via migration SQL
-- Para cada cliente faltante, gerar INSERT com: `company_name`, `document`, `trade_name`, `tax_regime`, `monthly_value`, `sci_code`, `business_classification` (se disponível na planilha), `status`
-- Dividir em batches se necessário para respeitar limites de tamanho da migração
+### 2. Atualizar `src/pages/Clients.tsx`
+- Substituir `fetch('https://brasilapi.com.br/api/cnpj/v1/...')` por `supabase.functions.invoke('cnpj-lookup', { body: { cnpj } })`
+- Aplicar em ambos os locais: busca individual (linha ~203) e batch update de regimes (linha ~281)
 
-### Detalhes
-- Normalizar CNPJs para formato `XX.XXX.XXX/XXXX-XX`
-- Converter honorários de formato BR (vírgula) para numérico
-- Mapear regimes: SIMPLES NACIONAL → simples_nacional, LUCRO PRESUMIDO → lucro_presumido, MEI → mei
-- Status padrão: active (exceto LUNNAR que é Inativa → inactive)
+### 3. Atualizar `src/pages/InvoiceEmit.tsx`
+- Substituir chamada direta à BrasilAPI pela Edge Function
+
+### 4. Atualizar `src/components/CertificateImportDialog.tsx`
+- Substituir chamada direta à BrasilAPI pela Edge Function
+
+### Detalhes técnicos
+- A Edge Function roda no Deno (servidor), sem restrição CORS
+- Não precisa de autenticação extra — usa o JWT do Supabase existente
+- Mantém a mesma estrutura de dados retornada pela BrasilAPI
 
