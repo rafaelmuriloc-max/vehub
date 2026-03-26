@@ -117,6 +117,7 @@ export default function Clients() {
   const { toast } = useToast();
   const [form, setForm] = useState({ ...emptyForm });
   const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [classifyingSegment, setClassifyingSegment] = useState(false);
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
@@ -234,8 +235,13 @@ export default function Clients() {
         foundation_date: data.data_inicio_atividade || prev.foundation_date,
         opening_date: data.data_inicio_atividade || prev.opening_date,
         business_segment: data.cnae_fiscal_descricao || prev.business_segment,
-        business_classification: classifyByCnae(cnaePrincipal, secondaryCnaes),
+        business_classification: '',
       }));
+      setClassifyingSegment(true);
+      classifyByAI(cnaePrincipal, secondaryCnaes).then(c => {
+        setForm(prev => ({ ...prev, business_classification: c }));
+        setClassifyingSegment(false);
+      });
 
       toast({ title: 'Dados carregados', description: `Dados de ${data.razao_social || digits} preenchidos automaticamente.` });
     } catch (err: any) {
@@ -940,15 +946,25 @@ export default function Clients() {
                   <div className="col-span-2 space-y-2">
                     <Label>Atividade Principal (CNAE)</Label>
                     <CnaeCombobox value={form.main_activity} onChange={v => {
-                      const classification = classifyByCnae(v, form.secondary_activities);
-                      setForm({ ...form, main_activity: v, business_classification: classification });
+                      setForm(prev => ({ ...prev, main_activity: v, business_classification: '' }));
+                      setClassifyingSegment(true);
+                      classifyByAI(v, form.secondary_activities).then(c => {
+                        setForm(prev => ({ ...prev, business_classification: c }));
+                        setClassifyingSegment(false);
+                      });
+                    }} />
                     }} />
                   </div>
                   <div className="col-span-2 space-y-2">
                     <Label>Atividades Secundárias</Label>
                     <CnaeMultiSelect value={form.secondary_activities} onChange={v => {
-                      const classification = classifyByCnae(form.main_activity, v);
-                      setForm({ ...form, secondary_activities: v, business_classification: classification });
+                      setForm(prev => ({ ...prev, secondary_activities: v, business_classification: '' }));
+                      setClassifyingSegment(true);
+                      classifyByAI(form.main_activity, v).then(c => {
+                        setForm(prev => ({ ...prev, business_classification: c }));
+                        setClassifyingSegment(false);
+                      });
+                    }} />
                     }} />
                   </div>
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
