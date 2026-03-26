@@ -48,25 +48,18 @@ function parsePermits(raw: string | null): PermitItem[] {
   return defaultPermits.map(p => ({ ...p }));
 }
 
-function classifyByCnae(mainCnae: string, secondaryCnaes: string): string {
-  const getType = (code: string) => {
-    const digits = code.replace(/\D/g, '');
-    if (!digits) return 'servico';
-    const div = parseInt(digits.substring(0, 2));
-    if (div >= 10 && div <= 33) return 'industria';
-    if (div >= 45 && div <= 47) return 'comercio';
-    return 'servico';
-  };
-  const mainType = getType(mainCnae);
-  const allCodes = [mainCnae];
-  if (secondaryCnaes) {
-    const matches = secondaryCnaes.match(/\d{7}/g);
-    if (matches) allCodes.push(...matches);
+async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<string> {
+  if (!mainCnae && !secondaryCnaes) return '';
+  try {
+    const { data, error } = await supabase.functions.invoke('classify-segment', {
+      body: { main_activity: mainCnae, secondary_activities: secondaryCnaes },
+    });
+    if (error) throw error;
+    return data?.classification || '';
+  } catch (e) {
+    console.error('AI classification error:', e);
+    return '';
   }
-  const types = new Set(allCodes.map(getType));
-  if (types.size > 1) return 'Misto';
-  const map: Record<string, string> = { comercio: 'Comércio', industria: 'Indústria', servico: 'Serviço' };
-  return map[mainType] || 'Serviço';
 }
 
 type Client = {
@@ -124,6 +117,7 @@ export default function Clients() {
   const { toast } = useToast();
   const [form, setForm] = useState({ ...emptyForm });
   const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [classifyingSegment, setClassifyingSegment] = useState(false);
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
@@ -241,8 +235,13 @@ export default function Clients() {
         foundation_date: data.data_inicio_atividade || prev.foundation_date,
         opening_date: data.data_inicio_atividade || prev.opening_date,
         business_segment: data.cnae_fiscal_descricao || prev.business_segment,
-        business_classification: classifyByCnae(cnaePrincipal, secondaryCnaes),
+        business_classification: '',
       }));
+      setClassifyingSegment(true);
+      classifyByAI(cnaePrincipal, secondaryCnaes).then(c => {
+        setForm(prev => ({ ...prev, business_classification: c }));
+        setClassifyingSegment(false);
+      });
 
       toast({ title: 'Dados carregados', description: `Dados de ${data.razao_social || digits} preenchidos automaticamente.` });
     } catch (err: any) {
@@ -933,9 +932,12 @@ export default function Clients() {
                     </Select>
                   </div>
                   <div className="col-span-2 space-y-2">
-                    <Label>Segmento</Label>
-                    <Select value={form.business_classification} onValueChange={v => setForm({ ...form, business_classification: v })} disabled={viewOnly}>
-                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <Label className="flex items-center gap-2">
+                      Segmento
+                      {classifyingSegment && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                    </Label>
+                    <Select value={form.business_classification} onValueChange={v => setForm({ ...form, business_classification: v })} disabled={viewOnly || classifyingSegment}>
+                      <SelectTrigger><SelectValue placeholder={classifyingSegment ? "Classificando..." : "Selecione..."} /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Comércio">Comércio</SelectItem>
                         <SelectItem value="Serviço">Serviço</SelectItem>
@@ -947,15 +949,23 @@ export default function Clients() {
                   <div className="col-span-2 space-y-2">
                     <Label>Atividade Principal (CNAE)</Label>
                     <CnaeCombobox value={form.main_activity} onChange={v => {
-                      const classification = classifyByCnae(v, form.secondary_activities);
-                      setForm({ ...form, main_activity: v, business_classification: classification });
+                      setForm(prev => ({ ...prev, main_activity: v, business_classification: '' }));
+                      setClassifyingSegment(true);
+                      classifyByAI(v, form.secondary_activities).then(c => {
+                        setForm(prev => ({ ...prev, business_classification: c }));
+                        setClassifyingSegment(false);
+                      });
                     }} />
                   </div>
                   <div className="col-span-2 space-y-2">
                     <Label>Atividades Secundárias</Label>
                     <CnaeMultiSelect value={form.secondary_activities} onChange={v => {
-                      const classification = classifyByCnae(form.main_activity, v);
-                      setForm({ ...form, secondary_activities: v, business_classification: classification });
+                      setForm(prev => ({ ...prev, secondary_activities: v, business_classification: '' }));
+                      setClassifyingSegment(true);
+                      classifyByAI(form.main_activity, v).then(c => {
+                        setForm(prev => ({ ...prev, business_classification: c }));
+                        setClassifyingSegment(false);
+                      });
                     }} />
                   </div>
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
