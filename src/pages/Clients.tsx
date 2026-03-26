@@ -745,9 +745,6 @@ export default function Clients() {
             </Button>
             <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" />Novo Cliente</Button>
           </div>
-          {batchUpdating && (
-            <Progress value={(batchProgress.current / Math.max(batchProgress.total, 1)) * 100} className="h-2 mt-2 w-full absolute bottom-0 left-0" />
-          )}
         )}
       </div>
 
