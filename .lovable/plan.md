@@ -1,51 +1,39 @@
 
 
-# Sincronizar Base de Clientes com Planilha
+# Reprocessar sincronização completa com a nova planilha
 
-## Objetivo
-Atualizar a base de clientes no Supabase com os dados da planilha Excel, incluindo: regime tributário, valor mensal, código SCI, nome fantasia, segmento, além de excluir clientes ausentes na planilha e cadastrar novos.
+## Problema
+A migração anterior usou dados parciais/incorretos — continha CNPJs que não existem na planilha (ex: códigos SCI 185-248 com CNPJs diferentes) e faltavam ~30 clientes da planilha. Resultado: 160 clientes no sistema em vez de 191.
 
-## Mudanças
+## Planilha atual
+- **Page 1**: 186 clientes (linhas 9-194, códigos SCI 3 a 255)
+- **Page 2**: 5 clientes adicionais (códigos SCI 191, 192, 193, 124, 12)
+- **Total**: 191 clientes únicos (por CNPJ)
+- 1 cliente com status "Inativa" (LUNNAR, código 193)
 
-### 1. Migração SQL — nova coluna `trade_name`
-```sql
-ALTER TABLE clients ADD COLUMN trade_name text;
-```
+## Plano
 
-### 2. Atualizar `src/pages/Clients.tsx`
-- Adicionar `trade_name` ao tipo Client, emptyForm, populateForm, handleSave
-- Adicionar campo "Nome Fantasia" na aba Geral do formulário (após Razão Social)
-- Preencher automaticamente via BrasilAPI no fetchCnpjData
+### 1. Script Python para extrair todos os CNPJs da planilha
+- Ler o arquivo Excel com pandas
+- Extrair todas as 191 linhas com CNPJ, razão social, nome fantasia, regime, honorário, código SCI, segmento, status
+- Normalizar CNPJs (remover pontuação)
+- Converter honorários (formato BR com vírgula → numérico)
+- Mapear regimes: "SIMPLES NACIONAL" → `simples_nacional`, "LUCRO PRESUMIDO" → `lucro_presumido`, "MEI" → `mei`
 
-### 3. Script de sincronização de dados (via exec)
-Ler a planilha com pandas, extrair as colunas relevantes por CNPJ e executar via psql:
+### 2. Comparar com base atual
+- Consultar via psql todos os CNPJs atuais no sistema
+- Identificar: quais faltam, quais são extras, quais precisam de update
 
-**Para cada linha da planilha:**
-- Extrair: CNPJ, Honorário (monthly_value), Segmento (business_classification), Regime Tributação (tax_regime), Código (sci_code), Nome fantasia (trade_name)
-- Mapear regime: "SIMPLES NACIONAL", "LUCRO PRESUMIDO", "MEI" → valores usados no sistema
-
-**Operações:**
-- **UPDATE** clientes existentes (cruzamento por CNPJ): tax_regime, monthly_value, sci_code, trade_name
-- **UPDATE** segmento apenas quando `business_classification` estiver NULL/vazio
-- **DELETE** clientes que existem no sistema mas não na planilha
-- **INSERT** clientes novos (que estão na planilha mas não no sistema) com: company_name (razão social), document (CNPJ), sci_code, monthly_value, tax_regime, business_classification, trade_name, status
-
-### Mapeamento de colunas (planilha → banco)
-| Planilha | Banco |
-|---|---|
-| Honorário | monthly_value |
-| Segmento | business_classification |
-| Regime Tributação | tax_regime |
-| Código | sci_code |
-| Razão social | company_name |
-| CNPJ | document |
-| Nome fantasia | trade_name |
-| Status (Ativa/Inativa) | status (active/inactive) |
+### 3. Gerar e executar migração SQL
+Uma única migração que:
+- **UPDATE** todos os 191 clientes da planilha (tax_regime, monthly_value, sci_code, trade_name, status, business_classification onde vazio)
+- **DELETE** clientes que não estão na planilha
+- **INSERT** clientes novos que estão na planilha mas não no sistema
 
 ### Detalhes técnicos
-- Planilha tem ~186 clientes (linhas 9-194)
-- CNPJs na planilha incluem formatação (XX.XXX.XXX/XXXX-XX), normalizar para comparação
-- Honorários com formato brasileiro (vírgula decimal), converter para numérico
-- Usar psql INSERT para novos e UPDATE para existentes (o acesso permite INSERT e SELECT, mas UPDATE precisa migration — usaremos edge function ou faremos via migration com valores hardcoded)
-- Como psql só tem SELECT/INSERT, os UPDATEs e DELETEs serão feitos via migration SQL
+- Usar `code--exec` com Python + pandas para ler o Excel e gerar o SQL
+- Executar as operações via migration SQL (pois psql só tem SELECT/INSERT)
+- Manter a lógica de não sobrescrever `business_classification` se já preenchido
+- Trade names da planilha: coluna "Nome Fantasia"
+- Page 2 tem dados extras (cidade, UF, etc.) que não precisamos agora
 
