@@ -1,35 +1,57 @@
 
 
-# Busca em lote de CNPJs para atualizar todos os cadastros
+# Criar Página de Chat estilo WhatsApp
 
 ## Objetivo
-Criar uma funcionalidade que percorre todos os clientes com CNPJ, consulta a edge function `cnpj-lookup` para cada um, e atualiza os campos cadastrais (razão social, endereço, telefone, CNAE principal, CNAEs secundários, sócios, regime tributário, nome fantasia, data de abertura, segmento e classificação por IA).
+Criar uma página de Chat integrada ao sistema com visual inspirado no WhatsApp: lista de conversas à esquerda e painel de mensagens à direita.
 
 ## Mudanças
 
-### 1. Adicionar botão "Atualizar Cadastros via CNPJ" na página de Clientes
-- Botão visível na barra de ações da listagem de clientes
-- Ao clicar, inicia o processo em lote com indicador de progresso (ex: "Atualizando 15/187...")
-- Delay de 1.5s entre cada requisição para não sobrecarregar a API
+### 1. Tabelas no banco (2 migrações)
+- **`chat_conversations`**: `id`, `name`, `is_group`, `created_at`, `updated_at`, `created_by` (ref auth.users)
+- **`chat_participants`**: `id`, `conversation_id`, `user_id`, `joined_at`
+- **`chat_messages`**: `id`, `conversation_id`, `sender_id`, `content` (text), `message_type` (text/image/file), `created_at`, `read_at`
+- RLS: usuários só veem conversas onde são participantes
+- Realtime habilitado nas tabelas de mensagens
 
-### 2. Lógica de atualização em lote (`src/pages/Clients.tsx`)
-- Buscar todos os clientes com CNPJ válido (14 dígitos)
-- Para cada cliente:
-  - Chamar `supabase.functions.invoke('cnpj-lookup', { body: { cnpj } })`
-  - Montar os campos: `company_name`, `address`, `contact_phone`, `contact_email`, `main_activity`, `secondary_activities`, `tax_regime`, `partners_info`, `foundation_date`, `opening_date`, `business_segment`, `trade_name`
-  - Chamar `classify-segment` para obter `business_classification` via IA
-  - Fazer `UPDATE` no Supabase com os dados obtidos
-- Exibir toast com resumo ao final (X atualizados, Y erros)
+### 2. Nova página `src/pages/Chat.tsx`
+Layout dividido em dois painéis (como WhatsApp):
 
-### 3. Proteções
-- Botão desabilitado durante execução
-- Não sobrescrever `monthly_value`, `sci_code`, `status` ou outros campos manuais
-- Se a API falhar para um CNPJ, pular e continuar com o próximo
-- Preservar `business_classification` se já existir (ou atualizar sempre, a pedido do usuário)
+**Painel esquerdo — Lista de conversas**
+- Header com avatar do usuário, busca e botão "Nova conversa"
+- Lista de conversas com: avatar, nome, última mensagem, horário, badge de não lidas
+- Busca/filtro por nome
+- Conversa ativa destacada com fundo diferente
+
+**Painel direito — Mensagens**
+- Header com nome do contato/grupo e avatar
+- Área de mensagens com scroll, balões verdes (enviadas) e brancos (recebidas)
+- Agrupamento por data ("Hoje", "Ontem", etc.)
+- Input de mensagem na parte inferior com botão de envio
+- Estado vazio quando nenhuma conversa selecionada
+
+### 3. Componentes auxiliares
+- `src/components/chat/ConversationList.tsx` — lista lateral
+- `src/components/chat/MessageArea.tsx` — área de mensagens
+- `src/components/chat/MessageBubble.tsx` — balão individual
+- `src/components/chat/ChatInput.tsx` — input com envio
+- `src/components/chat/NewConversationDialog.tsx` — dialog para iniciar conversa (seleciona usuários do sistema)
+
+### 4. Realtime com Supabase
+- Subscribe no canal `chat_messages` para receber mensagens em tempo real
+- Atualizar lista de conversas quando nova mensagem chegar
+- Marcar mensagens como lidas ao abrir conversa
+
+### 5. Integração no app
+- Adicionar rota `/chat` em `App.tsx`
+- Adicionar item "Chat" no `AppSidebar.tsx` com ícone `MessageCircle`
+- Página usa `h-[calc(100vh-theme(spacing.16))]` para ocupar toda a altura sem scroll externo
 
 ### Detalhes técnicos
-- Reutiliza a mesma lógica de `fetchCnpjData` já existente, mas aplicada em lote
-- Delay de 1500ms entre chamadas para respeitar rate limits da BrasilAPI
-- Progresso mostrado via estado React (contador atual / total)
-- Ao finalizar, recarrega a lista de clientes
+- Cores dos balões: enviado `bg-[#DCF8C6]`, recebido `bg-white` (tema claro do WhatsApp)
+- Fundo da área de mensagens com padrão sutil (cor `bg-[#ECE5DD]`)
+- Painel lateral com largura fixa ~350px, mensagens ocupam o restante
+- Scroll automático para última mensagem ao abrir conversa ou receber nova
+- Timestamps formatados com `date-fns` (já no projeto)
+- Responsivo: em mobile, mostrar apenas a lista ou as mensagens (toggle)
 
