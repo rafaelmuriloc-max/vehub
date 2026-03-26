@@ -237,6 +237,7 @@ export default function Clients() {
         foundation_date: data.data_inicio_atividade || prev.foundation_date,
         opening_date: data.data_inicio_atividade || prev.opening_date,
         business_segment: data.cnae_fiscal_descricao || prev.business_segment,
+        trade_name: data.nome_fantasia || prev.trade_name,
         business_classification: '',
       }));
       setClassifyingSegment(true);
