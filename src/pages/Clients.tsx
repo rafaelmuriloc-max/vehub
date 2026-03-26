@@ -48,25 +48,18 @@ function parsePermits(raw: string | null): PermitItem[] {
   return defaultPermits.map(p => ({ ...p }));
 }
 
-function classifyByCnae(mainCnae: string, secondaryCnaes: string): string {
-  const getType = (code: string) => {
-    const digits = code.replace(/\D/g, '');
-    if (!digits) return 'servico';
-    const div = parseInt(digits.substring(0, 2));
-    if (div >= 10 && div <= 33) return 'industria';
-    if (div >= 45 && div <= 47) return 'comercio';
-    return 'servico';
-  };
-  const mainType = getType(mainCnae);
-  const allCodes = [mainCnae];
-  if (secondaryCnaes) {
-    const matches = secondaryCnaes.match(/\d{7}/g);
-    if (matches) allCodes.push(...matches);
+async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<string> {
+  if (!mainCnae && !secondaryCnaes) return '';
+  try {
+    const { data, error } = await supabase.functions.invoke('classify-segment', {
+      body: { main_activity: mainCnae, secondary_activities: secondaryCnaes },
+    });
+    if (error) throw error;
+    return data?.classification || '';
+  } catch (e) {
+    console.error('AI classification error:', e);
+    return '';
   }
-  const types = new Set(allCodes.map(getType));
-  if (types.size > 1) return 'Misto';
-  const map: Record<string, string> = { comercio: 'Comércio', industria: 'Indústria', servico: 'Serviço' };
-  return map[mainType] || 'Serviço';
 }
 
 type Client = {
