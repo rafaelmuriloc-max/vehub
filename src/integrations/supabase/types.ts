@@ -111,6 +111,7 @@ export type Database = {
       clients: {
         Row: {
           address: string | null
+          business_classification: string | null
           business_segment: string | null
           company_description: string | null
           company_name: string
@@ -154,6 +155,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          business_classification?: string | null
           business_segment?: string | null
           company_description?: string | null
           company_name: string
@@ -197,6 +199,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          business_classification?: string | null
           business_segment?: string | null
           company_description?: string | null
           company_name?: string
