@@ -953,7 +953,6 @@ export default function Clients() {
                         setClassifyingSegment(false);
                       });
                     }} />
-                    }} />
                   </div>
                   <div className="col-span-2 space-y-2">
                     <Label>Atividades Secundárias</Label>
@@ -964,7 +963,6 @@ export default function Clients() {
                         setForm(prev => ({ ...prev, business_classification: c }));
                         setClassifyingSegment(false);
                       });
-                    }} />
                     }} />
                   </div>
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
