@@ -736,11 +736,18 @@ export default function Clients() {
         <h1 className="text-3xl font-bold text-foreground">Clientes</h1>
         {isAdmin_ && (
           <div className="flex gap-2">
+            <Button variant="outline" onClick={batchUpdateAllCnpj} disabled={batchUpdating}>
+              {batchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              {batchUpdating ? `Atualizando ${batchProgress.current}/${batchProgress.total}` : 'Atualizar Cadastros'}
+            </Button>
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <Upload className="mr-2 h-4 w-4" />Importar Certificados
             </Button>
             <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" />Novo Cliente</Button>
           </div>
+          {batchUpdating && (
+            <Progress value={(batchProgress.current / Math.max(batchProgress.total, 1)) * 100} className="h-2 mt-2 w-full absolute bottom-0 left-0" />
+          )}
         )}
       </div>
 
