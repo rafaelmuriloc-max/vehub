@@ -187,9 +187,8 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
 
         // Fetch BrasilAPI data
         try {
-          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
-          if (res.ok) {
-            const data = await res.json();
+          const { data, error: fnError } = await supabase.functions.invoke('cnpj-lookup', { body: { cnpj } });
+          if (!fnError && data && !data.error) {
             entry.brasilApiData = data;
             entry.companyName = data.razao_social || null;
           }
