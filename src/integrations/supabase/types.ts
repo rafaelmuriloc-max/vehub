@@ -151,6 +151,7 @@ export type Database = {
           status: Database["public"]["Enums"]["client_status"]
           success_notes: string | null
           tax_regime: string | null
+          trade_name: string | null
           updated_at: string
         }
         Insert: {
@@ -195,6 +196,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["client_status"]
           success_notes?: string | null
           tax_regime?: string | null
+          trade_name?: string | null
           updated_at?: string
         }
         Update: {
@@ -239,6 +241,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["client_status"]
           success_notes?: string | null
           tax_regime?: string | null
+          trade_name?: string | null
           updated_at?: string
         }
         Relationships: []

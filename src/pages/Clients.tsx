@@ -79,6 +79,7 @@ type Client = {
   previous_office_name: string | null; exit_reason: string | null;
   destination_office_name: string | null; exit_reason_notes: string | null;
   business_classification: string | null;
+  trade_name: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -98,6 +99,7 @@ const emptyForm = {
   previous_office_name: '', exit_reason: '',
   destination_office_name: '', exit_reason_notes: '',
   business_classification: '',
+  trade_name: '',
 };
 
 type Department = { id: string; name: string };
@@ -235,6 +237,7 @@ export default function Clients() {
         foundation_date: data.data_inicio_atividade || prev.foundation_date,
         opening_date: data.data_inicio_atividade || prev.opening_date,
         business_segment: data.cnae_fiscal_descricao || prev.business_segment,
+        trade_name: data.nome_fantasia || prev.trade_name,
         business_classification: '',
       }));
       setClassifyingSegment(true);
@@ -371,6 +374,7 @@ export default function Clients() {
       previous_office_name: (c as any).previous_office_name || '', exit_reason: (c as any).exit_reason || '',
       destination_office_name: (c as any).destination_office_name || '', exit_reason_notes: (c as any).exit_reason_notes || '',
       business_classification: (c as any).business_classification || '',
+      trade_name: (c as any).trade_name || '',
     });
   }
 
@@ -509,6 +513,7 @@ export default function Clients() {
       previous_office_name: form.previous_office_name || null, exit_reason: form.exit_reason || null,
       destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
       business_classification: form.business_classification || null,
+      trade_name: form.trade_name || null,
     };
     let error;
     let clientId = editing?.id;
@@ -825,6 +830,7 @@ export default function Clients() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Código SCI</Label><Input {...f('sci_code')} placeholder="Código no SCI Sistemas" /></div>
                   <div className="col-span-2 space-y-2"><Label>Razão Social *</Label><Input {...f('company_name')} required /></div>
+                  <div className="col-span-2 space-y-2"><Label>Nome Fantasia</Label><Input {...f('trade_name')} placeholder="Nome fantasia da empresa" /></div>
                   <div className="space-y-2">
                     <Label>CNPJ/CPF</Label>
                     <div className="flex gap-2">
