@@ -953,7 +953,10 @@ export default function Clients() {
                   </div>
                   <div className="col-span-2 space-y-2">
                     <Label>Atividades Secundárias</Label>
-                    <CnaeMultiSelect value={form.secondary_activities} onChange={v => setForm({ ...form, secondary_activities: v })} />
+                    <CnaeMultiSelect value={form.secondary_activities} onChange={v => {
+                      const classification = classifyByCnae(form.main_activity, v);
+                      setForm({ ...form, secondary_activities: v, business_classification: classification });
+                    }} />
                   </div>
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
                   <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...f('municipal_registration')} /></div>
