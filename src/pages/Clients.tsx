@@ -200,9 +200,8 @@ export default function Clients() {
     }
     setCnpjLoading(true);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-      if (!res.ok) throw new Error('CNPJ não encontrado');
-      const data = await res.json();
+      const { data, error: fnError } = await supabase.functions.invoke('cnpj-lookup', { body: { cnpj: digits } });
+      if (fnError || !data || data.error) throw new Error(data?.error || 'CNPJ não encontrado');
 
       const address = [data.logradouro, data.numero, data.complemento, data.bairro, `${data.municipio || ''}/${data.uf || ''}`, data.cep]
         .filter(Boolean).join(', ');
@@ -278,9 +277,8 @@ export default function Clients() {
       for (const client of cnpjClients) {
         const cnpj = client.document!.replace(/\D/g, '');
         try {
-          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
-          if (!res.ok) { errors++; continue; }
-          const data = await res.json();
+          const { data, error: fnError } = await supabase.functions.invoke('cnpj-lookup', { body: { cnpj } });
+          if (fnError || !data || data.error) { errors++; continue; }
           
           const isSimples = data.opcao_pelo_simples === true;
           const isMei = data.opcao_pelo_mei === true;

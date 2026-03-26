@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.classify-segment]
 verify_jwt = false
+
+[functions.cnpj-lookup]
+verify_jwt = false

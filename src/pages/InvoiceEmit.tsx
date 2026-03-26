@@ -211,9 +211,8 @@ export default function InvoiceEmit() {
 
       // 2. Query BrasilAPI for CNPJ (only works for 14-digit CNPJ)
       if (digits.length === 14) {
-        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-        if (res.ok) {
-          const data = await res.json();
+        const { data, error: fnError } = await supabase.functions.invoke('cnpj-lookup', { body: { cnpj: digits } });
+        if (!fnError && data && !data.error) {
           const cep = (data.cep || '').replace(/\D/g, '');
           let ibge = '';
           if (cep.length === 8) {
