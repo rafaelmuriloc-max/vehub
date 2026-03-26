@@ -133,6 +133,8 @@ export default function Clients() {
   const [allObligations, setAllObligations] = useState<ObligationOption[]>([]);
   const [selectedObligations, setSelectedObligations] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [batchUpdating, setBatchUpdating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
