@@ -933,7 +933,7 @@ export default function Clients() {
                     </Select>
                   </div>
                   <div className="col-span-2 space-y-2">
-                    <Label>Classificação</Label>
+                    <Label>Segmento</Label>
                     <Select value={form.business_classification} onValueChange={v => setForm({ ...form, business_classification: v })} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
