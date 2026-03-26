@@ -1,33 +1,35 @@
 
 
-# Corrigir erro na busca de CNPJ (BrasilAPI bloqueada por CORS)
+# Busca em lote de CNPJs para atualizar todos os cadastros
 
-## Problema
-As chamadas diretas do frontend para `https://brasilapi.com.br/api/cnpj/v1/` estão falhando com "Failed to fetch". Isso ocorre porque a BrasilAPI bloqueia requisições CORS vindas do domínio do preview/produção.
-
-## Solução
-Criar uma Edge Function `cnpj-lookup` que faz a chamada para a BrasilAPI no servidor (sem restrição CORS) e atualizar o frontend para usar essa função.
+## Objetivo
+Criar uma funcionalidade que percorre todos os clientes com CNPJ, consulta a edge function `cnpj-lookup` para cada um, e atualiza os campos cadastrais (razão social, endereço, telefone, CNAE principal, CNAEs secundários, sócios, regime tributário, nome fantasia, data de abertura, segmento e classificação por IA).
 
 ## Mudanças
 
-### 1. Nova Edge Function `supabase/functions/cnpj-lookup/index.ts`
-- Recebe `{ cnpj: string }` no body
-- Chama `https://brasilapi.com.br/api/cnpj/v1/{digits}` no servidor
-- Retorna os dados com headers CORS adequados
-- Fallback: se BrasilAPI falhar, tenta `https://receitaws.com.br/v1/cnpj/{digits}`
+### 1. Adicionar botão "Atualizar Cadastros via CNPJ" na página de Clientes
+- Botão visível na barra de ações da listagem de clientes
+- Ao clicar, inicia o processo em lote com indicador de progresso (ex: "Atualizando 15/187...")
+- Delay de 1.5s entre cada requisição para não sobrecarregar a API
 
-### 2. Atualizar `src/pages/Clients.tsx`
-- Substituir `fetch('https://brasilapi.com.br/api/cnpj/v1/...')` por `supabase.functions.invoke('cnpj-lookup', { body: { cnpj } })`
-- Aplicar em ambos os locais: busca individual (linha ~203) e batch update de regimes (linha ~281)
+### 2. Lógica de atualização em lote (`src/pages/Clients.tsx`)
+- Buscar todos os clientes com CNPJ válido (14 dígitos)
+- Para cada cliente:
+  - Chamar `supabase.functions.invoke('cnpj-lookup', { body: { cnpj } })`
+  - Montar os campos: `company_name`, `address`, `contact_phone`, `contact_email`, `main_activity`, `secondary_activities`, `tax_regime`, `partners_info`, `foundation_date`, `opening_date`, `business_segment`, `trade_name`
+  - Chamar `classify-segment` para obter `business_classification` via IA
+  - Fazer `UPDATE` no Supabase com os dados obtidos
+- Exibir toast com resumo ao final (X atualizados, Y erros)
 
-### 3. Atualizar `src/pages/InvoiceEmit.tsx`
-- Substituir chamada direta à BrasilAPI pela Edge Function
-
-### 4. Atualizar `src/components/CertificateImportDialog.tsx`
-- Substituir chamada direta à BrasilAPI pela Edge Function
+### 3. Proteções
+- Botão desabilitado durante execução
+- Não sobrescrever `monthly_value`, `sci_code`, `status` ou outros campos manuais
+- Se a API falhar para um CNPJ, pular e continuar com o próximo
+- Preservar `business_classification` se já existir (ou atualizar sempre, a pedido do usuário)
 
 ### Detalhes técnicos
-- A Edge Function roda no Deno (servidor), sem restrição CORS
-- Não precisa de autenticação extra — usa o JWT do Supabase existente
-- Mantém a mesma estrutura de dados retornada pela BrasilAPI
+- Reutiliza a mesma lógica de `fetchCnpjData` já existente, mas aplicada em lote
+- Delay de 1500ms entre chamadas para respeitar rate limits da BrasilAPI
+- Progresso mostrado via estado React (contador atual / total)
+- Ao finalizar, recarrega a lista de clientes
 
