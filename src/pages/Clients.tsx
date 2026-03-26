@@ -48,6 +48,27 @@ function parsePermits(raw: string | null): PermitItem[] {
   return defaultPermits.map(p => ({ ...p }));
 }
 
+function classifyByCnae(mainCnae: string, secondaryCnaes: string): string {
+  const getType = (code: string) => {
+    const digits = code.replace(/\D/g, '');
+    if (!digits) return 'servico';
+    const div = parseInt(digits.substring(0, 2));
+    if (div >= 10 && div <= 33) return 'industria';
+    if (div >= 45 && div <= 47) return 'comercio';
+    return 'servico';
+  };
+  const mainType = getType(mainCnae);
+  const allCodes = [mainCnae];
+  if (secondaryCnaes) {
+    const matches = secondaryCnaes.match(/\d{7}/g);
+    if (matches) allCodes.push(...matches);
+  }
+  const types = new Set(allCodes.map(getType));
+  if (types.size > 1) return 'Misto';
+  const map: Record<string, string> = { comercio: 'Comércio', industria: 'Indústria', servico: 'Serviço' };
+  return map[mainType] || 'Serviço';
+}
+
 type Client = {
   id: string; company_name: string; sci_code: string | null; document: string | null; contact_name: string | null;
   contact_email: string | null; contact_phone: string | null; address: string | null;
@@ -64,6 +85,7 @@ type Client = {
   opening_date: string | null; from_another_office: boolean;
   previous_office_name: string | null; exit_reason: string | null;
   destination_office_name: string | null; exit_reason_notes: string | null;
+  business_classification: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -82,6 +104,7 @@ const emptyForm = {
   opening_date: '', from_another_office: false as boolean,
   previous_office_name: '', exit_reason: '',
   destination_office_name: '', exit_reason_notes: '',
+  business_classification: '',
 };
 
 type Department = { id: string; name: string };
@@ -218,6 +241,7 @@ export default function Clients() {
         foundation_date: data.data_inicio_atividade || prev.foundation_date,
         opening_date: data.data_inicio_atividade || prev.opening_date,
         business_segment: data.cnae_fiscal_descricao || prev.business_segment,
+        business_classification: classifyByCnae(cnaePrincipal, secondaryCnaes),
       }));
 
       toast({ title: 'Dados carregados', description: `Dados de ${data.razao_social || digits} preenchidos automaticamente.` });
@@ -347,6 +371,7 @@ export default function Clients() {
       opening_date: (c as any).opening_date || '', from_another_office: !!(c as any).from_another_office,
       previous_office_name: (c as any).previous_office_name || '', exit_reason: (c as any).exit_reason || '',
       destination_office_name: (c as any).destination_office_name || '', exit_reason_notes: (c as any).exit_reason_notes || '',
+      business_classification: (c as any).business_classification || '',
     });
   }
 
@@ -484,6 +509,7 @@ export default function Clients() {
       opening_date: form.opening_date || null, from_another_office: form.from_another_office,
       previous_office_name: form.previous_office_name || null, exit_reason: form.exit_reason || null,
       destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
+      business_classification: form.business_classification || null,
     };
     let error;
     let clientId = editing?.id;
@@ -907,12 +933,30 @@ export default function Clients() {
                     </Select>
                   </div>
                   <div className="col-span-2 space-y-2">
+                    <Label>Classificação</Label>
+                    <Select value={form.business_classification} onValueChange={v => setForm({ ...form, business_classification: v })} disabled={viewOnly}>
+                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Comércio">Comércio</SelectItem>
+                        <SelectItem value="Serviço">Serviço</SelectItem>
+                        <SelectItem value="Indústria">Indústria</SelectItem>
+                        <SelectItem value="Misto">Misto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2 space-y-2">
                     <Label>Atividade Principal (CNAE)</Label>
-                    <CnaeCombobox value={form.main_activity} onChange={v => setForm({ ...form, main_activity: v })} />
+                    <CnaeCombobox value={form.main_activity} onChange={v => {
+                      const classification = classifyByCnae(v, form.secondary_activities);
+                      setForm({ ...form, main_activity: v, business_classification: classification });
+                    }} />
                   </div>
                   <div className="col-span-2 space-y-2">
                     <Label>Atividades Secundárias</Label>
-                    <CnaeMultiSelect value={form.secondary_activities} onChange={v => setForm({ ...form, secondary_activities: v })} />
+                    <CnaeMultiSelect value={form.secondary_activities} onChange={v => {
+                      const classification = classifyByCnae(form.main_activity, v);
+                      setForm({ ...form, secondary_activities: v, business_classification: classification });
+                    }} />
                   </div>
                   <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
                   <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...f('municipal_registration')} /></div>
