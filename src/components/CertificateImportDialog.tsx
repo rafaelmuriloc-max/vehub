@@ -123,9 +123,7 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
         try {
           p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
         } catch {
-          entry.status = 'error';
-          entry.error = 'Senha incorreta';
-          results.push(entry);
+          // Senha incorreta — ignorar silenciosamente
           continue;
         }
 
@@ -182,7 +180,8 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
           entry.status = 'exists';
           entry.companyName = '(já cadastrado)';
         } else {
-          entry.status = 'new';
+          // CNPJ não cadastrado — ignorar
+          continue;
         }
 
         // Fetch BrasilAPI data
@@ -209,7 +208,7 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
   }
 
   async function handleImport() {
-    const toImport = entries.filter(e => e.status === 'new' || e.status === 'exists');
+    const toImport = entries.filter(e => e.status === 'exists');
     if (toImport.length === 0) return;
 
     setImporting(true);
@@ -223,56 +222,17 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
         const cnpjFormatted = entry.cnpj ? formatCnpjDisplay(entry.cnpj) : '';
         const data = entry.brasilApiData;
 
-        if (entry.status === 'exists' || existingDocuments.some(d => d.replace(/\D/g, '') === entry.cnpj)) {
-          // Update existing client: just upload certificate
-          const { data: existingClients } = await supabase.from('clients').select('id').ilike('document', `%${entry.cnpj}%`).limit(1);
-          const existingClient = existingClients?.[0];
-          if (existingClient) {
-            const filePath = `${existingClient.id}/${entry.file.name}`;
-            await supabase.storage.from('certificates').upload(filePath, entry.file, { upsert: true });
-            await supabase.from('clients').update({
-              digital_certificate_url: filePath,
-              digital_certificate_password: password,
-              digital_certificate_expiry: entry.expiry ? entry.expiry.toISOString().split('T')[0] : null,
-            } as any).eq('id', existingClient.id);
-          }
-        } else {
-          // Create new client
-          const address = data ? [data.logradouro, data.numero, data.complemento, data.bairro, `${data.municipio}/${data.uf}`, data.cep].filter(Boolean).join(', ') : null;
-          const mainCnae = data?.cnae_fiscal ? `${String(data.cnae_fiscal).padStart(7, '0')} - ${data.cnae_fiscal_descricao}` : null;
-          const secondaryCnaes = data?.cnaes_secundarios
-            ?.filter((c: any) => c.codigo && c.codigo !== 0)
-            .map((c: any) => `${String(c.codigo).padStart(7, '0')} - ${c.descricao}`)
-            .join(', ') || null;
-          const partners = data?.qsa?.map((s: any) => `${s.nome_socio} (${s.qualificacao_socio})`).join('\n') || null;
-
-          const payload: any = {
-            company_name: data?.razao_social || entry.fileName.replace(/\.(pfx|p12)$/i, ''),
-            document: cnpjFormatted,
-            address,
-            contact_phone: data?.ddd_telefone_1 ? `(${data.ddd_telefone_1.slice(0, 2)}) ${data.ddd_telefone_1.slice(2)}` : null,
-            contact_email: data?.email || null,
-            main_activity: mainCnae,
-            secondary_activities: secondaryCnaes,
-            partners_info: partners,
-            foundation_date: data?.data_inicio_atividade || null,
-            opening_date: data?.data_inicio_atividade || null,
-            business_segment: data?.cnae_fiscal_descricao || null,
+        // Update existing client: upload certificate
+        const { data: existingClients } = await supabase.from('clients').select('id').ilike('document', `%${entry.cnpj}%`).limit(1);
+        const existingClient = existingClients?.[0];
+        if (existingClient) {
+          const filePath = `${existingClient.id}/${entry.file.name}`;
+          await supabase.storage.from('certificates').upload(filePath, entry.file, { upsert: true });
+          await supabase.from('clients').update({
+            digital_certificate_url: filePath,
             digital_certificate_password: password,
             digital_certificate_expiry: entry.expiry ? entry.expiry.toISOString().split('T')[0] : null,
-            status: 'active',
-            start_date: new Date().toISOString().split('T')[0],
-            created_by: user?.id,
-          };
-
-          const { data: newClient, error } = await supabase.from('clients').insert(payload).select('id').single();
-          if (error) throw error;
-
-          if (newClient) {
-            const filePath = `${newClient.id}/${entry.file.name}`;
-            await supabase.storage.from('certificates').upload(filePath, entry.file, { upsert: true });
-            await supabase.from('clients').update({ digital_certificate_url: filePath } as any).eq('id', newClient.id);
-          }
+          } as any).eq('id', existingClient.id);
         }
 
         setEntries(prev => prev.map(e => e === entry ? { ...e, status: 'done' as const } : e));
@@ -294,8 +254,7 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
 
   const statusIcon = (status: ImportEntry['status']) => {
     switch (status) {
-      case 'new': return <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><FilePlus2 className="h-3 w-3" />Novo</Badge>;
-      case 'exists': return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 gap-1"><FileCheck2 className="h-3 w-3" />Atualizar</Badge>;
+      case 'exists': return <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><FileCheck2 className="h-3 w-3" />Importar</Badge>;
       case 'error': return <Badge variant="destructive" className="gap-1"><FileX2 className="h-3 w-3" />Erro</Badge>;
       case 'importing': return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
       case 'done': return <CheckCircle className="h-4 w-4 text-emerald-600" />;
@@ -314,11 +273,8 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
     return <span className="text-emerald-600 dark:text-emerald-400">{formatted}</span>;
   };
 
-  const newCount = entries.filter(e => e.status === 'new').length;
   const existsCount = entries.filter(e => e.status === 'exists').length;
   const errorCount = entries.filter(e => e.status === 'error').length;
-  const ignoredCount = entries.filter(e => e.status === 'error' && (e.error?.includes('pessoa física') || e.error?.includes('vencido'))).length;
-  const realErrorCount = errorCount - ignoredCount;
 
   const StatusCard = ({ icon: Icon, label, count, color }: { icon: any; label: string; count: number; color: string }) => (
     <div className={`flex items-center gap-2 rounded-lg border p-3 ${color}`}>
@@ -407,11 +363,9 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
         {step === 'preview' && (
           <div className="space-y-4">
             {/* Status summary cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <StatusCard icon={FilePlus2} label="Novos" count={newCount} color="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" />
-              <StatusCard icon={FileCheck2} label="Existentes" count={existsCount} color="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800" />
-              <StatusCard icon={ShieldAlert} label="Ignorados" count={ignoredCount} color="bg-muted text-muted-foreground border-border" />
-              <StatusCard icon={FileX2} label="Erros" count={realErrorCount} color="bg-destructive/10 text-destructive border-destructive/30" />
+            <div className="grid grid-cols-2 gap-2">
+              <StatusCard icon={FileCheck2} label="Para importar" count={existsCount} color="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" />
+              <StatusCard icon={FileX2} label="Erros" count={errorCount} color="bg-destructive/10 text-destructive border-destructive/30" />
             </div>
 
             {/* Desktop table */}
@@ -467,11 +421,11 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
               </Button>
               <Button
                 onClick={handleImport}
-                disabled={newCount + existsCount === 0}
+                disabled={existsCount === 0}
                 className="w-full sm:w-auto"
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Importar {newCount + existsCount} cliente(s)
+                Importar {existsCount} certificado(s)
               </Button>
             </div>
           </div>
