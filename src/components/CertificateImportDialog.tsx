@@ -421,11 +421,11 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
               </Button>
               <Button
                 onClick={handleImport}
-                disabled={newCount + existsCount === 0}
+                disabled={existsCount === 0}
                 className="w-full sm:w-auto"
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Importar {newCount + existsCount} cliente(s)
+                Importar {existsCount} certificado(s)
               </Button>
             </div>
           </div>
