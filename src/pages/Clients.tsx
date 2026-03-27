@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
@@ -786,6 +786,7 @@ export default function Clients() {
                 <TableHead>Contato</TableHead>
                 <TableHead>Valor Mensal</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Venc. Certificado</TableHead>
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -798,6 +799,16 @@ export default function Clients() {
                   <TableCell>{c.contact_name || '-'}</TableCell>
                   <TableCell>R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge></TableCell>
+                  <TableCell>{(() => {
+                    if (!c.digital_certificate_expiry) return <span className="text-muted-foreground text-xs">—</span>;
+                    const exp = new Date(c.digital_certificate_expiry + 'T00:00:00');
+                    const now = new Date();
+                    const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    const formatted = exp.toLocaleDateString('pt-BR');
+                    if (diffDays < 0) return <Badge className="bg-destructive/10 text-destructive border-destructive/30">{formatted}</Badge>;
+                    if (diffDays <= 30) return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">{formatted}</Badge>;
+                    return <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">{formatted}</Badge>;
+                  })()}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openView(c)} title="Visualizar">
@@ -817,7 +828,7 @@ export default function Clients() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -833,6 +844,14 @@ export default function Clients() {
                   <p className="font-medium text-foreground">{c.company_name}</p>
                   <p className="text-sm text-muted-foreground">{c.document || 'Sem documento'}</p>
                   <p className="text-sm text-muted-foreground">R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  {c.digital_certificate_expiry && (() => {
+                    const exp = new Date(c.digital_certificate_expiry + 'T00:00:00');
+                    const now = new Date();
+                    const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    const formatted = exp.toLocaleDateString('pt-BR');
+                    const cls = diffDays < 0 ? 'text-destructive' : diffDays <= 30 ? 'text-amber-600' : 'text-emerald-600';
+                    return <p className={`text-xs flex items-center gap-1 ${cls}`}><ShieldCheck className="h-3 w-3" />Cert: {formatted}</p>;
+                  })()}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
