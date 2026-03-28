@@ -223,7 +223,7 @@ export default function CertificateImportDialog({ open, onOpenChange, onImportCo
         const data = entry.brasilApiData;
 
         // Update existing client: upload certificate
-        const { data: existingClients } = await supabase.from('clients').select('id').ilike('document', `%${entry.cnpj}%`).limit(1);
+        const { data: existingClients } = await supabase.from('clients').select('id').eq('document', cnpjFormatted).limit(1);
         const existingClient = existingClients?.[0];
         if (existingClient) {
           const filePath = `${existingClient.id}/${entry.file.name}`;
