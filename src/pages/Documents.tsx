@@ -1,21 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Download, Trash2, FileText } from 'lucide-react';
+import { Upload, Download, Trash2, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import * as pdfjs from 'pdfjs-dist';
+import DocumentReviewDialog, { type AiExtraction, type ReviewData } from '@/components/DocumentReviewDialog';
 
-type DocumentType = { id: string; name: string };
-type Client = { id: string; company_name: string };
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
+
+type DocumentType = { id: string; name: string; description: string | null };
+type Client = { id: string; company_name: string; document: string | null };
 type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string };
+
+function cleanCnpj(raw: string | null | undefined): string {
+  return (raw || '').replace(/\D/g, '');
+}
+
+async function extractPdfText(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((it: any) => it.str).join(' '));
+  }
+  return pages.join('\n');
+}
 
 export default function Documents() {
   const { isAdmin, user } = useAuth();
@@ -24,18 +44,17 @@ export default function Documents() {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
-
-  const [selectedType, setSelectedType] = useState('');
-  const [selectedClient, setSelectedClient] = useState('');
-  const [referenceMonth, setReferenceMonth] = useState(format(new Date(), 'yyyy-MM-01'));
-  const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
     const [dtRes, clRes, docRes] = await Promise.all([
-      supabase.from('document_types').select('id, name').order('name'),
-      supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
+      supabase.from('document_types').select('id, name, description').order('name'),
+      supabase.from('clients').select('id, company_name, document').eq('status', 'active').order('company_name'),
       supabase.from('documents').select('*').order('created_at', { ascending: false }),
     ]);
     if (dtRes.data) setDocumentTypes(dtRes.data as DocumentType[]);
@@ -43,84 +62,169 @@ export default function Documents() {
     if (docRes.data) setDocuments(docRes.data as Doc[]);
   }
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !selectedType || !selectedClient || !referenceMonth) {
-      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
-      return;
-    }
-    setUploading(true);
+  function matchClient(cnpj: string): string {
+    if (!cnpj) return '';
+    const clean = cleanCnpj(cnpj);
+    if (clean.length !== 14) return '';
+    const found = clients.find(c => cleanCnpj(c.document) === clean);
+    return found?.id || '';
+  }
+
+  function matchDocType(name: string): string {
+    if (!name) return '';
+    const lower = name.toLowerCase().trim();
+    const found = documentTypes.find(dt => dt.name.toLowerCase().trim() === lower);
+    return found?.id || '';
+  }
+
+  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Process first file (multi-file can be added later)
+    const file = files[0];
+    setAnalyzing(true);
+
     try {
-      const path = `${selectedClient}/${referenceMonth}/${selectedType}/${file.name}`;
-      const { error: uploadError } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
-      if (uploadError) throw uploadError;
-
-      // Save document record
-      const { error: insertError } = await supabase.from('documents').insert({
-        document_type_id: selectedType,
-        client_id: selectedClient,
-        reference_month: referenceMonth,
-        file_url: path,
-        file_name: file.name,
-        uploaded_by: user?.id || null,
-      } as any);
-      if (insertError) throw insertError;
-
-      // Auto-associate: find activities of type 'document' with this document_type_id
-      // and mark completions for instances of this client/reference_month
-      const { data: matchingActivities } = await supabase
-        .from('obligation_activities')
-        .select('id, obligation_id')
-        .eq('type', 'document')
-        .eq('document_type_id', selectedType);
-
-      if (matchingActivities && matchingActivities.length > 0) {
-        const obligationIds = [...new Set(matchingActivities.map(a => a.obligation_id))];
-        const { data: matchingInstances } = await supabase
-          .from('obligation_instances')
-          .select('id, obligation_id')
-          .eq('client_id', selectedClient)
-          .eq('reference_month', referenceMonth)
-          .in('obligation_id', obligationIds);
-
-        if (matchingInstances && matchingInstances.length > 0) {
-          for (const inst of matchingInstances) {
-            const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
-            for (const act of relatedActivities) {
-              // Check if completion exists
-              const { data: existing } = await supabase
-                .from('obligation_activity_completions')
-                .select('id')
-                .eq('instance_id', inst.id)
-                .eq('activity_id', act.id)
-                .maybeSingle();
-
-              if (existing) {
-                await supabase.from('obligation_activity_completions').update({
-                  completed: true, completed_at: new Date().toISOString(), file_url: path,
-                }).eq('id', existing.id);
-              } else {
-                await supabase.from('obligation_activity_completions').insert({
-                  instance_id: inst.id, activity_id: act.id, completed: true, completed_at: new Date().toISOString(), file_url: path,
-                });
-              }
-            }
-          }
-          toast({ title: 'Documento importado', description: 'Obrigações associadas foram atualizadas automaticamente.' });
-        } else {
-          toast({ title: 'Documento importado', description: 'Nenhuma competência encontrada para auto-associação.' });
-        }
-      } else {
-        toast({ title: 'Documento importado' });
+      // 1. Extract text from PDF
+      let text = '';
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        text = await extractPdfText(file);
       }
 
-      loadAll();
+      if (!text.trim()) {
+        // Non-PDF or empty: go straight to review with empty extraction
+        setReviewData({
+          file,
+          extraction: { cnpj: '', company_name: '', reference_month: '', document_type_name: '' },
+          matchedClientId: '',
+          matchedDocTypeId: '',
+          referenceMonth: '',
+        });
+        setReviewOpen(true);
+        setAnalyzing(false);
+        return;
+      }
+
+      // 2. Call AI to classify
+      const { data: aiResult, error: aiError } = await supabase.functions.invoke('classify-document', {
+        body: {
+          text,
+          document_types: documentTypes.map(dt => ({ name: dt.name, description: dt.description })),
+        },
+      });
+
+      if (aiError) throw new Error(aiError.message || 'Erro na classificação');
+
+      const extraction: AiExtraction = {
+        cnpj: aiResult?.cnpj || '',
+        company_name: aiResult?.company_name || '',
+        reference_month: aiResult?.reference_month || '',
+        document_type_name: aiResult?.document_type_name || '',
+      };
+
+      // 3. Match against local data
+      const matchedClientId = matchClient(extraction.cnpj);
+      const matchedDocTypeId = matchDocType(extraction.document_type_name);
+      const referenceMonth = extraction.reference_month || '';
+
+      // 4. If all matched → auto-import
+      if (matchedClientId && matchedDocTypeId && referenceMonth) {
+        await importDocument(file, matchedClientId, matchedDocTypeId, referenceMonth + '-01');
+        setAnalyzing(false);
+        return;
+      }
+
+      // 5. Otherwise → open review dialog
+      setReviewData({ file, extraction, matchedClientId, matchedDocTypeId, referenceMonth });
+      setReviewOpen(true);
+    } catch (err: any) {
+      toast({ title: 'Erro na análise', description: err.message, variant: 'destructive' });
+    } finally {
+      setAnalyzing(false);
+      e.target.value = '';
+    }
+  }, [clients, documentTypes]);
+
+  async function handleReviewConfirm({ file, clientId, docTypeId, referenceMonth }: { file: File; clientId: string; docTypeId: string; referenceMonth: string }) {
+    setConfirming(true);
+    try {
+      await importDocument(file, clientId, docTypeId, referenceMonth + '-01');
+      setReviewOpen(false);
+      setReviewData(null);
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
-      setUploading(false);
-      e.target.value = '';
+      setConfirming(false);
     }
+  }
+
+  async function importDocument(file: File, clientId: string, docTypeId: string, refMonth: string) {
+    const path = `${clientId}/${refMonth}/${docTypeId}/${file.name}`;
+    const { error: uploadError } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
+    if (uploadError) throw uploadError;
+
+    const { error: insertError } = await supabase.from('documents').insert({
+      document_type_id: docTypeId,
+      client_id: clientId,
+      reference_month: refMonth,
+      file_url: path,
+      file_name: file.name,
+      uploaded_by: user?.id || null,
+    } as any);
+    if (insertError) throw insertError;
+
+    // Auto-associate obligations
+    const { data: matchingActivities } = await supabase
+      .from('obligation_activities')
+      .select('id, obligation_id')
+      .eq('type', 'document')
+      .eq('document_type_id', docTypeId);
+
+    let associatedCount = 0;
+    if (matchingActivities && matchingActivities.length > 0) {
+      const obligationIds = [...new Set(matchingActivities.map(a => a.obligation_id))];
+      const { data: matchingInstances } = await supabase
+        .from('obligation_instances')
+        .select('id, obligation_id')
+        .eq('client_id', clientId)
+        .eq('reference_month', refMonth)
+        .in('obligation_id', obligationIds);
+
+      if (matchingInstances) {
+        for (const inst of matchingInstances) {
+          const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
+          for (const act of relatedActivities) {
+            const { data: existing } = await supabase
+              .from('obligation_activity_completions')
+              .select('id')
+              .eq('instance_id', inst.id)
+              .eq('activity_id', act.id)
+              .maybeSingle();
+
+            if (existing) {
+              await supabase.from('obligation_activity_completions').update({
+                completed: true, completed_at: new Date().toISOString(), file_url: path,
+              }).eq('id', existing.id);
+            } else {
+              await supabase.from('obligation_activity_completions').insert({
+                instance_id: inst.id, activity_id: act.id, completed: true, completed_at: new Date().toISOString(), file_url: path,
+              });
+            }
+            associatedCount++;
+          }
+        }
+      }
+    }
+
+    toast({
+      title: 'Documento importado com sucesso',
+      description: associatedCount > 0
+        ? `${associatedCount} atividade(s) de obrigação vinculada(s) automaticamente.`
+        : 'Nenhuma obrigação vinculada encontrada para esta competência.',
+    });
+
+    loadAll();
   }
 
   async function downloadDoc(fileUrl: string) {
@@ -141,45 +245,20 @@ export default function Documents() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Documentos</h1>
-        <p className="text-muted-foreground">Importação de documentos com associação automática às obrigações</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Documentos</h1>
+          <p className="text-muted-foreground">Importação inteligente com classificação automática por IA</p>
+        </div>
+        <label className="cursor-pointer">
+          <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" onChange={handleUpload} disabled={analyzing} />
+          <Button asChild disabled={analyzing}>
+            <span>
+              {analyzing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivo</>}
+            </span>
+          </Button>
+        </label>
       </div>
-
-      {/* Upload section */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Importar Documento</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div className="space-y-2">
-              <Label>Tipo de Documento *</Label>
-              <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{documentTypes.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Cliente *</Label>
-              <Select value={selectedClient} onValueChange={setSelectedClient}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Competência *</Label>
-              <Input type="date" value={referenceMonth} onChange={e => setReferenceMonth(e.target.value)} />
-            </div>
-            <div>
-              <label className="cursor-pointer">
-                <input type="file" className="hidden" onChange={handleUpload} disabled={uploading || !selectedType || !selectedClient} />
-                <Button asChild disabled={uploading || !selectedType || !selectedClient}>
-                  <span><Upload className="h-4 w-4 mr-2" />{uploading ? 'Enviando...' : 'Enviar Arquivo'}</span>
-                </Button>
-              </label>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Documents list */}
       <Card>
@@ -220,6 +299,16 @@ export default function Documents() {
           </Table>
         </CardContent>
       </Card>
+
+      <DocumentReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        data={reviewData}
+        documentTypes={documentTypes}
+        clients={clients}
+        onConfirm={handleReviewConfirm}
+        confirming={confirming}
+      />
     </div>
   );
 }
