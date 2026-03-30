@@ -284,6 +284,7 @@ export default function Documents() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Competência</TableHead>
+                <TableHead>Obrigação</TableHead>
                 <TableHead>Data Upload</TableHead>
                 <TableHead className="w-24">Ações</TableHead>
               </TableRow>
