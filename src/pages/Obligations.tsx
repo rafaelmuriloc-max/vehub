@@ -106,7 +106,7 @@ export default function Obligations() {
   // ---- Activity CRUD ----
   function openNewActivity(obligationId: string) {
     setEditingActivity(null);
-    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '' });
+    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false });
     setActivityOpen(true);
   }
   function openEditActivity(a: Activity) {
