@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import EmailComposeDialog from '@/components/EmailComposeDialog';
 
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean };
