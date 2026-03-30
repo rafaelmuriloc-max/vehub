@@ -90,7 +90,7 @@ export default function CalendarView() {
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
-      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order'),
+      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start'),
       supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url'),
     ]);
     setInstances((instRes.data as Instance[]) || []);
