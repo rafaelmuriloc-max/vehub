@@ -159,6 +159,43 @@ export default function Clients() {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [classifyingAll, setClassifyingAll] = useState(false);
   const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
+  const [societyDocs, setSocietyDocs] = useState<{ id: string; document_label: string; file_name: string; file_url: string }[]>([]);
+  const [societyUploading, setSocietyUploading] = useState<Record<string, boolean>>({});
+
+  async function loadSocietyDocs(clientId: string) {
+    const { data } = await supabase.from('client_society_documents' as any).select('id, document_label, file_name, file_url').eq('client_id', clientId);
+    setSocietyDocs((data as any[]) || []);
+  }
+
+  async function handleSocietyUpload(label: string, file: File) {
+    if (!editing) return;
+    setSocietyUploading(prev => ({ ...prev, [label]: true }));
+    try {
+      const path = `${editing.id}/societario/${label}/${file.name}`;
+      const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase.from('client_society_documents' as any).insert({ client_id: editing.id, document_label: label, file_name: file.name, file_url: path, uploaded_by: user?.id } as any);
+      if (dbErr) throw dbErr;
+      await loadSocietyDocs(editing.id);
+      toast({ title: 'Documento enviado com sucesso' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar documento', description: err.message, variant: 'destructive' });
+    } finally {
+      setSocietyUploading(prev => ({ ...prev, [label]: false }));
+    }
+  }
+
+  async function handleSocietyDownload(fileUrl: string) {
+    const { data } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 60);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
+  async function handleSocietyDelete(docId: string, fileUrl: string) {
+    await supabase.storage.from('documents').remove([fileUrl]);
+    await supabase.from('client_society_documents' as any).delete().eq('id', docId);
+    if (editing) await loadSocietyDocs(editing.id);
+    toast({ title: 'Documento removido' });
+  }
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
