@@ -1071,33 +1071,50 @@ export default function Clients() {
                     <Building2 className="h-4 w-4" />
                     Regime Tributário × Segmento
                   </CardTitle>
+                  <p className="text-[11px] text-muted-foreground/60">Distribuição percentual de segmentos por regime</p>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={stackedData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                      <XAxis dataKey="regime" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      <Tooltip content={<StackedTooltip />} />
-                      <Legend
-                        wrapperStyle={{ fontSize: 12 }}
-                        formatter={(value: string) => <span className="text-muted-foreground">{value}</span>}
-                      />
+                  <div className="flex flex-col lg:flex-row gap-6">
+                    <div className="lg:w-[70%]">
+                      <ResponsiveContainer width="100%" height={Math.max(200, stackedData.length * 52)}>
+                        <BarChart data={stackedData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                          <defs>
+                            {segmentList.map((seg, i) => (
+                              <linearGradient key={seg} id={`grad-${i}`} x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.85} />
+                                <stop offset="100%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={1} />
+                              </linearGradient>
+                            ))}
+                          </defs>
+                          <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                          <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
+                          <YAxis type="category" dataKey="regime" width={130} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                          <Tooltip content={<StackedTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }} />
+                          {segmentList.map((seg, i) => (
+                            <Bar
+                              key={seg}
+                              dataKey={seg}
+                              stackId="a"
+                              fill={`url(#grad-${i})`}
+                              radius={i === segmentList.length - 1 ? [0, 4, 4, 0] : [0, 0, 0, 0]}
+                              isAnimationActive
+                              animationBegin={i * 150}
+                              animationDuration={800}
+                              animationEasing="ease-out"
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="lg:w-[30%] flex flex-wrap lg:flex-col gap-2 content-start">
                       {segmentList.map((seg, i) => (
-                        <Bar
-                          key={seg}
-                          dataKey={seg}
-                          stackId="a"
-                          fill={CHART_COLORS[i % CHART_COLORS.length]}
-                          radius={i === segmentList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                          isAnimationActive
-                          animationBegin={0}
-                          animationDuration={800}
-                          animationEasing="ease-out"
-                        />
+                        <div key={seg} className="flex items-center gap-2 text-xs">
+                          <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                          <span className="text-muted-foreground">{seg}</span>
+                        </div>
                       ))}
-                    </BarChart>
-                  </ResponsiveContainer>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
