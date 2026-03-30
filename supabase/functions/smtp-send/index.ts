@@ -31,11 +31,14 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     if (userError || !user) {
+      console.error("Auth error:", userError?.message);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    
+    console.log("Authenticated user:", user.email);
 
     // Parse and validate input
     const body = await req.json();
