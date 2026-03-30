@@ -168,14 +168,14 @@ export default function Documents() {
     const { error: uploadError } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
     if (uploadError) throw uploadError;
 
-    const { error: insertError } = await supabase.from('documents').insert({
+    const { data: insertedDoc, error: insertError } = await supabase.from('documents').insert({
       document_type_id: docTypeId,
       client_id: clientId,
       reference_month: refMonth,
       file_url: path,
       file_name: file.name,
       uploaded_by: user?.id || null,
-    } as any);
+    } as any).select('id').single();
     if (insertError) throw insertError;
 
     // Auto-associate obligations
@@ -186,6 +186,8 @@ export default function Documents() {
       .eq('document_type_id', docTypeId);
 
     let associatedCount = 0;
+    let linkedObligationId: string | null = null;
+
     if (matchingActivities && matchingActivities.length > 0) {
       const obligationIds = [...new Set(matchingActivities.map(a => a.obligation_id))];
       const { data: matchingInstances } = await supabase
@@ -197,6 +199,7 @@ export default function Documents() {
 
       if (matchingInstances) {
         for (const inst of matchingInstances) {
+          if (!linkedObligationId) linkedObligationId = inst.obligation_id;
           const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
           for (const act of relatedActivities) {
             const { data: existing } = await supabase
@@ -219,6 +222,11 @@ export default function Documents() {
           }
         }
       }
+    }
+
+    // Save linked obligation on document record
+    if (linkedObligationId && insertedDoc?.id) {
+      await supabase.from('documents').update({ linked_obligation_id: linkedObligationId } as any).eq('id', insertedDoc.id);
     }
 
     toast({
