@@ -11,9 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
 import {
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Zap,
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
