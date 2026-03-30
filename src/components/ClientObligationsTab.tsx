@@ -452,6 +452,7 @@ export default function ClientObligationsTab({ clientId }: Props) {
         prefillDepartmentId={emailPrefill.departmentId}
         prefillSubject={emailPrefill.subject}
         prefillBody={emailPrefill.body}
+        attachments={emailAttachments}
         onSent={() => {
           if (emailActivityId && detailInstance) {
             toggleCompletion(detailInstance.id, emailActivityId, false);
