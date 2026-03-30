@@ -347,6 +347,19 @@ export default function ClientObligationsTab({ clientId }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Email Compose Dialog */}
+      <EmailComposeDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        variables={emailVariables}
+        onSent={() => {
+          if (emailActivityId && detailInstance) {
+            toggleCompletion(detailInstance.id, emailActivityId, false);
+          }
+          setEmailActivityId(null);
+        }}
+      />
     </div>
   );
 }
