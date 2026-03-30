@@ -318,6 +318,60 @@ export default function Clients() {
     batchUpdateTaxRegimes();
   }, []);
 
+  // Auto-classify segments for clients missing business_classification
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const CLASSIFY_KEY = `batch_classify_done_${today}`;
+    if (localStorage.getItem(CLASSIFY_KEY)) return;
+
+    async function autoClassify() {
+      const { data: unclassified } = await supabase
+        .from('clients')
+        .select('id, main_activity, secondary_activities')
+        .or('business_classification.is.null,business_classification.eq.');
+
+      const toClassify = (unclassified || []).filter(
+        (c: any) => (c.main_activity || c.secondary_activities)
+      );
+
+      if (toClassify.length === 0) {
+        localStorage.setItem(CLASSIFY_KEY, 'true');
+        return;
+      }
+
+      setClassifyingAll(true);
+      setClassifyProgress({ current: 0, total: toClassify.length });
+      let classified = 0;
+
+      for (let i = 0; i < toClassify.length; i++) {
+        const c = toClassify[i] as any;
+        setClassifyProgress({ current: i + 1, total: toClassify.length });
+        try {
+          const result = await classifyByAI(c.main_activity || '', c.secondary_activities || '');
+          if (result) {
+            await supabase.from('clients').update({ business_classification: result }).eq('id', c.id);
+            classified++;
+          }
+        } catch { /* skip */ }
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      setClassifyingAll(false);
+      setClassifyProgress({ current: 0, total: 0 });
+      localStorage.setItem(CLASSIFY_KEY, 'true');
+
+      if (classified > 0) {
+        loadClients();
+        toast({
+          title: 'Classificação concluída',
+          description: `${classified} de ${toClassify.length} clientes classificados automaticamente.`,
+        });
+      }
+    }
+
+    autoClassify();
+  }, []);
+
   async function loadClients() {
     const { data } = await supabase.from('clients').select('*').order('company_name');
     setClients((data as unknown as Client[]) || []);
