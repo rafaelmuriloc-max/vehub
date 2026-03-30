@@ -325,6 +325,11 @@ export default function ClientObligationsTab({ clientId }: Props) {
                                 '[Nome_da_Obrigação]': obl?.name || '',
                                 '[Vencimento]': detailInstance!.due_date ? new Date(detailInstance!.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '',
                               });
+                              setEmailPrefill({
+                                departmentId: act.email_department_id || undefined,
+                                subject: act.email_subject || undefined,
+                                body: act.email_body || undefined,
+                              });
                               setEmailActivityId(act.id);
                               setEmailDialogOpen(true);
                             });
