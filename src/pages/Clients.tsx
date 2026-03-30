@@ -50,6 +50,26 @@ function parsePermits(raw: string | null): PermitItem[] {
   return defaultPermits.map(p => ({ ...p }));
 }
 
+function normalizeClassification(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+  if (lower.includes('comércio') || lower.includes('comercio')) return 'Comércio';
+  if (lower.includes('serviço') || lower.includes('servico') || lower.includes('serviços') || lower.includes('servicos')) return 'Serviço';
+  if (lower.includes('indústria') || lower.includes('industria')) return 'Indústria';
+  if (lower.includes('misto')) return 'Misto';
+  return raw.trim();
+}
+
+function classificationToSegment(classification: string): string {
+  const normalized = normalizeClassification(classification);
+  switch (normalized) {
+    case 'Comércio': return 'Comércio';
+    case 'Serviço': return 'Serviços';
+    case 'Indústria': return 'Indústria';
+    case 'Misto': return 'Misto';
+    default: return normalized;
+  }
+}
+
 async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<string> {
   if (!mainCnae && !secondaryCnaes) return '';
   try {
@@ -57,7 +77,8 @@ async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<s
       body: { main_activity: mainCnae, secondary_activities: secondaryCnaes },
     });
     if (error) throw error;
-    return data?.classification || '';
+    const raw = data?.classification || '';
+    return raw ? normalizeClassification(raw) : '';
   } catch (e) {
     console.error('AI classification error:', e);
     return '';
