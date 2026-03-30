@@ -217,6 +217,24 @@ export default function CalendarView() {
         completed_at: new Date().toISOString(),
       });
     }
+
+    // Auto-start chain
+    if (!currentlyCompleted && detailObligation) {
+      const oblActivities = activities.filter(a => a.obligation_id === detailObligation.id).sort((a, b) => a.order - b.order);
+      const currentIdx = oblActivities.findIndex(a => a.id === activityId);
+      for (let i = currentIdx + 1; i < oblActivities.length; i++) {
+        const nextAct = oblActivities[i];
+        if (!nextAct.auto_start) break;
+        const nextComp = completions.find(c => c.instance_id === detailInstanceId && c.activity_id === nextAct.id);
+        if (nextComp?.completed) break;
+        if (nextComp) {
+          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+        } else {
+          await supabase.from('obligation_activity_completions').insert({ instance_id: detailInstanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+        }
+      }
+    }
+
     await loadData();
   }
 

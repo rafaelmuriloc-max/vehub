@@ -141,6 +141,28 @@ export default function ClientObligationsTab({ clientId }: Props) {
         instance_id: instanceId, activity_id: activityId, completed: true, completed_at: new Date().toISOString(),
       });
     }
+
+    // Auto-start chain: if completing (not uncompleting), check next activities
+    if (!currentlyCompleted) {
+      const currentAct = activities.find(a => a.id === activityId);
+      if (currentAct) {
+        const oblActivities = activities.filter(a => a.obligation_id === currentAct.obligation_id).sort((a, b) => a.order - b.order);
+        const currentIdx = oblActivities.findIndex(a => a.id === activityId);
+        // Chain through consecutive auto_start activities
+        for (let i = currentIdx + 1; i < oblActivities.length; i++) {
+          const nextAct = oblActivities[i];
+          if (!nextAct.auto_start) break;
+          const nextComp = completions.find(c => c.instance_id === instanceId && c.activity_id === nextAct.id);
+          if (nextComp?.completed) break; // already completed
+          if (nextComp) {
+            await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+          } else {
+            await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+          }
+        }
+      }
+    }
+
     loadData();
   }
 
