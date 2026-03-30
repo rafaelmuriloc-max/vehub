@@ -165,12 +165,28 @@ export default function Documents() {
     setConfirming(true);
     try {
       await importDocument(file, clientId, docTypeId, referenceMonth + '-01');
-      setReviewOpen(false);
-      setReviewData(null);
+      // Move to next in queue
+      const remaining = reviewQueue.slice(1);
+      if (remaining.length > 0) {
+        setReviewQueue(remaining);
+      } else {
+        setReviewQueue([]);
+        setReviewOpen(false);
+      }
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
       setConfirming(false);
+    }
+  }
+
+  function handleSkipReview() {
+    const remaining = reviewQueue.slice(1);
+    if (remaining.length > 0) {
+      setReviewQueue(remaining);
+    } else {
+      setReviewQueue([]);
+      setReviewOpen(false);
     }
   }
 
