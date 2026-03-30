@@ -641,6 +641,11 @@ export default function CalendarView() {
                           '[Nome_da_Obrigação]': detailObligation?.name || '',
                           '[Vencimento]': vencimento,
                         });
+                        setEmailPrefill({
+                          departmentId: act.email_department_id || undefined,
+                          subject: act.email_subject || undefined,
+                          body: act.email_body || undefined,
+                        });
                         setEmailActivityId(act.id);
                         setEmailDialogOpen(true);
                       }}
