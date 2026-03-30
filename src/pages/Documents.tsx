@@ -47,7 +47,8 @@ export default function Documents() {
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
-  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+  const [reviewQueue, setReviewQueue] = useState<ReviewData[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [relinking, setRelinking] = useState(false);
@@ -86,68 +87,77 @@ export default function Documents() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // Process first file (multi-file can be added later)
-    const file = files[0];
+    const fileList = Array.from(files);
     setAnalyzing(true);
+    setUploadProgress({ current: 0, total: fileList.length });
 
-    try {
-      // 1. Extract text from PDF
-      let text = '';
-      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        text = await extractPdfText(file);
-      }
+    const pendingReview: ReviewData[] = [];
+    let importedCount = 0;
 
-      if (!text.trim()) {
-        // Non-PDF or empty: go straight to review with empty extraction
-        setReviewData({
-          file,
-          extraction: { cnpj: '', company_name: '', reference_month: '', document_type_name: '' },
-          matchedClientId: '',
-          matchedDocTypeId: '',
-          referenceMonth: '',
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      setUploadProgress({ current: i + 1, total: fileList.length });
+
+      try {
+        let text = '';
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          text = await extractPdfText(file);
+        }
+
+        if (!text.trim()) {
+          pendingReview.push({
+            file,
+            extraction: { cnpj: '', company_name: '', reference_month: '', document_type_name: '' },
+            matchedClientId: '',
+            matchedDocTypeId: '',
+            referenceMonth: '',
+          });
+          continue;
+        }
+
+        const { data: aiResult, error: aiError } = await supabase.functions.invoke('classify-document', {
+          body: {
+            text,
+            document_types: documentTypes.map(dt => ({ name: dt.name, description: dt.description })),
+          },
         });
-        setReviewOpen(true);
-        setAnalyzing(false);
-        return;
+
+        if (aiError) throw new Error(aiError.message || 'Erro na classificação');
+
+        const extraction: AiExtraction = {
+          cnpj: aiResult?.cnpj || '',
+          company_name: aiResult?.company_name || '',
+          reference_month: aiResult?.reference_month || '',
+          document_type_name: aiResult?.document_type_name || '',
+        };
+
+        const matchedClientId = matchClient(extraction.cnpj);
+        const matchedDocTypeId = matchDocType(extraction.document_type_name);
+        const referenceMonth = extraction.reference_month || '';
+
+        if (matchedClientId && matchedDocTypeId && referenceMonth) {
+          await importDocument(file, matchedClientId, matchedDocTypeId, referenceMonth + '-01');
+          importedCount++;
+        } else {
+          pendingReview.push({ file, extraction, matchedClientId, matchedDocTypeId, referenceMonth });
+        }
+      } catch (err: any) {
+        toast({ title: `Erro ao analisar ${file.name}`, description: err.message, variant: 'destructive' });
       }
+    }
 
-      // 2. Call AI to classify
-      const { data: aiResult, error: aiError } = await supabase.functions.invoke('classify-document', {
-        body: {
-          text,
-          document_types: documentTypes.map(dt => ({ name: dt.name, description: dt.description })),
-        },
-      });
+    setAnalyzing(false);
+    setUploadProgress(null);
+    e.target.value = '';
 
-      if (aiError) throw new Error(aiError.message || 'Erro na classificação');
-
-      const extraction: AiExtraction = {
-        cnpj: aiResult?.cnpj || '',
-        company_name: aiResult?.company_name || '',
-        reference_month: aiResult?.reference_month || '',
-        document_type_name: aiResult?.document_type_name || '',
-      };
-
-      // 3. Match against local data
-      const matchedClientId = matchClient(extraction.cnpj);
-      const matchedDocTypeId = matchDocType(extraction.document_type_name);
-      const referenceMonth = extraction.reference_month || '';
-
-      // 4. If all matched → auto-import
-      if (matchedClientId && matchedDocTypeId && referenceMonth) {
-        await importDocument(file, matchedClientId, matchedDocTypeId, referenceMonth + '-01');
-        setAnalyzing(false);
-        return;
-      }
-
-      // 5. Otherwise → open review dialog
-      setReviewData({ file, extraction, matchedClientId, matchedDocTypeId, referenceMonth });
+    if (pendingReview.length > 0) {
+      setReviewQueue(pendingReview);
       setReviewOpen(true);
-    } catch (err: any) {
-      toast({ title: 'Erro na análise', description: err.message, variant: 'destructive' });
-    } finally {
-      setAnalyzing(false);
-      e.target.value = '';
+      if (importedCount > 0) {
+        toast({ title: `${importedCount} documento(s) importado(s) automaticamente`, description: `${pendingReview.length} pendente(s) de revisão.` });
+      }
+    } else if (importedCount > 0) {
+      toast({ title: `${importedCount} documento(s) importado(s) com sucesso!` });
     }
   }, [clients, documentTypes]);
 
@@ -155,12 +165,28 @@ export default function Documents() {
     setConfirming(true);
     try {
       await importDocument(file, clientId, docTypeId, referenceMonth + '-01');
-      setReviewOpen(false);
-      setReviewData(null);
+      // Move to next in queue
+      const remaining = reviewQueue.slice(1);
+      if (remaining.length > 0) {
+        setReviewQueue(remaining);
+      } else {
+        setReviewQueue([]);
+        setReviewOpen(false);
+      }
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
       setConfirming(false);
+    }
+  }
+
+  function handleSkipReview() {
+    const remaining = reviewQueue.slice(1);
+    if (remaining.length > 0) {
+      setReviewQueue(remaining);
+    } else {
+      setReviewQueue([]);
+      setReviewOpen(false);
     }
   }
 
@@ -349,10 +375,12 @@ export default function Documents() {
             {relinking ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Revinculando...</> : 'Revincular Documentos'}
           </Button>
           <label className="cursor-pointer">
-            <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" onChange={handleUpload} disabled={analyzing} />
+            <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple onChange={handleUpload} disabled={analyzing} />
             <Button asChild disabled={analyzing}>
               <span>
-                {analyzing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivo</>}
+                {analyzing && uploadProgress
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando {uploadProgress.current}/{uploadProgress.total}...</>
+                  : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivos</>}
               </span>
             </Button>
           </label>
@@ -403,12 +431,14 @@ export default function Documents() {
 
       <DocumentReviewDialog
         open={reviewOpen}
-        onOpenChange={setReviewOpen}
-        data={reviewData}
+        onOpenChange={(open) => { if (!open) { setReviewQueue([]); } setReviewOpen(open); }}
+        data={reviewQueue[0] || null}
         documentTypes={documentTypes}
         clients={clients}
         onConfirm={handleReviewConfirm}
         confirming={confirming}
+        queueTotal={reviewQueue.length}
+        onSkip={handleSkipReview}
       />
     </div>
   );

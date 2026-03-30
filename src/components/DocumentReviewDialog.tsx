@@ -29,9 +29,11 @@ interface Props {
   clients: { id: string; company_name: string }[];
   onConfirm: (data: { file: File; clientId: string; docTypeId: string; referenceMonth: string }) => void;
   confirming: boolean;
+  queueTotal?: number;
+  onSkip?: () => void;
 }
 
-export default function DocumentReviewDialog({ open, onOpenChange, data, documentTypes, clients, onConfirm, confirming }: Props) {
+export default function DocumentReviewDialog({ open, onOpenChange, data, documentTypes, clients, onConfirm, confirming, queueTotal, onSkip }: Props) {
   if (!data) return null;
 
   const { file, extraction, matchedClientId, matchedDocTypeId, referenceMonth } = data;
@@ -62,7 +64,10 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Revisar Importação</DialogTitle>
+          <DialogTitle>
+            Revisar Importação
+            {queueTotal && queueTotal > 1 && <Badge variant="secondary" className="ml-2 text-xs">{queueTotal} pendente(s)</Badge>}
+          </DialogTitle>
           <DialogDescription>
             Arquivo: <strong>{file.name}</strong>
             {extraction.company_name && <> — Empresa detectada: <strong>{extraction.company_name}</strong></>}
@@ -117,6 +122,11 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={confirming}>
               Cancelar
             </Button>
+            {onSkip && queueTotal && queueTotal > 1 && (
+              <Button type="button" variant="ghost" onClick={onSkip} disabled={confirming}>
+                Pular
+              </Button>
+            )}
             <Button type="submit" disabled={confirming}>
               {confirming ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Importando...</> : 'Confirmar e Importar'}
             </Button>
