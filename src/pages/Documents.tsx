@@ -50,6 +50,7 @@ export default function Documents() {
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [relinking, setRelinking] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
 
