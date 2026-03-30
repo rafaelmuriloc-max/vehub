@@ -171,6 +171,7 @@ export default function ClientObligationsTab({ clientId }: Props) {
               obligationName: obl?.name || '',
               referenceMonth: instances.find(inst => inst.id === instanceId)?.reference_month || '',
               dueDay: obl?.due_day,
+              departmentId: obl?.department_id,
             });
             if (!result.success) {
               toast({ title: 'Erro no envio automático de e-mail', description: result.error, variant: 'destructive' });
