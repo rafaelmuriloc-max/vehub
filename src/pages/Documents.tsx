@@ -19,7 +19,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 type DocumentType = { id: string; name: string; description: string | null };
 type Client = { id: string; company_name: string; document: string | null };
-type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string };
+type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string; linked_obligation_id: string | null };
+type Obligation = { id: string; name: string };
 
 function cleanCnpj(raw: string | null | undefined): string {
   return (raw || '').replace(/\D/g, '');
