@@ -392,26 +392,28 @@ export default function ClientObligationsTab({ clientId }: Props) {
                         <Button
                           size="sm"
                           variant={isCompleted ? 'ghost' : 'default'}
-                          onClick={() => {
+                          onClick={async () => {
                             const obl = obligations.find(o => o.id === detailInstance!.obligation_id);
                             const refDate = new Date(detailInstance!.reference_month + 'T00:00:00');
                             const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-                            // Fetch client name
-                            supabase.from('clients').select('company_name').eq('id', clientId).single().then(({ data: cli }) => {
-                              setEmailVariables({
-                                '[Nome_da_Empresa]': cli?.company_name || '',
-                                '[Competencia]': competencia,
-                                '[Nome_da_Obrigação]': obl?.name || '',
-                                '[Vencimento]': detailInstance!.due_date ? new Date(detailInstance!.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '',
-                              });
-                              setEmailPrefill({
-                                departmentId: act.email_department_id || undefined,
-                                subject: act.email_subject || undefined,
-                                body: act.email_body || undefined,
-                              });
-                              setEmailActivityId(act.id);
-                              setEmailDialogOpen(true);
+                            const [{ data: cli }, { data: deptContact }] = await Promise.all([
+                              supabase.from('clients').select('company_name, contact_email').eq('id', clientId).single(),
+                              obl ? supabase.from('client_department_contacts').select('contact_email').eq('client_id', clientId).eq('department_id', obl.department_id).maybeSingle() : Promise.resolve({ data: null }),
+                            ]);
+                            setEmailRecipient(deptContact?.contact_email || cli?.contact_email || '');
+                            setEmailVariables({
+                              '[Nome_da_Empresa]': cli?.company_name || '',
+                              '[Competencia]': competencia,
+                              '[Nome_da_Obrigação]': obl?.name || '',
+                              '[Vencimento]': detailInstance!.due_date ? new Date(detailInstance!.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '',
                             });
+                            setEmailPrefill({
+                              departmentId: act.email_department_id || undefined,
+                              subject: act.email_subject || undefined,
+                              body: act.email_body || undefined,
+                            });
+                            setEmailActivityId(act.id);
+                            setEmailDialogOpen(true);
                           }}
                         >
                           <Mail className="h-3 w-3 mr-1" />
