@@ -254,6 +254,7 @@ export default function Documents() {
 
   function getTypeName(id: string) { return documentTypes.find(d => d.id === id)?.name || '—'; }
   function getClientName(id: string) { return clients.find(c => c.id === id)?.company_name || '—'; }
+  function getObligationName(id: string | null) { if (!id) return '—'; return obligations.find(o => o.id === id)?.name || '—'; }
 
   return (
     <div className="space-y-6">
