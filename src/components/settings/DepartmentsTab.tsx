@@ -19,7 +19,8 @@ export function DepartmentsTab() {
   const [items, setItems] = useState<Department[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [form, setForm] = useState({ name: '', description: '', smtp_email: '', smtp_password: '' });
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetch = async () => {
     const { data } = await supabase.from('departments').select('*').order('name');
