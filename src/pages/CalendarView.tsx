@@ -12,6 +12,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
+import { sendActivityEmail } from '@/lib/sendActivityEmail';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
@@ -95,7 +96,7 @@ export default function CalendarView() {
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
-      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start'),
+      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body'),
       supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url'),
     ]);
     setInstances((instRes.data as Instance[]) || []);
@@ -224,7 +225,7 @@ export default function CalendarView() {
     }
 
     // Auto-start chain
-    if (!currentlyCompleted && detailObligation) {
+    if (!currentlyCompleted && detailObligation && detailInstance) {
       const oblActivities = activities.filter(a => a.obligation_id === detailObligation.id).sort((a, b) => a.order - b.order);
       const currentIdx = oblActivities.findIndex(a => a.id === activityId);
       for (let i = currentIdx + 1; i < oblActivities.length; i++) {
@@ -232,10 +233,30 @@ export default function CalendarView() {
         if (!nextAct.auto_start) break;
         const nextComp = completions.find(c => c.instance_id === detailInstanceId && c.activity_id === nextAct.id);
         if (nextComp?.completed) break;
-        if (nextComp) {
-          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+
+        // Auto-send email activities
+        if (nextAct.type === 'email' && nextAct.email_department_id && nextAct.email_subject && nextAct.email_body) {
+          const result = await sendActivityEmail({
+            activity: nextAct,
+            instanceId: detailInstanceId,
+            clientId: detailInstance.client_id,
+            obligationName: detailObligation.name,
+            referenceMonth: detailInstance.reference_month,
+            dueDay: detailObligation.due_day,
+          });
+          if (!result.success) {
+            toast({ title: 'Erro no envio automático de e-mail', description: result.error, variant: 'destructive' });
+            break;
+          }
+          toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
+        } else if (nextAct.type === 'email') {
+          break; // email without full config, stop chain
         } else {
-          await supabase.from('obligation_activity_completions').insert({ instance_id: detailInstanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+          if (nextComp) {
+            await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+          } else {
+            await supabase.from('obligation_activity_completions').insert({ instance_id: detailInstanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+          }
         }
       }
     }
