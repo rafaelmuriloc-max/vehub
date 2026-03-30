@@ -25,6 +25,7 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    console.log("Auth check - token length:", token.length, "serviceRoleKey length:", serviceRoleKey?.length, "match:", token === serviceRoleKey);
     
     // Allow service role key OR authenticated user
     if (token !== serviceRoleKey) {
