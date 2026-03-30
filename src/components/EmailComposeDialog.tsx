@@ -23,6 +23,10 @@ interface EmailComposeDialogProps {
   /** Variables available for interpolation */
   variables?: Record<string, string>;
   onSent?: () => void;
+  /** Pre-filled values from activity configuration */
+  prefillDepartmentId?: string;
+  prefillSubject?: string;
+  prefillBody?: string;
 }
 
 const VARIABLE_OPTIONS = [
