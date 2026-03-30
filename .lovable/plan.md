@@ -1,33 +1,44 @@
 
 
-# Adicionar gráfico de cruzamento Regime Tributário × Segmento
+# Melhorar gráfico de Regime Tributário × Segmento
 
-## Objetivo
-Adicionar um terceiro card com gráfico de barras empilhadas (stacked bar chart) mostrando a distribuição de segmentos dentro de cada regime tributário.
+## Problema atual
+O gráfico de barras empilhadas está visualmente genérico - barras grandes e desproporcionais, sem refinamento visual, tooltip básico, e a legenda padrão do recharts sem personalização.
 
-## Mudanças em `src/pages/Clients.tsx`
+## Direção estética
+Seguindo a skill: tom **refined/editorial**, consistente com os donuts já existentes na página. Manter coesão com o design system Navy + Orange.
 
-### 1. Importar BarChart do recharts
-- Adicionar `BarChart, Bar, XAxis, YAxis, Legend, CartesianGrid` ao import de recharts
+## Mudanças em `src/pages/Clients.tsx` (linhas ~1045-1081)
 
-### 2. Computar dados de cruzamento
-- Criar uma matriz: para cada regime tributário, contar quantos clientes existem em cada segmento
-- Formato: `[{ regime: 'Simples Nacional', Comércio: 5, Serviços: 3, Indústria: 2, ... }, ...]`
-- Extrair lista única de segmentos para gerar as `<Bar>` dinamicamente
+### 1. Trocar para barras horizontais agrupadas com proporção percentual
+- Usar `BarChart layout="vertical"` para melhor legibilidade dos nomes dos regimes
+- Normalizar para 100% (percentual) em vez de valores absolutos, mostrando a composição real de cada regime
+- Isso resolve o problema visual da imagem onde MEI fica invisível ao lado de Simples Nacional
 
-### 3. Novo card abaixo dos dois existentes
-- Card de largura total (`lg:col-span-2` ou fora do grid de 2 colunas)
-- Título: "Regime Tributário × Segmento" com ícone
-- `BarChart` com barras empilhadas:
-  - Eixo X: regimes tributários
-  - Cada cor representa um segmento
-  - Tooltip customizado mostrando contagem e percentual
-  - Legend com os segmentos
-- Usa as mesmas `CHART_COLORS` já existentes
-- Mesma animação e estilo visual dos donuts
+### 2. Tooltip customizado refinado
+- Reutilizar o estilo do `StackedTooltip` existente mas melhorar com:
+  - Barra de progresso colorida ao lado de cada segmento
+  - Mostrar valor absoluto + percentual
+  - Borda sutil e sombra consistente com os outros tooltips
 
-### Detalhes técnicos
+### 3. Legenda customizada lateral
+- Substituir a `<Legend>` padrão do recharts por uma legenda customizada no mesmo estilo do `renderLegend` dos donuts (com bolinhas coloridas + nome)
+- Posicionada abaixo do gráfico em layout clean
+
+### 4. Detalhes visuais
+- `CartesianGrid` mais sutil (opacity 0.3, apenas horizontal)
+- Bordas arredondadas em todas as barras (`radius={[0, 4, 4, 0]}` para horizontal)
+- Gradiente sutil nas barras usando `<defs><linearGradient>` para cada cor
+- Animação staggered: `animationBegin={i * 150}` para cada `<Bar>`
+- Mostrar valor absoluto dentro da barra quando há espaço suficiente (label customizado)
+
+### 5. Layout do card
+- Flex row: gráfico à esquerda (~70%), legenda customizada à direita (~30%)
+- Subtítulo discreto: "Distribuição percentual de segmentos por regime"
+- Mesmo hover shadow transition dos cards vizinhos
+
+## Detalhes técnicos
 - Apenas `src/pages/Clients.tsx` é modificado
-- Sem dependências novas (recharts já está no projeto)
-- O card ficará abaixo do grid de 2 colunas dos donuts existentes
+- Sem dependências novas
+- Reutiliza `CHART_COLORS`, `segmentList`, `stackedData` já computados
 
