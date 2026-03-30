@@ -339,6 +339,13 @@ export default function Obligations() {
             )}
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={activityForm.description} onChange={e => setActivityForm({ ...activityForm, description: e.target.value })} /></div>
             <div className="space-y-2"><Label>Ordem</Label><Input type="number" value={activityForm.order} onChange={e => setActivityForm({ ...activityForm, order: Number(e.target.value) })} /></div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-primary" />Execução automática</Label>
+                <p className="text-xs text-muted-foreground">Inicia automaticamente após a atividade anterior ser concluída</p>
+              </div>
+              <Switch checked={activityForm.auto_start} onCheckedChange={v => setActivityForm({ ...activityForm, auto_start: v })} />
+            </div>
             <Button type="submit" className="w-full" disabled={!activityForm.title}>Salvar</Button>
           </form>
         </DialogContent>
