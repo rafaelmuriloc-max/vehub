@@ -1,0 +1,1 @@
+ALTER TABLE public.documents ADD COLUMN linked_obligation_id uuid;

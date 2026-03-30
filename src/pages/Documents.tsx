@@ -19,7 +19,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 type DocumentType = { id: string; name: string; description: string | null };
 type Client = { id: string; company_name: string; document: string | null };
-type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string };
+type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string; linked_obligation_id: string | null };
+type Obligation = { id: string; name: string };
 
 function cleanCnpj(raw: string | null | undefined): string {
   return (raw || '').replace(/\D/g, '');
@@ -44,6 +45,7 @@ export default function Documents() {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
+  const [obligations, setObligations] = useState<Obligation[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -52,14 +54,16 @@ export default function Documents() {
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
-    const [dtRes, clRes, docRes] = await Promise.all([
+    const [dtRes, clRes, docRes, oblRes] = await Promise.all([
       supabase.from('document_types').select('id, name, description').order('name'),
       supabase.from('clients').select('id, company_name, document').eq('status', 'active').order('company_name'),
       supabase.from('documents').select('*').order('created_at', { ascending: false }),
+      supabase.from('obligations').select('id, name'),
     ]);
     if (dtRes.data) setDocumentTypes(dtRes.data as DocumentType[]);
     if (clRes.data) setClients(clRes.data);
     if (docRes.data) setDocuments(docRes.data as Doc[]);
+    if (oblRes.data) setObligations(oblRes.data);
   }
 
   function matchClient(cnpj: string): string {
@@ -164,14 +168,14 @@ export default function Documents() {
     const { error: uploadError } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
     if (uploadError) throw uploadError;
 
-    const { error: insertError } = await supabase.from('documents').insert({
+    const { data: insertedDoc, error: insertError } = await supabase.from('documents').insert({
       document_type_id: docTypeId,
       client_id: clientId,
       reference_month: refMonth,
       file_url: path,
       file_name: file.name,
       uploaded_by: user?.id || null,
-    } as any);
+    } as any).select('id').single();
     if (insertError) throw insertError;
 
     // Auto-associate obligations
@@ -182,6 +186,8 @@ export default function Documents() {
       .eq('document_type_id', docTypeId);
 
     let associatedCount = 0;
+    let linkedObligationId: string | null = null;
+
     if (matchingActivities && matchingActivities.length > 0) {
       const obligationIds = [...new Set(matchingActivities.map(a => a.obligation_id))];
       const { data: matchingInstances } = await supabase
@@ -193,6 +199,7 @@ export default function Documents() {
 
       if (matchingInstances) {
         for (const inst of matchingInstances) {
+          if (!linkedObligationId) linkedObligationId = inst.obligation_id;
           const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
           for (const act of relatedActivities) {
             const { data: existing } = await supabase
@@ -215,6 +222,11 @@ export default function Documents() {
           }
         }
       }
+    }
+
+    // Save linked obligation on document record
+    if (linkedObligationId && insertedDoc?.id) {
+      await supabase.from('documents').update({ linked_obligation_id: linkedObligationId } as any).eq('id', insertedDoc.id);
     }
 
     toast({
@@ -242,6 +254,7 @@ export default function Documents() {
 
   function getTypeName(id: string) { return documentTypes.find(d => d.id === id)?.name || '—'; }
   function getClientName(id: string) { return clients.find(c => c.id === id)?.company_name || '—'; }
+  function getObligationName(id: string | null) { if (!id) return '—'; return obligations.find(o => o.id === id)?.name || '—'; }
 
   return (
     <div className="space-y-6">
@@ -271,6 +284,7 @@ export default function Documents() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Competência</TableHead>
+                <TableHead>Obrigação</TableHead>
                 <TableHead>Data Upload</TableHead>
                 <TableHead className="w-24">Ações</TableHead>
               </TableRow>
@@ -285,6 +299,7 @@ export default function Documents() {
                   <TableCell><Badge variant="outline">{getTypeName(doc.document_type_id)}</Badge></TableCell>
                   <TableCell>{getClientName(doc.client_id)}</TableCell>
                   <TableCell>{format(new Date(doc.reference_month + 'T00:00:00'), 'MM/yyyy')}</TableCell>
+                  <TableCell>{getObligationName(doc.linked_obligation_id)}</TableCell>
                   <TableCell>{format(new Date(doc.created_at), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
@@ -294,7 +309,7 @@ export default function Documents() {
                   </TableCell>
                 </TableRow>
               ))}
-              {documents.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum documento importado.</TableCell></TableRow>}
+              {documents.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum documento importado.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
