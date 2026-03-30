@@ -1115,6 +1115,48 @@ export default function Clients() {
                       ))}
                     </div>
                   </div>
+                  <Separator className="my-4" />
+                  <p className="text-xs text-muted-foreground/70 mb-3">Quantidades absolutas</p>
+                  <div className="overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-left text-xs">Regime</TableHead>
+                          {segmentList.map((seg, i) => (
+                            <TableHead key={seg} className="text-right text-xs">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                                {seg}
+                              </div>
+                            </TableHead>
+                          ))}
+                          <TableHead className="text-right text-xs font-semibold">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rawStackedData.map((row: any) => (
+                          <TableRow key={row.regime}>
+                            <TableCell className="text-xs font-medium">{row.regime}</TableCell>
+                            {segmentList.map(seg => (
+                              <TableCell key={seg} className="text-right text-xs tabular-nums">{(row[seg] || 0)}</TableCell>
+                            ))}
+                            <TableCell className="text-right text-xs font-semibold tabular-nums">{row.total}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="border-t-2">
+                          <TableCell className="text-xs font-semibold">Total</TableCell>
+                          {segmentList.map(seg => (
+                            <TableCell key={seg} className="text-right text-xs font-semibold tabular-nums">
+                              {rawStackedData.reduce((s: number, r: any) => s + ((r[seg] || 0) as number), 0)}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-right text-xs font-bold tabular-nums">
+                            {rawStackedData.reduce((s: number, r: any) => s + (r.total as number), 0)}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}
