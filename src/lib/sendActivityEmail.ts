@@ -25,7 +25,7 @@ function replaceVariables(text: string, variables: Record<string, string>): stri
 }
 
 export async function sendActivityEmail(params: SendActivityEmailParams): Promise<{ success: boolean; error?: string }> {
-  const { activity, instanceId, clientId, obligationName, referenceMonth, dueDay } = params;
+  const { activity, instanceId, clientId, obligationName, referenceMonth, dueDay, departmentId } = params;
 
   if (!activity.email_department_id || !activity.email_subject || !activity.email_body) {
     return { success: false, error: 'Atividade de e-mail sem configuração completa' };
@@ -33,7 +33,22 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
 
   // Fetch client info
   const { data: client } = await supabase.from('clients').select('company_name, contact_email').eq('id', clientId).single();
-  if (!client?.contact_email) {
+
+  // Try department-specific contact first
+  let recipientEmail = client?.contact_email || null;
+  if (departmentId) {
+    const { data: deptContact } = await supabase
+      .from('client_department_contacts')
+      .select('contact_email')
+      .eq('client_id', clientId)
+      .eq('department_id', departmentId)
+      .maybeSingle();
+    if (deptContact?.contact_email) {
+      recipientEmail = deptContact.contact_email;
+    }
+  }
+
+  if (!recipientEmail) {
     return { success: false, error: 'Cliente sem e-mail de contato cadastrado' };
   }
 
