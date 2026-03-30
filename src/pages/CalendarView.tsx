@@ -315,6 +315,17 @@ export default function CalendarView() {
     await loadData();
   }
 
+  async function deleteFile(activityId: string, fileUrl: string) {
+    if (!detailInstanceId) return;
+    await supabase.storage.from('documents').remove([fileUrl]);
+    const existing = getCompletion(activityId);
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({ completed: false, completed_at: null, file_url: null }).eq('id', existing.id);
+    }
+    toast({ title: 'Arquivo excluído' });
+    await loadData();
+  }
+
   async function downloadFile(fileUrl: string) {
     const { data } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 300);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
