@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import EmailComposeDialog from '@/components/EmailComposeDialog';
 
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean };
@@ -46,7 +47,9 @@ export default function ClientObligationsTab({ clientId }: Props) {
   const [generating, setGenerating] = useState(false);
 
   const [detailInstance, setDetailInstance] = useState<Instance | null>(null);
-
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
+  const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
   useEffect(() => { loadData(); }, [clientId]);
 
   async function loadData() {
@@ -302,6 +305,34 @@ export default function ClientObligationsTab({ clientId }: Props) {
                           </div>
                         </label>
                       </div>
+                    ) : act.type === 'email' ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        {activityTypeIcons[act.type]}
+                        <span className={`text-sm flex-1 ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>{act.title}</span>
+                        <Button
+                          size="sm"
+                          variant={isCompleted ? 'ghost' : 'default'}
+                          onClick={() => {
+                            const obl = obligations.find(o => o.id === detailInstance!.obligation_id);
+                            const refDate = new Date(detailInstance!.reference_month + 'T00:00:00');
+                            const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                            // Fetch client name
+                            supabase.from('clients').select('company_name').eq('id', clientId).single().then(({ data: cli }) => {
+                              setEmailVariables({
+                                '[Nome_da_Empresa]': cli?.company_name || '',
+                                '[Competencia]': competencia,
+                                '[Nome_da_Obrigação]': obl?.name || '',
+                                '[Vencimento]': detailInstance!.due_date ? new Date(detailInstance!.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '',
+                              });
+                              setEmailActivityId(act.id);
+                              setEmailDialogOpen(true);
+                            });
+                          }}
+                        >
+                          <Mail className="h-3 w-3 mr-1" />
+                          {isCompleted ? 'Reenviar' : 'Enviar'}
+                        </Button>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2 flex-1">
                         <Checkbox checked={isCompleted} onCheckedChange={() => toggleCompletion(detailInstance.id, act.id, isCompleted)} />
@@ -316,6 +347,19 @@ export default function ClientObligationsTab({ clientId }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Email Compose Dialog */}
+      <EmailComposeDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        variables={emailVariables}
+        onSent={() => {
+          if (emailActivityId && detailInstance) {
+            toggleCompletion(detailInstance.id, emailActivityId, false);
+          }
+          setEmailActivityId(null);
+        }}
+      />
     </div>
   );
 }

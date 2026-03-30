@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
 import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import EmailComposeDialog from '@/components/EmailComposeDialog';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
@@ -83,6 +84,9 @@ export default function CalendarView() {
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
   const [dayPage, setDayPage] = useState(1);
   const [monthPage, setMonthPage] = useState(1);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
+  const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
 
   const loadData = useCallback(async () => {
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
@@ -617,7 +621,33 @@ export default function CalendarView() {
                       </div>
                     )}
                   </div>
-                  {act.type !== 'document' && (
+                  {act.type === 'email' ? (
+                    <Button
+                      size="sm"
+                      variant={isCompleted ? 'ghost' : 'default'}
+                      className="shrink-0"
+                      onClick={() => {
+                        const clientName = detailInstance ? clientMap.get(detailInstance.client_id)?.company_name || '' : '';
+                        const refDate = detailInstance ? new Date(detailInstance.reference_month + 'T00:00:00') : new Date();
+                        const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                        const oblDueDay = detailObligation?.due_day;
+                        const vencimento = oblDueDay
+                          ? new Date(refDate.getFullYear(), refDate.getMonth(), oblDueDay).toLocaleDateString('pt-BR')
+                          : '';
+                        setEmailVariables({
+                          '[Nome_da_Empresa]': clientName,
+                          '[Competencia]': competencia,
+                          '[Nome_da_Obrigação]': detailObligation?.name || '',
+                          '[Vencimento]': vencimento,
+                        });
+                        setEmailActivityId(act.id);
+                        setEmailDialogOpen(true);
+                      }}
+                    >
+                      <Mail className="h-3 w-3 mr-1" />
+                      {isCompleted ? 'Reenviar' : 'Enviar'}
+                    </Button>
+                  ) : act.type !== 'document' && (
                     <Checkbox checked={isCompleted} onCheckedChange={() => toggleCompletion(act.id, isCompleted)} />
                   )}
                 </div>
@@ -626,6 +656,19 @@ export default function CalendarView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Email Compose Dialog */}
+      <EmailComposeDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        variables={emailVariables}
+        onSent={async () => {
+          if (emailActivityId) {
+            await toggleCompletion(emailActivityId, false);
+          }
+          setEmailActivityId(null);
+        }}
+      />
     </div>
   );
 }
