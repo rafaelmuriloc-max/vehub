@@ -42,7 +42,7 @@ serve(async (req) => {
 
     // Parse and validate input
     const body = await req.json();
-    const { departmentId, to, subject, html } = body;
+    const { departmentId, to, subject, html, attachments } = body;
 
     if (!departmentId || !to || !subject || !html) {
       return new Response(
