@@ -1,34 +1,32 @@
 
 
-# Upload de múltiplos arquivos simultâneos
+# Dividir obrigações do mês em abas "A fazer" e "Concluídas"
 
 ## Resumo
-Permitir selecionar vários arquivos de uma vez no input de upload. Cada arquivo será processado sequencialmente pela IA (extração de texto → classificação → importação automática ou revisão). Um indicador de progresso mostrará quantos arquivos foram processados.
+Na seção "Obrigações do mês" (parte inferior da tela do calendário), substituir a lista única por duas abas usando o componente `Tabs` existente: "A fazer" mostra obrigações pendentes e "Concluídas" mostra as que tiveram todas as atividades completadas.
 
-## Mudanças em `src/pages/Documents.tsx`
+## Mudanças em `src/pages/CalendarView.tsx`
 
-### 1. Input com `multiple`
-- Adicionar atributo `multiple` no `<input type="file">`
+### 1. Importar Tabs
+- Adicionar import de `Tabs, TabsList, TabsTrigger, TabsContent` de `@/components/ui/tabs`
 
-### 2. Processamento sequencial com progresso
-- Novo state: `uploadProgress: { current: number; total: number } | null`
-- `handleUpload` itera sobre todos os arquivos do `FileList`
-- Para cada arquivo:
-  - Atualiza progresso ("Analisando 2/5...")
-  - Extrai texto, chama IA, tenta auto-import
-  - Se auto-import falhar (dados incompletos): acumula numa fila de revisão
-- Após processar todos: se houver arquivos pendentes de revisão, abre o dialog para o primeiro
+### 2. Separar monthEvents em duas listas
+- `monthEventsPending`: filtra `monthEvents` onde `isInstanceCompleted(ev.instanceId, ev.obligationId)` retorna `false`
+- `monthEventsCompleted`: filtra onde retorna `true`
+- Cada lista com paginação independente (novos states `monthPendingPage` e `monthCompletedPage`)
 
-### 3. Fila de revisão
-- Novo state: `reviewQueue: ReviewData[]`
-- Ao confirmar um item no dialog, processa o próximo da fila automaticamente
-- Contador visual: "Revisando 1 de 3 documentos pendentes"
+### 3. Substituir a seção "Obrigações do mês" por Tabs
+- Dentro do `<Card>`, após o header, renderizar `<Tabs defaultValue="pending">`
+- Tab "A fazer" com contador (badge) e lista paginada de `monthEventsPending`
+- Tab "Concluídas" com contador e lista paginada de `monthEventsCompleted`
+- Reutilizar o mesmo card/evento JSX existente (extrair para bloco reutilizável)
 
-### 4. UI do botão
-- Texto dinâmico: "Analisando 2/5..." durante processamento
-- Toast final: "X documentos importados, Y pendentes de revisão"
+### 4. States de paginação
+- Substituir `monthPage` por `monthPendingPage` e `monthCompletedPage`
+- Resetar ambos quando mês/filtros mudam
 
-## Arquivos modificados
-- `src/pages/Documents.tsx` — lógica de upload e estados
-- `src/components/DocumentReviewDialog.tsx` — exibir contador da fila (opcional, menor mudança)
+## Detalhes técnicos
+- A função `isInstanceCompleted` já existe e faz exatamente a verificação necessária
+- O componente `Tabs` do shadcn/ui já está disponível no projeto
+- Nenhuma migração ou mudança de backend necessária
 
