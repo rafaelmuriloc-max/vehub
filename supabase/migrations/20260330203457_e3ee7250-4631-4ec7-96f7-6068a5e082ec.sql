@@ -1,0 +1,1 @@
+ALTER TABLE departments ADD COLUMN smtp_email text, ADD COLUMN smtp_password text;

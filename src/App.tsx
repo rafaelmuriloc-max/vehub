@@ -20,6 +20,7 @@ import InvoiceEmit from "./pages/InvoiceEmit";
 import Fiscal from "./pages/Fiscal";
 import IntegraContador from "./pages/IntegraContador";
 import Chat from "./pages/Chat";
+import Email from "./pages/Email";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/fiscal" element={<Fiscal />} />
               <Route path="/integra-contador" element={<IntegraContador />} />
               <Route path="/chat" element={<Chat />} />
+              <Route path="/email" element={<Email />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />
