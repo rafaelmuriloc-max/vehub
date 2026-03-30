@@ -1,52 +1,31 @@
 
 
-# Envio de e-mail via SMTP por departamento
+# Buscar e-mail do contato por departamento da obrigação
 
-## Objetivo
-Cada departamento terá suas próprias credenciais SMTP do Gmail configuradas. Ao enviar um e-mail, o sistema usará as credenciais do departamento remetente.
+## Resumo
+Atualmente o sistema usa o `contact_email` genérico do cliente. A mudança fará com que o destinatário seja buscado na tabela `client_department_contacts`, filtrando pelo `client_id` e pelo `department_id` da obrigação. Se não houver contato específico do departamento, cairá no `contact_email` genérico como fallback.
 
 ## Mudanças
 
-### 1. Migração SQL — adicionar colunas SMTP na tabela `departments`
-```sql
-ALTER TABLE departments
-  ADD COLUMN smtp_email text,
-  ADD COLUMN smtp_password text;
-```
-- `smtp_email`: endereço Gmail do departamento (ex: fiscal@escritorio.com)
-- `smtp_password`: senha de app do Gmail (não a senha da conta)
+### 1. `src/lib/sendActivityEmail.ts` — adicionar parâmetro `departmentId` da obrigação
+- Receber `departmentId` (da obrigação, não do e-mail) nos parâmetros
+- Buscar primeiro em `client_department_contacts` onde `client_id` e `department_id` correspondem
+- Se encontrar `contact_email`, usar esse
+- Senão, usar o `contact_email` genérico do `clients` como fallback
 
-### 2. Atualizar formulário de departamento (`DepartmentsTab.tsx`)
-- Adicionar campos "E-mail SMTP" e "Senha de App" no dialog de criação/edição
-- Campo de senha com tipo `password` e botão para mostrar/ocultar
-- Texto auxiliar: "Use uma Senha de App do Google, não a senha da conta"
+### 2. `src/components/ClientObligationsTab.tsx` — passar `departmentId` e pré-preencher destinatário
+- No envio automático (`sendActivityEmail`), passar o `department_id` da obrigação
+- No envio manual (`EmailComposeDialog`), buscar o e-mail do contato departamental e passá-lo como `recipientEmail`
 
-### 3. Nova Edge Function `smtp-send/index.ts`
-- Recebe: `departmentId`, `to`, `subject`, `body` (HTML)
-- Busca credenciais SMTP do departamento no banco (via service role)
-- Envia e-mail via Gmail SMTP (`smtp.gmail.com:465`) usando a lib `nodemailer` (disponível no Deno via npm)
-- Validação de input com Zod
-- CORS headers para chamada do frontend
+### 3. `src/pages/CalendarView.tsx` — mesma lógica
+- Passar `departmentId` no `sendActivityEmail`
+- Pré-preencher `recipientEmail` no `EmailComposeDialog` com o contato departamental
 
-### 4. Nova página de composição de e-mail (`src/pages/Email.tsx`)
-- Formulário: Departamento (select), Destinatário, Assunto, Corpo (textarea)
-- Select de departamento mostra apenas departamentos com SMTP configurado
-- Botão "Enviar" chama `supabase.functions.invoke('smtp-send', { body: {...} })`
-- Toast de sucesso/erro
-
-### 5. Rota e navegação
-- Nova rota `/email` em `App.tsx`
-- Novo item "E-mail" com ícone `Mail` no sidebar (`AppSidebar.tsx`)
-
-## Pré-requisito do usuário
-Para cada departamento, gerar uma **Senha de App** no Google:
-1. Acessar myaccount.google.com → Segurança → Senhas de app
-2. Criar uma senha de app para "Outro (nome personalizado)"
-3. Colar a senha de 16 caracteres no campo "Senha de App" do departamento
+### 4. `src/components/EmailComposeDialog.tsx` — sem mudanças estruturais
+- Já aceita `recipientEmail` como prop, apenas será passado corretamente agora
 
 ## Detalhes técnicos
-- Arquivos modificados: `DepartmentsTab.tsx`, `AppSidebar.tsx`, `App.tsx`
-- Arquivos criados: `supabase/functions/smtp-send/index.ts`, `src/pages/Email.tsx`
-- Nova migração para colunas SMTP
-- A senha SMTP fica no banco (acessível apenas via service role na Edge Function)
+- Tabela consultada: `client_department_contacts` (campos `client_id`, `department_id`, `contact_email`)
+- Fallback: `clients.contact_email` quando não houver contato específico
+- Nenhuma migração necessária
 
