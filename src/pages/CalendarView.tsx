@@ -265,7 +265,7 @@ export default function CalendarView() {
   }
 
   async function handleFileUpload(activityId: string, file: File) {
-    if (!detailInstanceId) return;
+    if (!detailInstanceId || !detailInstance || !detailObligation) return;
     const path = `obligations/${detailInstanceId}/${activityId}/${file.name}`;
     const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
     if (upErr) { toast({ title: 'Erro ao enviar arquivo', description: upErr.message, variant: 'destructive' }); return; }
@@ -277,6 +277,41 @@ export default function CalendarView() {
       await supabase.from('obligation_activity_completions').insert({ instance_id: detailInstanceId, activity_id: activityId, completed: true, completed_at: new Date().toISOString(), file_url: path });
     }
     toast({ title: 'Arquivo enviado com sucesso' });
+
+    // Trigger auto-start chain after document upload
+    const oblActivities = activities.filter(a => a.obligation_id === detailObligation.id).sort((a, b) => a.order - b.order);
+    const currentIdx = oblActivities.findIndex(a => a.id === activityId);
+    for (let i = currentIdx + 1; i < oblActivities.length; i++) {
+      const nextAct = oblActivities[i];
+      if (!nextAct.auto_start) break;
+      const nextComp = completions.find(c => c.instance_id === detailInstanceId && c.activity_id === nextAct.id);
+      if (nextComp?.completed) break;
+
+      if (nextAct.type === 'email' && nextAct.email_department_id && nextAct.email_subject && nextAct.email_body) {
+        const result = await sendActivityEmail({
+          activity: nextAct,
+          instanceId: detailInstanceId,
+          clientId: detailInstance.client_id,
+          obligationName: detailObligation.name,
+          referenceMonth: detailInstance.reference_month,
+          dueDay: detailObligation.due_day,
+        });
+        if (!result.success) {
+          toast({ title: 'Erro no envio automático de e-mail', description: result.error, variant: 'destructive' });
+          break;
+        }
+        toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
+      } else if (nextAct.type === 'email') {
+        break;
+      } else {
+        if (nextComp) {
+          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+        } else {
+          await supabase.from('obligation_activity_completions').insert({ instance_id: detailInstanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+        }
+      }
+    }
+
     await loadData();
   }
 
