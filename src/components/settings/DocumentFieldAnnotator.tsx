@@ -234,7 +234,7 @@ export function DocumentFieldAnnotator({ open, onOpenChange, file, extractionCon
                         className={`flex items-center gap-2 text-sm font-medium transition-colors rounded px-2 py-1 ${isActive ? 'ring-2 ring-offset-1' : 'hover:bg-muted'}`}
                         style={{
                           color: f.color,
-                          ringColor: isActive ? f.color : undefined,
+                          boxShadow: isActive ? `0 0 0 2px ${f.color}` : undefined,
                         }}
                         onClick={() => setActiveField(isActive ? null : f.key)}
                       >
