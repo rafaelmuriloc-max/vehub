@@ -52,6 +52,7 @@ export default function EmailComposeDialog({
   prefillDepartmentId,
   prefillSubject,
   prefillBody,
+  attachments = [],
 }: EmailComposeDialogProps) {
   const { toast } = useToast();
   const [departments, setDepartments] = useState<Department[]>([]);
