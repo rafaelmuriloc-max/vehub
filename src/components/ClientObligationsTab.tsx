@@ -53,6 +53,7 @@ export default function ClientObligationsTab({ clientId }: Props) {
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
   const [emailPrefill, setEmailPrefill] = useState<{ departmentId?: string; subject?: string; body?: string }>({});
   const [emailRecipient, setEmailRecipient] = useState('');
+  const [emailAttachments, setEmailAttachments] = useState<{ fileUrl: string; fileName: string }[]>([]);
   useEffect(() => { loadData(); }, [clientId]);
 
   async function loadData() {
