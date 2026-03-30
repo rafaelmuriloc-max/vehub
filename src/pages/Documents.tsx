@@ -47,7 +47,8 @@ export default function Documents() {
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
-  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+  const [reviewQueue, setReviewQueue] = useState<ReviewData[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [relinking, setRelinking] = useState(false);
