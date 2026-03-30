@@ -250,6 +250,16 @@ export default function ClientObligationsTab({ clientId }: Props) {
     loadData();
   }
 
+  async function deleteFile(instanceId: string, activityId: string, fileUrl: string) {
+    await supabase.storage.from('documents').remove([fileUrl]);
+    const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === activityId);
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({ completed: false, completed_at: null, file_url: null }).eq('id', existing.id);
+    }
+    toast({ title: 'Arquivo excluído' });
+    loadData();
+  }
+
   async function downloadFile(fileUrl: string) {
     const { data, error } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 60);
     if (error || !data?.signedUrl) { toast({ title: 'Erro', variant: 'destructive' }); return; }
