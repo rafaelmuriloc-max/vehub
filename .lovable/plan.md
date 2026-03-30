@@ -1,37 +1,50 @@
 
 
-# Enviar anexos junto com e-mail das obrigações
+# Configuração de modelo para extração automática de dados por tipo de documento
 
 ## Resumo
-Quando uma atividade de e-mail for disparada (automática ou manual), o sistema coletará todos os arquivos já anexados nas atividades anteriores (tipo documento) da mesma instância e os enviará como anexos no e-mail via SMTP.
+Adicionar no cadastro de Tipo de Documento a possibilidade de fazer upload de um arquivo-modelo (sample). Esse arquivo serve como referência para a IA identificar onde estão as informações de CNPJ, Nome da Empresa, Competência e Tipo de Obrigação em documentos desse tipo, permitindo vinculação automática futura.
 
 ## Mudanças
 
-### 1. `src/lib/sendActivityEmail.ts` — coletar arquivos das atividades concluídas
-- Buscar todas as `obligation_activity_completions` da mesma `instance_id` que possuam `file_url` preenchido
-- Enviar a lista de `file_url` + `file_name` (extraído do path) no body da chamada à Edge Function `smtp-send`
+### 1. Migração SQL — novas colunas na tabela `document_types`
+```sql
+ALTER TABLE document_types
+  ADD COLUMN sample_file_url text,
+  ADD COLUMN sample_file_name text,
+  ADD COLUMN extraction_config jsonb DEFAULT '{}';
+```
+- `sample_file_url`: caminho do arquivo-modelo no Storage
+- `sample_file_name`: nome original do arquivo para exibição
+- `extraction_config`: JSON com instruções de extração (campos: cnpj, company_name, reference_month, obligation_type) — pode ser preenchido manualmente ou futuramente por IA
 
-### 2. `supabase/functions/smtp-send/index.ts` — baixar e anexar arquivos
-- Receber campo opcional `attachments: Array<{ fileUrl: string, fileName: string }>` no body
-- Para cada anexo, usar o Supabase Admin client para gerar signed URL do bucket `documents` e fazer fetch do conteúdo binário
-- Converter para base64 (ou Uint8Array) e usar o campo `attachments` do denomailer:
-  ```
-  attachments: [{ filename: "doc.pdf", content: binaryData, encoding: "binary" }]
-  ```
-- A biblioteca denomailer já suporta attachments nativamente
+### 2. `src/components/settings/DocumentTypesTab.tsx` — upload do arquivo-modelo no dialog
+- Adicionar campo de upload de arquivo no formulário de criação/edição
+- Exibir nome do arquivo já enviado com botão para remover
+- Adicionar campos de texto para descrever onde cada informação se encontra no documento:
+  - "Localização do CNPJ" (ex: "canto superior esquerdo", "linha 3")
+  - "Localização do Nome da Empresa"
+  - "Localização da Competência"
+  - "Localização do Tipo de Obrigação"
+- Upload vai para o bucket `documents` com path `document-types/{id}/sample.ext`
+- Na tabela, mostrar ícone indicando se o tipo possui arquivo-modelo configurado
 
-### 3. `src/components/ClientObligationsTab.tsx` e `src/pages/CalendarView.tsx` — sem mudanças estruturais
-- O envio manual via `EmailComposeDialog` também deve passar os anexos; adicionar prop `attachments` ao dialog e passá-los na chamada ao `smtp-send`
-
-### 4. `src/components/EmailComposeDialog.tsx` — suportar anexos
-- Receber prop opcional `attachments: Array<{ fileUrl: string, fileName: string }>`
-- Exibir lista dos arquivos que serão anexados (apenas visual, não editável)
-- Incluir no body enviado à Edge Function
+### 3. Nenhuma nova página ou Edge Function necessária
+- O arquivo e as configurações ficam armazenados para uso futuro por uma IA de extração
+- A estrutura `extraction_config` será consumida quando a funcionalidade de extração automática por IA for implementada
 
 ## Detalhes técnicos
-- Os arquivos estão no bucket privado `documents` do Supabase Storage
-- A Edge Function usa `SUPABASE_SERVICE_ROLE_KEY` para gerar signed URLs e baixar os arquivos
-- O path no `file_url` segue o padrão do storage (`client_id/file.ext`)
-- Limite prático: Gmail SMTP permite anexos até ~25MB total
-- Nenhuma migração necessária
+- Bucket utilizado: `documents` (já existente, privado)
+- Path do sample: `document-types/{document_type_id}/{filename}`
+- O `extraction_config` JSON terá a estrutura:
+  ```json
+  {
+    "cnpj_location": "texto descritivo",
+    "company_name_location": "texto descritivo",
+    "reference_month_location": "texto descritivo",
+    "obligation_type_location": "texto descritivo"
+  }
+  ```
+- Arquivos modificados: migração SQL, `DocumentTypesTab.tsx`
+- Interface do tipo atualizada para refletir novos campos
 
