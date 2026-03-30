@@ -122,6 +122,15 @@ export default function Obligations() {
     } else {
       payload.document_type_id = null;
     }
+    if (activityForm.type === 'email') {
+      payload.email_department_id = activityForm.email_department_id || null;
+      payload.email_subject = activityForm.email_subject || null;
+      payload.email_body = activityForm.email_body || null;
+    } else {
+      payload.email_department_id = null;
+      payload.email_subject = null;
+      payload.email_body = null;
+    }
     const { error } = editingActivity
       ? await supabase.from('obligation_activities').update(payload).eq('id', editingActivity.id)
       : await supabase.from('obligation_activities').insert(payload);
