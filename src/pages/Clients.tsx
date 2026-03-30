@@ -462,42 +462,6 @@ export default function Clients() {
 
 
 
-    setClassifyingAll(true);
-    const { data: unclassified } = await supabase
-      .from('clients')
-      .select('id, main_activity, secondary_activities')
-      .or('business_classification.is.null,business_classification.eq.')
-      .or('main_activity.neq.,secondary_activities.neq.');
-
-    const toClassify = (unclassified || []).filter(
-      (c: any) => (c.main_activity || c.secondary_activities)
-    );
-
-    setClassifyProgress({ current: 0, total: toClassify.length });
-    let classified = 0;
-
-    for (let i = 0; i < toClassify.length; i++) {
-      const c = toClassify[i] as any;
-      setClassifyProgress({ current: i + 1, total: toClassify.length });
-      try {
-        const result = await classifyByAI(c.main_activity || '', c.secondary_activities || '');
-        if (result) {
-          await supabase.from('clients').update({ business_classification: result }).eq('id', c.id);
-          classified++;
-        }
-      } catch { /* skip */ }
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    setClassifyingAll(false);
-    setClassifyProgress({ current: 0, total: 0 });
-    loadClients();
-    toast({
-      title: 'Classificação concluída',
-      description: `${classified} de ${toClassify.length} clientes classificados.`,
-    });
-  }
-
   async function openNew() {
     setEditing(null);
     setViewOnly(false);
