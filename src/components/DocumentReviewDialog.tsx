@@ -64,7 +64,10 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Revisar Importação</DialogTitle>
+          <DialogTitle>
+            Revisar Importação
+            {queueTotal && queueTotal > 1 && <Badge variant="secondary" className="ml-2 text-xs">{queueTotal} pendente(s)</Badge>}
+          </DialogTitle>
           <DialogDescription>
             Arquivo: <strong>{file.name}</strong>
             {extraction.company_name && <> — Empresa detectada: <strong>{extraction.company_name}</strong></>}
