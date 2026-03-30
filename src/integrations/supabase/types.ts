@@ -503,6 +503,7 @@ export type Database = {
           file_name: string
           file_url: string
           id: string
+          linked_obligation_id: string | null
           reference_month: string
           uploaded_by: string | null
         }
@@ -513,6 +514,7 @@ export type Database = {
           file_name: string
           file_url: string
           id?: string
+          linked_obligation_id?: string | null
           reference_month: string
           uploaded_by?: string | null
         }
@@ -523,6 +525,7 @@ export type Database = {
           file_name?: string
           file_url?: string
           id?: string
+          linked_obligation_id?: string | null
           reference_month?: string
           uploaded_by?: string | null
         }
