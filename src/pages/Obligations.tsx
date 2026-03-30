@@ -210,7 +210,16 @@ export default function Obligations() {
                             {obActivities.map((act, i) => (
                               <TableRow key={act.id}>
                                 <TableCell>{i + 1}</TableCell>
-                                <TableCell className="font-medium">{act.title}</TableCell>
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    {act.title}
+                                    {act.auto_start && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary">
+                                        <Zap className="h-3 w-3 mr-0.5" />Auto
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-1">
                                     {activityTypeIcons[act.type]}
