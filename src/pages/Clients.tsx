@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import * as forge from 'node-forge';
 import { useAuth } from '@/hooks/useAuth';
@@ -986,26 +986,48 @@ export default function Clients() {
           crossData[regime][seg] = (crossData[regime][seg] || 0) + 1;
         });
         const segmentList = Array.from(allSegments).sort();
-        const stackedData = Object.entries(crossData).map(([regime, segs]) => ({
+        const rawStackedData = Object.entries(crossData).map(([regime, segs]) => ({
           regime,
           ...segs,
           total: Object.values(segs).reduce((s, v) => s + v, 0),
         })).sort((a, b) => b.total - a.total);
 
+        // Normalize to percentages for proportional view
+        const stackedData = rawStackedData.map(row => {
+          const pctRow: Record<string, any> = { regime: row.regime, total: row.total };
+          segmentList.forEach(seg => {
+            const raw = (row as any)[seg] || 0;
+            pctRow[seg] = row.total > 0 ? Math.round((raw / row.total) * 100) : 0;
+            pctRow[`${seg}_abs`] = raw;
+          });
+          return pctRow;
+        });
+
         const StackedTooltip = ({ active, payload, label }: any) => {
           if (!active || !payload?.length) return null;
-          const total = payload.reduce((s: number, p: any) => s + (p.value || 0), 0);
+          const entry = stackedData.find((d: any) => d.regime === label);
+          const total = entry?.total || 0;
           return (
-            <div className="rounded-lg border bg-popover px-3 py-2 shadow-lg min-w-[140px]">
-              <p className="text-sm font-medium text-popover-foreground mb-1">{label}</p>
-              {payload.filter((p: any) => p.value > 0).map((p: any, i: number) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.fill }} />
-                  <span className="text-muted-foreground">{p.dataKey}</span>
-                  <span className="ml-auto font-medium text-popover-foreground">{p.value} ({((p.value / total) * 100).toFixed(0)}%)</span>
-                </div>
-              ))}
-              <div className="border-t mt-1 pt-1 text-xs text-muted-foreground font-medium">Total: {total}</div>
+            <div className="rounded-xl border bg-popover px-4 py-3 shadow-xl min-w-[200px]">
+              <p className="text-sm font-semibold text-popover-foreground mb-2">{label}</p>
+              <p className="text-[10px] text-muted-foreground mb-2">{total} clientes</p>
+              {payload.filter((p: any) => p.value > 0).map((p: any, i: number) => {
+                const absVal = entry?.[`${p.dataKey}_abs`] || 0;
+                return (
+                  <div key={i} className="mb-1.5">
+                    <div className="flex items-center justify-between text-xs mb-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.fill }} />
+                        <span className="text-muted-foreground">{p.dataKey}</span>
+                      </div>
+                      <span className="font-medium text-popover-foreground">{absVal} ({p.value}%)</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${p.value}%`, backgroundColor: p.fill }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         };
@@ -1049,33 +1071,50 @@ export default function Clients() {
                     <Building2 className="h-4 w-4" />
                     Regime Tributário × Segmento
                   </CardTitle>
+                  <p className="text-[11px] text-muted-foreground/60">Distribuição percentual de segmentos por regime</p>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={stackedData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                      <XAxis dataKey="regime" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      <Tooltip content={<StackedTooltip />} />
-                      <Legend
-                        wrapperStyle={{ fontSize: 12 }}
-                        formatter={(value: string) => <span className="text-muted-foreground">{value}</span>}
-                      />
+                  <div className="flex flex-col lg:flex-row gap-6">
+                    <div className="lg:w-[70%]">
+                      <ResponsiveContainer width="100%" height={Math.max(200, stackedData.length * 52)}>
+                        <BarChart data={stackedData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                          <defs>
+                            {segmentList.map((seg, i) => (
+                              <linearGradient key={seg} id={`grad-${i}`} x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.85} />
+                                <stop offset="100%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={1} />
+                              </linearGradient>
+                            ))}
+                          </defs>
+                          <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                          <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
+                          <YAxis type="category" dataKey="regime" width={130} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                          <Tooltip content={<StackedTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }} />
+                          {segmentList.map((seg, i) => (
+                            <Bar
+                              key={seg}
+                              dataKey={seg}
+                              stackId="a"
+                              fill={`url(#grad-${i})`}
+                              radius={i === segmentList.length - 1 ? [0, 4, 4, 0] : [0, 0, 0, 0]}
+                              isAnimationActive
+                              animationBegin={i * 150}
+                              animationDuration={800}
+                              animationEasing="ease-out"
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="lg:w-[30%] flex flex-wrap lg:flex-col gap-2 content-start">
                       {segmentList.map((seg, i) => (
-                        <Bar
-                          key={seg}
-                          dataKey={seg}
-                          stackId="a"
-                          fill={CHART_COLORS[i % CHART_COLORS.length]}
-                          radius={i === segmentList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                          isAnimationActive
-                          animationBegin={0}
-                          animationDuration={800}
-                          animationEasing="ease-out"
-                        />
+                        <div key={seg} className="flex items-center gap-2 text-xs">
+                          <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                          <span className="text-muted-foreground">{seg}</span>
+                        </div>
                       ))}
-                    </BarChart>
-                  </ResponsiveContainer>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
