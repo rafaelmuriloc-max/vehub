@@ -208,6 +208,45 @@ export default function ClientObligationsTab({ clientId }: Props) {
       });
     }
     toast({ title: 'Arquivo enviado' });
+
+    // Trigger auto-start chain after document upload
+    const currentAct = activities.find(a => a.id === activityId);
+    if (currentAct) {
+      const obl = obligations.find(o => o.id === currentAct.obligation_id);
+      const oblActivities = activities.filter(a => a.obligation_id === currentAct.obligation_id).sort((a, b) => a.order - b.order);
+      const currentIdx = oblActivities.findIndex(a => a.id === activityId);
+      for (let i = currentIdx + 1; i < oblActivities.length; i++) {
+        const nextAct = oblActivities[i];
+        if (!nextAct.auto_start) break;
+        const nextComp = completions.find(c => c.instance_id === instanceId && c.activity_id === nextAct.id);
+        if (nextComp?.completed) break;
+
+        if (nextAct.type === 'email' && nextAct.email_department_id && nextAct.email_subject && nextAct.email_body) {
+          const result = await sendActivityEmail({
+            activity: nextAct,
+            instanceId,
+            clientId,
+            obligationName: obl?.name || '',
+            referenceMonth: instances.find(inst => inst.id === instanceId)?.reference_month || '',
+            dueDay: obl?.due_day,
+          });
+          if (!result.success) {
+            toast({ title: 'Erro no envio automático de e-mail', description: result.error, variant: 'destructive' });
+            break;
+          }
+          toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
+        } else if (nextAct.type === 'email') {
+          break;
+        } else {
+          if (nextComp) {
+            await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+          } else {
+            await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+          }
+        }
+      }
+    }
+
     loadData();
   }
 
