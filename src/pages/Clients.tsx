@@ -986,26 +986,48 @@ export default function Clients() {
           crossData[regime][seg] = (crossData[regime][seg] || 0) + 1;
         });
         const segmentList = Array.from(allSegments).sort();
-        const stackedData = Object.entries(crossData).map(([regime, segs]) => ({
+        const rawStackedData = Object.entries(crossData).map(([regime, segs]) => ({
           regime,
           ...segs,
           total: Object.values(segs).reduce((s, v) => s + v, 0),
         })).sort((a, b) => b.total - a.total);
 
+        // Normalize to percentages for proportional view
+        const stackedData = rawStackedData.map(row => {
+          const pctRow: Record<string, any> = { regime: row.regime, total: row.total };
+          segmentList.forEach(seg => {
+            const raw = (row as any)[seg] || 0;
+            pctRow[seg] = row.total > 0 ? Math.round((raw / row.total) * 100) : 0;
+            pctRow[`${seg}_abs`] = raw;
+          });
+          return pctRow;
+        });
+
         const StackedTooltip = ({ active, payload, label }: any) => {
           if (!active || !payload?.length) return null;
-          const total = payload.reduce((s: number, p: any) => s + (p.value || 0), 0);
+          const entry = stackedData.find((d: any) => d.regime === label);
+          const total = entry?.total || 0;
           return (
-            <div className="rounded-lg border bg-popover px-3 py-2 shadow-lg min-w-[140px]">
-              <p className="text-sm font-medium text-popover-foreground mb-1">{label}</p>
-              {payload.filter((p: any) => p.value > 0).map((p: any, i: number) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.fill }} />
-                  <span className="text-muted-foreground">{p.dataKey}</span>
-                  <span className="ml-auto font-medium text-popover-foreground">{p.value} ({((p.value / total) * 100).toFixed(0)}%)</span>
-                </div>
-              ))}
-              <div className="border-t mt-1 pt-1 text-xs text-muted-foreground font-medium">Total: {total}</div>
+            <div className="rounded-xl border bg-popover px-4 py-3 shadow-xl min-w-[200px]">
+              <p className="text-sm font-semibold text-popover-foreground mb-2">{label}</p>
+              <p className="text-[10px] text-muted-foreground mb-2">{total} clientes</p>
+              {payload.filter((p: any) => p.value > 0).map((p: any, i: number) => {
+                const absVal = entry?.[`${p.dataKey}_abs`] || 0;
+                return (
+                  <div key={i} className="mb-1.5">
+                    <div className="flex items-center justify-between text-xs mb-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.fill }} />
+                        <span className="text-muted-foreground">{p.dataKey}</span>
+                      </div>
+                      <span className="font-medium text-popover-foreground">{absVal} ({p.value}%)</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${p.value}%`, backgroundColor: p.fill }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         };
