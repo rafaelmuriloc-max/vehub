@@ -47,7 +47,7 @@ export default function Obligations() {
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '' });
+  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false });
 
   const [expandedObligation, setExpandedObligation] = useState<string | null>(null);
 
