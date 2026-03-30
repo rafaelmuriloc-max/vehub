@@ -975,36 +975,110 @@ export default function Clients() {
           </ResponsiveContainer>
         );
 
+        // Cross data: regime × segment
+        const crossData: Record<string, Record<string, number>> = {};
+        const allSegments = new Set<string>();
+        clients.forEach(c => {
+          const regime = taxRegimeLabels[c.tax_regime || ''] || c.tax_regime || 'Não informado';
+          const seg = c.business_classification || 'Não informado';
+          allSegments.add(seg);
+          if (!crossData[regime]) crossData[regime] = {};
+          crossData[regime][seg] = (crossData[regime][seg] || 0) + 1;
+        });
+        const segmentList = Array.from(allSegments).sort();
+        const stackedData = Object.entries(crossData).map(([regime, segs]) => ({
+          regime,
+          ...segs,
+          total: Object.values(segs).reduce((s, v) => s + v, 0),
+        })).sort((a, b) => b.total - a.total);
+
+        const StackedTooltip = ({ active, payload, label }: any) => {
+          if (!active || !payload?.length) return null;
+          const total = payload.reduce((s: number, p: any) => s + (p.value || 0), 0);
+          return (
+            <div className="rounded-lg border bg-popover px-3 py-2 shadow-lg min-w-[140px]">
+              <p className="text-sm font-medium text-popover-foreground mb-1">{label}</p>
+              {payload.filter((p: any) => p.value > 0).map((p: any, i: number) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.fill }} />
+                  <span className="text-muted-foreground">{p.dataKey}</span>
+                  <span className="ml-auto font-medium text-popover-foreground">{p.value} ({((p.value / total) * 100).toFixed(0)}%)</span>
+                </div>
+              ))}
+              <div className="border-t mt-1 pt-1 text-xs text-muted-foreground font-medium">Total: {total}</div>
+            </div>
+          );
+        };
+
         return (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  Regime Tributário
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col lg:flex-row gap-4">
-                  <div className="lg:w-[55%]">{renderDonut(taxData, taxTotal, 'clientes')}</div>
-                  <div className="lg:w-[45%]">{renderLegend(taxData, taxTotal)}</div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Briefcase className="h-4 w-4" />
-                  Segmento
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col lg:flex-row gap-4">
-                  <div className="lg:w-[55%]">{renderDonut(segmentData, segTotal, 'clientes')}</div>
-                  <div className="lg:w-[45%]">{renderLegend(segmentData, segTotal)}</div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="space-y-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Regime Tributário
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    <div className="lg:w-[55%]">{renderDonut(taxData, taxTotal, 'clientes')}</div>
+                    <div className="lg:w-[45%]">{renderLegend(taxData, taxTotal)}</div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Segmento
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    <div className="lg:w-[55%]">{renderDonut(segmentData, segTotal, 'clientes')}</div>
+                    <div className="lg:w-[45%]">{renderLegend(segmentData, segTotal)}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            {stackedData.length > 0 && (
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Regime Tributário × Segmento
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={stackedData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                      <XAxis dataKey="regime" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip content={<StackedTooltip />} />
+                      <Legend
+                        wrapperStyle={{ fontSize: 12 }}
+                        formatter={(value: string) => <span className="text-muted-foreground">{value}</span>}
+                      />
+                      {segmentList.map((seg, i) => (
+                        <Bar
+                          key={seg}
+                          dataKey={seg}
+                          stackId="a"
+                          fill={CHART_COLORS[i % CHART_COLORS.length]}
+                          radius={i === segmentList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                          isAnimationActive
+                          animationBegin={0}
+                          animationDuration={800}
+                          animationEasing="ease-out"
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
           </div>
         );
       })()}
