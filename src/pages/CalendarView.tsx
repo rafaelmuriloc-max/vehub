@@ -244,6 +244,7 @@ export default function CalendarView() {
             obligationName: detailObligation.name,
             referenceMonth: detailInstance.reference_month,
             dueDay: detailObligation.due_day,
+            departmentId: detailObligation.department_id,
           });
           if (!result.success) {
             toast({ title: 'Erro no envio automático de e-mail', description: result.error, variant: 'destructive' });
