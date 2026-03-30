@@ -29,8 +29,8 @@ export function DepartmentsTab() {
 
   useEffect(() => { fetch(); }, []);
 
-  const openNew = () => { setEditing(null); setForm({ name: '', description: '' }); setOpen(true); };
-  const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '' }); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ name: '', description: '', smtp_email: '', smtp_password: '' }); setShowPassword(false); setOpen(true); };
+  const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '', smtp_email: d.smtp_email || '', smtp_password: d.smtp_password || '' }); setShowPassword(false); setOpen(true); };
 
   const handleSave = async () => {
     const payload = { name: form.name, description: form.description || null };
