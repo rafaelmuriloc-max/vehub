@@ -439,6 +439,7 @@ export default function ClientObligationsTab({ clientId }: Props) {
       <EmailComposeDialog
         open={emailDialogOpen}
         onOpenChange={setEmailDialogOpen}
+        recipientEmail={emailRecipient}
         variables={emailVariables}
         prefillDepartmentId={emailPrefill.departmentId}
         prefillSubject={emailPrefill.subject}
