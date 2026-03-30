@@ -444,18 +444,24 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          smtp_email: string | null
+          smtp_password: string | null
         }
         Insert: {
           created_at?: string
           description?: string | null
           id?: string
           name: string
+          smtp_email?: string | null
+          smtp_password?: string | null
         }
         Update: {
           created_at?: string
           description?: string | null
           id?: string
           name?: string
+          smtp_email?: string | null
+          smtp_password?: string | null
         }
         Relationships: []
       }
