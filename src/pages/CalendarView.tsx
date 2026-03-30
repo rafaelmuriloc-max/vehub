@@ -766,6 +766,7 @@ export default function CalendarView() {
         prefillDepartmentId={emailPrefill.departmentId}
         prefillSubject={emailPrefill.subject}
         prefillBody={emailPrefill.body}
+        attachments={emailAttachments}
         onSent={async () => {
           if (emailActivityId) {
             await toggleCompletion(emailActivityId, false);
