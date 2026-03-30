@@ -50,6 +50,26 @@ function parsePermits(raw: string | null): PermitItem[] {
   return defaultPermits.map(p => ({ ...p }));
 }
 
+function normalizeClassification(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+  if (lower.includes('comércio') || lower.includes('comercio')) return 'Comércio';
+  if (lower.includes('serviço') || lower.includes('servico') || lower.includes('serviços') || lower.includes('servicos')) return 'Serviço';
+  if (lower.includes('indústria') || lower.includes('industria')) return 'Indústria';
+  if (lower.includes('misto')) return 'Misto';
+  return raw.trim();
+}
+
+function classificationToSegment(classification: string): string {
+  const normalized = normalizeClassification(classification);
+  switch (normalized) {
+    case 'Comércio': return 'Comércio';
+    case 'Serviço': return 'Serviços';
+    case 'Indústria': return 'Indústria';
+    case 'Misto': return 'Misto';
+    default: return normalized;
+  }
+}
+
 async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<string> {
   if (!mainCnae && !secondaryCnaes) return '';
   try {
@@ -57,7 +77,8 @@ async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<s
       body: { main_activity: mainCnae, secondary_activities: secondaryCnaes },
     });
     if (error) throw error;
-    return data?.classification || '';
+    const raw = data?.classification || '';
+    return raw ? normalizeClassification(raw) : '';
   } catch (e) {
     console.error('AI classification error:', e);
     return '';
@@ -247,7 +268,7 @@ export default function Clients() {
       }));
       setClassifyingSegment(true);
       classifyByAI(cnaePrincipal, secondaryCnaes).then(c => {
-        setForm(prev => ({ ...prev, business_classification: c }));
+        setForm(prev => ({ ...prev, business_classification: c, business_segment: c ? classificationToSegment(c) : prev.business_segment }));
         setClassifyingSegment(false);
       });
 
@@ -318,26 +339,61 @@ export default function Clients() {
     batchUpdateTaxRegimes();
   }, []);
 
-  // Auto-classify segments for clients missing business_classification
+  // Auto-classify segments and backfill business_segment
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     const CLASSIFY_KEY = `batch_classify_done_${today}`;
     if (localStorage.getItem(CLASSIFY_KEY)) return;
 
-    async function autoClassify() {
+    async function autoClassifyAndBackfill() {
+      // Step 1: Backfill business_segment for clients that have classification but no segment
+      const { data: needsSegment } = await supabase
+        .from('clients')
+        .select('id, business_classification, business_segment');
+
+      const toBackfill = (needsSegment || []).filter(
+        (c: any) => c.business_classification && c.business_classification.trim() &&
+          (!c.business_segment || !c.business_segment.trim())
+      );
+
+      if (toBackfill.length > 0) {
+        for (const c of toBackfill) {
+          const normalized = normalizeClassification((c as any).business_classification);
+          const segment = classificationToSegment(normalized);
+          await supabase.from('clients').update({
+            business_classification: normalized,
+            business_segment: segment,
+          }).eq('id', (c as any).id);
+        }
+        console.log(`[backfill-segment] Updated ${toBackfill.length} clients`);
+      }
+
+      // Step 2: Also normalize existing classifications with inconsistent casing
+      const toNormalize = (needsSegment || []).filter(
+        (c: any) => c.business_classification && c.business_classification.trim() &&
+          c.business_classification !== normalizeClassification(c.business_classification)
+      );
+      for (const c of toNormalize) {
+        const normalized = normalizeClassification((c as any).business_classification);
+        await supabase.from('clients').update({
+          business_classification: normalized,
+          business_segment: classificationToSegment(normalized),
+        }).eq('id', (c as any).id);
+      }
+
+      // Step 3: AI-classify clients missing business_classification entirely
       const { data: unclassified } = await supabase
         .from('clients')
-        .select('id, main_activity, secondary_activities')
-        .or('business_classification.is.null,business_classification.eq.');
+        .select('id, main_activity, secondary_activities, business_classification');
 
-      // Also filter out clients with only whitespace in business_classification
       const toClassify = (unclassified || []).filter(
-        (c: any) => (c.main_activity || c.secondary_activities) && 
+        (c: any) => (c.main_activity || c.secondary_activities) &&
           (!c.business_classification || !c.business_classification.trim())
       );
 
       if (toClassify.length === 0) {
         localStorage.setItem(CLASSIFY_KEY, 'true');
+        if (toBackfill.length > 0 || toNormalize.length > 0) loadClients();
         return;
       }
 
@@ -351,7 +407,10 @@ export default function Clients() {
         try {
           const result = await classifyByAI(c.main_activity || '', c.secondary_activities || '');
           if (result) {
-            await supabase.from('clients').update({ business_classification: result }).eq('id', c.id);
+            await supabase.from('clients').update({
+              business_classification: result,
+              business_segment: classificationToSegment(result),
+            }).eq('id', c.id);
             classified++;
           }
         } catch { /* skip */ }
@@ -361,21 +420,20 @@ export default function Clients() {
       setClassifyingAll(false);
       setClassifyProgress({ current: 0, total: 0 });
 
-      // Only mark as done if ALL pending clients were successfully classified
       if (classified === toClassify.length) {
         localStorage.setItem(CLASSIFY_KEY, 'true');
       }
 
-      if (classified > 0) {
+      if (classified > 0 || toBackfill.length > 0 || toNormalize.length > 0) {
         loadClients();
         toast({
           title: 'Classificação concluída',
-          description: `${classified} de ${toClassify.length} clientes classificados automaticamente.`,
+          description: `${classified} classificado(s), ${toBackfill.length} segmento(s) preenchido(s).`,
         });
       }
     }
 
-    autoClassify();
+    autoClassifyAndBackfill();
   }, []);
 
   async function loadClients() {
@@ -447,6 +505,7 @@ export default function Clients() {
 
         if (classification) {
           updatePayload.business_classification = classification;
+          updatePayload.business_segment = classificationToSegment(classification);
         }
 
         await supabase.from('clients').update(updatePayload).eq('id', client.id);
