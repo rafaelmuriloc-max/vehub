@@ -339,8 +339,12 @@ export default function CalendarView() {
 
   const dayTotalPages = Math.ceil(selectedEvents.length / ITEMS_PER_PAGE);
   const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * ITEMS_PER_PAGE, dayPage * ITEMS_PER_PAGE);
-  const monthTotalPages = Math.ceil(monthEvents.length / ITEMS_PER_PAGE);
-  const paginatedMonthEvents = monthEvents.slice((monthPage - 1) * ITEMS_PER_PAGE, monthPage * ITEMS_PER_PAGE);
+  const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const monthPendingTotalPages = Math.ceil(monthEventsPending.length / ITEMS_PER_PAGE);
+  const monthCompletedTotalPages = Math.ceil(monthEventsCompleted.length / ITEMS_PER_PAGE);
+  const paginatedMonthPending = monthEventsPending.slice((monthPendingPage - 1) * ITEMS_PER_PAGE, monthPendingPage * ITEMS_PER_PAGE);
+  const paginatedMonthCompleted = monthEventsCompleted.slice((monthCompletedPage - 1) * ITEMS_PER_PAGE, monthCompletedPage * ITEMS_PER_PAGE);
 
   // Dialog progress
   const dialogProgress = detailInstance
