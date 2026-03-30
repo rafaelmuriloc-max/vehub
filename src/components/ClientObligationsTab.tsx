@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
-  FileText, CheckSquare, MessageCircle, Mail, Upload, Download, Check, Loader2,
+  FileText, CheckSquare, MessageCircle, Mail, Upload, Download, Check, Loader2, Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
