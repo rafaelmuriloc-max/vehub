@@ -92,7 +92,7 @@ export function DocumentTypesTab() {
       if (!editing) {
         const { data: inserted, error: insertErr } = await supabase
           .from('document_types')
-          .insert({ name: form.name, description: form.description || null, extraction_config: config })
+          .insert([{ name: form.name, description: form.description || null, extraction_config: config as any }])
           .select('id')
           .single();
         if (insertErr || !inserted) {
