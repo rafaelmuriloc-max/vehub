@@ -1,21 +1,38 @@
 
 
-# Classificar segmentos automaticamente ao carregar a página
+# Corrigir classificação automática de segmentos em branco
 
-## Objetivo
-Remover o botão "Classificar Segmentos" e executar a classificação automaticamente em background quando a página de clientes carrega (similar ao `batchUpdateTaxRegimes` que já roda no `useEffect`).
+## Problema
+A classificação automática usa `localStorage` com chave diária (`batch_classify_done_YYYY-MM-DD`). Se já rodou hoje (mesmo que algumas falharam ou novos clientes foram adicionados), não roda novamente. Além disso, erros silenciosos no `catch` podem ter impedido a classificação de alguns clientes.
 
 ## Mudanças em `src/pages/Clients.tsx`
 
-### 1. Mover lógica do `batchClassifySegments` para um `useEffect`
-- Criar um `useEffect` (ou adicionar ao existente) que roda uma vez após o carregamento inicial
-- Usar `localStorage` com uma chave tipo `batch_classify_done_YYYY-MM-DD` para não repetir no mesmo dia
-- A lógica interna permanece igual: buscar clientes sem `business_classification` mas com CNAEs, chamar `classifyByAI` para cada um, atualizar o banco
+### 1. Melhorar controle de re-execução
+- Em vez de marcar como "done" mesmo quando alguns falharam, só marcar como done se **todos** foram classificados com sucesso (ou se não há mais pendentes)
+- Guardar no localStorage o número de pendentes restantes; se ainda houver pendentes, rodar novamente
 
-### 2. Remover o botão "Classificar Segmentos" da UI
-- Remover o `<Button>` que chama `batchClassifySegments` (linha ~783)
-- Manter os estados `classifyingAll` e `classifyProgress` para mostrar progresso em background (barra de progresso existente)
+### 2. Adicionar retry para falhas
+- Se `classifyByAI` falhar para um cliente, não contar como "feito" -- permitir que a próxima execução tente novamente
+- Mudar a lógica: só setar localStorage se `toClassify.length === classified`
 
-### 3. Mostrar progresso discreto
-- Manter a barra de progresso já existente para feedback visual enquanto classifica em background
+### 3. Filtro de query mais robusto
+- A query atual `business_classification.eq.` (string vazia) pode não pegar todos os casos
+- Adicionar também filtro para strings com apenas espaços: usar `business_classification.eq. ` ou tratar no filtro JS
+
+### Mudança concreta (linha ~361):
+```
+// ANTES: sempre marca como done
+localStorage.setItem(CLASSIFY_KEY, 'true');
+
+// DEPOIS: só marca se não sobrou nenhum pendente
+if (classified === toClassify.length) {
+  localStorage.setItem(CLASSIFY_KEY, 'true');
+}
+```
+
+Isso garante que ao recarregar a página, a classificação rode novamente para os que falharam.
+
+## Detalhes técnicos
+- Apenas `src/pages/Clients.tsx` é modificado
+- Sem mudanças no banco de dados ou edge functions
 
