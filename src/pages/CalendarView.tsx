@@ -621,7 +621,33 @@ export default function CalendarView() {
                       </div>
                     )}
                   </div>
-                  {act.type !== 'document' && (
+                  {act.type === 'email' ? (
+                    <Button
+                      size="sm"
+                      variant={isCompleted ? 'ghost' : 'default'}
+                      className="shrink-0"
+                      onClick={() => {
+                        const clientName = detailInstance ? clientMap.get(detailInstance.client_id)?.company_name || '' : '';
+                        const refDate = detailInstance ? new Date(detailInstance.reference_month + 'T00:00:00') : new Date();
+                        const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                        const oblDueDay = detailObligation?.due_day;
+                        const vencimento = oblDueDay
+                          ? new Date(refDate.getFullYear(), refDate.getMonth(), oblDueDay).toLocaleDateString('pt-BR')
+                          : '';
+                        setEmailVariables({
+                          '[Nome_da_Empresa]': clientName,
+                          '[Competencia]': competencia,
+                          '[Nome_da_Obrigação]': detailObligation?.name || '',
+                          '[Vencimento]': vencimento,
+                        });
+                        setEmailActivityId(act.id);
+                        setEmailDialogOpen(true);
+                      }}
+                    >
+                      <Mail className="h-3 w-3 mr-1" />
+                      {isCompleted ? 'Reenviar' : 'Enviar'}
+                    </Button>
+                  ) : act.type !== 'document' && (
                     <Checkbox checked={isCompleted} onCheckedChange={() => toggleCompletion(act.id, isCompleted)} />
                   )}
                 </div>
