@@ -122,6 +122,11 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={confirming}>
               Cancelar
             </Button>
+            {onSkip && queueTotal && queueTotal > 1 && (
+              <Button type="button" variant="ghost" onClick={onSkip} disabled={confirming}>
+                Pular
+              </Button>
+            )}
             <Button type="submit" disabled={confirming}>
               {confirming ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Importando...</> : 'Confirmar e Importar'}
             </Button>
