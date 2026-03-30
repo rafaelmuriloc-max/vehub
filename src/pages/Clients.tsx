@@ -268,7 +268,7 @@ export default function Clients() {
       }));
       setClassifyingSegment(true);
       classifyByAI(cnaePrincipal, secondaryCnaes).then(c => {
-        setForm(prev => ({ ...prev, business_classification: c }));
+        setForm(prev => ({ ...prev, business_classification: c, business_segment: c ? classificationToSegment(c) : prev.business_segment }));
         setClassifyingSegment(false);
       });
 
