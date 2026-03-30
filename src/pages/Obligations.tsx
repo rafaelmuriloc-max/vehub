@@ -346,6 +346,35 @@ export default function Obligations() {
                 </Select>
               </div>
             )}
+            {activityForm.type === 'email' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Departamento Remetente</Label>
+                  <Select value={activityForm.email_department_id} onValueChange={v => setActivityForm({ ...activityForm, email_department_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o departamento" /></SelectTrigger>
+                    <SelectContent>
+                      {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">O e-mail será enviado com as credenciais SMTP deste departamento</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Assunto</Label>
+                  <Input value={activityForm.email_subject} onChange={e => setActivityForm({ ...activityForm, email_subject: e.target.value })} placeholder="Ex: Lembrete de [Nome_da_Obrigação] - [Competencia]" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Corpo do E-mail</Label>
+                  <Textarea rows={5} value={activityForm.email_body} onChange={e => setActivityForm({ ...activityForm, email_body: e.target.value })} placeholder="Use variáveis: [Nome_da_Empresa], [Competencia], [Nome_da_Obrigação], [Vencimento]" />
+                  <div className="flex flex-wrap gap-1">
+                    {['[Nome_da_Empresa]', '[Competencia]', '[Nome_da_Obrigação]', '[Vencimento]'].map(v => (
+                      <Badge key={v} variant="outline" className="text-xs cursor-pointer hover:bg-muted" onClick={() => setActivityForm(f => ({ ...f, email_body: f.email_body + v }))}>
+                        {v}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={activityForm.description} onChange={e => setActivityForm({ ...activityForm, description: e.target.value })} /></div>
             <div className="space-y-2"><Label>Ordem</Label><Input type="number" value={activityForm.order} onChange={e => setActivityForm({ ...activityForm, order: Number(e.target.value) })} /></div>
             <div className="flex items-center justify-between rounded-lg border p-3">
