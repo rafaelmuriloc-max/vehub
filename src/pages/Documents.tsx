@@ -375,10 +375,12 @@ export default function Documents() {
             {relinking ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Revinculando...</> : 'Revincular Documentos'}
           </Button>
           <label className="cursor-pointer">
-            <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" onChange={handleUpload} disabled={analyzing} />
+            <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple onChange={handleUpload} disabled={analyzing} />
             <Button asChild disabled={analyzing}>
               <span>
-                {analyzing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivo</>}
+                {analyzing && uploadProgress
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando {uploadProgress.current}/{uploadProgress.total}...</>
+                  : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivos</>}
               </span>
             </Button>
           </label>
