@@ -179,7 +179,7 @@ export default function CalendarView() {
   }, [events, year, month]);
 
   useEffect(() => { setDayPage(1); }, [selectedDay]);
-  useEffect(() => { setMonthPage(1); }, [year, month, filterDept, filterClient]);
+  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); }, [year, month, filterDept, filterClient]);
 
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
