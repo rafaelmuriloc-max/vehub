@@ -1,31 +1,37 @@
 
 
-# Buscar e-mail do contato por departamento da obrigação
+# Enviar anexos junto com e-mail das obrigações
 
 ## Resumo
-Atualmente o sistema usa o `contact_email` genérico do cliente. A mudança fará com que o destinatário seja buscado na tabela `client_department_contacts`, filtrando pelo `client_id` e pelo `department_id` da obrigação. Se não houver contato específico do departamento, cairá no `contact_email` genérico como fallback.
+Quando uma atividade de e-mail for disparada (automática ou manual), o sistema coletará todos os arquivos já anexados nas atividades anteriores (tipo documento) da mesma instância e os enviará como anexos no e-mail via SMTP.
 
 ## Mudanças
 
-### 1. `src/lib/sendActivityEmail.ts` — adicionar parâmetro `departmentId` da obrigação
-- Receber `departmentId` (da obrigação, não do e-mail) nos parâmetros
-- Buscar primeiro em `client_department_contacts` onde `client_id` e `department_id` correspondem
-- Se encontrar `contact_email`, usar esse
-- Senão, usar o `contact_email` genérico do `clients` como fallback
+### 1. `src/lib/sendActivityEmail.ts` — coletar arquivos das atividades concluídas
+- Buscar todas as `obligation_activity_completions` da mesma `instance_id` que possuam `file_url` preenchido
+- Enviar a lista de `file_url` + `file_name` (extraído do path) no body da chamada à Edge Function `smtp-send`
 
-### 2. `src/components/ClientObligationsTab.tsx` — passar `departmentId` e pré-preencher destinatário
-- No envio automático (`sendActivityEmail`), passar o `department_id` da obrigação
-- No envio manual (`EmailComposeDialog`), buscar o e-mail do contato departamental e passá-lo como `recipientEmail`
+### 2. `supabase/functions/smtp-send/index.ts` — baixar e anexar arquivos
+- Receber campo opcional `attachments: Array<{ fileUrl: string, fileName: string }>` no body
+- Para cada anexo, usar o Supabase Admin client para gerar signed URL do bucket `documents` e fazer fetch do conteúdo binário
+- Converter para base64 (ou Uint8Array) e usar o campo `attachments` do denomailer:
+  ```
+  attachments: [{ filename: "doc.pdf", content: binaryData, encoding: "binary" }]
+  ```
+- A biblioteca denomailer já suporta attachments nativamente
 
-### 3. `src/pages/CalendarView.tsx` — mesma lógica
-- Passar `departmentId` no `sendActivityEmail`
-- Pré-preencher `recipientEmail` no `EmailComposeDialog` com o contato departamental
+### 3. `src/components/ClientObligationsTab.tsx` e `src/pages/CalendarView.tsx` — sem mudanças estruturais
+- O envio manual via `EmailComposeDialog` também deve passar os anexos; adicionar prop `attachments` ao dialog e passá-los na chamada ao `smtp-send`
 
-### 4. `src/components/EmailComposeDialog.tsx` — sem mudanças estruturais
-- Já aceita `recipientEmail` como prop, apenas será passado corretamente agora
+### 4. `src/components/EmailComposeDialog.tsx` — suportar anexos
+- Receber prop opcional `attachments: Array<{ fileUrl: string, fileName: string }>`
+- Exibir lista dos arquivos que serão anexados (apenas visual, não editável)
+- Incluir no body enviado à Edge Function
 
 ## Detalhes técnicos
-- Tabela consultada: `client_department_contacts` (campos `client_id`, `department_id`, `contact_email`)
-- Fallback: `clients.contact_email` quando não houver contato específico
+- Os arquivos estão no bucket privado `documents` do Supabase Storage
+- A Edge Function usa `SUPABASE_SERVICE_ROLE_KEY` para gerar signed URLs e baixar os arquivos
+- O path no `file_url` segue o padrão do storage (`client_id/file.ext`)
+- Limite prático: Gmail SMTP permite anexos até ~25MB total
 - Nenhuma migração necessária
 
