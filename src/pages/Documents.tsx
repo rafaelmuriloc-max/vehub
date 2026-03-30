@@ -45,6 +45,7 @@ export default function Documents() {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [documents, setDocuments] = useState<Doc[]>([]);
+  const [obligations, setObligations] = useState<Obligation[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
