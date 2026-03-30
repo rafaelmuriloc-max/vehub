@@ -1,30 +1,29 @@
 
 
-# Vincular documentos a obrigações e mostrar na lista
+# Revincular documentos existentes a obrigações em aberto
 
-## Resumo
-Ao importar um documento, o sistema já vincula a `obligation_activity_completions`. A mudança adiciona uma coluna `linked_obligation_id` na tabela `documents` para registrar diretamente qual obrigação foi vinculada, e exibe essa informação na listagem.
+## Problema
+Documentos importados antes da lógica de vinculação automática (ou que falharam no vínculo) estão sem `linked_obligation_id`, mesmo havendo obrigações correspondentes em aberto.
+
+## Solução
+Adicionar um botão "Revincular Documentos" na tela de Documentos que percorre todos os documentos sem vínculo e tenta associá-los às obrigações em aberto, usando a mesma lógica já existente: cruzar `document_type_id` com `obligation_activities` (type=document) e depois encontrar `obligation_instances` pelo `client_id` + `reference_month`.
 
 ## Mudanças
 
-### 1. Migração SQL
-- Adicionar coluna `linked_obligation_id uuid` (nullable) na tabela `documents`
-
-### 2. `src/pages/Documents.tsx`
-- Carregar `obligations` (id, name) no `loadAll()`
-- Na função `importDocument`, após vincular a `obligation_activity_completions`, salvar o `obligation_id` encontrado no registro do documento (`documents.linked_obligation_id`)
-- Se múltiplas obrigações forem vinculadas, salvar a primeira (ou a principal)
-- Adicionar coluna "Obrigação" na tabela de documentos importados, exibindo o nome da obrigação vinculada ou "—" se nenhuma
-- Tipo `Doc` atualizado para incluir `linked_obligation_id: string | null`
-
-### 3. Lógica de vinculação (já existente, melhorada)
-- A lógica atual já busca `obligation_activities` por `document_type_id` e cruza com `obligation_instances` por `client_id` + `reference_month`
-- Após encontrar e vincular, o `obligation_id` da instância é gravado no documento
-- O `update` no documento acontece após o `insert` inicial, usando o id retornado
+### `src/pages/Documents.tsx`
+1. Adicionar botão "Revincular" ao lado do botão "Enviar Arquivo"
+2. Nova função `relinkDocuments()`:
+   - Filtra documentos com `linked_obligation_id === null`
+   - Para cada documento sem vínculo:
+     - Busca `obligation_activities` com `type=document` e `document_type_id` igual ao do documento
+     - Busca `obligation_instances` com mesmo `client_id` e `reference_month`
+     - Se encontrar: atualiza `obligation_activity_completions` (marca completo com `file_url`) e salva `linked_obligation_id` no documento
+   - Exibe toast com contagem de documentos vinculados
+3. Loading state durante o processo
 
 ## Detalhes técnicos
-- Nova coluna: `ALTER TABLE documents ADD COLUMN linked_obligation_id uuid;`
-- A coluna é nullable pois documentos podem ser importados sem vínculo
-- Nenhuma foreign key formal (padrão do projeto)
-- Após o insert do documento, capturar o `id` retornado para fazer o update com o `linked_obligation_id`
+- Reutiliza a mesma lógica de matching de `importDocument`, mas opera sobre documentos já salvos
+- Busca todos os `obligation_activities` de tipo document de uma vez (otimizado)
+- Busca todas as `obligation_instances` relevantes em batch
+- Nenhuma migração necessária
 
