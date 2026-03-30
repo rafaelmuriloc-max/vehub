@@ -1,30 +1,21 @@
 
 
-# Preencher Segmento em lote via IA para clientes sem classificação
+# Classificar segmentos automaticamente ao carregar a página
 
 ## Objetivo
-Adicionar um botão que busca todos os clientes com `business_classification` vazio mas que possuem CNAEs (`main_activity` ou `secondary_activities`), e chama a edge function `classify-segment` para cada um, atualizando o banco.
+Remover o botão "Classificar Segmentos" e executar a classificação automaticamente em background quando a página de clientes carrega (similar ao `batchUpdateTaxRegimes` que já roda no `useEffect`).
 
 ## Mudanças em `src/pages/Clients.tsx`
 
-### 1. Novo estado para controle do batch
-- `classifyingAll` (boolean) + `classifyProgress` (`{current, total}`)
+### 1. Mover lógica do `batchClassifySegments` para um `useEffect`
+- Criar um `useEffect` (ou adicionar ao existente) que roda uma vez após o carregamento inicial
+- Usar `localStorage` com uma chave tipo `batch_classify_done_YYYY-MM-DD` para não repetir no mesmo dia
+- A lógica interna permanece igual: buscar clientes sem `business_classification` mas com CNAEs, chamar `classifyByAI` para cada um, atualizar o banco
 
-### 2. Nova função `batchClassifySegments`
-- Busca clientes onde `business_classification` é nulo/vazio E (`main_activity` não é nulo OU `secondary_activities` não é nulo)
-- Para cada cliente, chama `classifyByAI(main_activity, secondary_activities)`
-- Se retornar classificação, faz `UPDATE` no campo `business_classification`
-- Delay de 500ms entre chamadas para evitar rate limit
-- Mostra progresso via toast ou estado visual
-- Ao finalizar, recarrega lista de clientes
+### 2. Remover o botão "Classificar Segmentos" da UI
+- Remover o `<Button>` que chama `batchClassifySegments` (linha ~783)
+- Manter os estados `classifyingAll` e `classifyProgress` para mostrar progresso em background (barra de progresso existente)
 
-### 3. Botão na UI
-- Adicionar botão "Classificar Segmentos" ao lado dos botões de batch existentes (ex: "Atualizar Cadastros")
-- Desabilitado enquanto `classifyingAll` é true
-- Mostra progresso (ex: "Classificando 3/15...")
-
-### Detalhes técnicos
-- Reutiliza `classifyByAI` já existente (chama edge function `classify-segment`)
-- Apenas clientes com CNAEs preenchidos e sem classificação serão processados
-- Não altera clientes que já possuem `business_classification`
+### 3. Mostrar progresso discreto
+- Manter a barra de progresso já existente para feedback visual enquanto classifica em background
 
