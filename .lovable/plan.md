@@ -1,29 +1,34 @@
 
 
-# Revincular documentos existentes a obrigações em aberto
+# Upload de múltiplos arquivos simultâneos
 
-## Problema
-Documentos importados antes da lógica de vinculação automática (ou que falharam no vínculo) estão sem `linked_obligation_id`, mesmo havendo obrigações correspondentes em aberto.
+## Resumo
+Permitir selecionar vários arquivos de uma vez no input de upload. Cada arquivo será processado sequencialmente pela IA (extração de texto → classificação → importação automática ou revisão). Um indicador de progresso mostrará quantos arquivos foram processados.
 
-## Solução
-Adicionar um botão "Revincular Documentos" na tela de Documentos que percorre todos os documentos sem vínculo e tenta associá-los às obrigações em aberto, usando a mesma lógica já existente: cruzar `document_type_id` com `obligation_activities` (type=document) e depois encontrar `obligation_instances` pelo `client_id` + `reference_month`.
+## Mudanças em `src/pages/Documents.tsx`
 
-## Mudanças
+### 1. Input com `multiple`
+- Adicionar atributo `multiple` no `<input type="file">`
 
-### `src/pages/Documents.tsx`
-1. Adicionar botão "Revincular" ao lado do botão "Enviar Arquivo"
-2. Nova função `relinkDocuments()`:
-   - Filtra documentos com `linked_obligation_id === null`
-   - Para cada documento sem vínculo:
-     - Busca `obligation_activities` com `type=document` e `document_type_id` igual ao do documento
-     - Busca `obligation_instances` com mesmo `client_id` e `reference_month`
-     - Se encontrar: atualiza `obligation_activity_completions` (marca completo com `file_url`) e salva `linked_obligation_id` no documento
-   - Exibe toast com contagem de documentos vinculados
-3. Loading state durante o processo
+### 2. Processamento sequencial com progresso
+- Novo state: `uploadProgress: { current: number; total: number } | null`
+- `handleUpload` itera sobre todos os arquivos do `FileList`
+- Para cada arquivo:
+  - Atualiza progresso ("Analisando 2/5...")
+  - Extrai texto, chama IA, tenta auto-import
+  - Se auto-import falhar (dados incompletos): acumula numa fila de revisão
+- Após processar todos: se houver arquivos pendentes de revisão, abre o dialog para o primeiro
 
-## Detalhes técnicos
-- Reutiliza a mesma lógica de matching de `importDocument`, mas opera sobre documentos já salvos
-- Busca todos os `obligation_activities` de tipo document de uma vez (otimizado)
-- Busca todas as `obligation_instances` relevantes em batch
-- Nenhuma migração necessária
+### 3. Fila de revisão
+- Novo state: `reviewQueue: ReviewData[]`
+- Ao confirmar um item no dialog, processa o próximo da fila automaticamente
+- Contador visual: "Revisando 1 de 3 documentos pendentes"
+
+### 4. UI do botão
+- Texto dinâmico: "Analisando 2/5..." durante processamento
+- Toast final: "X documentos importados, Y pendentes de revisão"
+
+## Arquivos modificados
+- `src/pages/Documents.tsx` — lógica de upload e estados
+- `src/components/DocumentReviewDialog.tsx` — exibir contador da fila (opcional, menor mudança)
 
