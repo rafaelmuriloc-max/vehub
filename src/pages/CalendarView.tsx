@@ -668,6 +668,9 @@ export default function CalendarView() {
         open={emailDialogOpen}
         onOpenChange={setEmailDialogOpen}
         variables={emailVariables}
+        prefillDepartmentId={emailPrefill.departmentId}
+        prefillSubject={emailPrefill.subject}
+        prefillBody={emailPrefill.body}
         onSent={async () => {
           if (emailActivityId) {
             await toggleCompletion(emailActivityId, false);
