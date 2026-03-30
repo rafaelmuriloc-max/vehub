@@ -47,7 +47,9 @@ export default function ClientObligationsTab({ clientId }: Props) {
   const [generating, setGenerating] = useState(false);
 
   const [detailInstance, setDetailInstance] = useState<Instance | null>(null);
-
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
+  const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
   useEffect(() => { loadData(); }, [clientId]);
 
   async function loadData() {
