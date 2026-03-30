@@ -116,6 +116,7 @@ export default function EmailComposeDialog({
           to,
           subject: finalSubject,
           html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>`,
+          attachments: attachments.length > 0 ? attachments : undefined,
         },
       });
 
