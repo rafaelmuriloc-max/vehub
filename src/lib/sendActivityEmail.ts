@@ -68,12 +68,27 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
   const finalSubject = replaceVariables(activity.email_subject, variables);
   const finalBody = replaceVariables(activity.email_body, variables);
 
+  // Collect attachments from completed document activities of the same instance
+  const { data: fileCompletions } = await supabase
+    .from('obligation_activity_completions')
+    .select('file_url')
+    .eq('instance_id', instanceId)
+    .not('file_url', 'is', null);
+
+  const attachments = (fileCompletions || [])
+    .filter(fc => fc.file_url)
+    .map(fc => ({
+      fileUrl: fc.file_url!,
+      fileName: fc.file_url!.split('/').pop() || 'attachment',
+    }));
+
   const { data, error } = await supabase.functions.invoke('smtp-send', {
     body: {
       departmentId: activity.email_department_id,
       to: recipientEmail,
       subject: finalSubject,
       html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>`,
+      attachments: attachments.length > 0 ? attachments : undefined,
     },
   });
 

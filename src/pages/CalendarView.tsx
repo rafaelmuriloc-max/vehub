@@ -90,6 +90,7 @@ export default function CalendarView() {
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
   const [emailPrefill, setEmailPrefill] = useState<{ departmentId?: string; subject?: string; body?: string }>({});
   const [emailRecipient, setEmailRecipient] = useState('');
+  const [emailAttachments, setEmailAttachments] = useState<{ fileUrl: string; fileName: string }[]>([]);
 
   const loadData = useCallback(async () => {
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
@@ -730,6 +731,15 @@ export default function CalendarView() {
                           subject: act.email_subject || undefined,
                           body: act.email_body || undefined,
                         });
+                        // Collect attachments
+                        if (detailInstanceId) {
+                          const { data: fileComps } = await supabase
+                            .from('obligation_activity_completions')
+                            .select('file_url')
+                            .eq('instance_id', detailInstanceId)
+                            .not('file_url', 'is', null);
+                          setEmailAttachments((fileComps || []).filter(fc => fc.file_url).map(fc => ({ fileUrl: fc.file_url!, fileName: fc.file_url!.split('/').pop() || 'anexo' })));
+                        }
                         setEmailActivityId(act.id);
                         setEmailDialogOpen(true);
                       }}
@@ -756,6 +766,7 @@ export default function CalendarView() {
         prefillDepartmentId={emailPrefill.departmentId}
         prefillSubject={emailPrefill.subject}
         prefillBody={emailPrefill.body}
+        attachments={emailAttachments}
         onSent={async () => {
           if (emailActivityId) {
             await toggleCompletion(emailActivityId, false);

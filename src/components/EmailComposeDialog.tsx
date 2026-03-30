@@ -8,12 +8,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Send, Loader2 } from 'lucide-react';
+import { Mail, Send, Loader2, Paperclip } from 'lucide-react';
 
 interface Department {
   id: string;
   name: string;
   smtp_email: string | null;
+}
+
+interface EmailAttachment {
+  fileUrl: string;
+  fileName: string;
 }
 
 interface EmailComposeDialogProps {
@@ -27,6 +32,8 @@ interface EmailComposeDialogProps {
   prefillDepartmentId?: string;
   prefillSubject?: string;
   prefillBody?: string;
+  /** Attachments to include */
+  attachments?: EmailAttachment[];
 }
 
 const VARIABLE_OPTIONS = [
@@ -45,6 +52,7 @@ export default function EmailComposeDialog({
   prefillDepartmentId,
   prefillSubject,
   prefillBody,
+  attachments = [],
 }: EmailComposeDialogProps) {
   const { toast } = useToast();
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -108,6 +116,7 @@ export default function EmailComposeDialog({
           to,
           subject: finalSubject,
           html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>`,
+          attachments: attachments.length > 0 ? attachments : undefined,
         },
       });
 
@@ -214,6 +223,20 @@ export default function EmailComposeDialog({
               ))}
             </div>
           </div>
+
+          {attachments.length > 0 && (
+            <div>
+              <Label className="flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" /> Anexos ({attachments.length})</Label>
+              <div className="mt-1 space-y-1">
+                {attachments.map((att, idx) => (
+                  <div key={idx} className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 flex items-center gap-1">
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    {att.fileName}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Button
             onClick={handleSend}

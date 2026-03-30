@@ -42,7 +42,7 @@ serve(async (req) => {
 
     // Parse and validate input
     const body = await req.json();
-    const { departmentId, to, subject, html } = body;
+    const { departmentId, to, subject, html, attachments } = body;
 
     if (!departmentId || !to || !subject || !html) {
       return new Response(
@@ -86,6 +86,35 @@ serve(async (req) => {
       );
     }
 
+    // Download attachments from Supabase Storage if provided
+    const emailAttachments: Array<{ filename: string; content: Uint8Array; encoding: string }> = [];
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      for (const att of attachments) {
+        try {
+          const { data: signedData, error: signErr } = await supabaseAdmin.storage
+            .from("documents")
+            .createSignedUrl(att.fileUrl, 120);
+          if (signErr || !signedData?.signedUrl) {
+            console.error("Failed to sign URL for", att.fileUrl, signErr?.message);
+            continue;
+          }
+          const fileResp = await fetch(signedData.signedUrl);
+          if (!fileResp.ok) {
+            console.error("Failed to download", att.fileUrl, fileResp.status);
+            continue;
+          }
+          const arrayBuffer = await fileResp.arrayBuffer();
+          emailAttachments.push({
+            filename: att.fileName || att.fileUrl.split("/").pop() || "attachment",
+            content: new Uint8Array(arrayBuffer),
+            encoding: "binary",
+          });
+        } catch (attErr) {
+          console.error("Attachment error:", attErr);
+        }
+      }
+    }
+
     // Send email via Gmail SMTP
     const client = new SMTPClient({
       connection: {
@@ -99,14 +128,19 @@ serve(async (req) => {
       },
     });
 
-    await client.send({
+    const sendOptions: any = {
       from: dept.smtp_email,
       to: to,
       subject: subject,
       content: "auto",
       html: html,
-    });
+    };
 
+    if (emailAttachments.length > 0) {
+      sendOptions.attachments = emailAttachments;
+    }
+
+    await client.send(sendOptions);
     await client.close();
 
     return new Response(
