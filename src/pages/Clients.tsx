@@ -171,7 +171,8 @@ export default function Clients() {
     if (!editing) return;
     setSocietyUploading(prev => ({ ...prev, [label]: true }));
     try {
-      const path = `${editing.id}/societario/${label}/${file.name}`;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${editing.id}/societario/${label}/${safeName}`;
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { error: dbErr } = await supabase.from('client_society_documents' as any).insert({ client_id: editing.id, document_label: label, file_name: file.name, file_url: path, uploaded_by: user?.id } as any);
