@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, Building2, Briefcase } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, Building2, Briefcase, FileText } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
@@ -159,6 +159,43 @@ export default function Clients() {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [classifyingAll, setClassifyingAll] = useState(false);
   const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
+  const [societyDocs, setSocietyDocs] = useState<{ id: string; document_label: string; file_name: string; file_url: string }[]>([]);
+  const [societyUploading, setSocietyUploading] = useState<Record<string, boolean>>({});
+
+  async function loadSocietyDocs(clientId: string) {
+    const { data } = await supabase.from('client_society_documents' as any).select('id, document_label, file_name, file_url').eq('client_id', clientId);
+    setSocietyDocs((data as any[]) || []);
+  }
+
+  async function handleSocietyUpload(label: string, file: File) {
+    if (!editing) return;
+    setSocietyUploading(prev => ({ ...prev, [label]: true }));
+    try {
+      const path = `${editing.id}/societario/${label}/${file.name}`;
+      const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase.from('client_society_documents' as any).insert({ client_id: editing.id, document_label: label, file_name: file.name, file_url: path, uploaded_by: user?.id } as any);
+      if (dbErr) throw dbErr;
+      await loadSocietyDocs(editing.id);
+      toast({ title: 'Documento enviado com sucesso' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar documento', description: err.message, variant: 'destructive' });
+    } finally {
+      setSocietyUploading(prev => ({ ...prev, [label]: false }));
+    }
+  }
+
+  async function handleSocietyDownload(fileUrl: string) {
+    const { data } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 60);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
+  async function handleSocietyDelete(docId: string, fileUrl: string) {
+    await supabase.storage.from('documents').remove([fileUrl]);
+    await supabase.from('client_society_documents' as any).delete().eq('id', docId);
+    if (editing) await loadSocietyDocs(editing.id);
+    toast({ title: 'Documento removido' });
+  }
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
@@ -533,6 +570,7 @@ export default function Clients() {
     setForm({ ...emptyForm, start_date: new Date().toISOString().split('T')[0] });
     setPermits(defaultPermits.map(p => ({ ...p })));
     setCertificateUrl(null);
+    setSocietyDocs([]);
     setSelectedObligations(new Set());
     const [deps] = await Promise.all([loadDepartments(), loadObligations()]);
     initEmptyDeptContacts(deps);
@@ -545,7 +583,7 @@ export default function Clients() {
     populateForm(c);
     setPermits(parsePermits(c.permits));
     setCertificateUrl(c.digital_certificate_url || null);
-    const [deps] = await Promise.all([loadDepartments(), loadObligations(), loadClientObligations(c.id)]);
+    const [deps] = await Promise.all([loadDepartments(), loadObligations(), loadClientObligations(c.id), loadSocietyDocs(c.id)]);
     await loadDeptContacts(c.id, deps);
     setDialogOpen(true);
   }
@@ -556,7 +594,7 @@ export default function Clients() {
     populateForm(c);
     setPermits(parsePermits(c.permits));
     setCertificateUrl(c.digital_certificate_url || null);
-    const [deps] = await Promise.all([loadDepartments(), loadObligations(), loadClientObligations(c.id)]);
+    const [deps] = await Promise.all([loadDepartments(), loadObligations(), loadClientObligations(c.id), loadSocietyDocs(c.id)]);
     await loadDeptContacts(c.id, deps);
     setDialogOpen(true);
   }
@@ -1595,6 +1633,38 @@ export default function Clients() {
                         <FileCheck className="h-4 w-4 text-primary" />
                         <span className="text-sm flex-1 truncate">{certificateUrl.split('/').pop()}</span>
                         <Button type="button" variant="ghost" size="sm" onClick={handleCertificateDownload}><Download className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                  )}
+                  {editing && (
+                    <div className="col-span-2 space-y-3">
+                      <Separator />
+                      <Label className="flex items-center gap-2 text-base font-semibold"><FileText className="h-4 w-4" />Documentos Societários</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {(['contrato_social', 'cartao_cnpj'] as const).map(label => {
+                          const doc = societyDocs.find(d => d.document_label === label);
+                          const title = label === 'contrato_social' ? 'Contrato Social' : 'Cartão CNPJ';
+                          return (
+                            <div key={label} className="rounded-md border border-input p-3 space-y-2">
+                              <span className="text-sm font-medium">{title}</span>
+                              {doc ? (
+                                <div className="flex items-center gap-2">
+                                  <FileCheck className="h-4 w-4 text-primary shrink-0" />
+                                  <span className="text-sm flex-1 truncate">{doc.file_name}</span>
+                                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSocietyDownload(doc.file_url)}><Download className="h-4 w-4" /></Button>
+                                  {!viewOnly && isAdmin && <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSocietyDelete(doc.id, doc.file_url)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+                                </div>
+                              ) : viewOnly ? (
+                                <p className="text-xs text-muted-foreground">Nenhum documento anexado</p>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <Input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={societyUploading[label]} onChange={e => { const file = e.target.files?.[0]; if (file) handleSocietyUpload(label, file); }} />
+                                  {societyUploading[label] && <Loader2 className="h-4 w-4 animate-spin" />}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
