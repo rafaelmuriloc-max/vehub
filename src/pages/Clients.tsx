@@ -794,6 +794,9 @@ export default function Clients() {
       {batchUpdating && (
         <Progress value={(batchProgress.current / Math.max(batchProgress.total, 1)) * 100} className="h-2" />
       )}
+      {classifyingAll && (
+        <Progress value={(classifyProgress.current / Math.max(classifyProgress.total, 1)) * 100} className="h-2" />
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold">{clients.length}</p></CardContent></Card>
