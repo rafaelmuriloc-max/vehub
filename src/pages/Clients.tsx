@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, Building2, Briefcase } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
@@ -762,11 +762,14 @@ export default function Clients() {
       {/* Charts */}
       {(() => {
         const CHART_COLORS = [
-          'hsl(var(--chart-1))',
-          'hsl(var(--chart-2))',
-          'hsl(var(--chart-3))',
-          'hsl(var(--chart-4))',
-          'hsl(var(--chart-5))',
+          'hsl(220, 50%, 25%)',
+          'hsl(28, 82%, 53%)',
+          'hsl(220, 40%, 45%)',
+          'hsl(28, 70%, 70%)',
+          'hsl(220, 30%, 60%)',
+          'hsl(160, 50%, 45%)',
+          'hsl(280, 40%, 55%)',
+          'hsl(45, 70%, 55%)',
         ];
         const taxRegimeLabels: Record<string, string> = {
           simples_nacional: 'Simples Nacional',
@@ -791,34 +794,89 @@ export default function Clients() {
           }, {} as Record<string, number>)
         ).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
 
-        const renderLabel = ({ name, percent }: any) => `${name} (${(percent * 100).toFixed(0)}%)`;
+        const taxTotal = taxData.reduce((s, d) => s + d.value, 0);
+        const segTotal = segmentData.reduce((s, d) => s + d.value, 0);
+
+        const CustomTooltip = ({ active, payload }: any) => {
+          if (!active || !payload?.length) return null;
+          const d = payload[0];
+          const total = d.payload?.total || 1;
+          return (
+            <div className="rounded-lg border bg-popover px-3 py-2 shadow-lg">
+              <p className="text-sm font-medium text-popover-foreground">{d.name}</p>
+              <p className="text-xs text-muted-foreground">{d.value} clientes · {((d.value / total) * 100).toFixed(1)}%</p>
+            </div>
+          );
+        };
+
+        const renderLegend = (data: { name: string; value: number }[], total: number) => (
+          <div className="flex flex-col gap-2 justify-center">
+            {data.map((d, i) => (
+              <div key={d.name} className="flex items-center gap-2 text-sm">
+                <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                <span className="text-foreground truncate">{d.name}</span>
+                <span className="ml-auto text-muted-foreground font-medium tabular-nums">{d.value}</span>
+                <span className="text-muted-foreground text-xs w-10 text-right">({((d.value / total) * 100).toFixed(0)}%)</span>
+              </div>
+            ))}
+          </div>
+        );
+
+        const renderDonut = (data: { name: string; value: number }[], total: number, label: string) => (
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={data.map(d => ({ ...d, total }))}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={55}
+                outerRadius={85}
+                paddingAngle={3}
+                cornerRadius={4}
+                isAnimationActive
+                animationBegin={0}
+                animationDuration={800}
+                animationEasing="ease-out"
+              >
+                {data.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="none" />)}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">{total}</text>
+              <text x="50%" y="60%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">{label}</text>
+            </PieChart>
+          </ResponsiveContainer>
+        );
 
         return (
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Regime Tributário</CardTitle></CardHeader>
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Regime Tributário
+                </CardTitle>
+              </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={taxData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={renderLabel}>
-                      {taxData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="lg:w-[55%]">{renderDonut(taxData, taxTotal, 'clientes')}</div>
+                  <div className="lg:w-[45%]">{renderLegend(taxData, taxTotal)}</div>
+                </div>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Segmento</CardTitle></CardHeader>
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Briefcase className="h-4 w-4" />
+                  Segmento
+                </CardTitle>
+              </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={segmentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={renderLabel}>
-                      {segmentData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="lg:w-[55%]">{renderDonut(segmentData, segTotal, 'clientes')}</div>
+                  <div className="lg:w-[45%]">{renderLegend(segmentData, segTotal)}</div>
+                </div>
               </CardContent>
             </Card>
           </div>
