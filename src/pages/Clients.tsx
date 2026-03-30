@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import * as forge from 'node-forge';
 import { useAuth } from '@/hooks/useAuth';
