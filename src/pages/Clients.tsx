@@ -330,8 +330,10 @@ export default function Clients() {
         .select('id, main_activity, secondary_activities')
         .or('business_classification.is.null,business_classification.eq.');
 
+      // Also filter out clients with only whitespace in business_classification
       const toClassify = (unclassified || []).filter(
-        (c: any) => (c.main_activity || c.secondary_activities)
+        (c: any) => (c.main_activity || c.secondary_activities) && 
+          (!c.business_classification || !c.business_classification.trim())
       );
 
       if (toClassify.length === 0) {
@@ -358,7 +360,11 @@ export default function Clients() {
 
       setClassifyingAll(false);
       setClassifyProgress({ current: 0, total: 0 });
-      localStorage.setItem(CLASSIFY_KEY, 'true');
+
+      // Only mark as done if ALL pending clients were successfully classified
+      if (classified === toClassify.length) {
+        localStorage.setItem(CLASSIFY_KEY, 'true');
+      }
 
       if (classified > 0) {
         loadClients();
