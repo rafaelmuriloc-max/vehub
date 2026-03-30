@@ -682,9 +682,14 @@ export default function CalendarView() {
                           </label>
                         </Button>
                         {comp?.file_url && (
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => downloadFile(comp.file_url!)}>
-                            <Download className="h-3 w-3 mr-1" /> Baixar
-                          </Button>
+                          <>
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => downloadFile(comp.file_url!)}>
+                              <Download className="h-3 w-3 mr-1" /> Baixar
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => deleteFile(act.id, comp.file_url!)}>
+                              <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                            </Button>
+                          </>
                         )}
                       </div>
                     )}
