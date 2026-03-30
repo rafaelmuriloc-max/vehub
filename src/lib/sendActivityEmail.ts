@@ -71,7 +71,7 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
   const { data, error } = await supabase.functions.invoke('smtp-send', {
     body: {
       departmentId: activity.email_department_id,
-      to: client.contact_email,
+      to: recipientEmail,
       subject: finalSubject,
       html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>`,
     },
