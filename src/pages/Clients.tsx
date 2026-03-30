@@ -1635,6 +1635,38 @@ export default function Clients() {
                       </div>
                     </div>
                   )}
+                  {editing && (
+                    <div className="col-span-2 space-y-3">
+                      <Separator />
+                      <Label className="flex items-center gap-2 text-base font-semibold"><FileText className="h-4 w-4" />Documentos Societários</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {(['contrato_social', 'cartao_cnpj'] as const).map(label => {
+                          const doc = societyDocs.find(d => d.document_label === label);
+                          const title = label === 'contrato_social' ? 'Contrato Social' : 'Cartão CNPJ';
+                          return (
+                            <div key={label} className="rounded-md border border-input p-3 space-y-2">
+                              <span className="text-sm font-medium">{title}</span>
+                              {doc ? (
+                                <div className="flex items-center gap-2">
+                                  <FileCheck className="h-4 w-4 text-primary shrink-0" />
+                                  <span className="text-sm flex-1 truncate">{doc.file_name}</span>
+                                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSocietyDownload(doc.file_url)}><Download className="h-4 w-4" /></Button>
+                                  {!viewOnly && isAdmin && <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSocietyDelete(doc.id, doc.file_url)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+                                </div>
+                              ) : viewOnly ? (
+                                <p className="text-xs text-muted-foreground">Nenhum documento anexado</p>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <Input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={societyUploading[label]} onChange={e => { const file = e.target.files?.[0]; if (file) handleSocietyUpload(label, file); }} />
+                                  {societyUploading[label] && <Loader2 className="h-4 w-4 animate-spin" />}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <div className="col-span-2 space-y-2"><Label>Informações dos Sócios</Label><Textarea {...f('partners_info')} /></div>
                 </div>
                 {renderDeptObligations('societár')}
