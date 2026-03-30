@@ -299,6 +299,7 @@ export default function Documents() {
                   <TableCell><Badge variant="outline">{getTypeName(doc.document_type_id)}</Badge></TableCell>
                   <TableCell>{getClientName(doc.client_id)}</TableCell>
                   <TableCell>{format(new Date(doc.reference_month + 'T00:00:00'), 'MM/yyyy')}</TableCell>
+                  <TableCell>{getObligationName(doc.linked_obligation_id)}</TableCell>
                   <TableCell>{format(new Date(doc.created_at), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
