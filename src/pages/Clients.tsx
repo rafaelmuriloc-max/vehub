@@ -570,6 +570,7 @@ export default function Clients() {
     setForm({ ...emptyForm, start_date: new Date().toISOString().split('T')[0] });
     setPermits(defaultPermits.map(p => ({ ...p })));
     setCertificateUrl(null);
+    setSocietyDocs([]);
     setSelectedObligations(new Set());
     const [deps] = await Promise.all([loadDepartments(), loadObligations()]);
     initEmptyDeptContacts(deps);
