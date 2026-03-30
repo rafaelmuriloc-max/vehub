@@ -89,6 +89,7 @@ export default function CalendarView() {
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
   const [emailPrefill, setEmailPrefill] = useState<{ departmentId?: string; subject?: string; body?: string }>({});
+  const [emailRecipient, setEmailRecipient] = useState('');
 
   const loadData = useCallback(async () => {
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
@@ -243,6 +244,7 @@ export default function CalendarView() {
             obligationName: detailObligation.name,
             referenceMonth: detailInstance.reference_month,
             dueDay: detailObligation.due_day,
+            departmentId: detailObligation.department_id,
           });
           if (!result.success) {
             toast({ title: 'Erro no envio automático de e-mail', description: result.error, variant: 'destructive' });
@@ -295,6 +297,7 @@ export default function CalendarView() {
           obligationName: detailObligation.name,
           referenceMonth: detailInstance.reference_month,
           dueDay: detailObligation.due_day,
+          departmentId: detailObligation.department_id,
         });
         if (!result.success) {
           toast({ title: 'Erro no envio automático de e-mail', description: result.error, variant: 'destructive' });
@@ -699,7 +702,7 @@ export default function CalendarView() {
                       size="sm"
                       variant={isCompleted ? 'ghost' : 'default'}
                       className="shrink-0"
-                      onClick={() => {
+                      onClick={async () => {
                         const clientName = detailInstance ? clientMap.get(detailInstance.client_id)?.company_name || '' : '';
                         const refDate = detailInstance ? new Date(detailInstance.reference_month + 'T00:00:00') : new Date();
                         const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -707,6 +710,15 @@ export default function CalendarView() {
                         const vencimento = oblDueDay
                           ? new Date(refDate.getFullYear(), refDate.getMonth(), oblDueDay).toLocaleDateString('pt-BR')
                           : '';
+                        let recipient = '';
+                        if (detailInstance && detailObligation) {
+                          const [{ data: cli }, { data: deptContact }] = await Promise.all([
+                            supabase.from('clients').select('contact_email').eq('id', detailInstance.client_id).single(),
+                            supabase.from('client_department_contacts').select('contact_email').eq('client_id', detailInstance.client_id).eq('department_id', detailObligation.department_id).maybeSingle(),
+                          ]);
+                          recipient = deptContact?.contact_email || cli?.contact_email || '';
+                        }
+                        setEmailRecipient(recipient);
                         setEmailVariables({
                           '[Nome_da_Empresa]': clientName,
                           '[Competencia]': competencia,
@@ -739,6 +751,7 @@ export default function CalendarView() {
       <EmailComposeDialog
         open={emailDialogOpen}
         onOpenChange={setEmailDialogOpen}
+        recipientEmail={emailRecipient}
         variables={emailVariables}
         prefillDepartmentId={emailPrefill.departmentId}
         prefillSubject={emailPrefill.subject}
