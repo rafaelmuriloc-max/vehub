@@ -16,6 +16,11 @@ interface Department {
   smtp_email: string | null;
 }
 
+interface EmailAttachment {
+  fileUrl: string;
+  fileName: string;
+}
+
 interface EmailComposeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,6 +32,8 @@ interface EmailComposeDialogProps {
   prefillDepartmentId?: string;
   prefillSubject?: string;
   prefillBody?: string;
+  /** Attachments to include */
+  attachments?: EmailAttachment[];
 }
 
 const VARIABLE_OPTIONS = [
