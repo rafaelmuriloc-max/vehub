@@ -780,10 +780,6 @@ export default function Clients() {
               {batchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               {batchUpdating ? `Atualizando ${batchProgress.current}/${batchProgress.total}` : 'Atualizar Cadastros'}
             </Button>
-            <Button variant="outline" onClick={batchClassifySegments} disabled={classifyingAll || batchUpdating}>
-              {classifyingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Briefcase className="mr-2 h-4 w-4" />}
-              {classifyingAll ? `Classificando ${classifyProgress.current}/${classifyProgress.total}` : 'Classificar Segmentos'}
-            </Button>
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <Upload className="mr-2 h-4 w-4" />Importar Certificados
             </Button>
