@@ -1,17 +1,25 @@
 
 
-# Fix: PDF worker failing to load in DocumentFieldAnnotator
+# Fix PDF worker loading in DocumentFieldAnnotator
 
 ## Problem
-The pdf.js worker is loaded from `unpkg.com` which is being blocked/failing. Console error: `"Failed to fetch dynamically imported module: https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs"`.
+The `pdfjs.version` resolves to `4.8.69`, which may not exist on cdnjs.cloudflare.com. The console still shows the fallback to `unpkg.com` which is blocked/failing.
 
 ## Solution
-Change the worker source URL on line 9 of `DocumentFieldAnnotator.tsx` from `unpkg.com` to `cdnjs.cloudflare.com`, which is more reliably accessible:
+Use the recommended `import.meta.url` approach from react-pdf docs, which bundles the worker locally via Vite instead of fetching from a CDN:
 
+### `src/components/settings/DocumentFieldAnnotator.tsx` — line 9
+Replace:
 ```typescript
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 ```
+With:
+```typescript
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
+```
 
-## Files modified
-- `src/components/settings/DocumentFieldAnnotator.tsx` — line 9 only
+This makes Vite resolve the worker from `node_modules/pdfjs-dist` at build time, eliminating any CDN dependency. Single file change, single line.
 
