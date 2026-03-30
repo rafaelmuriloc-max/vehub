@@ -460,7 +460,8 @@ export default function Clients() {
     });
   }
 
-  async function batchClassifySegments() {
+
+
     setClassifyingAll(true);
     const { data: unclassified } = await supabase
       .from('clients')
