@@ -505,6 +505,7 @@ export default function Clients() {
 
         if (classification) {
           updatePayload.business_classification = classification;
+          updatePayload.business_segment = classificationToSegment(classification);
         }
 
         await supabase.from('clients').update(updatePayload).eq('id', client.id);
