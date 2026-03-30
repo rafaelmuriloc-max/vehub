@@ -42,6 +42,9 @@ export default function EmailComposeDialog({
   recipientEmail = '',
   variables = {},
   onSent,
+  prefillDepartmentId,
+  prefillSubject,
+  prefillBody,
 }: EmailComposeDialogProps) {
   const { toast } = useToast();
   const [departments, setDepartments] = useState<Department[]>([]);
