@@ -16,7 +16,7 @@ type Instance = { id: string; client_id: string; obligation_id: string; referenc
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
 
 type CalendarEvent = {
