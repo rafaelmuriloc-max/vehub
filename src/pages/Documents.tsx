@@ -344,14 +344,19 @@ export default function Documents() {
           <h1 className="text-2xl font-bold text-foreground">Documentos</h1>
           <p className="text-muted-foreground">Importação inteligente com classificação automática por IA</p>
         </div>
-        <label className="cursor-pointer">
-          <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" onChange={handleUpload} disabled={analyzing} />
-          <Button asChild disabled={analyzing}>
-            <span>
-              {analyzing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivo</>}
-            </span>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={relinkDocuments} disabled={relinking}>
+            {relinking ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Revinculando...</> : 'Revincular Documentos'}
           </Button>
-        </label>
+          <label className="cursor-pointer">
+            <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" onChange={handleUpload} disabled={analyzing} />
+            <Button asChild disabled={analyzing}>
+              <span>
+                {analyzing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivo</>}
+              </span>
+            </Button>
+          </label>
+        </div>
       </div>
 
       {/* Documents list */}
