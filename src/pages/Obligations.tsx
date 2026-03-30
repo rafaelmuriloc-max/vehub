@@ -116,7 +116,7 @@ export default function Obligations() {
   }
   async function saveActivity(e: React.FormEvent) {
     e.preventDefault();
-    const payload: any = { title: activityForm.title, type: activityForm.type as any, description: activityForm.description || null, order: activityForm.order, obligation_id: activityForm.obligation_id };
+    const payload: any = { title: activityForm.title, type: activityForm.type as any, description: activityForm.description || null, order: activityForm.order, obligation_id: activityForm.obligation_id, auto_start: activityForm.auto_start };
     if (activityForm.type === 'document' && activityForm.document_type_id) {
       payload.document_type_id = activityForm.document_type_id;
     } else {

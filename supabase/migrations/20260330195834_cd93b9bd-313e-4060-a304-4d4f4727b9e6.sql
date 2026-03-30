@@ -1,0 +1,1 @@
+ALTER TABLE public.obligation_activities ADD COLUMN auto_start boolean NOT NULL DEFAULT false;

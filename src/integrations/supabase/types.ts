@@ -682,6 +682,7 @@ export type Database = {
       }
       obligation_activities: {
         Row: {
+          auto_start: boolean
           created_at: string
           description: string | null
           document_type_id: string | null
@@ -692,6 +693,7 @@ export type Database = {
           type: Database["public"]["Enums"]["activity_type"]
         }
         Insert: {
+          auto_start?: boolean
           created_at?: string
           description?: string | null
           document_type_id?: string | null
@@ -702,6 +704,7 @@ export type Database = {
           type?: Database["public"]["Enums"]["activity_type"]
         }
         Update: {
+          auto_start?: boolean
           created_at?: string
           description?: string | null
           document_type_id?: string | null
