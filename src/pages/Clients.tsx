@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import * as forge from 'node-forge';
 import { useAuth } from '@/hooks/useAuth';
@@ -757,6 +758,72 @@ export default function Clients() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">MRR</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-primary">R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Churn Rate</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-orange-500">{churnRate.toFixed(1)}%</p></CardContent></Card>
       </div>
+
+      {/* Charts */}
+      {(() => {
+        const CHART_COLORS = [
+          'hsl(var(--chart-1))',
+          'hsl(var(--chart-2))',
+          'hsl(var(--chart-3))',
+          'hsl(var(--chart-4))',
+          'hsl(var(--chart-5))',
+        ];
+        const taxRegimeLabels: Record<string, string> = {
+          simples_nacional: 'Simples Nacional',
+          lucro_presumido: 'Lucro Presumido',
+          lucro_real: 'Lucro Real',
+          mei: 'MEI',
+        };
+        const taxData = Object.entries(
+          clients.reduce((acc, c) => {
+            const key = c.tax_regime || 'Não informado';
+            const label = taxRegimeLabels[key] || key;
+            acc[label] = (acc[label] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        ).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
+
+        const segmentData = Object.entries(
+          clients.reduce((acc, c) => {
+            const key = c.business_classification || 'Não informado';
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        ).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
+
+        const renderLabel = ({ name, percent }: any) => `${name} (${(percent * 100).toFixed(0)}%)`;
+
+        return (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Regime Tributário</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie data={taxData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={renderLabel}>
+                      {taxData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Segmento</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie data={segmentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={renderLabel}>
+                      {segmentData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       <div className="flex gap-4">
         <div className="relative flex-1">
