@@ -33,7 +33,7 @@ export function DepartmentsTab() {
   const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '', smtp_email: d.smtp_email || '', smtp_password: d.smtp_password || '' }); setShowPassword(false); setOpen(true); };
 
   const handleSave = async () => {
-    const payload = { name: form.name, description: form.description || null };
+    const payload = { name: form.name, description: form.description || null, smtp_email: form.smtp_email || null, smtp_password: form.smtp_password || null };
     const { error } = editing
       ? await supabase.from('departments').update(payload).eq('id', editing.id)
       : await supabase.from('departments').insert(payload);
