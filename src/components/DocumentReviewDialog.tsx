@@ -29,9 +29,11 @@ interface Props {
   clients: { id: string; company_name: string }[];
   onConfirm: (data: { file: File; clientId: string; docTypeId: string; referenceMonth: string }) => void;
   confirming: boolean;
+  queueTotal?: number;
+  onSkip?: () => void;
 }
 
-export default function DocumentReviewDialog({ open, onOpenChange, data, documentTypes, clients, onConfirm, confirming }: Props) {
+export default function DocumentReviewDialog({ open, onOpenChange, data, documentTypes, clients, onConfirm, confirming, queueTotal, onSkip }: Props) {
   if (!data) return null;
 
   const { file, extraction, matchedClientId, matchedDocTypeId, referenceMonth } = data;
