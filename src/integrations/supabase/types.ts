@@ -469,20 +469,29 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          extraction_config: Json | null
           id: string
           name: string
+          sample_file_name: string | null
+          sample_file_url: string | null
         }
         Insert: {
           created_at?: string
           description?: string | null
+          extraction_config?: Json | null
           id?: string
           name: string
+          sample_file_name?: string | null
+          sample_file_url?: string | null
         }
         Update: {
           created_at?: string
           description?: string | null
+          extraction_config?: Json | null
           id?: string
           name?: string
+          sample_file_name?: string | null
+          sample_file_url?: string | null
         }
         Relationships: []
       }
