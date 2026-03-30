@@ -89,6 +89,17 @@ export function DepartmentsTab() {
           <div className="space-y-3">
             <div><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
             <div><Label>Descrição</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
+            <div><Label>E-mail SMTP</Label><Input type="email" placeholder="departamento@escritorio.com" value={form.smtp_email} onChange={e => setForm({ ...form, smtp_email: e.target.value })} /></div>
+            <div>
+              <Label>Senha de App (Gmail)</Label>
+              <div className="relative">
+                <Input type={showPassword ? 'text' : 'password'} placeholder="Senha de app de 16 caracteres" value={form.smtp_password} onChange={e => setForm({ ...form, smtp_password: e.target.value })} />
+                <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Use uma Senha de App do Google, não a senha da conta. Gere em myaccount.google.com → Segurança → Senhas de app.</p>
+            </div>
           </div>
           <DialogFooter><Button onClick={handleSave} disabled={!form.name}>Salvar</Button></DialogFooter>
         </DialogContent>

@@ -45,6 +45,7 @@ const App = () => (
               <Route path="/fiscal" element={<Fiscal />} />
               <Route path="/integra-contador" element={<IntegraContador />} />
               <Route path="/chat" element={<Chat />} />
+              <Route path="/email" element={<Email />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />
