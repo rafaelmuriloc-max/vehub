@@ -240,6 +240,86 @@ export default function Documents() {
     loadAll();
   }
 
+  async function relinkDocuments() {
+    setRelinking(true);
+    try {
+      const unlinked = documents.filter(d => !d.linked_obligation_id);
+      if (unlinked.length === 0) {
+        toast({ title: 'Todos os documentos já estão vinculados.' });
+        return;
+      }
+
+      // Batch fetch all document-type activities
+      const { data: allActivities } = await supabase
+        .from('obligation_activities')
+        .select('id, obligation_id, document_type_id')
+        .eq('type', 'document');
+
+      if (!allActivities || allActivities.length === 0) {
+        toast({ title: 'Nenhuma atividade de documento cadastrada nas obrigações.' });
+        return;
+      }
+
+      let linkedCount = 0;
+
+      for (const doc of unlinked) {
+        const matchingActs = allActivities.filter(a => a.document_type_id === doc.document_type_id);
+        if (matchingActs.length === 0) continue;
+
+        const obligationIds = [...new Set(matchingActs.map(a => a.obligation_id))];
+        const { data: instances } = await supabase
+          .from('obligation_instances')
+          .select('id, obligation_id')
+          .eq('client_id', doc.client_id)
+          .eq('reference_month', doc.reference_month)
+          .in('obligation_id', obligationIds);
+
+        if (!instances || instances.length === 0) continue;
+
+        let linkedObligationId: string | null = null;
+        for (const inst of instances) {
+          if (!linkedObligationId) linkedObligationId = inst.obligation_id;
+          const relatedActs = matchingActs.filter(a => a.obligation_id === inst.obligation_id);
+          for (const act of relatedActs) {
+            const { data: existing } = await supabase
+              .from('obligation_activity_completions')
+              .select('id')
+              .eq('instance_id', inst.id)
+              .eq('activity_id', act.id)
+              .maybeSingle();
+
+            if (existing) {
+              await supabase.from('obligation_activity_completions').update({
+                completed: true, completed_at: new Date().toISOString(), file_url: doc.file_url,
+              }).eq('id', existing.id);
+            } else {
+              await supabase.from('obligation_activity_completions').insert({
+                instance_id: inst.id, activity_id: act.id, completed: true, completed_at: new Date().toISOString(), file_url: doc.file_url,
+              });
+            }
+          }
+        }
+
+        if (linkedObligationId) {
+          await supabase.from('documents').update({ linked_obligation_id: linkedObligationId } as any).eq('id', doc.id);
+          linkedCount++;
+        }
+      }
+
+      toast({
+        title: 'Revinculação concluída',
+        description: linkedCount > 0
+          ? `${linkedCount} documento(s) vinculado(s) a obrigações.`
+          : 'Nenhum documento encontrou obrigação correspondente.',
+      });
+      loadAll();
+    } catch (err: any) {
+      toast({ title: 'Erro na revinculação', description: err.message, variant: 'destructive' });
+    } finally {
+      setRelinking(false);
+    }
+  }
+
   async function downloadDoc(fileUrl: string) {
     const { data, error } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 60);
     if (error || !data?.signedUrl) return;
