@@ -362,9 +362,14 @@ export default function ClientObligationsTab({ clientId }: Props) {
                         {activityTypeIcons[act.type]}
                         <span className={`text-sm flex-1 ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>{act.title}</span>
                         {comp?.file_url && (
-                          <Button size="sm" variant="ghost" onClick={() => downloadFile(comp.file_url!)}>
-                            <Download className="h-3 w-3 mr-1" />Baixar
-                          </Button>
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => downloadFile(comp.file_url!)}>
+                              <Download className="h-3 w-3 mr-1" />Baixar
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => deleteFile(detailInstance.id, act.id, comp.file_url!)}>
+                              <Trash2 className="h-3 w-3 mr-1" />Excluir
+                            </Button>
+                          </>
                         )}
                         <label className="cursor-pointer">
                           <input type="file" className="hidden" onChange={e => {
