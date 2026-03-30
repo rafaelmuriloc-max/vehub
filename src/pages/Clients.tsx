@@ -136,6 +136,8 @@ export default function Clients() {
   const [deleting, setDeleting] = useState(false);
   const [batchUpdating, setBatchUpdating] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [classifyingAll, setClassifyingAll] = useState(false);
+  const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
 
   async function loadDepartments() {
     const { data } = await supabase.from('departments').select('id, name').order('name');
@@ -401,6 +403,43 @@ export default function Clients() {
     toast({
       title: 'Atualização concluída',
       description: `${updated} atualizado(s), ${errors} erro(s) de ${cnpjClients.length} clientes.`,
+    });
+  }
+
+  async function batchClassifySegments() {
+    setClassifyingAll(true);
+    const { data: unclassified } = await supabase
+      .from('clients')
+      .select('id, main_activity, secondary_activities')
+      .or('business_classification.is.null,business_classification.eq.')
+      .or('main_activity.neq.,secondary_activities.neq.');
+
+    const toClassify = (unclassified || []).filter(
+      (c: any) => (c.main_activity || c.secondary_activities)
+    );
+
+    setClassifyProgress({ current: 0, total: toClassify.length });
+    let classified = 0;
+
+    for (let i = 0; i < toClassify.length; i++) {
+      const c = toClassify[i] as any;
+      setClassifyProgress({ current: i + 1, total: toClassify.length });
+      try {
+        const result = await classifyByAI(c.main_activity || '', c.secondary_activities || '');
+        if (result) {
+          await supabase.from('clients').update({ business_classification: result }).eq('id', c.id);
+          classified++;
+        }
+      } catch { /* skip */ }
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    setClassifyingAll(false);
+    setClassifyProgress({ current: 0, total: 0 });
+    loadClients();
+    toast({
+      title: 'Classificação concluída',
+      description: `${classified} de ${toClassify.length} clientes classificados.`,
     });
   }
 
@@ -737,9 +776,13 @@ export default function Clients() {
         <h1 className="text-3xl font-bold text-foreground">Clientes</h1>
         {isAdmin_ && (
           <div className="flex gap-2">
-            <Button variant="outline" onClick={batchUpdateAllCnpj} disabled={batchUpdating}>
+            <Button variant="outline" onClick={batchUpdateAllCnpj} disabled={batchUpdating || classifyingAll}>
               {batchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               {batchUpdating ? `Atualizando ${batchProgress.current}/${batchProgress.total}` : 'Atualizar Cadastros'}
+            </Button>
+            <Button variant="outline" onClick={batchClassifySegments} disabled={classifyingAll || batchUpdating}>
+              {classifyingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Briefcase className="mr-2 h-4 w-4" />}
+              {classifyingAll ? `Classificando ${classifyProgress.current}/${classifyProgress.total}` : 'Classificar Segmentos'}
             </Button>
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <Upload className="mr-2 h-4 w-4" />Importar Certificados
@@ -750,6 +793,9 @@ export default function Clients() {
       </div>
       {batchUpdating && (
         <Progress value={(batchProgress.current / Math.max(batchProgress.total, 1)) * 100} className="h-2" />
+      )}
+      {classifyingAll && (
+        <Progress value={(classifyProgress.current / Math.max(classifyProgress.total, 1)) * 100} className="h-2" />
       )}
 
       <div className="grid gap-4 md:grid-cols-4">
