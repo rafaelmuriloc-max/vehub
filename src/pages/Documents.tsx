@@ -54,14 +54,16 @@ export default function Documents() {
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
-    const [dtRes, clRes, docRes] = await Promise.all([
+    const [dtRes, clRes, docRes, oblRes] = await Promise.all([
       supabase.from('document_types').select('id, name, description').order('name'),
       supabase.from('clients').select('id, company_name, document').eq('status', 'active').order('company_name'),
       supabase.from('documents').select('*').order('created_at', { ascending: false }),
+      supabase.from('obligations').select('id, name'),
     ]);
     if (dtRes.data) setDocumentTypes(dtRes.data as DocumentType[]);
     if (clRes.data) setClients(clRes.data);
     if (docRes.data) setDocuments(docRes.data as Doc[]);
+    if (oblRes.data) setObligations(oblRes.data);
   }
 
   function matchClient(cnpj: string): string {
