@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    // Auth check - accept user token or service role key
+    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -23,26 +23,22 @@ serve(async (req) => {
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    console.log("Auth check - token length:", token.length, "serviceRoleKey length:", serviceRoleKey?.length, "match:", token === serviceRoleKey);
-    
-    // Allow service role key OR authenticated user
-    if (token !== serviceRoleKey) {
-      const supabaseAuth = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
-        { global: { headers: { Authorization: authHeader } } }
-      );
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
-      const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-      if (userError || !user) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !user) {
+      console.error("Auth error:", userError?.message);
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    
+    console.log("Authenticated user:", user.email);
 
     // Parse and validate input
     const body = await req.json();
