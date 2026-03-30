@@ -431,12 +431,14 @@ export default function Documents() {
 
       <DocumentReviewDialog
         open={reviewOpen}
-        onOpenChange={setReviewOpen}
-        data={reviewData}
+        onOpenChange={(open) => { if (!open) { setReviewQueue([]); } setReviewOpen(open); }}
+        data={reviewQueue[0] || null}
         documentTypes={documentTypes}
         clients={clients}
         onConfirm={handleReviewConfirm}
         confirming={confirming}
+        queueTotal={reviewQueue.length}
+        onSkip={handleSkipReview}
       />
     </div>
   );
