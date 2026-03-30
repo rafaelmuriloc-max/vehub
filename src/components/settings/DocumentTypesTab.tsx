@@ -9,14 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Pencil, Trash2, Upload, FileText, X } from 'lucide-react';
-
-interface ExtractionConfig {
-  cnpj_location?: string;
-  company_name_location?: string;
-  reference_month_location?: string;
-  obligation_type_location?: string;
-}
+import { Plus, Pencil, Trash2, Upload, FileText, X, Settings2 } from 'lucide-react';
+import { DocumentFieldAnnotator, RegionExtractionConfig } from './DocumentFieldAnnotator';
 
 interface DocumentType {
   id: string;
@@ -24,7 +18,7 @@ interface DocumentType {
   description: string | null;
   sample_file_url: string | null;
   sample_file_name: string | null;
-  extraction_config: ExtractionConfig | null;
+  extraction_config: RegionExtractionConfig | null;
 }
 
 export function DocumentTypesTab() {
@@ -34,12 +28,14 @@ export function DocumentTypesTab() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<DocumentType | null>(null);
   const [form, setForm] = useState({ name: '', description: '' });
-  const [extractionConfig, setExtractionConfig] = useState<ExtractionConfig>({});
+  const [extractionConfig, setExtractionConfig] = useState<RegionExtractionConfig>({});
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [existingSampleName, setExistingSampleName] = useState<string | null>(null);
   const [existingSampleUrl, setExistingSampleUrl] = useState<string | null>(null);
   const [removeSample, setRemoveSample] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [annotatorOpen, setAnnotatorOpen] = useState(false);
+  const [annotatorFile, setAnnotatorFile] = useState<File | string | null>(null);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -52,7 +48,7 @@ export function DocumentTypesTab() {
         description: d.description,
         sample_file_url: d.sample_file_url,
         sample_file_name: d.sample_file_name,
-        extraction_config: d.extraction_config as ExtractionConfig | null,
+        extraction_config: d.extraction_config as RegionExtractionConfig | null,
       })));
     }
   }
@@ -79,6 +75,21 @@ export function DocumentTypesTab() {
     setOpen(true);
   }
 
+  async function openAnnotator() {
+    if (sampleFile) {
+      setAnnotatorFile(sampleFile);
+      setAnnotatorOpen(true);
+    } else if (existingSampleUrl) {
+      const { data } = await supabase.storage.from('documents').createSignedUrl(existingSampleUrl, 300);
+      if (data?.signedUrl) {
+        setAnnotatorFile(data.signedUrl);
+        setAnnotatorOpen(true);
+      } else {
+        toast({ title: 'Erro', description: 'Não foi possível carregar o arquivo.', variant: 'destructive' });
+      }
+    }
+  }
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -86,7 +97,6 @@ export function DocumentTypesTab() {
       let sampleUrl = removeSample ? null : (existingSampleUrl || null);
       let sampleName = removeSample ? null : (existingSampleName || null);
 
-      // If editing, use existing id; if creating, insert first to get id
       let docTypeId = editing?.id;
 
       if (!editing) {
@@ -102,13 +112,10 @@ export function DocumentTypesTab() {
         docTypeId = inserted.id;
       }
 
-      // Upload sample file if provided
       if (sampleFile && docTypeId) {
-        const ext = sampleFile.name.split('.').pop() || 'pdf';
         const sanitizedName = sampleFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const storagePath = `document-types/${docTypeId}/${sanitizedName}`;
 
-        // Remove old file if replacing
         if (existingSampleUrl) {
           await supabase.storage.from('documents').remove([existingSampleUrl]);
         }
@@ -125,7 +132,6 @@ export function DocumentTypesTab() {
         sampleName = sampleFile.name;
       }
 
-      // Remove old file if user clicked remove
       if (removeSample && existingSampleUrl) {
         await supabase.storage.from('documents').remove([existingSampleUrl]);
       }
@@ -145,7 +151,6 @@ export function DocumentTypesTab() {
           return;
         }
       } else {
-        // Already inserted above, just update with file info
         const { error } = await supabase.from('document_types').update({
           sample_file_url: sampleUrl,
           sample_file_name: sampleName,
@@ -176,6 +181,8 @@ export function DocumentTypesTab() {
   }
 
   const showingSample = !removeSample && (sampleFile || existingSampleName);
+  const canAnnotate = !removeSample && (!!sampleFile || !!existingSampleUrl);
+  const configuredCount = Object.values(extractionConfig).filter(Boolean).length;
 
   return (
     <Card>
@@ -262,6 +269,7 @@ export function DocumentTypesTab() {
                     <span className="text-sm text-muted-foreground">Selecionar arquivo-modelo...</span>
                     <input
                       type="file"
+                      accept=".pdf"
                       className="hidden"
                       onChange={e => {
                         const f = e.target.files?.[0];
@@ -275,49 +283,26 @@ export function DocumentTypesTab() {
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                Envie um documento de exemplo para que a IA saiba onde localizar CNPJ, nome da empresa, competência, etc.
+                Envie um PDF de exemplo e configure visualmente onde a IA deve buscar cada informação.
               </p>
             </div>
 
-            {/* Extraction config fields */}
-            <div className="space-y-3 border rounded-md p-3">
-              <p className="text-sm font-medium">Configuração de extração</p>
-              <p className="text-xs text-muted-foreground">
-                Descreva onde cada informação se encontra no documento-modelo.
-              </p>
-              <div className="space-y-2">
-                <Label className="text-xs">Localização do CNPJ</Label>
-                <Input
-                  placeholder='Ex: "canto superior esquerdo", "linha 3"'
-                  value={extractionConfig.cnpj_location || ''}
-                  onChange={e => setExtractionConfig({ ...extractionConfig, cnpj_location: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Localização do Nome da Empresa</Label>
-                <Input
-                  placeholder='Ex: "abaixo do CNPJ", "cabeçalho"'
-                  value={extractionConfig.company_name_location || ''}
-                  onChange={e => setExtractionConfig({ ...extractionConfig, company_name_location: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Localização da Competência</Label>
-                <Input
-                  placeholder='Ex: "campo Período de Referência"'
-                  value={extractionConfig.reference_month_location || ''}
-                  onChange={e => setExtractionConfig({ ...extractionConfig, reference_month_location: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Localização do Tipo de Obrigação</Label>
-                <Input
-                  placeholder='Ex: "título do documento"'
-                  value={extractionConfig.obligation_type_location || ''}
-                  onChange={e => setExtractionConfig({ ...extractionConfig, obligation_type_location: e.target.value })}
-                />
-              </div>
-            </div>
+            {/* Configure fields button */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={!canAnnotate}
+              onClick={openAnnotator}
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              Configurar Campos no Documento
+              {configuredCount > 0 && (
+                <span className="ml-2 text-xs bg-primary text-primary-foreground rounded-full px-2 py-0.5">
+                  {configuredCount}/4
+                </span>
+              )}
+            </Button>
 
             <Button className="w-full" onClick={handleSave} disabled={!form.name || saving}>
               {saving ? 'Salvando...' : 'Salvar'}
@@ -325,6 +310,16 @@ export function DocumentTypesTab() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {annotatorFile && (
+        <DocumentFieldAnnotator
+          open={annotatorOpen}
+          onOpenChange={setAnnotatorOpen}
+          file={annotatorFile}
+          extractionConfig={extractionConfig}
+          onSave={setExtractionConfig}
+        />
+      )}
     </Card>
   );
 }
