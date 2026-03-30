@@ -656,6 +656,19 @@ export default function CalendarView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Email Compose Dialog */}
+      <EmailComposeDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        variables={emailVariables}
+        onSent={async () => {
+          if (emailActivityId) {
+            await toggleCompletion(emailActivityId, false);
+          }
+          setEmailActivityId(null);
+        }}
+      />
     </div>
   );
 }
