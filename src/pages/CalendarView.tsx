@@ -751,6 +751,7 @@ export default function CalendarView() {
       <EmailComposeDialog
         open={emailDialogOpen}
         onOpenChange={setEmailDialogOpen}
+        recipientEmail={emailRecipient}
         variables={emailVariables}
         prefillDepartmentId={emailPrefill.departmentId}
         prefillSubject={emailPrefill.subject}
