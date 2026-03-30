@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
-interface Department { id: string; name: string; description: string | null; }
+interface Department { id: string; name: string; description: string | null; smtp_email: string | null; smtp_password: string | null; }
 
 export function DepartmentsTab() {
   const { isAdmin: admin } = useAuth();
