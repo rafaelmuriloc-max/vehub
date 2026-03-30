@@ -12,6 +12,8 @@ interface SendActivityEmailParams {
   obligationName: string;
   referenceMonth: string;
   dueDay?: number | null;
+  /** department_id da obrigação, usado para buscar contato específico */
+  departmentId?: string;
 }
 
 function replaceVariables(text: string, variables: Record<string, string>): string {
