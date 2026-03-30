@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
-  FileText, CheckSquare, MessageCircle, Mail, Upload, Download, Check, Loader2,
+  FileText, CheckSquare, MessageCircle, Mail, Upload, Download, Check, Loader2, Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -250,6 +250,16 @@ export default function ClientObligationsTab({ clientId }: Props) {
     loadData();
   }
 
+  async function deleteFile(instanceId: string, activityId: string, fileUrl: string) {
+    await supabase.storage.from('documents').remove([fileUrl]);
+    const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === activityId);
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({ completed: false, completed_at: null, file_url: null }).eq('id', existing.id);
+    }
+    toast({ title: 'Arquivo excluído' });
+    loadData();
+  }
+
   async function downloadFile(fileUrl: string) {
     const { data, error } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 60);
     if (error || !data?.signedUrl) { toast({ title: 'Erro', variant: 'destructive' }); return; }
@@ -352,9 +362,14 @@ export default function ClientObligationsTab({ clientId }: Props) {
                         {activityTypeIcons[act.type]}
                         <span className={`text-sm flex-1 ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>{act.title}</span>
                         {comp?.file_url && (
-                          <Button size="sm" variant="ghost" onClick={() => downloadFile(comp.file_url!)}>
-                            <Download className="h-3 w-3 mr-1" />Baixar
-                          </Button>
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => downloadFile(comp.file_url!)}>
+                              <Download className="h-3 w-3 mr-1" />Baixar
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => deleteFile(detailInstance.id, act.id, comp.file_url!)}>
+                              <Trash2 className="h-3 w-3 mr-1" />Excluir
+                            </Button>
+                          </>
                         )}
                         <label className="cursor-pointer">
                           <input type="file" className="hidden" onChange={e => {

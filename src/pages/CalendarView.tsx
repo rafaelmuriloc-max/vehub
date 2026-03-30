@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
@@ -312,6 +312,17 @@ export default function CalendarView() {
       }
     }
 
+    await loadData();
+  }
+
+  async function deleteFile(activityId: string, fileUrl: string) {
+    if (!detailInstanceId) return;
+    await supabase.storage.from('documents').remove([fileUrl]);
+    const existing = getCompletion(activityId);
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({ completed: false, completed_at: null, file_url: null }).eq('id', existing.id);
+    }
+    toast({ title: 'Arquivo excluído' });
     await loadData();
   }
 
@@ -671,9 +682,14 @@ export default function CalendarView() {
                           </label>
                         </Button>
                         {comp?.file_url && (
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => downloadFile(comp.file_url!)}>
-                            <Download className="h-3 w-3 mr-1" /> Baixar
-                          </Button>
+                          <>
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => downloadFile(comp.file_url!)}>
+                              <Download className="h-3 w-3 mr-1" /> Baixar
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => deleteFile(act.id, comp.file_url!)}>
+                              <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                            </Button>
+                          </>
                         )}
                       </div>
                     )}
