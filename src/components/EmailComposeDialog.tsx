@@ -224,6 +224,20 @@ export default function EmailComposeDialog({
             </div>
           </div>
 
+          {attachments.length > 0 && (
+            <div>
+              <Label className="flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" /> Anexos ({attachments.length})</Label>
+              <div className="mt-1 space-y-1">
+                {attachments.map((att, idx) => (
+                  <div key={idx} className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 flex items-center gap-1">
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    {att.fileName}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Button
             onClick={handleSend}
             disabled={sending || !departmentId || !to || !subject || !body}
