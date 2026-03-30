@@ -1,44 +1,30 @@
 
 
-# Melhorar gráfico de Regime Tributário × Segmento
+# Adicionar tabela de quantidades Regime × Segmento
 
-## Problema atual
-O gráfico de barras empilhadas está visualmente genérico - barras grandes e desproporcionais, sem refinamento visual, tooltip básico, e a legenda padrão do recharts sem personalização.
+## Objetivo
+Mostrar uma tabela abaixo do gráfico de barras com os valores absolutos do cruzamento entre regime tributário e segmento, complementando a visualização percentual do gráfico.
 
-## Direção estética
-Seguindo a skill: tom **refined/editorial**, consistente com os donuts já existentes na página. Manter coesão com o design system Navy + Orange.
+## Mudanças em `src/pages/Clients.tsx`
 
-## Mudanças em `src/pages/Clients.tsx` (linhas ~1045-1081)
+### 1. Adicionar tabela dentro do card existente do gráfico (após o `ResponsiveContainer`)
+- Usar os componentes `Table, TableHeader, TableBody, TableRow, TableHead, TableCell` já existentes no projeto
+- Importar de `@/components/ui/table`
 
-### 1. Trocar para barras horizontais agrupadas com proporção percentual
-- Usar `BarChart layout="vertical"` para melhor legibilidade dos nomes dos regimes
-- Normalizar para 100% (percentual) em vez de valores absolutos, mostrando a composição real de cada regime
-- Isso resolve o problema visual da imagem onde MEI fica invisível ao lado de Simples Nacional
+### 2. Estrutura da tabela
+- **Colunas**: Regime Tributário | cada segmento da `segmentList` | Total
+- **Linhas**: uma por regime (dados de `rawStackedData`)
+- **Última linha**: totais por segmento (soma de cada coluna)
+- Células coloridas com os dots do segmento para referência visual
+- Valores alinhados à direita, regime à esquerda
 
-### 2. Tooltip customizado refinado
-- Reutilizar o estilo do `StackedTooltip` existente mas melhorar com:
-  - Barra de progresso colorida ao lado de cada segmento
-  - Mostrar valor absoluto + percentual
-  - Borda sutil e sombra consistente com os outros tooltips
+### 3. Posicionamento
+- Abaixo do gráfico de barras, dentro do mesmo card `Regime Tributário × Segmento`
+- Separador visual (`<Separator />` ou margin-top) entre gráfico e tabela
+- Subtítulo discreto: "Quantidades absolutas"
 
-### 3. Legenda customizada lateral
-- Substituir a `<Legend>` padrão do recharts por uma legenda customizada no mesmo estilo do `renderLegend` dos donuts (com bolinhas coloridas + nome)
-- Posicionada abaixo do gráfico em layout clean
-
-### 4. Detalhes visuais
-- `CartesianGrid` mais sutil (opacity 0.3, apenas horizontal)
-- Bordas arredondadas em todas as barras (`radius={[0, 4, 4, 0]}` para horizontal)
-- Gradiente sutil nas barras usando `<defs><linearGradient>` para cada cor
-- Animação staggered: `animationBegin={i * 150}` para cada `<Bar>`
-- Mostrar valor absoluto dentro da barra quando há espaço suficiente (label customizado)
-
-### 5. Layout do card
-- Flex row: gráfico à esquerda (~70%), legenda customizada à direita (~30%)
-- Subtítulo discreto: "Distribuição percentual de segmentos por regime"
-- Mesmo hover shadow transition dos cards vizinhos
-
-## Detalhes técnicos
+### Detalhes técnicos
 - Apenas `src/pages/Clients.tsx` é modificado
-- Sem dependências novas
-- Reutiliza `CHART_COLORS`, `segmentList`, `stackedData` já computados
+- Reutiliza `rawStackedData`, `segmentList`, `CHART_COLORS` já computados
+- Adiciona import de `Table` components (já existem no projeto)
 
