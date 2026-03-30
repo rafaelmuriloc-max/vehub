@@ -11,14 +11,15 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
 import {
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Zap,
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean };
 type DocumentType = { id: string; name: string };
 
 const activityTypeIcons: Record<string, React.ReactNode> = {
@@ -46,7 +47,7 @@ export default function Obligations() {
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '' });
+  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false });
 
   const [expandedObligation, setExpandedObligation] = useState<string | null>(null);
 
@@ -105,17 +106,17 @@ export default function Obligations() {
   // ---- Activity CRUD ----
   function openNewActivity(obligationId: string) {
     setEditingActivity(null);
-    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '' });
+    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false });
     setActivityOpen(true);
   }
   function openEditActivity(a: Activity) {
     setEditingActivity(a);
-    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '' });
+    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start });
     setActivityOpen(true);
   }
   async function saveActivity(e: React.FormEvent) {
     e.preventDefault();
-    const payload: any = { title: activityForm.title, type: activityForm.type as any, description: activityForm.description || null, order: activityForm.order, obligation_id: activityForm.obligation_id };
+    const payload: any = { title: activityForm.title, type: activityForm.type as any, description: activityForm.description || null, order: activityForm.order, obligation_id: activityForm.obligation_id, auto_start: activityForm.auto_start };
     if (activityForm.type === 'document' && activityForm.document_type_id) {
       payload.document_type_id = activityForm.document_type_id;
     } else {
@@ -209,7 +210,16 @@ export default function Obligations() {
                             {obActivities.map((act, i) => (
                               <TableRow key={act.id}>
                                 <TableCell>{i + 1}</TableCell>
-                                <TableCell className="font-medium">{act.title}</TableCell>
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    {act.title}
+                                    {act.auto_start && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary">
+                                        <Zap className="h-3 w-3 mr-0.5" />Auto
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-1">
                                     {activityTypeIcons[act.type]}
@@ -329,6 +339,13 @@ export default function Obligations() {
             )}
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={activityForm.description} onChange={e => setActivityForm({ ...activityForm, description: e.target.value })} /></div>
             <div className="space-y-2"><Label>Ordem</Label><Input type="number" value={activityForm.order} onChange={e => setActivityForm({ ...activityForm, order: Number(e.target.value) })} /></div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-primary" />Execução automática</Label>
+                <p className="text-xs text-muted-foreground">Inicia automaticamente após a atividade anterior ser concluída</p>
+              </div>
+              <Switch checked={activityForm.auto_start} onCheckedChange={v => setActivityForm({ ...activityForm, auto_start: v })} />
+            </div>
             <Button type="submit" className="w-full" disabled={!activityForm.title}>Salvar</Button>
           </form>
         </DialogContent>

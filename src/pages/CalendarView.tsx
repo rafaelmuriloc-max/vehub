@@ -16,7 +16,7 @@ type Instance = { id: string; client_id: string; obligation_id: string; referenc
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
 
 type CalendarEvent = {
@@ -90,7 +90,7 @@ export default function CalendarView() {
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
-      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order'),
+      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start'),
       supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url'),
     ]);
     setInstances((instRes.data as Instance[]) || []);
@@ -217,6 +217,24 @@ export default function CalendarView() {
         completed_at: new Date().toISOString(),
       });
     }
+
+    // Auto-start chain
+    if (!currentlyCompleted && detailObligation) {
+      const oblActivities = activities.filter(a => a.obligation_id === detailObligation.id).sort((a, b) => a.order - b.order);
+      const currentIdx = oblActivities.findIndex(a => a.id === activityId);
+      for (let i = currentIdx + 1; i < oblActivities.length; i++) {
+        const nextAct = oblActivities[i];
+        if (!nextAct.auto_start) break;
+        const nextComp = completions.find(c => c.instance_id === detailInstanceId && c.activity_id === nextAct.id);
+        if (nextComp?.completed) break;
+        if (nextComp) {
+          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+        } else {
+          await supabase.from('obligation_activity_completions').insert({ instance_id: detailInstanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+        }
+      }
+    }
+
     await loadData();
   }
 
