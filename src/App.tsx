@@ -20,6 +20,7 @@ import InvoiceEmit from "./pages/InvoiceEmit";
 import Fiscal from "./pages/Fiscal";
 import IntegraContador from "./pages/IntegraContador";
 import Chat from "./pages/Chat";
+import Email from "./pages/Email";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
