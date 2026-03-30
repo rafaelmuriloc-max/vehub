@@ -579,52 +579,120 @@ export default function CalendarView() {
               <p className="text-muted-foreground text-sm">Nenhuma obrigação com data de meta neste mês</p>
             </div>
           ) : (
-            <>
-              <div className="space-y-2">
-                {paginatedMonthEvents.map((ev, idx) => {
-                  const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
-                  const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => setDetailInstanceId(ev.instanceId)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
-                        ${completed
-                          ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
-                          : 'border-border hover:border-primary/30 hover:bg-muted/30'
-                        }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-14 shrink-0 text-sm font-semibold text-primary">
-                          {ev.date.split('-').reverse().slice(0, 2).join('/')}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
-                          </p>
-                        </div>
-                        <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
-                          {typeConfig[ev.type].label}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
-                        {progress.total > 0 && (
-                          <span className={`text-[10px] font-medium ${completed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
-                            {progress.completed}/{progress.total} atividades
-                          </span>
-                        )}
-                      </div>
-                      {progress.total > 0 && (
-                        <Progress value={progress.percent} className="h-1 mt-2" />
-                      )}
+            <Tabs defaultValue="pending">
+              <TabsList className="mb-4">
+                <TabsTrigger value="pending">
+                  A fazer
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsPending.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="completed">
+                  Concluídas
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="pending">
+                {monthEventsPending.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckSquare className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Todas as obrigações foram concluídas!</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthPending.map((ev, idx) => {
+                        const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setDetailInstanceId(ev.instanceId)}
+                            className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
+                                {typeConfig[ev.type].label}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className="text-[10px] font-medium text-muted-foreground">
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
-              <PaginationBlock page={monthPage} totalPages={monthTotalPages} total={monthEvents.length} onPageChange={setMonthPage} />
-            </>
+                    <PaginationBlock page={monthPendingPage} totalPages={monthPendingTotalPages} total={monthEventsPending.length} onPageChange={setMonthPendingPage} />
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="completed">
+                {monthEventsCompleted.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <ListChecks className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação concluída neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthCompleted.map((ev, idx) => {
+                        const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setDetailInstanceId(ev.instanceId)}
+                            className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
+                                {typeConfig[ev.type].label}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className="text-[10px] font-medium text-green-600 dark:text-green-400">
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <PaginationBlock page={monthCompletedPage} totalPages={monthCompletedTotalPages} total={monthEventsCompleted.length} onPageChange={setMonthCompletedPage} />
+                  </>
+                )}
+              </TabsContent>
+            </Tabs>
           )}
         </CardContent>
       </Card>
