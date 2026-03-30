@@ -19,7 +19,7 @@ import {
 
 type Department = { id: string; name: string };
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null };
 type DocumentType = { id: string; name: string };
 
 const activityTypeIcons: Record<string, React.ReactNode> = {
@@ -47,7 +47,7 @@ export default function Obligations() {
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false });
+  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '' });
 
   const [expandedObligation, setExpandedObligation] = useState<string | null>(null);
 
@@ -106,12 +106,12 @@ export default function Obligations() {
   // ---- Activity CRUD ----
   function openNewActivity(obligationId: string) {
     setEditingActivity(null);
-    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false });
+    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '' });
     setActivityOpen(true);
   }
   function openEditActivity(a: Activity) {
     setEditingActivity(a);
-    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start });
+    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '' });
     setActivityOpen(true);
   }
   async function saveActivity(e: React.FormEvent) {
@@ -121,6 +121,15 @@ export default function Obligations() {
       payload.document_type_id = activityForm.document_type_id;
     } else {
       payload.document_type_id = null;
+    }
+    if (activityForm.type === 'email') {
+      payload.email_department_id = activityForm.email_department_id || null;
+      payload.email_subject = activityForm.email_subject || null;
+      payload.email_body = activityForm.email_body || null;
+    } else {
+      payload.email_department_id = null;
+      payload.email_subject = null;
+      payload.email_body = null;
     }
     const { error } = editingActivity
       ? await supabase.from('obligation_activities').update(payload).eq('id', editingActivity.id)
@@ -336,6 +345,35 @@ export default function Obligations() {
                   </SelectContent>
                 </Select>
               </div>
+            )}
+            {activityForm.type === 'email' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Departamento Remetente</Label>
+                  <Select value={activityForm.email_department_id} onValueChange={v => setActivityForm({ ...activityForm, email_department_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o departamento" /></SelectTrigger>
+                    <SelectContent>
+                      {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">O e-mail será enviado com as credenciais SMTP deste departamento</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Assunto</Label>
+                  <Input value={activityForm.email_subject} onChange={e => setActivityForm({ ...activityForm, email_subject: e.target.value })} placeholder="Ex: Lembrete de [Nome_da_Obrigação] - [Competencia]" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Corpo do E-mail</Label>
+                  <Textarea rows={5} value={activityForm.email_body} onChange={e => setActivityForm({ ...activityForm, email_body: e.target.value })} placeholder="Use variáveis: [Nome_da_Empresa], [Competencia], [Nome_da_Obrigação], [Vencimento]" />
+                  <div className="flex flex-wrap gap-1">
+                    {['[Nome_da_Empresa]', '[Competencia]', '[Nome_da_Obrigação]', '[Vencimento]'].map(v => (
+                      <Badge key={v} variant="outline" className="text-xs cursor-pointer hover:bg-muted" onClick={() => setActivityForm(f => ({ ...f, email_body: f.email_body + v }))}>
+                        {v}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={activityForm.description} onChange={e => setActivityForm({ ...activityForm, description: e.target.value })} /></div>
             <div className="space-y-2"><Label>Ordem</Label><Input type="number" value={activityForm.order} onChange={e => setActivityForm({ ...activityForm, order: Number(e.target.value) })} /></div>

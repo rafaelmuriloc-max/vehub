@@ -23,6 +23,10 @@ interface EmailComposeDialogProps {
   /** Variables available for interpolation */
   variables?: Record<string, string>;
   onSent?: () => void;
+  /** Pre-filled values from activity configuration */
+  prefillDepartmentId?: string;
+  prefillSubject?: string;
+  prefillBody?: string;
 }
 
 const VARIABLE_OPTIONS = [
@@ -38,6 +42,9 @@ export default function EmailComposeDialog({
   recipientEmail = '',
   variables = {},
   onSent,
+  prefillDepartmentId,
+  prefillSubject,
+  prefillBody,
 }: EmailComposeDialogProps) {
   const { toast } = useToast();
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -50,6 +57,9 @@ export default function EmailComposeDialog({
   useEffect(() => {
     if (open) {
       setTo(recipientEmail);
+      if (prefillDepartmentId) setDepartmentId(prefillDepartmentId);
+      if (prefillSubject) setSubject(prefillSubject);
+      if (prefillBody) setBody(prefillBody);
       const fetchDepts = async () => {
         const { data } = await supabase
           .from('departments')
@@ -63,7 +73,7 @@ export default function EmailComposeDialog({
       };
       fetchDepts();
     }
-  }, [open, recipientEmail]);
+  }, [open, recipientEmail, prefillDepartmentId, prefillSubject, prefillBody]);
 
   function insertVariable(variable: string, target: 'subject' | 'body') {
     if (target === 'subject') {

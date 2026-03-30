@@ -17,7 +17,7 @@ type Instance = { id: string; client_id: string; obligation_id: string; referenc
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
 
 type CalendarEvent = {
@@ -87,6 +87,7 @@ export default function CalendarView() {
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
+  const [emailPrefill, setEmailPrefill] = useState<{ departmentId?: string; subject?: string; body?: string }>({});
 
   const loadData = useCallback(async () => {
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
@@ -640,6 +641,11 @@ export default function CalendarView() {
                           '[Nome_da_Obrigação]': detailObligation?.name || '',
                           '[Vencimento]': vencimento,
                         });
+                        setEmailPrefill({
+                          departmentId: act.email_department_id || undefined,
+                          subject: act.email_subject || undefined,
+                          body: act.email_body || undefined,
+                        });
                         setEmailActivityId(act.id);
                         setEmailDialogOpen(true);
                       }}
@@ -662,6 +668,9 @@ export default function CalendarView() {
         open={emailDialogOpen}
         onOpenChange={setEmailDialogOpen}
         variables={emailVariables}
+        prefillDepartmentId={emailPrefill.departmentId}
+        prefillSubject={emailPrefill.subject}
+        prefillBody={emailPrefill.body}
         onSent={async () => {
           if (emailActivityId) {
             await toggleCompletion(emailActivityId, false);

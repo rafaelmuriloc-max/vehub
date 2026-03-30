@@ -15,7 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null };
 type Instance = { id: string; obligation_id: string; client_id: string; reference_month: string; status: string; assigned_to: string | null; due_date: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null; file_url: string | null; notes: string | null };
 type Department = { id: string; name: string };
@@ -50,6 +50,7 @@ export default function ClientObligationsTab({ clientId }: Props) {
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
+  const [emailPrefill, setEmailPrefill] = useState<{ departmentId?: string; subject?: string; body?: string }>({});
   useEffect(() => { loadData(); }, [clientId]);
 
   async function loadData() {
@@ -324,6 +325,11 @@ export default function ClientObligationsTab({ clientId }: Props) {
                                 '[Nome_da_Obrigação]': obl?.name || '',
                                 '[Vencimento]': detailInstance!.due_date ? new Date(detailInstance!.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '',
                               });
+                              setEmailPrefill({
+                                departmentId: act.email_department_id || undefined,
+                                subject: act.email_subject || undefined,
+                                body: act.email_body || undefined,
+                              });
                               setEmailActivityId(act.id);
                               setEmailDialogOpen(true);
                             });
@@ -353,6 +359,9 @@ export default function ClientObligationsTab({ clientId }: Props) {
         open={emailDialogOpen}
         onOpenChange={setEmailDialogOpen}
         variables={emailVariables}
+        prefillDepartmentId={emailPrefill.departmentId}
+        prefillSubject={emailPrefill.subject}
+        prefillBody={emailPrefill.body}
         onSent={() => {
           if (emailActivityId && detailInstance) {
             toggleCompletion(detailInstance.id, emailActivityId, false);

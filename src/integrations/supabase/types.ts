@@ -692,6 +692,9 @@ export type Database = {
           created_at: string
           description: string | null
           document_type_id: string | null
+          email_body: string | null
+          email_department_id: string | null
+          email_subject: string | null
           id: string
           obligation_id: string
           order: number
@@ -703,6 +706,9 @@ export type Database = {
           created_at?: string
           description?: string | null
           document_type_id?: string | null
+          email_body?: string | null
+          email_department_id?: string | null
+          email_subject?: string | null
           id?: string
           obligation_id: string
           order?: number
@@ -714,6 +720,9 @@ export type Database = {
           created_at?: string
           description?: string | null
           document_type_id?: string | null
+          email_body?: string | null
+          email_department_id?: string | null
+          email_subject?: string | null
           id?: string
           obligation_id?: string
           order?: number
@@ -726,6 +735,13 @@ export type Database = {
             columns: ["document_type_id"]
             isOneToOne: false
             referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_activities_email_department_id_fkey"
+            columns: ["email_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
           {
