@@ -52,16 +52,30 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         );
       case 'whatsapp_document':
         return (
-          <a
-            href={mediaUrl}
-            download
-            className="flex items-center gap-2 p-2 mb-1 rounded-md bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch(mediaUrl);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = content || 'documento';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              } catch {
+                window.open(mediaUrl, '_blank');
+              }
+            }}
+            className="flex items-center gap-2 p-2 mb-1 rounded-md bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition-colors cursor-pointer w-full text-left"
           >
             <FileDown className="h-5 w-5 text-muted-foreground shrink-0" />
             <span className="text-sm text-primary truncate">
               {content || 'Documento'}
             </span>
-          </a>
+          </button>
         );
       default:
         return null;
