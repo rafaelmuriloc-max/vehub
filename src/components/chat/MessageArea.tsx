@@ -13,6 +13,7 @@ export interface ChatMessage {
   created_at: string;
   read_at: string | null;
   sender_name?: string;
+  message_type?: string;
 }
 
 interface MessageAreaProps {
@@ -93,6 +94,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                 isRead={!!msg.read_at}
                 senderName={msg.sender_name}
                 isGroup={isGroup}
+                messageType={msg.message_type}
               />
             ))}
           </div>
