@@ -141,9 +141,9 @@ Deno.serve(async (req) => {
         if (convByPhone && convByPhone.length > 0) {
           conversationId = convByPhone[0].id;
           // Vincular client_id e atualizar nome
-          await supabase
+            await supabase
             .from("chat_conversations")
-            .update({ client_id: clientId, name: `${clientName} (WhatsApp)` })
+            .update({ client_id: clientId, name: clientName })
             .eq("id", conversationId);
           console.log("Linked orphan conversation to client:", clientId);
         }
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         if (pushName) {
           await supabase
             .from("chat_conversations")
-            .update({ name: `${pushName} (WhatsApp)` })
+            .update({ name: pushName })
             .eq("id", conversationId)
             .ilike("name", `WhatsApp%`);
         }
@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
     }
 
     if (!conversationId) {
-      const convName = clientId ? `${clientName} (WhatsApp)` : clientName;
+      const convName = clientId ? clientName : clientName;
 
       const { data: newConv, error: convErr } = await supabase
         .from("chat_conversations")
@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
       if (existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
         await supabase
           .from("chat_conversations")
-          .update({ name: `${clientName} (WhatsApp)` })
+          .update({ name: clientName })
           .eq("id", conversationId);
       }
     }

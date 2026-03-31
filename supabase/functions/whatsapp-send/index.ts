@@ -149,9 +149,7 @@ serve(async (req) => {
             .single();
 
           const displayName = client?.contact_name || client?.company_name;
-          const convName = displayName
-            ? `${displayName} (WhatsApp)`
-            : "WhatsApp";
+          const convName = displayName || "WhatsApp";
 
           const { data: newConv } = await supabaseService
             .from("chat_conversations")
