@@ -65,6 +65,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-[#F0F2F5] dark:bg-zinc-800 border-b">
         <Avatar className="h-10 w-10">
+          {avatarUrl && <AvatarImage src={avatarUrl} alt={conversationName || ''} />}
           <AvatarFallback className="bg-primary/20 text-primary font-semibold">
             {conversationName.charAt(0).toUpperCase()}
           </AvatarFallback>
