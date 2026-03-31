@@ -56,6 +56,7 @@ export default function EmailComposeDialog({
   attachments = [],
 }: EmailComposeDialogProps) {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState('');
   const [to, setTo] = useState(recipientEmail);
