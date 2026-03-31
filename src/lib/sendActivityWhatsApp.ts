@@ -91,6 +91,15 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     .eq('id', instanceId)
     .single();
 
+  // Check for attached documents in this instance
+  const { data: attachedDocs } = await supabase
+    .from('obligation_activity_completions')
+    .select('file_url')
+    .eq('instance_id', instanceId)
+    .not('file_url', 'is', null);
+
+  const hasDocuments = attachedDocs && attachedDocs.length > 0;
+
   // Build request body
   const body: Record<string, unknown> = {
     to: recipientPhone,
@@ -122,8 +131,16 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
       }
     }
 
-    // Button URL param (index 0)
-    if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
+    // Button URL param (index 0) — auto-generate from attached docs or use manual fallback
+    if (hasDocuments) {
+      // Auto-generate: pass instanceId as the dynamic suffix for the template button URL
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: instanceId }],
+      });
+    } else if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
       components.push({
         type: 'button',
         sub_type: 'url',
