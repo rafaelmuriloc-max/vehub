@@ -5,6 +5,7 @@ interface SendActivityWhatsAppParams {
     id: string;
     whatsapp_template_name: string | null;
     whatsapp_message_body: string | null;
+    whatsapp_button_url?: string | null;
   };
   instanceId: string;
   clientId: string;
