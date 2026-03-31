@@ -1,73 +1,95 @@
 
 
-# Configurar envio de templates aprovados da Meta com parametros dinamicos
+# Corrigir payload de templates WhatsApp — parâmetros nomeados e botões URL
 
-## Contexto
-O usuario ja tem templates aprovados na Meta (vistos nas imagens). Os templates usam variaveis no formato `{{variavel}}` como `{{tratamento_contato}}`, `{{nome_contabilidade}}`, `{{cliente}}`, `{{nome_tipo_tarefa}}`, `{{titulo_doc_anexo}}`. O codigo atual prioriza texto livre sobre template e nao envia parametros posicionais corretamente.
+## Problema
+O erro `(#100) Invalid parameter — Parameter name is missing or empty` ocorre porque os templates Meta foram criados com **parâmetros nomeados** (`{{tratamento_contato}}`, `{{nome_contabilidade}}`), mas o codigo envia os parâmetros sem o campo `parameter_name`. A API da Meta exige esse campo para templates no formato named.
 
-## Alteracoes
+Além disso, os templates possuem **botões com URL dinâmica** que também precisam de componentes `button` no payload.
+
+## O que está errado hoje
+
+O payload enviado:
+```text
+parameters: [
+  { type: "text", text: "Rafael" },
+  { type: "text", text: "Velocitã..." }
+]
+```
+
+O que a Meta espera para parâmetros nomeados:
+```text
+parameters: [
+  { type: "text", parameter_name: "tratamento_contato", text: "Rafael" },
+  { type: "text", parameter_name: "nome_contabilidade", text: "Velocitã..." }
+]
+```
+
+E para botões URL dinâmicos:
+```text
+{ type: "button", sub_type: "url", index: "0",
+  parameters: [{ type: "text", text: "https://..." }] }
+```
+
+## Alterações
 
 ### 1. `src/lib/sendActivityWhatsApp.ts`
-- **Priorizar template** sobre texto livre (template e obrigatorio para mensagens business-initiated)
-- Quando `whatsapp_template_name` existir, enviar como `type: 'template'`
-- Montar `templateParams` com componentes `body` e parametros posicionais extraidos do `whatsapp_message_body`: parsear as variaveis `{{...}}` do corpo da mensagem na ordem em que aparecem, substituir pelos valores reais, e enviar como array de parametros posicionais
-- Adicionar mapeamento de variaveis `{{...}}` alem dos `[...]` existentes: `{{cliente}}` → company_name, `{{nome_tipo_tarefa}}` / `{{nome_da_obrigacao}}` → obligationName, `{{tratamento_contato}}` → contact_name, `{{nome_contabilidade}}` → nome do escritorio (buscar de `company_settings`), `{{titulo_doc_anexo}}` → obligationName, etc.
-- Fallback para texto livre quando nao houver template
+- Ao extrair `{{variavel}}` do `whatsapp_message_body`, incluir `parameter_name` em cada parâmetro:
+  ```
+  parameters: matches.map(m => ({
+    type: 'text',
+    parameter_name: m[1],
+    text: templateVars[m[1]] || ''
+  }))
+  ```
+- Adicionar suporte a botões URL: adicionar campo `whatsapp_button_url` na interface ou extrair de configuração. Como fallback, se o template tem botões URL, permitir configurar a URL base na atividade.
 
 ### 2. `supabase/functions/whatsapp-send/index.ts`
-Nenhuma alteracao necessaria — ja suporta `templateParams` como `components` no payload.
+Nenhuma alteração — já repassa `templateParams` como `components`.
 
-### Detalhes tecnicos
+### 3. `src/pages/Obligations.tsx`
+- Adicionar campo opcional `whatsapp_button_url` no formulário de atividade WhatsApp para configurar a URL dinâmica do botão (se aplicável).
 
-No `sendActivityWhatsApp.ts`, a logica de construcao do body ficara:
+### 4. Migração SQL
+- Adicionar coluna `whatsapp_button_url text` na tabela `obligation_activities` para armazenar a URL dinâmica do botão do template.
 
-```
-// Buscar company_settings para nome_contabilidade
-const { data: companySettings } = await supabase
-  .from('company_settings').select('company_name').limit(1).single();
+### Detalhes técnicos
 
-// Buscar nome do contato
-let contactName = client?.contact_name || '';
-if (departmentId) { /* usar dept contact name se existir */ }
+A construção dos `templateParams` ficará:
 
-// Mapa de variaveis {{...}}
-const templateVars: Record<string, string> = {
-  'tratamento_contato': contactName,
-  'nome_contabilidade': companySettings?.company_name || '',
-  'cliente': client?.company_name || '',
-  'nome_tipo_tarefa': obligationName,
-  'nome_da_obrigacao': obligationName,
-  'titulo_doc_anexo': obligationName,
-  'competencia': competencia,
-  'vencimento': vencimento,
-};
+```text
+const components = [];
 
-if (activity.whatsapp_template_name) {
-  body.type = 'template';
-  body.templateName = activity.whatsapp_template_name;
-  body.templateLanguage = 'pt_BR';
-
-  // Extrair variaveis {{...}} do corpo na ordem
-  if (activity.whatsapp_message_body) {
-    const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
-    if (matches.length > 0) {
-      body.templateParams = [{
-        type: 'body',
-        parameters: matches.map(m => ({
-          type: 'text',
-          text: templateVars[m[1]] || m[0]
-        }))
-      }];
-    }
+// Body params com parameter_name
+if (activity.whatsapp_message_body) {
+  const matches = [...body.matchAll(/\{\{(\w+)\}\}/g)];
+  if (matches.length > 0) {
+    components.push({
+      type: 'body',
+      parameters: matches.map(m => ({
+        type: 'text',
+        parameter_name: m[1],
+        text: templateVars[m[1]] || ''
+      }))
+    });
   }
-} else if (activity.whatsapp_message_body) {
-  body.type = 'text';
-  body.text = replaceVariables(activity.whatsapp_message_body, variables);
 }
+
+// Button URL param (index 0)
+if (activity.whatsapp_button_url) {
+  components.push({
+    type: 'button',
+    sub_type: 'url',
+    index: '0',
+    parameters: [{ type: 'text', text: activity.whatsapp_button_url }]
+  });
+}
+
+body.templateParams = components;
 ```
 
-Isso usa o campo `whatsapp_message_body` como "mapa" de quais variaveis o template espera e em qual ordem, extraindo `{{var}}` e mapeando para valores reais.
-
-## Arquivo modificado
-- `src/lib/sendActivityWhatsApp.ts`
+## Arquivos modificados
+- `src/lib/sendActivityWhatsApp.ts` — adicionar `parameter_name` e suporte a botão URL
+- `src/pages/Obligations.tsx` — campo de URL do botão no formulário
+- Migração SQL — coluna `whatsapp_button_url`
 
