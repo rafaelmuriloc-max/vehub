@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
       if (existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
         await supabase
           .from("chat_conversations")
-          .update({ name: `${clientName} (WhatsApp)` })
+          .update({ name: clientName })
           .eq("id", conversationId);
       }
     }
