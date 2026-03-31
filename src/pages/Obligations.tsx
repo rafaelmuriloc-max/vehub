@@ -111,7 +111,7 @@ export default function Obligations() {
   }
   function openEditActivity(a: Activity) {
     setEditingActivity(a);
-    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '', whatsapp_template_name: (a as any).whatsapp_template_name || '', whatsapp_message_body: (a as any).whatsapp_message_body || '' });
+    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '', whatsapp_template_name: (a as any).whatsapp_template_name || '', whatsapp_message_body: (a as any).whatsapp_message_body || '', whatsapp_button_url: (a as any).whatsapp_button_url || '' });
     setActivityOpen(true);
   }
   async function saveActivity(e: React.FormEvent) {
