@@ -14,6 +14,7 @@ import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, 
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
+import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
