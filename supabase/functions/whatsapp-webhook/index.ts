@@ -158,6 +158,14 @@ Deno.serve(async (req) => {
 
       if (existingConv && existingConv.length > 0) {
         conversationId = existingConv[0].id;
+        // Update name with pushName if available and still has generic phone format
+        if (pushName) {
+          await supabase
+            .from("chat_conversations")
+            .update({ name: `${pushName} (WhatsApp)` })
+            .eq("id", conversationId)
+            .ilike("name", `WhatsApp%`);
+        }
       }
     }
 
