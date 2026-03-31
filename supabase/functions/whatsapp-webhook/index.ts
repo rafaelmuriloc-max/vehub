@@ -182,6 +182,20 @@ Deno.serve(async (req) => {
       }
 
       conversationId = newConv.id;
+    } else if (clientId) {
+      // Update conversation name if it still has a generic phone-number format
+      const { data: existingConvData } = await supabase
+        .from("chat_conversations")
+        .select("name")
+        .eq("id", conversationId)
+        .single();
+
+      if (existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
+        await supabase
+          .from("chat_conversations")
+          .update({ name: `${clientName} (WhatsApp)` })
+          .eq("id", conversationId);
+      }
     }
 
     // Add ALL admins as participants

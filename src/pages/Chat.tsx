@@ -33,7 +33,7 @@ export default function Chat() {
 
     const { data: convs } = await supabase
       .from('chat_conversations')
-      .select('*')
+      .select('*, client_id')
       .in('id', convIds)
       .order('updated_at', { ascending: false });
 
@@ -61,7 +61,18 @@ export default function Chat() {
 
       // For 1:1, get other participant's name
       let name = conv.name || 'Conversa';
-      if (!conv.is_group) {
+
+      // If conversation has a linked client, use contact_name as priority
+      if (conv.client_id) {
+        const { data: client } = await supabase
+          .from('clients')
+          .select('contact_name, company_name')
+          .eq('id', conv.client_id)
+          .single();
+        if (client) {
+          name = client.contact_name || client.company_name || name;
+        }
+      } else if (!conv.is_group) {
         const { data: parts } = await supabase
           .from('chat_participants')
           .select('user_id')
