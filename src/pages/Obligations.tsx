@@ -353,6 +353,26 @@ export default function Obligations() {
                 </Select>
               </div>
             )}
+            {activityForm.type === 'whatsapp' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Nome do Template (opcional)</Label>
+                  <Input value={activityForm.whatsapp_template_name} onChange={e => setActivityForm({ ...activityForm, whatsapp_template_name: e.target.value })} placeholder="Ex: lembrete_obrigacao" />
+                  <p className="text-xs text-muted-foreground">Se preenchido, envia como template aprovado pela Meta</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Corpo da Mensagem</Label>
+                  <Textarea rows={5} value={activityForm.whatsapp_message_body} onChange={e => setActivityForm({ ...activityForm, whatsapp_message_body: e.target.value })} placeholder="Use variáveis: [Nome_da_Empresa], [Competencia], [Nome_da_Obrigação], [Vencimento]" />
+                  <div className="flex flex-wrap gap-1">
+                    {['[Nome_da_Empresa]', '[Competencia]', '[Nome_da_Obrigação]', '[Vencimento]'].map(v => (
+                      <Badge key={v} variant="outline" className="text-xs cursor-pointer hover:bg-muted" onClick={() => setActivityForm(f => ({ ...f, whatsapp_message_body: f.whatsapp_message_body + v }))}>
+                        {v}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
             {activityForm.type === 'email' && (
               <>
                 <div className="space-y-2">
