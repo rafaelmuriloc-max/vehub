@@ -64,7 +64,7 @@ serve(async (req) => {
     // Build message payload
     let messagePayload: Record<string, unknown>;
 
-    if (type === "template" && templateName) {
+    if (type === "template" && templateName && templateName.trim()) {
       messagePayload = {
         messaging_product: "whatsapp",
         to: cleanPhone,
