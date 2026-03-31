@@ -28,6 +28,7 @@ interface EmailLog {
   reference_month: string | null;
   status: string;
   sent_at: string;
+  opened_at: string | null;
 }
 
 const PAGE_SIZE = 15;
