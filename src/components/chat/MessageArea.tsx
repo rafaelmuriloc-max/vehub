@@ -34,7 +34,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl, companyNames }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
