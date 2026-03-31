@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, CheckCheck, Phone } from 'lucide-react';
+import { Check, CheckCheck, Phone, FileDown } from 'lucide-react';
 
 interface MessageBubbleProps {
   content: string;
@@ -10,11 +10,64 @@ interface MessageBubbleProps {
   senderName?: string;
   isGroup?: boolean;
   messageType?: string;
+  mediaUrl?: string;
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType }: MessageBubbleProps) {
-  const isWhatsApp = messageType === 'whatsapp' || messageType === 'whatsapp_incoming';
-  const isIncoming = messageType === 'whatsapp_incoming';
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl }: MessageBubbleProps) {
+  const isWhatsApp = messageType?.startsWith('whatsapp');
+  const isIncoming = messageType === 'whatsapp_incoming' || messageType === 'whatsapp_image' || messageType === 'whatsapp_video' || messageType === 'whatsapp_audio' || messageType === 'whatsapp_document';
+
+  const renderMedia = () => {
+    if (!mediaUrl) return null;
+
+    switch (messageType) {
+      case 'whatsapp_image':
+        return (
+          <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
+            <img
+              src={mediaUrl}
+              alt="Imagem"
+              className="max-w-full rounded-md max-h-64 object-cover cursor-pointer"
+              loading="lazy"
+            />
+          </a>
+        );
+      case 'whatsapp_video':
+        return (
+          <video
+            src={mediaUrl}
+            controls
+            className="max-w-full rounded-md max-h-64 mb-1"
+            preload="metadata"
+          />
+        );
+      case 'whatsapp_audio':
+        return (
+          <audio
+            src={mediaUrl}
+            controls
+            className="w-full min-w-[200px] mb-1"
+            preload="metadata"
+          />
+        );
+      case 'whatsapp_document':
+        return (
+          <a
+            href={mediaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 p-2 mb-1 rounded-md bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
+          >
+            <FileDown className="h-5 w-5 text-muted-foreground shrink-0" />
+            <span className="text-sm text-primary truncate">
+              {content || 'Documento'}
+            </span>
+          </a>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className={`flex ${isMine && !isIncoming ? 'justify-end' : 'justify-start'} mb-1`}>
@@ -37,7 +90,15 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             <span className="text-[10px] font-medium text-green-600">WhatsApp</span>
           </div>
         )}
-        <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
+        {renderMedia()}
+        {/* Show text content - skip for documents if already shown in the link */}
+        {content && messageType !== 'whatsapp_document' && (
+          <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
+        )}
+        {/* For audio with no text, don't show empty paragraph */}
+        {!content && !mediaUrl && (
+          <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
+        )}
         <div className={`flex items-center gap-1 justify-end mt-0.5 ${isMine ? '-mr-1' : ''}`}>
           <span className="text-[10px] text-muted-foreground leading-none">
             {format(new Date(timestamp), 'HH:mm', { locale: ptBR })}
