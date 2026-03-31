@@ -97,23 +97,25 @@ Deno.serve(async (req) => {
     let clientId: string | null = null;
     let clientName = "Cliente";
 
+    const pushName = data.pushName || null;
+
     for (const phone of formatted) {
       const { data: clients } = await supabase
         .from("clients")
-        .select("id, company_name, contact_phone")
+        .select("id, company_name, contact_name, contact_phone")
         .ilike("contact_phone", `%${phone.replace(/\D/g, "").slice(-9)}%`)
         .limit(1);
 
       if (clients && clients.length > 0) {
         clientId = clients[0].id;
-        clientName = clients[0].company_name;
+        clientName = clients[0].contact_name || clients[0].company_name;
         break;
       }
     }
 
     if (!clientId) {
       console.log("No client found for phone:", phoneRaw);
-      clientName = `WhatsApp ${phoneRaw}`;
+      clientName = pushName ? `${pushName} (WhatsApp)` : `WhatsApp ${phoneRaw}`;
     }
 
     // Find existing WhatsApp conversation for this client

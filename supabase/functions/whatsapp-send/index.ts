@@ -144,12 +144,13 @@ serve(async (req) => {
         } else {
           const { data: client } = await supabaseService
             .from("clients")
-            .select("company_name")
+            .select("company_name, contact_name")
             .eq("id", clientId)
             .single();
 
-          const convName = client?.company_name
-            ? `${client.company_name} (WhatsApp)`
+          const displayName = client?.contact_name || client?.company_name;
+          const convName = displayName
+            ? `${displayName} (WhatsApp)`
             : "WhatsApp";
 
           const { data: newConv } = await supabaseService

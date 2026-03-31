@@ -26,7 +26,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         }`}
       >
         {isIncoming && (
-          <p className="text-xs font-semibold text-green-600 mb-0.5">📱 Cliente</p>
+          <p className="text-xs font-semibold text-green-600 mb-0.5">📱 {senderName || 'Cliente'}</p>
         )}
         {isGroup && !isMine && !isIncoming && senderName && (
           <p className="text-xs font-semibold text-primary mb-0.5">{senderName}</p>
