@@ -134,9 +134,11 @@ export default function Obligations() {
     if (activityForm.type === 'whatsapp') {
       payload.whatsapp_template_name = activityForm.whatsapp_template_name || null;
       payload.whatsapp_message_body = activityForm.whatsapp_message_body || null;
+      payload.whatsapp_button_url = activityForm.whatsapp_button_url || null;
     } else {
       payload.whatsapp_template_name = null;
       payload.whatsapp_message_body = null;
+      payload.whatsapp_button_url = null;
     }
     const { error } = editingActivity
       ? await supabase.from('obligation_activities').update(payload).eq('id', editingActivity.id)
