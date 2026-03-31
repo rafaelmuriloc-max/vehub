@@ -33,7 +33,7 @@ export default function Chat() {
 
     const { data: convs } = await supabase
       .from('chat_conversations')
-      .select('*, client_id')
+      .select('*, client_id, avatar_url')
       .in('id', convIds)
       .order('updated_at', { ascending: false });
 
