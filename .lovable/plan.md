@@ -1,28 +1,39 @@
 
 
-# Mostrar nome do contato no chat WhatsApp
+# Mostrar nome do contato na lista e cabeçalho + assinar mensagens enviadas
 
 ## Problema
-Atualmente, quando um cliente não é encontrado no banco, a conversa é criada com o nome `WhatsApp {número}`. Mesmo quando o cliente é encontrado, usa `company_name` (razão social), não o `contact_name` (nome do contato). Além disso, na bolha de mensagem recebida aparece apenas "📱 Cliente" genérico.
+1. A lista de conversas e o cabeçalho mostram "WhatsApp 554791004860" em vez do nome do contato
+2. Mensagens enviadas pelo usuário logado não mostram o nome do remetente
 
 ## Alterações
 
 ### 1. `supabase/functions/whatsapp-webhook/index.ts`
-- Ao encontrar o cliente, usar `contact_name` como prioridade para o nome da conversa, caindo para `company_name` se não houver
-- Extrair `pushName` do payload da EvolutionAPI (`data.pushName`) como fallback para quando o cliente não é encontrado — em vez de mostrar apenas o número
-- Formato da conversa: `{contact_name || company_name} (WhatsApp)` ou `{pushName} (WhatsApp)` ou `WhatsApp {número}`
+O webhook já busca `contact_name` e `company_name` do cliente, mas o nome não está sendo persistido corretamente quando o cliente não é encontrado. Verificar e corrigir a lógica de nomeação — quando o cliente é encontrado, a conversa deve ser nomeada com `contact_name` (prioridade) ou `company_name`, e **atualizar o nome de conversas existentes** que ainda têm o formato antigo "WhatsApp {número}".
 
-### 2. `supabase/functions/whatsapp-send/index.ts`
-- Ao criar conversa, buscar `contact_name` além de `company_name` e usar como prioridade no nome
+Adicionar lógica: ao encontrar um cliente por telefone, se a conversa já existe mas tem nome no formato "WhatsApp {número}", atualizar o nome para `{contact_name} (WhatsApp)`.
 
-### 3. `src/components/chat/MessageBubble.tsx`
-- Na linha de "📱 Cliente", exibir o `senderName` se disponível: `📱 {senderName}` em vez de `📱 Cliente`
+### 2. `src/components/chat/MessageBubble.tsx`
+- Para mensagens **enviadas** (`isMine && !isIncoming`): mostrar o `senderName` acima do conteúdo em negrito, similar ao estilo de grupo
+- Layout: nome do remetente em texto pequeno e bold acima da mensagem
 
-### 4. `src/pages/Chat.tsx`
-- Nenhuma alteração necessária — o nome da conversa já é exibido no header pelo `conversationName`
+```tsx
+{isMine && !isIncoming && senderName && (
+  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">{senderName}</p>
+)}
+```
+
+### 3. `src/pages/Chat.tsx`
+- Na `loadConversations`, para conversas WhatsApp (nome contém "WhatsApp" e número), buscar o `client_id` da conversa e consultar o `contact_name` do cliente para exibir o nome correto na lista
+- Alternativa mais simples: a conversa já armazena o `client_id` — buscar o nome do cliente quando a conversa tem `client_id` e o nome atual é genérico
+
+Abordagem: ao carregar conversas, se `conv.client_id` existe, buscar o `contact_name` do cliente e usá-lo como nome na lista.
+
+### 4. `src/components/chat/MessageArea.tsx`
+Nenhuma alteração necessária — o header já usa `conversationName` que virá corrigido do Chat.tsx.
 
 ## Arquivos modificados
-- `supabase/functions/whatsapp-webhook/index.ts` — usar `contact_name` e `pushName`
-- `supabase/functions/whatsapp-send/index.ts` — usar `contact_name` na criação da conversa
-- `src/components/chat/MessageBubble.tsx` — exibir nome do contato na bolha
+- `supabase/functions/whatsapp-webhook/index.ts` — atualizar nome de conversas existentes
+- `src/components/chat/MessageBubble.tsx` — mostrar nome do remetente em mensagens enviadas
+- `src/pages/Chat.tsx` — resolver nome do contato via `client_id` da conversa
 
