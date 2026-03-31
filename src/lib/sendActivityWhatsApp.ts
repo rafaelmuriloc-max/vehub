@@ -78,13 +78,14 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     instanceId,
   };
 
-  if (activity.whatsapp_template_name) {
+  if (activity.whatsapp_message_body) {
+    // Prioritize text message (no template approval needed)
+    body.type = 'text';
+    body.text = replaceVariables(activity.whatsapp_message_body, variables);
+  } else if (activity.whatsapp_template_name) {
     body.type = 'template';
     body.templateName = activity.whatsapp_template_name;
     body.templateLanguage = 'pt_BR';
-  } else {
-    body.type = 'text';
-    body.text = replaceVariables(activity.whatsapp_message_body!, variables);
   }
 
   const { data, error } = await supabase.functions.invoke('whatsapp-send', { body });
