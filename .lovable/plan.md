@@ -1,32 +1,53 @@
 
 
-# Dividir obrigações do mês em abas "A fazer" e "Concluídas"
+# Seção "Enviados" na página de E-mail
 
 ## Resumo
-Na seção "Obrigações do mês" (parte inferior da tela do calendário), substituir a lista única por duas abas usando o componente `Tabs` existente: "A fazer" mostra obrigações pendentes e "Concluídas" mostra as que tiveram todas as atividades completadas.
+Criar uma tabela `email_logs` para registrar cada e-mail enviado, e exibir uma seção "Enviados" abaixo do formulário de composição com as colunas solicitadas.
 
-## Mudanças em `src/pages/CalendarView.tsx`
+## 1. Migração SQL — nova tabela `email_logs`
 
-### 1. Importar Tabs
-- Adicionar import de `Tabs, TabsList, TabsTrigger, TabsContent` de `@/components/ui/tabs`
+```sql
+CREATE TABLE public.email_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  department_id uuid NOT NULL,
+  recipient_email text NOT NULL,
+  subject text NOT NULL,
+  body_html text,
+  client_id uuid,
+  obligation_id uuid,
+  reference_month date,
+  status text NOT NULL DEFAULT 'sent',
+  sent_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-### 2. Separar monthEvents em duas listas
-- `monthEventsPending`: filtra `monthEvents` onde `isInstanceCompleted(ev.instanceId, ev.obligationId)` retorna `false`
-- `monthEventsCompleted`: filtra onde retorna `true`
-- Cada lista com paginação independente (novos states `monthPendingPage` e `monthCompletedPage`)
+ALTER TABLE public.email_logs ENABLE ROW LEVEL SECURITY;
 
-### 3. Substituir a seção "Obrigações do mês" por Tabs
-- Dentro do `<Card>`, após o header, renderizar `<Tabs defaultValue="pending">`
-- Tab "A fazer" com contador (badge) e lista paginada de `monthEventsPending`
-- Tab "Concluídas" com contador e lista paginada de `monthEventsCompleted`
-- Reutilizar o mesmo card/evento JSX existente (extrair para bloco reutilizável)
+CREATE POLICY "Authenticated can view email_logs" ON public.email_logs
+  FOR SELECT TO authenticated USING (true);
 
-### 4. States de paginação
-- Substituir `monthPage` por `monthPendingPage` e `monthCompletedPage`
-- Resetar ambos quando mês/filtros mudam
+CREATE POLICY "Authenticated can insert email_logs" ON public.email_logs
+  FOR INSERT TO authenticated WITH CHECK (true);
+```
 
-## Detalhes técnicos
-- A função `isInstanceCompleted` já existe e faz exatamente a verificação necessária
-- O componente `Tabs` do shadcn/ui já está disponível no projeto
-- Nenhuma migração ou mudança de backend necessária
+## 2. Registrar envio — `src/pages/Email.tsx`
+- Após envio bem-sucedido via `smtp-send`, inserir registro na `email_logs` com `department_id`, `recipient_email`, `subject`, `body_html`, `status='sent'`
+- Os campos `client_id`, `obligation_id`, `reference_month` ficam null para envios manuais (preenchidos automaticamente nos envios via obrigações)
+
+## 3. Registrar envio automático — `src/lib/sendActivityEmail.ts`
+- Após envio bem-sucedido, inserir na `email_logs` com `client_id`, `obligation_id` (da instância), `reference_month`, `subject`, `recipient_email`
+
+## 4. Seção "Enviados" — `src/pages/Email.tsx`
+- Adicionar Tabs: "Compor" e "Enviados"
+- Na aba "Enviados": tabela com colunas Data, Hora, Cliente, Obrigação, Competência, Status
+- Buscar `email_logs` com joins em `clients` e `obligations` para exibir nomes
+- Como não há FK formal, buscar clientes e obrigações separadamente e mapear por id
+- Badge colorido para status (verde=sent, vermelho=failed)
+- Paginação e ordenação por `sent_at DESC`
+
+## Arquivos modificados
+- **Migração SQL** — nova tabela `email_logs`
+- `src/pages/Email.tsx` — tabs + tabela de enviados + insert após envio
+- `src/lib/sendActivityEmail.ts` — insert na `email_logs` após envio automático
 
