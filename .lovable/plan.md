@@ -1,26 +1,48 @@
 
 
-# Tornar a página de Obrigações responsiva
+# Exibir mensagens WhatsApp no Chat
 
-## Problema
-A página de Obrigações tem layout fixo que não se adapta a telas menores: badges ficam aglomerados, tabela de atividades não cabe, dialogs não têm scroll, e o header não empilha.
+## Resumo
+Quando uma mensagem WhatsApp for enviada (via API oficial ou EvolutionAPI), ela será automaticamente inserida como mensagem no sistema de chat interno, em uma conversa dedicada ao cliente. As mensagens aparecerão com um indicador visual "WhatsApp".
 
 ## Alterações
 
-### `src/pages/Obligations.tsx`
+### 1. Migração SQL
+- Adicionar coluna `client_id uuid` na tabela `chat_conversations` para vincular conversas a clientes
+- Adicionar coluna `channel text default 'internal'` na tabela `chat_messages` para distinguir mensagens internas de WhatsApp (`'whatsapp'`)
+- Política RLS para permitir inserção via service role (edge function)
 
-1. **Header** (linhas 167-173): Empilhar título e botão em telas pequenas com `flex-col sm:flex-row` e gap.
+### 2. `supabase/functions/whatsapp-send/index.ts`
+Após enviar a mensagem com sucesso pela Meta API, além de registrar em `whatsapp_logs`:
+- Buscar ou criar uma `chat_conversation` vinculada ao `client_id` (nome = nome do cliente + " (WhatsApp)")
+- Garantir que o usuário remetente é participante
+- Inserir a mensagem em `chat_messages` com `message_type: 'whatsapp'` e o conteúdo enviado
 
-2. **Obligation row** (linhas 189-204): Usar `flex-col sm:flex-row` para empilhar nome/badges e botões de ação em mobile. Badges ficam com `flex-wrap`.
+### 3. `src/components/chat/MessageBubble.tsx`
+- Exibir badge/ícone do WhatsApp quando `message_type === 'whatsapp'`
+- Estilo levemente diferente (ícone verde do WhatsApp ao lado do horário)
 
-3. **Activities table** (linhas 216-260): Envolver a tabela em `div` com `overflow-x-auto` para scroll horizontal em telas pequenas. Esconder colunas menos importantes (Tipo Doc., Descrição) em mobile com `hidden md:table-cell`.
+### 4. `src/pages/Chat.tsx`
+- Incluir `message_type` no select de mensagens
+- Passar `messageType` para o `MessageBubble`
 
-4. **Obligation Dialog** (linhas 272-327): Usar `DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto"`. Grid de dias (3 colunas) muda para `grid-cols-1 sm:grid-cols-3`.
+### 5. `src/components/chat/MessageArea.tsx`
+- Propagar `message_type` no `ChatMessage` interface
+- Passar para `MessageBubble`
 
-5. **Activity Dialog** (linhas 330-424): Adicionar `max-h-[90vh] overflow-y-auto` ao DialogContent para scroll vertical em telas pequenas.
+## Fluxo
+```text
+Envio WhatsApp → Meta API → Sucesso
+  ├─ Insere em whatsapp_logs (já existe)
+  └─ Busca/cria chat_conversation para o cliente
+     └─ Insere chat_message com message_type='whatsapp'
+        └─ Realtime atualiza o Chat UI com badge WhatsApp
+```
 
-## Detalhes técnicos
-- Usa apenas classes Tailwind existentes (responsive prefixes `sm:`, `md:`)
-- Nenhuma dependência nova
-- Apenas 1 arquivo modificado: `src/pages/Obligations.tsx`
+## Arquivos modificados
+- Migração SQL (coluna `client_id` em conversations, `channel` em messages)
+- `supabase/functions/whatsapp-send/index.ts`
+- `src/components/chat/MessageBubble.tsx`
+- `src/components/chat/MessageArea.tsx`
+- `src/pages/Chat.tsx`
 
