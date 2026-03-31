@@ -22,6 +22,7 @@ interface MessageAreaProps {
   currentUserId: string;
   onSend: (message: string) => void;
   isGroup?: boolean;
+  avatarUrl?: string;
 }
 
 function formatDateLabel(dateStr: string) {
