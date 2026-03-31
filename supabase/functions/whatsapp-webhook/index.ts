@@ -130,6 +130,23 @@ Deno.serve(async (req) => {
 
       if (existingConv && existingConv.length > 0) {
         conversationId = existingConv[0].id;
+      } else {
+        // Fallback: busca por número no nome (conversa criada antes do vínculo)
+        const { data: convByPhone } = await supabase
+          .from("chat_conversations")
+          .select("id")
+          .ilike("name", `%${phoneRaw}%`)
+          .limit(1);
+
+        if (convByPhone && convByPhone.length > 0) {
+          conversationId = convByPhone[0].id;
+          // Vincular client_id e atualizar nome
+          await supabase
+            .from("chat_conversations")
+            .update({ client_id: clientId, name: `${clientName} (WhatsApp)` })
+            .eq("id", conversationId);
+          console.log("Linked orphan conversation to client:", clientId);
+        }
       }
     } else {
       // No client — look for conversation by phone in name
