@@ -20,7 +20,7 @@ type Instance = { id: string; client_id: string; obligation_id: string; referenc
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
 
 type CalendarEvent = {
@@ -101,7 +101,7 @@ export default function CalendarView() {
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
-      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body'),
+      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url'),
       supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url'),
     ]);
     setInstances((instRes.data as Instance[]) || []);
