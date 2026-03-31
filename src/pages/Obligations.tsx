@@ -247,8 +247,8 @@ export default function Obligations() {
                                     <span className="text-sm">{activityTypeLabels[act.type]}</span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-sm">{getDocTypeName(act.document_type_id) || '—'}</TableCell>
-                                <TableCell className="text-muted-foreground text-sm">{act.description || '—'}</TableCell>
+                                <TableCell className="hidden md:table-cell text-sm">{getDocTypeName(act.document_type_id) || '—'}</TableCell>
+                                <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{act.description || '—'}</TableCell>
                                 {admin && (
                                   <TableCell>
                                     <div className="flex gap-1">
