@@ -115,13 +115,32 @@ Deno.serve(async (req) => {
 
     if (!clientId) {
       console.log("No client found for phone:", phoneRaw);
-      clientName = pushName ? `${pushName} (WhatsApp)` : `WhatsApp ${phoneRaw}`;
+      clientName = pushName || `WhatsApp ${phoneRaw}`;
     }
 
-    // Find existing WhatsApp conversation for this client
+    // === Find existing conversation by whatsapp_phone FIRST ===
     let conversationId: string | null = null;
 
-    if (clientId) {
+    const { data: convByPhone } = await supabase
+      .from("chat_conversations")
+      .select("id, client_id")
+      .eq("whatsapp_phone", phoneRaw)
+      .limit(1);
+
+    if (convByPhone && convByPhone.length > 0) {
+      conversationId = convByPhone[0].id;
+      // Link client if found and not yet linked
+      if (clientId && !convByPhone[0].client_id) {
+        await supabase
+          .from("chat_conversations")
+          .update({ client_id: clientId, name: clientName })
+          .eq("id", conversationId);
+        console.log("Linked client to conversation:", clientId);
+      }
+    }
+
+    // Fallback: search by client_id
+    if (!conversationId && clientId) {
       const { data: existingConv } = await supabase
         .from("chat_conversations")
         .select("id")
@@ -130,42 +149,11 @@ Deno.serve(async (req) => {
 
       if (existingConv && existingConv.length > 0) {
         conversationId = existingConv[0].id;
-      } else {
-        // Fallback: busca por número no nome (conversa criada antes do vínculo)
-        const { data: convByPhone } = await supabase
+        // Save whatsapp_phone for future lookups
+        await supabase
           .from("chat_conversations")
-          .select("id")
-          .ilike("name", `%${phoneRaw}%`)
-          .limit(1);
-
-        if (convByPhone && convByPhone.length > 0) {
-          conversationId = convByPhone[0].id;
-          // Vincular client_id e atualizar nome
-            await supabase
-            .from("chat_conversations")
-            .update({ client_id: clientId, name: clientName })
-            .eq("id", conversationId);
-          console.log("Linked orphan conversation to client:", clientId);
-        }
-      }
-    } else {
-      // No client — look for conversation by phone in name
-      const { data: existingConv } = await supabase
-        .from("chat_conversations")
-        .select("id")
-        .ilike("name", `%${phoneRaw}%`)
-        .limit(1);
-
-      if (existingConv && existingConv.length > 0) {
-        conversationId = existingConv[0].id;
-        // Update name with pushName if available and still has generic phone format
-        if (pushName) {
-          await supabase
-            .from("chat_conversations")
-            .update({ name: pushName })
-            .eq("id", conversationId)
-            .ilike("name", `WhatsApp%`);
-        }
+          .update({ whatsapp_phone: phoneRaw })
+          .eq("id", conversationId);
       }
     }
 
@@ -185,8 +173,6 @@ Deno.serve(async (req) => {
     }
 
     if (!conversationId) {
-      const convName = clientId ? clientName : clientName;
-
       // Fetch WhatsApp profile picture from EvolutionAPI
       let avatarUrl: string | null = null;
       try {
@@ -215,11 +201,12 @@ Deno.serve(async (req) => {
       const { data: newConv, error: convErr } = await supabase
         .from("chat_conversations")
         .insert({
-          name: convName,
+          name: clientId ? clientName : clientName,
           is_group: false,
           created_by: systemUserId,
           client_id: clientId,
           avatar_url: avatarUrl,
+          whatsapp_phone: phoneRaw,
         })
         .select("id")
         .single();
