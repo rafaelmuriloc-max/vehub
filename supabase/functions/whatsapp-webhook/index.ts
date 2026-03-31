@@ -141,9 +141,9 @@ Deno.serve(async (req) => {
         if (convByPhone && convByPhone.length > 0) {
           conversationId = convByPhone[0].id;
           // Vincular client_id e atualizar nome
-          await supabase
+            await supabase
             .from("chat_conversations")
-            .update({ client_id: clientId, name: `${clientName} (WhatsApp)` })
+            .update({ client_id: clientId, name: clientName })
             .eq("id", conversationId);
           console.log("Linked orphan conversation to client:", clientId);
         }
