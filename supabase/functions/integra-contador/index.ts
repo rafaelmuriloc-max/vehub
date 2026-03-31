@@ -284,9 +284,10 @@ Deno.serve(async (req) => {
     const contratanteCnpj = company?.serpro_cnpj?.replace(/\D/g, "") || company?.cnpj?.replace(/\D/g, "") || client.document.replace(/\D/g, "");
     const contratanteNome = company?.company_name || "Escritório Contábil";
 
-    // --- autorPedidoDados = CNPJ do escritório (contratante) ---
-    const autorPedidoCpfCnpj = contratanteCnpj;
-    const autorPedidoTipo = 2; // CNPJ = tipo 2
+    // --- autorPedidoDados = CNPJ/CPF do cliente (contribuinte) para acionar procuração ---
+    const clientCnpjClean = client.document.replace(/\D/g, "");
+    const autorPedidoCpfCnpj = clientCnpjClean;
+    const autorPedidoTipo = clientCnpjClean.length <= 11 ? 1 : 2;
 
     // --- mTLS always uses the office's e-CNPJ certificate ---
     const certUrl = company?.digital_certificate_url;
@@ -422,12 +423,10 @@ Deno.serve(async (req) => {
     }
 
     // Build request body for Integra Contador
-    const clientCnpj = client.document.replace(/\D/g, "");
-
     const requestBody = {
       contratante: { numero: contratanteCnpj, tipo: 2 },
       autorPedidoDados: { numero: autorPedidoCpfCnpj, tipo: autorPedidoTipo },
-      contribuinte: { numero: clientCnpj, tipo: clientCnpj.length <= 11 ? 1 : 2 },
+      contribuinte: { numero: clientCnpjClean, tipo: clientCnpjClean.length <= 11 ? 1 : 2 },
       pedidoDados: {
         idSistema,
         idServico,
