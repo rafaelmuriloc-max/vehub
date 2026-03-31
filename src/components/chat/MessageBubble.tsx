@@ -54,8 +54,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         return (
           <a
             href={mediaUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            download
             className="flex items-center gap-2 p-2 mb-1 rounded-md bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
           >
             <FileDown className="h-5 w-5 text-muted-foreground shrink-0" />
