@@ -1,0 +1,142 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = claimsData.claims.sub;
+    const { to, type, templateName, templateLanguage, templateParams, text, clientId, obligationId, instanceId } = await req.json();
+
+    if (!to) {
+      return new Response(JSON.stringify({ error: "Campo 'to' é obrigatório" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+    const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+
+    if (!accessToken || !phoneNumberId) {
+      return new Response(JSON.stringify({ error: "WhatsApp credentials not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Clean phone number (keep only digits, add country code if needed)
+    let cleanPhone = to.replace(/\D/g, "");
+    if (cleanPhone.startsWith("0")) cleanPhone = "55" + cleanPhone.slice(1);
+    if (!cleanPhone.startsWith("55")) cleanPhone = "55" + cleanPhone;
+
+    // Build message payload
+    let messagePayload: Record<string, unknown>;
+
+    if (type === "template" && templateName) {
+      messagePayload = {
+        messaging_product: "whatsapp",
+        to: cleanPhone,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: templateLanguage || "pt_BR" },
+          ...(templateParams ? { components: templateParams } : {}),
+        },
+      };
+    } else {
+      // Text message
+      messagePayload = {
+        messaging_product: "whatsapp",
+        to: cleanPhone,
+        type: "text",
+        text: { body: text || "" },
+      };
+    }
+
+    const metaResponse = await fetch(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(messagePayload),
+      }
+    );
+
+    const metaData = await metaResponse.json();
+
+    if (!metaResponse.ok) {
+      console.error("Meta API error:", JSON.stringify(metaData));
+      return new Response(
+        JSON.stringify({ error: metaData.error?.message || "Erro ao enviar WhatsApp", details: metaData }),
+        { status: metaResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const wamid = metaData.messages?.[0]?.id || null;
+
+    // Log in whatsapp_logs
+    const supabaseService = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    await supabaseService.from("whatsapp_logs").insert({
+      client_id: clientId || null,
+      obligation_id: obligationId || null,
+      instance_id: instanceId || null,
+      recipient_phone: cleanPhone,
+      template_name: templateName || null,
+      template_params: templateParams || null,
+      body_text: text || null,
+      status: "sent",
+      wamid,
+      sent_by: userId,
+    });
+
+    return new Response(JSON.stringify({ success: true, wamid }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("whatsapp-send error:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
