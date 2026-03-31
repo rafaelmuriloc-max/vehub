@@ -302,11 +302,14 @@ export default function Email() {
                           <TableCell>{log.obligation_id ? (obligationsMap[log.obligation_id] || '—') : '—'}</TableCell>
                           <TableCell>{formatCompetencia(log.reference_month)}</TableCell>
                           <TableCell>
-                            <Badge
-                              variant={log.status === 'sent' ? 'default' : 'destructive'}
-                              className={log.status === 'sent' ? 'bg-green-600 hover:bg-green-700' : ''}
+                          <Badge
+                              variant={log.status === 'opened' ? 'default' : log.status === 'sent' ? 'default' : 'destructive'}
+                              className={
+                                log.status === 'opened' ? 'bg-blue-600 hover:bg-blue-700' :
+                                log.status === 'sent' ? 'bg-green-600 hover:bg-green-700' : ''
+                              }
                             >
-                              {log.status === 'sent' ? 'Enviado' : 'Falhou'}
+                              {log.status === 'opened' ? 'Aberto' : log.status === 'sent' ? 'Enviado' : 'Falhou'}
                             </Badge>
                           </TableCell>
                         </TableRow>
