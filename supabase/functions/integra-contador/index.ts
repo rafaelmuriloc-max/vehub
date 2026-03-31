@@ -148,7 +148,8 @@ async function obtainProcuradorToken(
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
   // 3. Convert to base64
-  const xmlBase64 = btoa(signedXml);
+  const xmlBytes = new TextEncoder().encode(signedXml);
+  const xmlBase64 = btoa(String.fromCharCode(...xmlBytes));
 
   // 4. Build request body for AUTENTICAPROCURADOR
   const requestBody = {
