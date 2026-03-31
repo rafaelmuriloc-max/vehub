@@ -1,15 +1,33 @@
 
 
-# Enviar e-mail com nome do remetente (usuário logado)
+# Enviar procuração do cliente no Integra Contador
 
-## Resumo
-Ao enviar um e-mail, o campo `from` do SMTP passará a incluir o nome do usuário logado, no formato `"Nome do Usuário" <email@departamento.com>`.
+## Problema
+Atualmente, o `autorPedidoDados` é configurado como o CNPJ do escritório (igual ao `contratante`), então a condição `autorPedidoCpfCnpj !== contratanteCnpj` nunca é verdadeira e o fluxo de procuração nunca é acionado.
 
-## Mudanças
+## Solução
+Alterar o `autorPedidoDados` para usar o CNPJ do **cliente** (contribuinte), fazendo com que o fluxo de procuração seja acionado automaticamente em todas as chamadas.
 
-### 1. Edge Function `smtp-send` — aceitar `senderName`
-- Aceitar campo opcional `senderName` no body da requisição
-- Alterar `sendOptions.from` de `dept.smtp_email` para `"${senderName}" <${dept.smtp_email}>` quando `senderName` for fornecido
+## Mudança em `supabase/functions/integra-contador/index.ts`
 
-### 2. `src/pages/Email.tsx` — enviar `senderName`
-- Usar `profile?.full_name` do `useAuth()` como `senderName` no body da chamada `
+### Linhas 287-289 — trocar autorPedidoDados
+De:
+```ts
+const autorPedidoCpfCnpj = contratanteCnpj;
+const autorPedidoTipo = 2;
+```
+Para:
+```ts
+const clientCnpjClean = client.document.replace(/\D/g, "");
+const autorPedidoCpfCnpj = clientCnpjClean;
+const autorPedidoTipo = clientCnpjClean.length <= 11 ? 1 : 2;
+```
+
+Isso faz com que `autorPedidoCpfCnpj !== contratanteCnpj` seja verdadeiro (a menos que o cliente seja o próprio escritório), acionando o fluxo de procuração existente que já gera o XML assinado e obtém o `autenticar_procurador_token`.
+
+### Remover variável duplicada (linha 425)
+A variável `clientCnpj` já será criada antes, então reutilizar `clientCnpjClean` no `requestBody`.
+
+## Arquivo modificado
+- `supabase/functions/integra-contador/index.ts`
+
