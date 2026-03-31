@@ -186,18 +186,20 @@ export default function Obligations() {
               const obActivities = activities.filter(a => a.obligation_id === ob.id);
               return (
                 <div key={ob.id} className="border rounded-lg">
-                  <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50" onClick={() => setExpandedObligation(isExpanded ? null : ob.id)}>
-                    <div className="flex items-center gap-2">
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2 cursor-pointer hover:bg-muted/50" onClick={() => setExpandedObligation(isExpanded ? null : ob.id)}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                      <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="font-medium">{ob.name}</span>
-                      <Badge variant="outline" className="ml-2">{ob.recurrence}</Badge>
-                      {ob.alert_day && <Badge className="ml-1 bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
-                      {ob.target_day && <Badge className="ml-1 bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
-                      {ob.due_day && <Badge className="ml-1 bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="outline">{ob.recurrence}</Badge>
+                        {ob.alert_day && <Badge className="bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
+                        {ob.target_day && <Badge className="bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
+                        {ob.due_day && <Badge className="bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
+                      </div>
                     </div>
                     {admin && (
-                      <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                         <Button size="icon" variant="ghost" onClick={() => openEditObligation(ob)}><Pencil className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => deleteObligation(ob.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
