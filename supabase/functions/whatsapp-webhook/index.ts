@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         if (pushName) {
           await supabase
             .from("chat_conversations")
-            .update({ name: `${pushName} (WhatsApp)` })
+            .update({ name: pushName })
             .eq("id", conversationId)
             .ilike("name", `WhatsApp%`);
         }
