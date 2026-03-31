@@ -95,6 +95,25 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
   if (error) return { success: false, error: error.message };
   if (data?.error) return { success: false, error: data.error };
 
+  // Fetch obligation_id from instance for logging
+  const { data: instanceData } = await supabase
+    .from('obligation_instances')
+    .select('obligation_id, reference_month')
+    .eq('id', instanceId)
+    .single();
+
+  // Log the sent email
+  await supabase.from('email_logs' as any).insert({
+    department_id: activity.email_department_id,
+    recipient_email: recipientEmail,
+    subject: finalSubject,
+    body_html: finalBody,
+    client_id: clientId,
+    obligation_id: instanceData?.obligation_id || null,
+    reference_month: referenceMonth,
+    status: 'sent',
+  } as any);
+
   // Mark activity as completed
   const { data: existing } = await supabase
     .from('obligation_activity_completions')
