@@ -106,7 +106,7 @@ export default function Chat() {
     const loadMessages = async () => {
       const { data } = await supabase
         .from('chat_messages')
-        .select('id, content, sender_id, created_at, read_at')
+        .select('id, content, sender_id, created_at, read_at, message_type')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: true });
 

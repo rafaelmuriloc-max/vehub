@@ -72,7 +72,7 @@ serve(async (req) => {
         template: {
           name: templateName,
           language: { code: templateLanguage || "pt_BR" },
-          ...(templateParams ? { components: templateParams } : {}),
+          ...(templateParams && templateParams.length > 0 ? { components: templateParams } : {}),
         },
       };
     } else {
@@ -109,12 +109,13 @@ serve(async (req) => {
 
     const wamid = metaData.messages?.[0]?.id || null;
 
-    // Log in whatsapp_logs
+    // Service role client for logging
     const supabaseService = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Log in whatsapp_logs
     await supabaseService.from("whatsapp_logs").insert({
       client_id: clientId || null,
       obligation_id: obligationId || null,
@@ -127,6 +128,87 @@ serve(async (req) => {
       wamid,
       sent_by: userId,
     });
+
+    // --- Insert message into chat system ---
+    const messageContent = text || (templateName ? `[Template: ${templateName}]` : "Mensagem WhatsApp enviada");
+
+    try {
+      if (clientId) {
+        // Find existing WhatsApp conversation for this client
+        const { data: existingConv } = await supabaseService
+          .from("chat_conversations")
+          .select("id")
+          .eq("client_id", clientId)
+          .limit(1)
+          .single();
+
+        let conversationId: string;
+
+        if (existingConv) {
+          conversationId = existingConv.id;
+        } else {
+          // Get client name
+          const { data: client } = await supabaseService
+            .from("clients")
+            .select("company_name")
+            .eq("id", clientId)
+            .single();
+
+          const convName = client?.company_name
+            ? `${client.company_name} (WhatsApp)`
+            : "WhatsApp";
+
+          // Create conversation
+          const { data: newConv } = await supabaseService
+            .from("chat_conversations")
+            .insert({
+              name: convName,
+              is_group: false,
+              created_by: userId,
+              client_id: clientId,
+            })
+            .select("id")
+            .single();
+
+          if (!newConv) throw new Error("Failed to create conversation");
+          conversationId = newConv.id;
+        }
+
+        // Ensure sender is participant
+        const { data: existingPart } = await supabaseService
+          .from("chat_participants")
+          .select("id")
+          .eq("conversation_id", conversationId)
+          .eq("user_id", userId)
+          .limit(1)
+          .maybeSingle();
+
+        if (!existingPart) {
+          await supabaseService.from("chat_participants").insert({
+            conversation_id: conversationId,
+            user_id: userId,
+          });
+        }
+
+        // Insert chat message
+        await supabaseService.from("chat_messages").insert({
+          conversation_id: conversationId,
+          sender_id: userId,
+          content: messageContent,
+          message_type: "whatsapp",
+          channel: "whatsapp",
+        });
+
+        // Update conversation timestamp
+        await supabaseService
+          .from("chat_conversations")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", conversationId);
+      }
+    } catch (chatErr) {
+      console.error("Error inserting chat message:", chatErr);
+      // Don't fail the WhatsApp send if chat insert fails
+    }
 
     return new Response(JSON.stringify({ success: true, wamid }), {
       status: 200,

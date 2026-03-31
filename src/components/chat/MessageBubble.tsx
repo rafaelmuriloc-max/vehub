@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, Phone } from 'lucide-react';
 
 interface MessageBubbleProps {
   content: string;
@@ -9,9 +9,12 @@ interface MessageBubbleProps {
   isRead: boolean;
   senderName?: string;
   isGroup?: boolean;
+  messageType?: string;
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType }: MessageBubbleProps) {
+  const isWhatsApp = messageType === 'whatsapp';
+
   return (
     <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-1`}>
       <div
@@ -23,6 +26,12 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
       >
         {isGroup && !isMine && senderName && (
           <p className="text-xs font-semibold text-primary mb-0.5">{senderName}</p>
+        )}
+        {isWhatsApp && (
+          <div className="flex items-center gap-1 mb-0.5">
+            <Phone className="h-3 w-3 text-green-600 fill-green-600" />
+            <span className="text-[10px] font-medium text-green-600">WhatsApp</span>
+          </div>
         )}
         <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
         <div className={`flex items-center gap-1 justify-end mt-0.5 ${isMine ? '-mr-1' : ''}`}>
