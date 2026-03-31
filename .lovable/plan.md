@@ -1,36 +1,74 @@
 
+# Corrigir exibição da foto do WhatsApp no chat
 
-# Corrigir conversas duplicadas e foto de perfil
+## Diagnóstico
+A foto já está sendo:
+- buscada pela `whatsapp-webhook`
+- salva em `chat_conversations.avatar_url`
+- carregada no frontend em `src/pages/Chat.tsx`
+- passada para `ConversationList` e `MessageArea`
 
-## Problema raiz
+Ou seja: o problema não está no banco nem na query do chat.
 
-### Conversas duplicadas
-O webhook busca conversas existentes por `client_id` ou pelo número de telefone no `name` da conversa (`ilike("name", "%554791004860%")`). Depois que o nome foi atualizado para "Rafael Murilo", o número de telefone não está mais no nome, então a busca falha e uma nova conversa é criada a cada mensagem.
+## Causa raiz
+O bloqueio está no `index.html`, na política de segurança (`Content-Security-Policy`).
 
-### Foto não aparece
-A foto está sendo salva corretamente no banco (confirmado nos logs e network requests). O problema é que conversas duplicadas são criadas sem a foto (a foto só é buscada na criação da primeira conversa, mas como cria uma nova a cada vez, algumas ficam sem).
+Hoje o projeto só permite imagens destes domínios:
+- `self`
+- `data:`
+- `blob:`
+- `https://*.supabase.co`
+- `https://storage.googleapis.com`
 
-## Solução
+Mas a foto do perfil do WhatsApp está vindo de URL como:
+- `https://pps.whatsapp.net/...`
 
-Adicionar uma coluna `whatsapp_phone` na tabela `chat_conversations` para armazenar o número de telefone do WhatsApp. Isso permite buscar a conversa existente de forma confiável, independente do nome.
+Então o navegador impede o carregamento da imagem, e o componente cai no fallback com a inicial do nome.
 
-## Alterações
+## Implementação proposta
 
-### 1. Migração SQL
-- Adicionar coluna `whatsapp_phone text` em `chat_conversations`
-- Backfill: extrair números das conversas existentes que têm nome com formato de telefone ou foram criadas pelo webhook
-- Criar índice para busca rápida
+### 1. Ajustar a CSP em `index.html`
+Atualizar `img-src` para permitir o domínio da foto do WhatsApp:
+- adicionar `https://pps.whatsapp.net`
 
-### 2. `supabase/functions/whatsapp-webhook/index.ts`
-- Ao buscar conversa existente, usar `whatsapp_phone` como critério principal (antes de `client_id` ou nome)
-- Ao criar conversa, salvar o `phoneRaw` na coluna `whatsapp_phone`
-- Ordem de busca: `whatsapp_phone` -> `client_id` -> fallback por nome
+Se necessário, incluir também o host de CDN alternativo usado pelo WhatsApp caso apareça nos logs futuros.
 
-### 3. `supabase/functions/whatsapp-send/index.ts`
-- Ao criar conversa de envio, também salvar o telefone em `whatsapp_phone`
+### 2. Melhorar fallback do avatar no chat
+Nos componentes:
+- `src/components/chat/ConversationList.tsx`
+- `src/components/chat/MessageArea.tsx`
 
-## Arquivos modificados
-- Migração SQL -- coluna `whatsapp_phone` + backfill
-- `supabase/functions/whatsapp-webhook/index.ts` -- buscar/salvar por `whatsapp_phone`
-- `supabase/functions/whatsapp-send/index.ts` -- salvar `whatsapp_phone`
+Ajustar o uso de `AvatarImage` para continuar exibindo a inicial quando a URL falhar, mas sem mascarar problemas silenciosamente. A estrutura atual já está quase correta; a principal correção é a liberação da origem da imagem.
 
+### 3. Validar fluxo de dados existente
+Manter a lógica atual em:
+- `src/pages/Chat.tsx`
+- `supabase/functions/whatsapp-webhook/index.ts`
+
+Porque ela já está retornando a `avatar_url` corretamente.
+
+## Arquivos a alterar
+- `index.html` — liberar `https://pps.whatsapp.net` em `img-src`
+- opcionalmente revisar:
+  - `src/components/chat/ConversationList.tsx`
+  - `src/components/chat/MessageArea.tsx`
+
+## Detalhes técnicos
+Evidência encontrada:
+- a resposta de `chat_conversations` já contém `avatar_url` preenchido
+- exemplo atual: `avatar_url = https://pps.whatsapp.net/...`
+- a CSP atual bloqueia esse domínio
+
+Fluxo atual:
+```text
+Evolution API -> whatsapp-webhook -> chat_conversations.avatar_url
+                                      ->
+frontend Chat.tsx -> ConversationList / MessageArea -> AvatarImage
+                                      X bloqueado pela CSP
+```
+
+## Resultado esperado
+Depois da correção:
+- a lista de conversas mostrará a foto do cliente
+- o cabeçalho da conversa mostrará a mesma foto
+- o fallback para inicial continuará funcionando quando não houver foto real
