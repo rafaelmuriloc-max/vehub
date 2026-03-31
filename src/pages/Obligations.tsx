@@ -164,12 +164,12 @@ export default function Obligations() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Obrigações</h1>
-          <p className="text-muted-foreground">Cadastro de obrigações e atividades por departamento</p>
+          <p className="text-sm text-muted-foreground">Cadastro de obrigações e atividades por departamento</p>
         </div>
-        {admin && <Button onClick={openNewObligation}><Plus className="h-4 w-4 mr-2" />Nova Obrigação</Button>}
+        {admin && <Button onClick={openNewObligation} className="w-full sm:w-auto"><Plus className="h-4 w-4 mr-2" />Nova Obrigação</Button>}
       </div>
 
       {groupedByDept.length === 0 && (
@@ -186,18 +186,20 @@ export default function Obligations() {
               const obActivities = activities.filter(a => a.obligation_id === ob.id);
               return (
                 <div key={ob.id} className="border rounded-lg">
-                  <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50" onClick={() => setExpandedObligation(isExpanded ? null : ob.id)}>
-                    <div className="flex items-center gap-2">
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2 cursor-pointer hover:bg-muted/50" onClick={() => setExpandedObligation(isExpanded ? null : ob.id)}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                      <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="font-medium">{ob.name}</span>
-                      <Badge variant="outline" className="ml-2">{ob.recurrence}</Badge>
-                      {ob.alert_day && <Badge className="ml-1 bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
-                      {ob.target_day && <Badge className="ml-1 bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
-                      {ob.due_day && <Badge className="ml-1 bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="outline">{ob.recurrence}</Badge>
+                        {ob.alert_day && <Badge className="bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
+                        {ob.target_day && <Badge className="bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
+                        {ob.due_day && <Badge className="bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
+                      </div>
                     </div>
                     {admin && (
-                      <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                         <Button size="icon" variant="ghost" onClick={() => openEditObligation(ob)}><Pencil className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => deleteObligation(ob.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
@@ -213,14 +215,15 @@ export default function Obligations() {
                       {obActivities.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nenhuma atividade cadastrada.</p>
                       ) : (
+                        <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead className="w-8">#</TableHead>
                               <TableHead>Título</TableHead>
                               <TableHead>Tipo</TableHead>
-                              <TableHead>Tipo Doc.</TableHead>
-                              <TableHead>Descrição</TableHead>
+                              <TableHead className="hidden md:table-cell">Tipo Doc.</TableHead>
+                              <TableHead className="hidden md:table-cell">Descrição</TableHead>
                               {admin && <TableHead className="w-20">Ações</TableHead>}
                             </TableRow>
                           </TableHeader>
@@ -244,8 +247,8 @@ export default function Obligations() {
                                     <span className="text-sm">{activityTypeLabels[act.type]}</span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-sm">{getDocTypeName(act.document_type_id) || '—'}</TableCell>
-                                <TableCell className="text-muted-foreground text-sm">{act.description || '—'}</TableCell>
+                                <TableCell className="hidden md:table-cell text-sm">{getDocTypeName(act.document_type_id) || '—'}</TableCell>
+                                <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{act.description || '—'}</TableCell>
                                 {admin && (
                                   <TableCell>
                                     <div className="flex gap-1">
@@ -258,6 +261,7 @@ export default function Obligations() {
                             ))}
                           </TableBody>
                         </Table>
+                        </div>
                       )}
                     </div>
                   )}
@@ -270,7 +274,7 @@ export default function Obligations() {
 
       {/* Obligation Dialog */}
       <Dialog open={obligationOpen} onOpenChange={setObligationOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingObligation ? 'Editar Obrigação' : 'Nova Obrigação'}</DialogTitle></DialogHeader>
           <form onSubmit={saveObligation} className="space-y-4">
             <div className="space-y-2"><Label>Nome *</Label><Input value={obligationForm.name} onChange={e => setObligationForm({ ...obligationForm, name: e.target.value })} required /></div>
@@ -295,7 +299,7 @@ export default function Obligations() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-green-500 inline-block" />
@@ -328,7 +332,7 @@ export default function Obligations() {
 
       {/* Activity Dialog */}
       <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingActivity ? 'Editar Atividade' : 'Nova Atividade'}</DialogTitle></DialogHeader>
           <form onSubmit={saveActivity} className="space-y-4">
             <div className="space-y-2"><Label>Título *</Label><Input value={activityForm.title} onChange={e => setActivityForm({ ...activityForm, title: e.target.value })} required /></div>
