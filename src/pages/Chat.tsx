@@ -286,6 +286,7 @@ export default function Chat() {
             onSend={sendMessage}
             isGroup={conversations.find(c => c.id === activeConvId)?.isGroup}
             avatarUrl={conversations.find(c => c.id === activeConvId)?.avatarUrl}
+            companyNames={conversations.find(c => c.id === activeConvId)?.companyNames}
           />
         </div>
       )}
