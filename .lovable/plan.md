@@ -1,48 +1,67 @@
 
 
-# Exibir mensagens WhatsApp no Chat
+# Receber mensagens WhatsApp via webhook EvolutionAPI no Chat
 
 ## Resumo
-Quando uma mensagem WhatsApp for enviada (via API oficial ou EvolutionAPI), ela será automaticamente inserida como mensagem no sistema de chat interno, em uma conversa dedicada ao cliente. As mensagens aparecerão com um indicador visual "WhatsApp".
+Criar uma Edge Function pública que recebe webhooks da EvolutionAPI. Quando uma mensagem de texto chega, o sistema identifica o cliente pelo número de telefone, encontra/cria a conversa WhatsApp e insere a mensagem no chat com indicador visual de "recebida".
 
 ## Alterações
 
-### 1. Migração SQL
-- Adicionar coluna `client_id uuid` na tabela `chat_conversations` para vincular conversas a clientes
-- Adicionar coluna `channel text default 'internal'` na tabela `chat_messages` para distinguir mensagens internas de WhatsApp (`'whatsapp'`)
-- Política RLS para permitir inserção via service role (edge function)
+### 1. Nova Edge Function: `whatsapp-webhook`
+- **Pública** (sem JWT) — a EvolutionAPI chama diretamente
+- Recebe POST com payload da EvolutionAPI (evento `messages.upsert`)
+- Extrai: número do remetente, texto da mensagem, timestamp
+- Busca o cliente pelo `contact_phone` na tabela `clients`
+- Encontra/cria `chat_conversation` vinculada ao `client_id`
+- Insere `chat_message` com `channel: 'whatsapp'`, `message_type: 'whatsapp'`
+- O `sender_id` será o `created_by` da conversa (o usuário interno responsável), já que o remetente é externo
+- Suporte a verificação GET (health check) da EvolutionAPI
 
-### 2. `supabase/functions/whatsapp-send/index.ts`
-Após enviar a mensagem com sucesso pela Meta API, além de registrar em `whatsapp_logs`:
-- Buscar ou criar uma `chat_conversation` vinculada ao `client_id` (nome = nome do cliente + " (WhatsApp)")
-- Garantir que o usuário remetente é participante
-- Inserir a mensagem em `chat_messages` com `message_type: 'whatsapp'` e o conteúdo enviado
+### 2. Migração SQL (opcional)
+- Nenhuma alteração de schema necessária — as colunas `client_id`, `channel` e `message_type` já existem
 
-### 3. `src/components/chat/MessageBubble.tsx`
-- Exibir badge/ícone do WhatsApp quando `message_type === 'whatsapp'`
-- Estilo levemente diferente (ícone verde do WhatsApp ao lado do horário)
+### 3. Configuração
+- Adicionar `[functions.whatsapp-webhook]` com `verify_jwt = false` no `supabase/config.toml`
 
-### 4. `src/pages/Chat.tsx`
-- Incluir `message_type` no select de mensagens
-- Passar `messageType` para o `MessageBubble`
+### 4. UI — Identificar mensagens recebidas
+- Atualizar `MessageBubble.tsx` para mostrar mensagens WhatsApp recebidas (de clientes) com estilo diferente: ícone WhatsApp + label "Cliente" como nome do remetente
+- No `whatsapp-webhook`, o `sender_id` será um ID "sistema" ou o criador da conversa, e o `content` terá prefixo para distinguir
 
-### 5. `src/components/chat/MessageArea.tsx`
-- Propagar `message_type` no `ChatMessage` interface
-- Passar para `MessageBubble`
+## Payload esperado da EvolutionAPI
+
+```text
+POST /whatsapp-webhook
+{
+  "event": "messages.upsert",
+  "instance": "nome-instancia",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": false,
+      "id": "..."
+    },
+    "message": {
+      "conversation": "Texto da mensagem"
+      // ou extendedTextMessage.text
+    },
+    "messageTimestamp": 1234567890
+  }
+}
+```
 
 ## Fluxo
+
 ```text
-Envio WhatsApp → Meta API → Sucesso
-  ├─ Insere em whatsapp_logs (já existe)
-  └─ Busca/cria chat_conversation para o cliente
-     └─ Insere chat_message com message_type='whatsapp'
-        └─ Realtime atualiza o Chat UI com badge WhatsApp
+Cliente responde WhatsApp
+  → EvolutionAPI recebe
+    → POST para whatsapp-webhook Edge Function
+      → Identifica cliente por telefone
+      → Encontra/cria conversa WhatsApp
+      → Insere chat_message (channel='whatsapp', message_type='whatsapp')
+        → Realtime atualiza Chat UI
 ```
 
 ## Arquivos modificados
-- Migração SQL (coluna `client_id` em conversations, `channel` em messages)
-- `supabase/functions/whatsapp-send/index.ts`
-- `src/components/chat/MessageBubble.tsx`
-- `src/components/chat/MessageArea.tsx`
-- `src/pages/Chat.tsx`
+- `supabase/functions/whatsapp-webhook/index.ts` — nova Edge Function
+- `supabase/config.toml` — adicionar função com verify_jwt = false
 
