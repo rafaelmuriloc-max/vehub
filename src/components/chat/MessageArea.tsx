@@ -14,6 +14,7 @@ export interface ChatMessage {
   read_at: string | null;
   sender_name?: string;
   message_type?: string;
+  media_url?: string;
 }
 
 interface MessageAreaProps {
@@ -97,6 +98,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                 senderName={msg.sender_name}
                 isGroup={isGroup}
                 messageType={msg.message_type}
+                mediaUrl={msg.media_url}
               />
             ))}
           </div>

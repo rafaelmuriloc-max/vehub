@@ -58,17 +58,42 @@ Deno.serve(async (req) => {
     }
 
     const messageObj = data.message || {};
-    const text =
-      messageObj.conversation ||
-      messageObj.extendedTextMessage?.text ||
-      messageObj.imageMessage?.caption ||
-      messageObj.videoMessage?.caption ||
-      messageObj.documentMessage?.caption ||
-      null;
 
-    if (!text) {
-      console.log("No text content in message, skipping");
-      return new Response(JSON.stringify({ ok: true, skipped: "no_text" }), {
+    // Detect message type and extract text/caption
+    let text: string | null = null;
+    let messageType = "whatsapp_incoming";
+    let mediaKey: string | null = null; // which media type key to use
+
+    if (messageObj.conversation) {
+      text = messageObj.conversation;
+    } else if (messageObj.extendedTextMessage?.text) {
+      text = messageObj.extendedTextMessage.text;
+    } else if (messageObj.imageMessage) {
+      text = messageObj.imageMessage.caption || "";
+      messageType = "whatsapp_image";
+      mediaKey = "imageMessage";
+    } else if (messageObj.videoMessage) {
+      text = messageObj.videoMessage.caption || "";
+      messageType = "whatsapp_video";
+      mediaKey = "videoMessage";
+    } else if (messageObj.audioMessage) {
+      text = "";
+      messageType = "whatsapp_audio";
+      mediaKey = "audioMessage";
+    } else if (messageObj.documentMessage) {
+      text = messageObj.documentMessage.caption || messageObj.documentMessage.fileName || "";
+      messageType = "whatsapp_document";
+      mediaKey = "documentMessage";
+    } else if (messageObj.stickerMessage) {
+      text = "";
+      messageType = "whatsapp_image";
+      mediaKey = "stickerMessage";
+    }
+
+    // If no recognizable content at all, skip
+    if (text === null) {
+      console.log("No recognizable message content, skipping");
+      return new Response(JSON.stringify({ ok: true, skipped: "no_content" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -76,6 +101,72 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
+
+    // Download media if applicable
+    let mediaUrl: string | null = null;
+    if (mediaKey) {
+      try {
+        const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+        const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
+        const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
+
+        if (evolutionUrl && evolutionApiKey && evolutionInstance) {
+          console.log("Downloading media via EvolutionAPI...");
+          const mediaRes = await fetch(
+            `${evolutionUrl}/chat/getBase64FromMediaMessage/${evolutionInstance}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: evolutionApiKey },
+              body: JSON.stringify({ message: { key, message: messageObj } }),
+            }
+          );
+
+          if (mediaRes.ok) {
+            const mediaData = await mediaRes.json();
+            const base64 = mediaData.base64;
+            const mimetype = mediaData.mimetype || "application/octet-stream";
+            const fileName = mediaData.fileName || `media_${Date.now()}`;
+
+            if (base64) {
+              // Determine file extension
+              const extMap: Record<string, string> = {
+                "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+                "audio/ogg": "ogg", "audio/ogg; codecs=opus": "ogg", "audio/mpeg": "mp3",
+                "video/mp4": "mp4", "application/pdf": "pdf",
+                "image/gif": "gif",
+              };
+              const ext = extMap[mimetype] || fileName.split(".").pop() || "bin";
+              const storagePath = `chat-media/${phoneRaw}_${Date.now()}.${ext}`;
+
+              // Convert base64 to Uint8Array
+              const binaryStr = atob(base64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+              }
+
+              const { error: uploadErr } = await supabase.storage
+                .from("chat-media")
+                .upload(storagePath, bytes, { contentType: mimetype, upsert: false });
+
+              if (uploadErr) {
+                console.error("Storage upload error:", uploadErr);
+              } else {
+                const { data: pubUrl } = supabase.storage
+                  .from("chat-media")
+                  .getPublicUrl(storagePath);
+                mediaUrl = pubUrl?.publicUrl || null;
+                console.log("Media uploaded:", mediaUrl);
+              }
+            }
+          } else {
+            console.log("EvolutionAPI media download failed:", mediaRes.status);
+          }
+        }
+      } catch (e) {
+        console.error("Error downloading media:", e);
+      }
+    }
 
     // Find client by phone
     const phoneSuffixes = [phoneRaw];
@@ -96,7 +187,6 @@ Deno.serve(async (req) => {
 
     let clientId: string | null = null;
     let clientName = "Cliente";
-
     const pushName = data.pushName || null;
 
     for (const phone of formatted) {
@@ -129,13 +219,11 @@ Deno.serve(async (req) => {
 
     if (convByPhone && convByPhone.length > 0) {
       conversationId = convByPhone[0].id;
-      // Link client if found and not yet linked
       if (clientId && !convByPhone[0].client_id) {
         await supabase
           .from("chat_conversations")
           .update({ client_id: clientId, name: clientName })
           .eq("id", conversationId);
-        console.log("Linked client to conversation:", clientId);
       }
     }
 
@@ -149,7 +237,6 @@ Deno.serve(async (req) => {
 
       if (existingConv && existingConv.length > 0) {
         conversationId = existingConv[0].id;
-        // Save whatsapp_phone for future lookups
         await supabase
           .from("chat_conversations")
           .update({ whatsapp_phone: phoneRaw })
@@ -173,7 +260,6 @@ Deno.serve(async (req) => {
     }
 
     if (!conversationId) {
-      // Fetch WhatsApp profile picture from EvolutionAPI
       let avatarUrl: string | null = null;
       try {
         const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
@@ -191,7 +277,6 @@ Deno.serve(async (req) => {
           if (profileRes.ok) {
             const profileData = await profileRes.json();
             avatarUrl = profileData?.profilePictureUrl || null;
-            console.log("Profile picture URL:", avatarUrl);
           }
         }
       } catch (e) {
@@ -201,7 +286,7 @@ Deno.serve(async (req) => {
       const { data: newConv, error: convErr } = await supabase
         .from("chat_conversations")
         .insert({
-          name: clientId ? clientName : clientName,
+          name: clientName,
           is_group: false,
           created_by: systemUserId,
           client_id: clientId,
@@ -221,7 +306,6 @@ Deno.serve(async (req) => {
 
       conversationId = newConv.id;
     } else if (clientId) {
-      // Update conversation name if it still has a generic phone-number format
       const { data: existingConvData } = await supabase
         .from("chat_conversations")
         .select("name")
@@ -254,13 +338,18 @@ Deno.serve(async (req) => {
     }
 
     // Insert the received message
-    const { error: msgErr } = await supabase.from("chat_messages").insert({
+    const insertData: Record<string, unknown> = {
       conversation_id: conversationId,
       sender_id: systemUserId,
-      content: text,
-      message_type: "whatsapp_incoming",
+      content: text || "",
+      message_type: messageType,
       channel: "whatsapp",
-    });
+    };
+    if (mediaUrl) {
+      insertData.media_url = mediaUrl;
+    }
+
+    const { error: msgErr } = await supabase.from("chat_messages").insert(insertData);
 
     if (msgErr) {
       console.error("Error inserting message:", msgErr);
@@ -275,7 +364,7 @@ Deno.serve(async (req) => {
       .update({ updated_at: new Date().toISOString() })
       .eq("id", conversationId);
 
-    console.log("Message saved successfully for conversation:", conversationId);
+    console.log("Message saved successfully for conversation:", conversationId, "type:", messageType);
 
     return new Response(JSON.stringify({ ok: true, conversation_id: conversationId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
