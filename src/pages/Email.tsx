@@ -290,6 +290,7 @@ export default function Email() {
                         <TableHead>Obrigação</TableHead>
                         <TableHead>Competência</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Aberto em</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
