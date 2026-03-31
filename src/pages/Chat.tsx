@@ -97,6 +97,7 @@ export default function Chat() {
         lastMessageAt: lastMsg?.created_at || conv.created_at,
         unreadCount: unreadCount || 0,
         isGroup: conv.is_group,
+        avatarUrl: conv.avatar_url || undefined,
       });
     }
 
