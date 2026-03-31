@@ -30,19 +30,26 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
   }
 
   // Fetch client info
-  const { data: client } = await supabase.from('clients').select('company_name, contact_phone').eq('id', clientId).single();
+  const { data: client } = await supabase.from('clients').select('company_name, contact_phone, contact_name').eq('id', clientId).single();
+
+  // Fetch company settings for nome_contabilidade
+  const { data: companySettings } = await supabase.from('company_settings').select('company_name').limit(1).single();
 
   // Try department-specific contact first
   let recipientPhone = client?.contact_phone || null;
+  let contactName = client?.contact_name || '';
   if (departmentId) {
     const { data: deptContact } = await supabase
       .from('client_department_contacts')
-      .select('contact_phone')
+      .select('contact_phone, contact_name')
       .eq('client_id', clientId)
       .eq('department_id', departmentId)
       .maybeSingle();
     if (deptContact?.contact_phone) {
       recipientPhone = deptContact.contact_phone;
+    }
+    if (deptContact?.contact_name) {
+      contactName = deptContact.contact_name;
     }
   }
 
@@ -56,11 +63,24 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     ? new Date(refDate.getFullYear(), refDate.getMonth(), dueDay).toLocaleDateString('pt-BR')
     : '';
 
+  // Variables for [bracket] replacement (text fallback)
   const variables: Record<string, string> = {
     '[Nome_da_Empresa]': client?.company_name || '',
     '[Competencia]': competencia,
     '[Nome_da_Obrigação]': obligationName,
     '[Vencimento]': vencimento,
+  };
+
+  // Variables for {{mustache}} replacement (template params)
+  const templateVars: Record<string, string> = {
+    'tratamento_contato': contactName,
+    'nome_contabilidade': companySettings?.company_name || '',
+    'cliente': client?.company_name || '',
+    'nome_tipo_tarefa': obligationName,
+    'nome_da_obrigacao': obligationName,
+    'titulo_doc_anexo': obligationName,
+    'competencia': competencia,
+    'vencimento': vencimento,
   };
 
   // Fetch obligation_id from instance
@@ -78,14 +98,29 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     instanceId,
   };
 
-  if (activity.whatsapp_message_body) {
-    // Prioritize text message (no template approval needed)
-    body.type = 'text';
-    body.text = replaceVariables(activity.whatsapp_message_body, variables);
-  } else if (activity.whatsapp_template_name) {
+  if (activity.whatsapp_template_name) {
+    // Template message (required for business-initiated conversations)
     body.type = 'template';
     body.templateName = activity.whatsapp_template_name;
     body.templateLanguage = 'pt_BR';
+
+    // Extract {{var}} from message body to build positional parameters
+    if (activity.whatsapp_message_body) {
+      const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
+      if (matches.length > 0) {
+        body.templateParams = [{
+          type: 'body',
+          parameters: matches.map(m => ({
+            type: 'text',
+            text: templateVars[m[1]] || m[0],
+          })),
+        }];
+      }
+    }
+  } else if (activity.whatsapp_message_body) {
+    // Text fallback (only works within 24h conversation window)
+    body.type = 'text';
+    body.text = replaceVariables(activity.whatsapp_message_body, variables);
   }
 
   const { data, error } = await supabase.functions.invoke('whatsapp-send', { body });
