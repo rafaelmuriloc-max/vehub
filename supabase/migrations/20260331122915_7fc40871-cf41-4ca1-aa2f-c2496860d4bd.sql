@@ -1,0 +1,1 @@
+ALTER TABLE public.obligation_activities ADD COLUMN IF NOT EXISTS whatsapp_button_url text;

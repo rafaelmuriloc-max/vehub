@@ -757,6 +757,7 @@ export type Database = {
           order: number
           title: string
           type: Database["public"]["Enums"]["activity_type"]
+          whatsapp_button_url: string | null
           whatsapp_message_body: string | null
           whatsapp_template_name: string | null
         }
@@ -773,6 +774,7 @@ export type Database = {
           order?: number
           title: string
           type?: Database["public"]["Enums"]["activity_type"]
+          whatsapp_button_url?: string | null
           whatsapp_message_body?: string | null
           whatsapp_template_name?: string | null
         }
@@ -789,6 +791,7 @@ export type Database = {
           order?: number
           title?: string
           type?: Database["public"]["Enums"]["activity_type"]
+          whatsapp_button_url?: string | null
           whatsapp_message_body?: string | null
           whatsapp_template_name?: string | null
         }

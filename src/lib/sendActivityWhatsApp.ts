@@ -5,6 +5,7 @@ interface SendActivityWhatsAppParams {
     id: string;
     whatsapp_template_name: string | null;
     whatsapp_message_body: string | null;
+    whatsapp_button_url?: string | null;
   };
   instanceId: string;
   clientId: string;
@@ -104,18 +105,35 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     body.templateName = activity.whatsapp_template_name;
     body.templateLanguage = 'pt_BR';
 
-    // Extract {{var}} from message body to build positional parameters
+    const components: Record<string, unknown>[] = [];
+
+    // Extract {{var}} from message body to build named parameters
     if (activity.whatsapp_message_body) {
       const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
       if (matches.length > 0) {
-        body.templateParams = [{
+        components.push({
           type: 'body',
           parameters: matches.map(m => ({
             type: 'text',
-            text: templateVars[m[1]] || m[0],
+            parameter_name: m[1],
+            text: templateVars[m[1]] || '',
           })),
-        }];
+        });
       }
+    }
+
+    // Button URL param (index 0)
+    if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: activity.whatsapp_button_url }],
+      });
+    }
+
+    if (components.length > 0) {
+      body.templateParams = components;
     }
   } else if (activity.whatsapp_message_body) {
     // Text fallback (only works within 24h conversation window)
