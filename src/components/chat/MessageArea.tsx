@@ -14,6 +14,7 @@ export interface ChatMessage {
   read_at: string | null;
   sender_name?: string;
   message_type?: string;
+  media_url?: string;
 }
 
 interface MessageAreaProps {
