@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageCircle } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
