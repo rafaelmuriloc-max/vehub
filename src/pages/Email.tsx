@@ -313,6 +313,13 @@ export default function Email() {
                               {log.status === 'opened' ? 'Aberto' : log.status === 'sent' ? 'Enviado' : 'Falhou'}
                             </Badge>
                           </TableCell>
+                          <TableCell>
+                            {log.opened_at ? (
+                              <span className="text-xs">
+                                {new Date(log.opened_at).toLocaleDateString('pt-BR')} {new Date(log.opened_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            ) : '—'}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

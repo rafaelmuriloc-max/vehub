@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.classify-document]
 verify_jwt = false
+
+[functions.email-track]
+verify_jwt = false
