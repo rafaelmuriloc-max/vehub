@@ -164,12 +164,12 @@ export default function Obligations() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Obrigações</h1>
-          <p className="text-muted-foreground">Cadastro de obrigações e atividades por departamento</p>
+          <p className="text-sm text-muted-foreground">Cadastro de obrigações e atividades por departamento</p>
         </div>
-        {admin && <Button onClick={openNewObligation}><Plus className="h-4 w-4 mr-2" />Nova Obrigação</Button>}
+        {admin && <Button onClick={openNewObligation} className="w-full sm:w-auto"><Plus className="h-4 w-4 mr-2" />Nova Obrigação</Button>}
       </div>
 
       {groupedByDept.length === 0 && (
