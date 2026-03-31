@@ -554,6 +554,7 @@ export type Database = {
           department_id: string
           id: string
           obligation_id: string | null
+          opened_at: string | null
           recipient_email: string
           reference_month: string | null
           sent_at: string
@@ -567,6 +568,7 @@ export type Database = {
           department_id: string
           id?: string
           obligation_id?: string | null
+          opened_at?: string | null
           recipient_email: string
           reference_month?: string | null
           sent_at?: string
@@ -580,6 +582,7 @@ export type Database = {
           department_id?: string
           id?: string
           obligation_id?: string | null
+          opened_at?: string | null
           recipient_email?: string
           reference_month?: string | null
           sent_at?: string

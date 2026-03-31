@@ -109,13 +109,27 @@ export default function EmailComposeDialog({
     try {
       const finalSubject = replaceVariables(subject);
       const finalBody = replaceVariables(body);
+      const htmlContent = `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>`;
+
+      // Insert log first for tracking pixel
+      const { data: logData } = await supabase.from('email_logs').insert({
+        department_id: departmentId,
+        recipient_email: to,
+        subject: finalSubject,
+        body_html: htmlContent,
+        status: 'sent',
+      }).select('id').single();
+
+      const trackingPixel = logData?.id
+        ? `<img src="https://ismgjjvarzzfsbdpthot.supabase.co/functions/v1/email-track?id=${logData.id}" width="1" height="1" style="display:none" />`
+        : '';
 
       const { data, error } = await supabase.functions.invoke('smtp-send', {
         body: {
           departmentId,
           to,
           subject: finalSubject,
-          html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>`,
+          html: htmlContent + trackingPixel,
           attachments: attachments.length > 0 ? attachments : undefined,
         },
       });

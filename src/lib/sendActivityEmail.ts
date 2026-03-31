@@ -82,19 +82,6 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
       fileName: fc.file_url!.split('/').pop() || 'attachment',
     }));
 
-  const { data, error } = await supabase.functions.invoke('smtp-send', {
-    body: {
-      departmentId: activity.email_department_id,
-      to: recipientEmail,
-      subject: finalSubject,
-      html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>`,
-      attachments: attachments.length > 0 ? attachments : undefined,
-    },
-  });
-
-  if (error) return { success: false, error: error.message };
-  if (data?.error) return { success: false, error: data.error };
-
   // Fetch obligation_id from instance for logging
   const { data: instanceData } = await supabase
     .from('obligation_instances')
@@ -102,8 +89,8 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
     .eq('id', instanceId)
     .single();
 
-  // Log the sent email
-  await supabase.from('email_logs' as any).insert({
+  // Insert log first to get id for tracking pixel
+  const { data: logData } = await supabase.from('email_logs').insert({
     department_id: activity.email_department_id,
     recipient_email: recipientEmail,
     subject: finalSubject,
@@ -112,7 +99,26 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
     obligation_id: instanceData?.obligation_id || null,
     reference_month: referenceMonth,
     status: 'sent',
-  } as any);
+  }).select('id').single();
+
+  const trackingPixel = logData?.id
+    ? `<img src="https://ismgjjvarzzfsbdpthot.supabase.co/functions/v1/email-track?id=${logData.id}" width="1" height="1" style="display:none" />`
+    : '';
+
+  const htmlBody = `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>${trackingPixel}`;
+
+  const { data, error } = await supabase.functions.invoke('smtp-send', {
+    body: {
+      departmentId: activity.email_department_id,
+      to: recipientEmail,
+      subject: finalSubject,
+      html: htmlBody,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    },
+  });
+
+  if (error) return { success: false, error: error.message };
+  if (data?.error) return { success: false, error: data.error };
 
   // Mark activity as completed
   const { data: existing } = await supabase

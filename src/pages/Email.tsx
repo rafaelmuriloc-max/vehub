@@ -28,6 +28,7 @@ interface EmailLog {
   reference_month: string | null;
   status: string;
   sent_at: string;
+  opened_at: string | null;
 }
 
 const PAGE_SIZE = 15;
@@ -121,21 +122,27 @@ export default function Email() {
     setSending(true);
     try {
       const htmlContent = `<div style="font-family: sans-serif; white-space: pre-wrap;">${body}</div>`;
-      const { data, error } = await supabase.functions.invoke('smtp-send', {
-        body: { departmentId, to, subject, html: htmlContent },
-      });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      // Log the sent email
-      await supabase.from('email_logs' as any).insert({
+      // Insert log first to get the id for tracking pixel
+      const { data: logData } = await supabase.from('email_logs').insert({
         department_id: departmentId,
         recipient_email: to,
         subject,
         body_html: htmlContent,
         status: 'sent',
-      } as any);
+      }).select('id').single();
+
+      const trackingPixel = logData?.id
+        ? `<img src="https://ismgjjvarzzfsbdpthot.supabase.co/functions/v1/email-track?id=${logData.id}" width="1" height="1" style="display:none" />`
+        : '';
+      const htmlWithPixel = htmlContent + trackingPixel;
+
+      const { data, error } = await supabase.functions.invoke('smtp-send', {
+        body: { departmentId, to, subject, html: htmlWithPixel },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({ title: 'E-mail enviado com sucesso!' });
       setTo('');
@@ -284,6 +291,7 @@ export default function Email() {
                         <TableHead>Obrigação</TableHead>
                         <TableHead>Competência</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Aberto em</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -296,12 +304,22 @@ export default function Email() {
                           <TableCell>{log.obligation_id ? (obligationsMap[log.obligation_id] || '—') : '—'}</TableCell>
                           <TableCell>{formatCompetencia(log.reference_month)}</TableCell>
                           <TableCell>
-                            <Badge
-                              variant={log.status === 'sent' ? 'default' : 'destructive'}
-                              className={log.status === 'sent' ? 'bg-green-600 hover:bg-green-700' : ''}
+                          <Badge
+                              variant={log.status === 'opened' ? 'default' : log.status === 'sent' ? 'default' : 'destructive'}
+                              className={
+                                log.status === 'opened' ? 'bg-blue-600 hover:bg-blue-700' :
+                                log.status === 'sent' ? 'bg-green-600 hover:bg-green-700' : ''
+                              }
                             >
-                              {log.status === 'sent' ? 'Enviado' : 'Falhou'}
+                              {log.status === 'opened' ? 'Aberto' : log.status === 'sent' ? 'Enviado' : 'Falhou'}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {log.opened_at ? (
+                              <span className="text-xs">
+                                {new Date(log.opened_at).toLocaleDateString('pt-BR')} {new Date(log.opened_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            ) : '—'}
                           </TableCell>
                         </TableRow>
                       ))}
