@@ -757,6 +757,8 @@ export type Database = {
           order: number
           title: string
           type: Database["public"]["Enums"]["activity_type"]
+          whatsapp_message_body: string | null
+          whatsapp_template_name: string | null
         }
         Insert: {
           auto_start?: boolean
@@ -771,6 +773,8 @@ export type Database = {
           order?: number
           title: string
           type?: Database["public"]["Enums"]["activity_type"]
+          whatsapp_message_body?: string | null
+          whatsapp_template_name?: string | null
         }
         Update: {
           auto_start?: boolean
@@ -785,6 +789,8 @@ export type Database = {
           order?: number
           title?: string
           type?: Database["public"]["Enums"]["activity_type"]
+          whatsapp_message_body?: string | null
+          whatsapp_template_name?: string | null
         }
         Relationships: [
           {
@@ -1172,6 +1178,54 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_logs: {
+        Row: {
+          body_text: string | null
+          client_id: string | null
+          created_at: string
+          id: string
+          instance_id: string | null
+          obligation_id: string | null
+          recipient_phone: string
+          sent_at: string
+          sent_by: string | null
+          status: string
+          template_name: string | null
+          template_params: Json | null
+          wamid: string | null
+        }
+        Insert: {
+          body_text?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          instance_id?: string | null
+          obligation_id?: string | null
+          recipient_phone: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          template_name?: string | null
+          template_params?: Json | null
+          wamid?: string | null
+        }
+        Update: {
+          body_text?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          instance_id?: string | null
+          obligation_id?: string | null
+          recipient_phone?: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          template_name?: string | null
+          template_params?: Json | null
+          wamid?: string | null
         }
         Relationships: []
       }
