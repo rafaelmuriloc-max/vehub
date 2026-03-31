@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
     }
 
     if (!conversationId) {
-      const convName = clientId ? `${clientName} (WhatsApp)` : clientName;
+      const convName = clientId ? clientName : clientName;
 
       const { data: newConv, error: convErr } = await supabase
         .from("chat_conversations")
