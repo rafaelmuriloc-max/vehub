@@ -263,6 +263,7 @@ export default function Chat() {
             currentUserId={user?.id || ''}
             onSend={sendMessage}
             isGroup={conversations.find(c => c.id === activeConvId)?.isGroup}
+            avatarUrl={conversations.find(c => c.id === activeConvId)?.avatarUrl}
           />
         </div>
       )}
