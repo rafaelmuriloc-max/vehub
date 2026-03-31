@@ -1,67 +1,90 @@
 
 
-# Receber mensagens WhatsApp via webhook EvolutionAPI no Chat
+# Mensagens WhatsApp não aparecem no Chat — Diagnóstico e Correção
 
-## Resumo
-Criar uma Edge Function pública que recebe webhooks da EvolutionAPI. Quando uma mensagem de texto chega, o sistema identifica o cliente pelo número de telefone, encontra/cria a conversa WhatsApp e insere a mensagem no chat com indicador visual de "recebida".
+## Problema
+Analisando os logs e o código, o webhook **está funcionando** — as mensagens são salvas no banco. O problema é de **visibilidade**: o Chat só mostra conversas onde o usuário logado é participante (`chat_participants`). 
 
-## Alterações
+O webhook adiciona apenas o **primeiro admin** encontrado como participante. Se o usuário logado não é esse admin específico, ele não vê a conversa nem as mensagens.
 
-### 1. Nova Edge Function: `whatsapp-webhook`
-- **Pública** (sem JWT) — a EvolutionAPI chama diretamente
-- Recebe POST com payload da EvolutionAPI (evento `messages.upsert`)
-- Extrai: número do remetente, texto da mensagem, timestamp
-- Busca o cliente pelo `contact_phone` na tabela `clients`
-- Encontra/cria `chat_conversation` vinculada ao `client_id`
-- Insere `chat_message` com `channel: 'whatsapp'`, `message_type: 'whatsapp'`
-- O `sender_id` será o `created_by` da conversa (o usuário interno responsável), já que o remetente é externo
-- Suporte a verificação GET (health check) da EvolutionAPI
+Além disso, existem 2 problemas adicionais:
+1. O `whatsapp-send` e o `whatsapp-webhook` podem criar conversas separadas para o mesmo cliente (um busca por `client_id`, outro também, mas podem não encontrar a mesma conversa)
+2. A RLS de `chat_messages` exige que o `sender_id = auth.uid()` para INSERT — mas o webhook usa `service_role` (bypassa RLS), o que está OK. Porém, a atualização de `read_at` pode falhar se o usuário não for o sender.
 
-### 2. Migração SQL (opcional)
-- Nenhuma alteração de schema necessária — as colunas `client_id`, `channel` e `message_type` já existem
+## Correções
 
-### 3. Configuração
-- Adicionar `[functions.whatsapp-webhook]` com `verify_jwt = false` no `supabase/config.toml`
+### 1. `supabase/functions/whatsapp-webhook/index.ts`
+Após criar a conversa e adicionar o admin como participante, **adicionar TODOS os admins** como participantes da conversa WhatsApp, para que todos vejam as mensagens:
 
-### 4. UI — Identificar mensagens recebidas
-- Atualizar `MessageBubble.tsx` para mostrar mensagens WhatsApp recebidas (de clientes) com estilo diferente: ícone WhatsApp + label "Cliente" como nome do remetente
-- No `whatsapp-webhook`, o `sender_id` será um ID "sistema" ou o criador da conversa, e o `content` terá prefixo para distinguir
+```typescript
+// Get ALL admin users
+const { data: adminRoles } = await supabase
+  .from("user_roles")
+  .select("user_id")
+  .eq("role", "admin");
 
-## Payload esperado da EvolutionAPI
-
-```text
-POST /whatsapp-webhook
-{
-  "event": "messages.upsert",
-  "instance": "nome-instancia",
-  "data": {
-    "key": {
-      "remoteJid": "5511999999999@s.whatsapp.net",
-      "fromMe": false,
-      "id": "..."
-    },
-    "message": {
-      "conversation": "Texto da mensagem"
-      // ou extendedTextMessage.text
-    },
-    "messageTimestamp": 1234567890
+// Add all admins as participants
+for (const admin of adminRoles || []) {
+  const { data: existing } = await supabase
+    .from("chat_participants")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", admin.user_id)
+    .maybeSingle();
+  
+  if (!existing) {
+    await supabase.from("chat_participants").insert({
+      conversation_id: conversationId,
+      user_id: admin.user_id,
+    });
   }
 }
 ```
 
-## Fluxo
+### 2. `supabase/functions/whatsapp-send/index.ts`
+Mesmo ajuste: ao criar uma conversa WhatsApp via envio, adicionar todos os admins como participantes (não apenas o remetente).
 
-```text
-Cliente responde WhatsApp
-  → EvolutionAPI recebe
-    → POST para whatsapp-webhook Edge Function
-      → Identifica cliente por telefone
-      → Encontra/cria conversa WhatsApp
-      → Insere chat_message (channel='whatsapp', message_type='whatsapp')
-        → Realtime atualiza Chat UI
+### 3. Migração SQL — adicionar admins existentes às conversas WhatsApp já criadas
+Inserir participantes faltantes nas conversas WhatsApp existentes para que os admins atuais passem a vê-las imediatamente.
+
+```sql
+INSERT INTO chat_participants (conversation_id, user_id)
+SELECT cc.id, ur.user_id
+FROM chat_conversations cc
+CROSS JOIN user_roles ur
+WHERE ur.role = 'admin'
+  AND cc.name ILIKE '%WhatsApp%'
+  AND NOT EXISTS (
+    SELECT 1 FROM chat_participants cp
+    WHERE cp.conversation_id = cc.id AND cp.user_id = ur.user_id
+  );
+```
+
+### 4. RLS — permitir update de `read_at` em mensagens da conversa (não apenas próprias)
+A política atual de UPDATE em `chat_messages` exige `sender_id = auth.uid()`. Isso impede que um participante marque como lida uma mensagem recebida. Adicionar política:
+
+```sql
+CREATE POLICY "Participants can mark messages as read"
+ON public.chat_messages FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM chat_participants
+    WHERE chat_participants.conversation_id = chat_messages.conversation_id
+    AND chat_participants.user_id = auth.uid()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM chat_participants
+    WHERE chat_participants.conversation_id = chat_messages.conversation_id
+    AND chat_participants.user_id = auth.uid()
+  )
+);
 ```
 
 ## Arquivos modificados
-- `supabase/functions/whatsapp-webhook/index.ts` — nova Edge Function
-- `supabase/config.toml` — adicionar função com verify_jwt = false
+- `supabase/functions/whatsapp-webhook/index.ts` — adicionar todos os admins como participantes
+- `supabase/functions/whatsapp-send/index.ts` — adicionar todos os admins como participantes
+- Migração SQL — backfill participantes + nova RLS policy
 
