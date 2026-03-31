@@ -1,13 +1,17 @@
 
 
-# Corrigir download de documentos no chat
+# Corrigir download de documentos cross-origin no chat
 
 ## Problema
-O link do documento usa `target="_blank"` que tenta abrir em nova aba, mas não funciona. Precisa forçar o download.
+O atributo `download` no `<a>` é ignorado pelo navegador quando a URL é cross-origin (de outro domínio, como Supabase Storage). O clique não faz nada.
+
+## Solução
+Usar `fetch()` para baixar o arquivo como blob e criar um link temporário com `URL.createObjectURL()` para forçar o download programaticamente.
 
 ## Alteração
 
 ### `src/components/chat/MessageBubble.tsx`
-- No case `whatsapp_document`, adicionar atributo `download` no `<a>` para forçar o download do arquivo
-- Remover `target="_blank"` pois o comportamento desejado é baixar, não abrir
+- Substituir o `<a download>` por um `<button>` com handler `onClick`
+- No handler: `fetch(mediaUrl)` → `.blob()` → `URL.createObjectURL()` → criar `<a>` temporário com `download` + `.click()` → `URL.revokeObjectURL()`
+- Isso funciona porque o blob criado é local (same-origin)
 
