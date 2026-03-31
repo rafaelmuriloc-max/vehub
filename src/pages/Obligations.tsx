@@ -299,7 +299,7 @@ export default function Obligations() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-green-500 inline-block" />
