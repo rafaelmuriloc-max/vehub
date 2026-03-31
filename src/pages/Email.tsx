@@ -140,7 +140,7 @@ export default function Email() {
       const htmlWithPixel = htmlContent + trackingPixel;
 
       const { data, error } = await supabase.functions.invoke('smtp-send', {
-        body: { departmentId, to, subject, html: htmlWithPixel },
+        body: { departmentId, to, subject, html: htmlWithPixel, senderName: profile?.full_name || undefined },
       });
 
       if (error) throw error;

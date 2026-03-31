@@ -128,8 +128,10 @@ serve(async (req) => {
       },
     });
 
+    const fromAddress = senderName ? `"${senderName}" <${dept.smtp_email}>` : dept.smtp_email;
+
     const sendOptions: any = {
-      from: dept.smtp_email,
+      from: fromAddress,
       to: to,
       subject: subject,
       content: "auto",

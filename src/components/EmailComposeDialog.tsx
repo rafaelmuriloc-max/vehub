@@ -133,6 +133,7 @@ export default function EmailComposeDialog({
           subject: finalSubject,
           html: htmlContent + trackingPixel,
           attachments: attachments.length > 0 ? attachments : undefined,
+          senderName: profile?.full_name || undefined,
         },
       });
 
