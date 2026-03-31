@@ -1,54 +1,36 @@
 
 
-# Exibir foto de perfil do WhatsApp do cliente no Chat
+# Corrigir conversas duplicadas e foto de perfil
 
-## Problema
-Atualmente, o avatar na lista de conversas e no cabeçalho mostra apenas a inicial do nome. O usuário quer exibir a foto de perfil real do WhatsApp do cliente.
+## Problema raiz
 
-## Abordagem
-A EvolutionAPI oferece um endpoint para buscar a foto de perfil de um contato:
-```
-POST {EVOLUTION_API_URL}/chat/fetchProfilePictureUrl/{instance}
-Body: { "number": "554791004860" }
-```
-Precisamos armazenar a URL da foto na conversa e exibi-la no UI.
+### Conversas duplicadas
+O webhook busca conversas existentes por `client_id` ou pelo número de telefone no `name` da conversa (`ilike("name", "%554791004860%")`). Depois que o nome foi atualizado para "Rafael Murilo", o número de telefone não está mais no nome, então a busca falha e uma nova conversa é criada a cada mensagem.
 
-## Pré-requisitos — Secrets necessários
-Não existem secrets da EvolutionAPI configurados. Precisamos de:
-- **EVOLUTION_API_URL** — URL base da instância EvolutionAPI (ex: `https://api.evolution.example.com`)
-- **EVOLUTION_API_KEY** — Chave de API da EvolutionAPI
-- **EVOLUTION_INSTANCE_NAME** — Nome da instância (ex: `minha-instancia`)
+### Foto não aparece
+A foto está sendo salva corretamente no banco (confirmado nos logs e network requests). O problema é que conversas duplicadas são criadas sem a foto (a foto só é buscada na criação da primeira conversa, mas como cria uma nova a cada vez, algumas ficam sem).
+
+## Solução
+
+Adicionar uma coluna `whatsapp_phone` na tabela `chat_conversations` para armazenar o número de telefone do WhatsApp. Isso permite buscar a conversa existente de forma confiável, independente do nome.
 
 ## Alterações
 
 ### 1. Migração SQL
-Adicionar coluna `avatar_url text` na tabela `chat_conversations`.
+- Adicionar coluna `whatsapp_phone text` em `chat_conversations`
+- Backfill: extrair números das conversas existentes que têm nome com formato de telefone ou foram criadas pelo webhook
+- Criar índice para busca rápida
 
 ### 2. `supabase/functions/whatsapp-webhook/index.ts`
-Quando uma conversa é **criada** (nova), chamar a EvolutionAPI para buscar a foto de perfil e salvar na coluna `avatar_url`:
-```typescript
-const profileRes = await fetch(`${EVOLUTION_URL}/chat/fetchProfilePictureUrl/${INSTANCE}`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json", apikey: EVOLUTION_KEY },
-  body: JSON.stringify({ number: phoneRaw })
-});
-const profileData = await profileRes.json();
-// profileData.profilePictureUrl → salvar em chat_conversations.avatar_url
-```
+- Ao buscar conversa existente, usar `whatsapp_phone` como critério principal (antes de `client_id` ou nome)
+- Ao criar conversa, salvar o `phoneRaw` na coluna `whatsapp_phone`
+- Ordem de busca: `whatsapp_phone` -> `client_id` -> fallback por nome
 
-### 3. `src/pages/Chat.tsx`
-Ao carregar conversas, incluir o campo `avatar_url` na query e passá-lo para os componentes.
-
-### 4. `src/components/chat/ConversationList.tsx`
-Usar `AvatarImage` com a URL do avatar quando disponível, fallback para a inicial.
-
-### 5. `src/components/chat/MessageArea.tsx`
-No header, exibir a foto do avatar quando disponível.
+### 3. `supabase/functions/whatsapp-send/index.ts`
+- Ao criar conversa de envio, também salvar o telefone em `whatsapp_phone`
 
 ## Arquivos modificados
-- Migração SQL — coluna `avatar_url`
-- `supabase/functions/whatsapp-webhook/index.ts` — buscar foto de perfil
-- `src/pages/Chat.tsx` — incluir `avatar_url` no carregamento
-- `src/components/chat/ConversationList.tsx` — exibir foto
-- `src/components/chat/MessageArea.tsx` — exibir foto no header
+- Migração SQL -- coluna `whatsapp_phone` + backfill
+- `supabase/functions/whatsapp-webhook/index.ts` -- buscar/salvar por `whatsapp_phone`
+- `supabase/functions/whatsapp-send/index.ts` -- salvar `whatsapp_phone`
 
