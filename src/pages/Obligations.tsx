@@ -261,6 +261,7 @@ export default function Obligations() {
                             ))}
                           </TableBody>
                         </Table>
+                        </div>
                       )}
                     </div>
                   )}
