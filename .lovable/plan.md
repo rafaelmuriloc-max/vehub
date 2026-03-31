@@ -1,90 +1,28 @@
 
 
-# Mensagens WhatsApp não aparecem no Chat — Diagnóstico e Correção
+# Mostrar nome do contato no chat WhatsApp
 
 ## Problema
-Analisando os logs e o código, o webhook **está funcionando** — as mensagens são salvas no banco. O problema é de **visibilidade**: o Chat só mostra conversas onde o usuário logado é participante (`chat_participants`). 
+Atualmente, quando um cliente não é encontrado no banco, a conversa é criada com o nome `WhatsApp {número}`. Mesmo quando o cliente é encontrado, usa `company_name` (razão social), não o `contact_name` (nome do contato). Além disso, na bolha de mensagem recebida aparece apenas "📱 Cliente" genérico.
 
-O webhook adiciona apenas o **primeiro admin** encontrado como participante. Se o usuário logado não é esse admin específico, ele não vê a conversa nem as mensagens.
-
-Além disso, existem 2 problemas adicionais:
-1. O `whatsapp-send` e o `whatsapp-webhook` podem criar conversas separadas para o mesmo cliente (um busca por `client_id`, outro também, mas podem não encontrar a mesma conversa)
-2. A RLS de `chat_messages` exige que o `sender_id = auth.uid()` para INSERT — mas o webhook usa `service_role` (bypassa RLS), o que está OK. Porém, a atualização de `read_at` pode falhar se o usuário não for o sender.
-
-## Correções
+## Alterações
 
 ### 1. `supabase/functions/whatsapp-webhook/index.ts`
-Após criar a conversa e adicionar o admin como participante, **adicionar TODOS os admins** como participantes da conversa WhatsApp, para que todos vejam as mensagens:
-
-```typescript
-// Get ALL admin users
-const { data: adminRoles } = await supabase
-  .from("user_roles")
-  .select("user_id")
-  .eq("role", "admin");
-
-// Add all admins as participants
-for (const admin of adminRoles || []) {
-  const { data: existing } = await supabase
-    .from("chat_participants")
-    .select("id")
-    .eq("conversation_id", conversationId)
-    .eq("user_id", admin.user_id)
-    .maybeSingle();
-  
-  if (!existing) {
-    await supabase.from("chat_participants").insert({
-      conversation_id: conversationId,
-      user_id: admin.user_id,
-    });
-  }
-}
-```
+- Ao encontrar o cliente, usar `contact_name` como prioridade para o nome da conversa, caindo para `company_name` se não houver
+- Extrair `pushName` do payload da EvolutionAPI (`data.pushName`) como fallback para quando o cliente não é encontrado — em vez de mostrar apenas o número
+- Formato da conversa: `{contact_name || company_name} (WhatsApp)` ou `{pushName} (WhatsApp)` ou `WhatsApp {número}`
 
 ### 2. `supabase/functions/whatsapp-send/index.ts`
-Mesmo ajuste: ao criar uma conversa WhatsApp via envio, adicionar todos os admins como participantes (não apenas o remetente).
+- Ao criar conversa, buscar `contact_name` além de `company_name` e usar como prioridade no nome
 
-### 3. Migração SQL — adicionar admins existentes às conversas WhatsApp já criadas
-Inserir participantes faltantes nas conversas WhatsApp existentes para que os admins atuais passem a vê-las imediatamente.
+### 3. `src/components/chat/MessageBubble.tsx`
+- Na linha de "📱 Cliente", exibir o `senderName` se disponível: `📱 {senderName}` em vez de `📱 Cliente`
 
-```sql
-INSERT INTO chat_participants (conversation_id, user_id)
-SELECT cc.id, ur.user_id
-FROM chat_conversations cc
-CROSS JOIN user_roles ur
-WHERE ur.role = 'admin'
-  AND cc.name ILIKE '%WhatsApp%'
-  AND NOT EXISTS (
-    SELECT 1 FROM chat_participants cp
-    WHERE cp.conversation_id = cc.id AND cp.user_id = ur.user_id
-  );
-```
-
-### 4. RLS — permitir update de `read_at` em mensagens da conversa (não apenas próprias)
-A política atual de UPDATE em `chat_messages` exige `sender_id = auth.uid()`. Isso impede que um participante marque como lida uma mensagem recebida. Adicionar política:
-
-```sql
-CREATE POLICY "Participants can mark messages as read"
-ON public.chat_messages FOR UPDATE
-TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM chat_participants
-    WHERE chat_participants.conversation_id = chat_messages.conversation_id
-    AND chat_participants.user_id = auth.uid()
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM chat_participants
-    WHERE chat_participants.conversation_id = chat_messages.conversation_id
-    AND chat_participants.user_id = auth.uid()
-  )
-);
-```
+### 4. `src/pages/Chat.tsx`
+- Nenhuma alteração necessária — o nome da conversa já é exibido no header pelo `conversationName`
 
 ## Arquivos modificados
-- `supabase/functions/whatsapp-webhook/index.ts` — adicionar todos os admins como participantes
-- `supabase/functions/whatsapp-send/index.ts` — adicionar todos os admins como participantes
-- Migração SQL — backfill participantes + nova RLS policy
+- `supabase/functions/whatsapp-webhook/index.ts` — usar `contact_name` e `pushName`
+- `supabase/functions/whatsapp-send/index.ts` — usar `contact_name` na criação da conversa
+- `src/components/chat/MessageBubble.tsx` — exibir nome do contato na bolha
 
