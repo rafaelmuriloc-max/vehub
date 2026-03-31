@@ -546,6 +546,48 @@ export type Database = {
           },
         ]
       }
+      email_logs: {
+        Row: {
+          body_html: string | null
+          client_id: string | null
+          created_at: string
+          department_id: string
+          id: string
+          obligation_id: string | null
+          recipient_email: string
+          reference_month: string | null
+          sent_at: string
+          status: string
+          subject: string
+        }
+        Insert: {
+          body_html?: string | null
+          client_id?: string | null
+          created_at?: string
+          department_id: string
+          id?: string
+          obligation_id?: string | null
+          recipient_email: string
+          reference_month?: string | null
+          sent_at?: string
+          status?: string
+          subject: string
+        }
+        Update: {
+          body_html?: string | null
+          client_id?: string | null
+          created_at?: string
+          department_id?: string
+          id?: string
+          obligation_id?: string | null
+          recipient_email?: string
+          reference_month?: string | null
+          sent_at?: string
+          status?: string
+          subject?: string
+        }
+        Relationships: []
+      }
       financial_categories: {
         Row: {
           created_at: string
