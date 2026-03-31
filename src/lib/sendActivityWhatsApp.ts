@@ -98,7 +98,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     instanceId,
   };
 
-  if (activity.whatsapp_template_name) {
+  if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
     // Template message (required for business-initiated conversations)
     body.type = 'template';
     body.templateName = activity.whatsapp_template_name;
