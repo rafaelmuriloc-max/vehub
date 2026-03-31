@@ -131,21 +131,15 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
       }
     }
 
-    // Button URL param (index 0) — auto-generate from attached docs or use manual fallback
-    if (hasDocuments) {
-      // Auto-generate: pass instanceId as the dynamic suffix for the template button URL
+    // Button URL param (index 0) — only if template has a button (whatsapp_button_url configured)
+    if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
+      // If there are attached documents, use instanceId as dynamic suffix for the public link
+      const buttonValue = hasDocuments ? instanceId : activity.whatsapp_button_url;
       components.push({
         type: 'button',
         sub_type: 'url',
         index: '0',
-        parameters: [{ type: 'text', text: instanceId }],
-      });
-    } else if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
-      components.push({
-        type: 'button',
-        sub_type: 'url',
-        index: '0',
-        parameters: [{ type: 'text', text: activity.whatsapp_button_url }],
+        parameters: [{ type: 'text', text: buttonValue }],
       });
     }
 
