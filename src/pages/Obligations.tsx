@@ -215,14 +215,15 @@ export default function Obligations() {
                       {obActivities.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nenhuma atividade cadastrada.</p>
                       ) : (
+                        <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead className="w-8">#</TableHead>
                               <TableHead>Título</TableHead>
                               <TableHead>Tipo</TableHead>
-                              <TableHead>Tipo Doc.</TableHead>
-                              <TableHead>Descrição</TableHead>
+                              <TableHead className="hidden md:table-cell">Tipo Doc.</TableHead>
+                              <TableHead className="hidden md:table-cell">Descrição</TableHead>
                               {admin && <TableHead className="w-20">Ações</TableHead>}
                             </TableRow>
                           </TableHeader>
