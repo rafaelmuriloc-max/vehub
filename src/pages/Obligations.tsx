@@ -373,6 +373,11 @@ export default function Obligations() {
                     ))}
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label>URL do Botão (opcional)</Label>
+                  <Input value={activityForm.whatsapp_button_url} onChange={e => setActivityForm({ ...activityForm, whatsapp_button_url: e.target.value })} placeholder="Ex: https://seusite.com/pagamento" />
+                  <p className="text-xs text-muted-foreground">URL dinâmica para botões do template (se aplicável)</p>
+                </div>
               </>
             )}
             {activityForm.type === 'email' && (
