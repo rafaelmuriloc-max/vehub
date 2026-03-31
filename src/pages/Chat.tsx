@@ -90,6 +90,27 @@ export default function Chat() {
       }
 
       const lastMsg = lastMsgs?.[0];
+      // Lookup companies linked via department contacts phone
+      let companyNames: string[] = [];
+      if (conv.whatsapp_phone) {
+        const digits = conv.whatsapp_phone.replace(/\D/g, '');
+        const searchPhone = digits.length > 4 ? digits.slice(-8) : digits;
+        const { data: contacts } = await supabase
+          .from('client_department_contacts')
+          .select('client_id')
+          .ilike('contact_phone', `%${searchPhone}%`);
+        if (contacts && contacts.length > 0) {
+          const uniqueIds = [...new Set(contacts.map(c => c.client_id))];
+          const { data: clients } = await supabase
+            .from('clients')
+            .select('company_name')
+            .in('id', uniqueIds);
+          if (clients) {
+            companyNames = clients.map(c => c.company_name);
+          }
+        }
+      }
+
       items.push({
         id: conv.id,
         name,
@@ -98,6 +119,7 @@ export default function Chat() {
         unreadCount: unreadCount || 0,
         isGroup: conv.is_group,
         avatarUrl: conv.avatar_url || undefined,
+        companyNames,
       });
     }
 
@@ -264,6 +286,7 @@ export default function Chat() {
             onSend={sendMessage}
             isGroup={conversations.find(c => c.id === activeConvId)?.isGroup}
             avatarUrl={conversations.find(c => c.id === activeConvId)?.avatarUrl}
+            companyNames={conversations.find(c => c.id === activeConvId)?.companyNames}
           />
         </div>
       )}

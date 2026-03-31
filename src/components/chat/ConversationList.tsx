@@ -14,6 +14,7 @@ export interface ConversationItem {
   unreadCount: number;
   isGroup: boolean;
   avatarUrl?: string;
+  companyNames?: string[];
 }
 
 interface ConversationListProps {

@@ -24,6 +24,7 @@ interface MessageAreaProps {
   onSend: (message: string) => void;
   isGroup?: boolean;
   avatarUrl?: string;
+  companyNames?: string[];
 }
 
 function formatDateLabel(dateStr: string) {
@@ -33,7 +34,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl, companyNames }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,6 +74,11 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
         </Avatar>
         <div>
           <p className="text-sm font-semibold">{conversationName}</p>
+          {companyNames && companyNames.length > 0 && (
+            <p className="text-xs text-muted-foreground truncate max-w-[400px]">
+              {companyNames.join(' | ')}
+            </p>
+          )}
         </div>
       </div>
 
