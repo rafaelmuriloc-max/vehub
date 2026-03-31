@@ -121,21 +121,27 @@ export default function Email() {
     setSending(true);
     try {
       const htmlContent = `<div style="font-family: sans-serif; white-space: pre-wrap;">${body}</div>`;
-      const { data, error } = await supabase.functions.invoke('smtp-send', {
-        body: { departmentId, to, subject, html: htmlContent },
-      });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      // Log the sent email
-      await supabase.from('email_logs' as any).insert({
+      // Insert log first to get the id for tracking pixel
+      const { data: logData } = await supabase.from('email_logs').insert({
         department_id: departmentId,
         recipient_email: to,
         subject,
         body_html: htmlContent,
         status: 'sent',
-      } as any);
+      }).select('id').single();
+
+      const trackingPixel = logData?.id
+        ? `<img src="https://ismgjjvarzzfsbdpthot.supabase.co/functions/v1/email-track?id=${logData.id}" width="1" height="1" style="display:none" />`
+        : '';
+      const htmlWithPixel = htmlContent + trackingPixel;
+
+      const { data, error } = await supabase.functions.invoke('smtp-send', {
+        body: { departmentId, to, subject, html: htmlWithPixel },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({ title: 'E-mail enviado com sucesso!' });
       setTo('');
