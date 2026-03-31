@@ -107,6 +107,14 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
 
   const htmlBody = `<div style="font-family: sans-serif; white-space: pre-wrap;">${finalBody}</div>${trackingPixel}`;
 
+  // Get current user's name for sender
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  let senderName: string | undefined;
+  if (currentUser) {
+    const { data: profileData } = await supabase.from('profiles').select('full_name').eq('user_id', currentUser.id).single();
+    senderName = profileData?.full_name || undefined;
+  }
+
   const { data, error } = await supabase.functions.invoke('smtp-send', {
     body: {
       departmentId: activity.email_department_id,
@@ -114,6 +122,7 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
       subject: finalSubject,
       html: htmlBody,
       attachments: attachments.length > 0 ? attachments : undefined,
+      senderName,
     },
   });
 

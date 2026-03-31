@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { Mail, Send, Loader2, Paperclip } from 'lucide-react';
 
 interface Department {
@@ -55,6 +56,7 @@ export default function EmailComposeDialog({
   attachments = [],
 }: EmailComposeDialogProps) {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState('');
   const [to, setTo] = useState(recipientEmail);
@@ -131,6 +133,7 @@ export default function EmailComposeDialog({
           subject: finalSubject,
           html: htmlContent + trackingPixel,
           attachments: attachments.length > 0 ? attachments : undefined,
+          senderName: profile?.full_name || undefined,
         },
       });
 

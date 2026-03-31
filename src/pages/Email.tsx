@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Mail, Send, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Department {
   id: string;
@@ -35,6 +36,7 @@ const PAGE_SIZE = 15;
 
 export default function Email() {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState('');
   const [to, setTo] = useState('');
@@ -138,7 +140,7 @@ export default function Email() {
       const htmlWithPixel = htmlContent + trackingPixel;
 
       const { data, error } = await supabase.functions.invoke('smtp-send', {
-        body: { departmentId, to, subject, html: htmlWithPixel },
+        body: { departmentId, to, subject, html: htmlWithPixel, senderName: profile?.full_name || undefined },
       });
 
       if (error) throw error;

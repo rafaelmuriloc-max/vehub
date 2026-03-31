@@ -42,7 +42,7 @@ serve(async (req) => {
 
     // Parse and validate input
     const body = await req.json();
-    const { departmentId, to, subject, html, attachments } = body;
+    const { departmentId, to, subject, html, attachments, senderName } = body;
 
     if (!departmentId || !to || !subject || !html) {
       return new Response(
@@ -128,8 +128,10 @@ serve(async (req) => {
       },
     });
 
+    const fromAddress = senderName ? `"${senderName}" <${dept.smtp_email}>` : dept.smtp_email;
+
     const sendOptions: any = {
-      from: dept.smtp_email,
+      from: fromAddress,
       to: to,
       subject: subject,
       content: "auto",
