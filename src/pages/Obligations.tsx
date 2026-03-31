@@ -332,7 +332,7 @@ export default function Obligations() {
 
       {/* Activity Dialog */}
       <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingActivity ? 'Editar Atividade' : 'Nova Atividade'}</DialogTitle></DialogHeader>
           <form onSubmit={saveActivity} className="space-y-4">
             <div className="space-y-2"><Label>Título *</Label><Input value={activityForm.title} onChange={e => setActivityForm({ ...activityForm, title: e.target.value })} required /></div>
