@@ -274,7 +274,7 @@ export default function Obligations() {
 
       {/* Obligation Dialog */}
       <Dialog open={obligationOpen} onOpenChange={setObligationOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingObligation ? 'Editar Obrigação' : 'Nova Obrigação'}</DialogTitle></DialogHeader>
           <form onSubmit={saveObligation} className="space-y-4">
             <div className="space-y-2"><Label>Nome *</Label><Input value={obligationForm.name} onChange={e => setObligationForm({ ...obligationForm, name: e.target.value })} required /></div>
