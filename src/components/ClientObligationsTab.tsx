@@ -182,7 +182,23 @@ export default function ClientObligationsTab({ clientId }: Props) {
             toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
           } else if (nextAct.type === 'email') {
             break; // email without full config, stop chain
-          } else {
+          } else if (nextAct.type === 'whatsapp' && (nextAct.whatsapp_template_name || nextAct.whatsapp_message_body)) {
+            const result = await sendActivityWhatsApp({
+              activity: nextAct,
+              instanceId,
+              clientId,
+              obligationName: obl?.name || '',
+              referenceMonth: instances.find(inst => inst.id === instanceId)?.reference_month || '',
+              dueDay: obl?.due_day,
+              departmentId: obl?.department_id,
+            });
+            if (!result.success) {
+              toast({ title: 'Erro no envio automático de WhatsApp', description: result.error, variant: 'destructive' });
+              break;
+            }
+            toast({ title: `WhatsApp "${nextAct.title}" enviado automaticamente` });
+          } else if (nextAct.type === 'whatsapp') {
+            break;
             if (nextComp) {
               await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
             } else {
