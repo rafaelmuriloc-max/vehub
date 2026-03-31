@@ -56,12 +56,10 @@ serve(async (req) => {
       });
     }
 
-    // Clean phone number (keep only digits, add country code if needed)
     let cleanPhone = to.replace(/\D/g, "");
     if (cleanPhone.startsWith("0")) cleanPhone = "55" + cleanPhone.slice(1);
     if (!cleanPhone.startsWith("55")) cleanPhone = "55" + cleanPhone;
 
-    // Build message payload
     let messagePayload: Record<string, unknown>;
 
     if (type === "template" && templateName && templateName.trim()) {
@@ -76,7 +74,6 @@ serve(async (req) => {
         },
       };
     } else {
-      // Text message
       messagePayload = {
         messaging_product: "whatsapp",
         to: cleanPhone,
@@ -109,13 +106,11 @@ serve(async (req) => {
 
     const wamid = metaData.messages?.[0]?.id || null;
 
-    // Service role client for logging
     const supabaseService = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Log in whatsapp_logs
     await supabaseService.from("whatsapp_logs").insert({
       client_id: clientId || null,
       obligation_id: obligationId || null,
@@ -134,7 +129,7 @@ serve(async (req) => {
 
     try {
       if (clientId) {
-        // Find existing WhatsApp conversation for this client
+        // Find existing conversation for this client
         const { data: existingConv } = await supabaseService
           .from("chat_conversations")
           .select("id")
@@ -147,7 +142,6 @@ serve(async (req) => {
         if (existingConv) {
           conversationId = existingConv.id;
         } else {
-          // Get client name
           const { data: client } = await supabaseService
             .from("clients")
             .select("company_name")
@@ -158,7 +152,6 @@ serve(async (req) => {
             ? `${client.company_name} (WhatsApp)`
             : "WhatsApp";
 
-          // Create conversation
           const { data: newConv } = await supabaseService
             .from("chat_conversations")
             .insert({
@@ -174,23 +167,46 @@ serve(async (req) => {
           conversationId = newConv.id;
         }
 
-        // Ensure sender is participant
-        const { data: existingPart } = await supabaseService
-          .from("chat_participants")
-          .select("id")
-          .eq("conversation_id", conversationId)
-          .eq("user_id", userId)
-          .limit(1)
-          .maybeSingle();
+        // Add ALL admins as participants
+        const { data: adminRoles } = await supabaseService
+          .from("user_roles")
+          .select("user_id")
+          .eq("role", "admin");
 
-        if (!existingPart) {
-          await supabaseService.from("chat_participants").insert({
-            conversation_id: conversationId,
-            user_id: userId,
-          });
+        for (const admin of adminRoles || []) {
+          const { data: existingPart } = await supabaseService
+            .from("chat_participants")
+            .select("id")
+            .eq("conversation_id", conversationId)
+            .eq("user_id", admin.user_id)
+            .maybeSingle();
+
+          if (!existingPart) {
+            await supabaseService.from("chat_participants").insert({
+              conversation_id: conversationId,
+              user_id: admin.user_id,
+            });
+          }
         }
 
-        // Insert chat message
+        // Ensure sender is also a participant (may not be admin)
+        const senderIsAdmin = (adminRoles || []).some(a => a.user_id === userId);
+        if (!senderIsAdmin) {
+          const { data: senderPart } = await supabaseService
+            .from("chat_participants")
+            .select("id")
+            .eq("conversation_id", conversationId)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (!senderPart) {
+            await supabaseService.from("chat_participants").insert({
+              conversation_id: conversationId,
+              user_id: userId,
+            });
+          }
+        }
+
         await supabaseService.from("chat_messages").insert({
           conversation_id: conversationId,
           sender_id: userId,
@@ -199,7 +215,6 @@ serve(async (req) => {
           channel: "whatsapp",
         });
 
-        // Update conversation timestamp
         await supabaseService
           .from("chat_conversations")
           .update({ updated_at: new Date().toISOString() })
@@ -207,7 +222,6 @@ serve(async (req) => {
       }
     } catch (chatErr) {
       console.error("Error inserting chat message:", chatErr);
-      // Don't fail the WhatsApp send if chat insert fails
     }
 
     return new Response(JSON.stringify({ success: true, wamid }), {
