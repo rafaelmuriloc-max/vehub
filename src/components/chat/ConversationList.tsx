@@ -75,6 +75,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated 
             }`}
           >
             <Avatar className="h-12 w-12 shrink-0">
+              {conv.avatarUrl && <AvatarImage src={conv.avatarUrl} alt={conv.name} />}
               <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                 {conv.name.charAt(0).toUpperCase()}
               </AvatarFallback>
