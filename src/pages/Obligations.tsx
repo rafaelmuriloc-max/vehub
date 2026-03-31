@@ -19,7 +19,7 @@ import {
 
 type Department = { id: string; name: string };
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null };
 type DocumentType = { id: string; name: string };
 
 const activityTypeIcons: Record<string, React.ReactNode> = {
@@ -47,7 +47,7 @@ export default function Obligations() {
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '' });
+  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '', whatsapp_template_name: '', whatsapp_message_body: '' });
 
   const [expandedObligation, setExpandedObligation] = useState<string | null>(null);
 
@@ -106,12 +106,12 @@ export default function Obligations() {
   // ---- Activity CRUD ----
   function openNewActivity(obligationId: string) {
     setEditingActivity(null);
-    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '' });
+    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '', whatsapp_template_name: '', whatsapp_message_body: '' });
     setActivityOpen(true);
   }
   function openEditActivity(a: Activity) {
     setEditingActivity(a);
-    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '' });
+    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '', whatsapp_template_name: (a as any).whatsapp_template_name || '', whatsapp_message_body: (a as any).whatsapp_message_body || '' });
     setActivityOpen(true);
   }
   async function saveActivity(e: React.FormEvent) {
@@ -130,6 +130,13 @@ export default function Obligations() {
       payload.email_department_id = null;
       payload.email_subject = null;
       payload.email_body = null;
+    }
+    if (activityForm.type === 'whatsapp') {
+      payload.whatsapp_template_name = activityForm.whatsapp_template_name || null;
+      payload.whatsapp_message_body = activityForm.whatsapp_message_body || null;
+    } else {
+      payload.whatsapp_template_name = null;
+      payload.whatsapp_message_body = null;
     }
     const { error } = editingActivity
       ? await supabase.from('obligation_activities').update(payload).eq('id', editingActivity.id)
@@ -345,6 +352,26 @@ export default function Obligations() {
                   </SelectContent>
                 </Select>
               </div>
+            )}
+            {activityForm.type === 'whatsapp' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Nome do Template (opcional)</Label>
+                  <Input value={activityForm.whatsapp_template_name} onChange={e => setActivityForm({ ...activityForm, whatsapp_template_name: e.target.value })} placeholder="Ex: lembrete_obrigacao" />
+                  <p className="text-xs text-muted-foreground">Se preenchido, envia como template aprovado pela Meta</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Corpo da Mensagem</Label>
+                  <Textarea rows={5} value={activityForm.whatsapp_message_body} onChange={e => setActivityForm({ ...activityForm, whatsapp_message_body: e.target.value })} placeholder="Use variáveis: [Nome_da_Empresa], [Competencia], [Nome_da_Obrigação], [Vencimento]" />
+                  <div className="flex flex-wrap gap-1">
+                    {['[Nome_da_Empresa]', '[Competencia]', '[Nome_da_Obrigação]', '[Vencimento]'].map(v => (
+                      <Badge key={v} variant="outline" className="text-xs cursor-pointer hover:bg-muted" onClick={() => setActivityForm(f => ({ ...f, whatsapp_message_body: f.whatsapp_message_body + v }))}>
+                        {v}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
             {activityForm.type === 'email' && (
               <>

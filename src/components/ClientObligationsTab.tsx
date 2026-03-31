@@ -14,9 +14,10 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
+import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null };
 type Instance = { id: string; obligation_id: string; client_id: string; reference_month: string; status: string; assigned_to: string | null; due_date: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null; file_url: string | null; notes: string | null };
 type Department = { id: string; name: string };
@@ -181,7 +182,23 @@ export default function ClientObligationsTab({ clientId }: Props) {
             toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
           } else if (nextAct.type === 'email') {
             break; // email without full config, stop chain
-          } else {
+          } else if (nextAct.type === 'whatsapp' && (nextAct.whatsapp_template_name || nextAct.whatsapp_message_body)) {
+            const result = await sendActivityWhatsApp({
+              activity: nextAct,
+              instanceId,
+              clientId,
+              obligationName: obl?.name || '',
+              referenceMonth: instances.find(inst => inst.id === instanceId)?.reference_month || '',
+              dueDay: obl?.due_day,
+              departmentId: obl?.department_id,
+            });
+            if (!result.success) {
+              toast({ title: 'Erro no envio automático de WhatsApp', description: result.error, variant: 'destructive' });
+              break;
+            }
+            toast({ title: `WhatsApp "${nextAct.title}" enviado automaticamente` });
+          } else if (nextAct.type === 'whatsapp') {
+            break;
             if (nextComp) {
               await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
             } else {
@@ -241,7 +258,23 @@ export default function ClientObligationsTab({ clientId }: Props) {
           toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
         } else if (nextAct.type === 'email') {
           break;
-        } else {
+        } else if (nextAct.type === 'whatsapp' && (nextAct.whatsapp_template_name || nextAct.whatsapp_message_body)) {
+          const result = await sendActivityWhatsApp({
+            activity: nextAct,
+            instanceId,
+            clientId,
+            obligationName: obl?.name || '',
+            referenceMonth: instances.find(inst => inst.id === instanceId)?.reference_month || '',
+            dueDay: obl?.due_day,
+            departmentId: obl?.department_id,
+          });
+          if (!result.success) {
+            toast({ title: 'Erro no envio automático de WhatsApp', description: result.error, variant: 'destructive' });
+            break;
+          }
+          toast({ title: `WhatsApp "${nextAct.title}" enviado automaticamente` });
+        } else if (nextAct.type === 'whatsapp') {
+          break;
           if (nextComp) {
             await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
           } else {

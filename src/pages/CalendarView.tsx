@@ -14,12 +14,13 @@ import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, 
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
+import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
 
 type CalendarEvent = {
@@ -100,7 +101,7 @@ export default function CalendarView() {
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
-      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body'),
+      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body'),
       supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url'),
     ]);
     setInstances((instRes.data as Instance[]) || []);
@@ -256,7 +257,23 @@ export default function CalendarView() {
           toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
         } else if (nextAct.type === 'email') {
           break; // email without full config, stop chain
-        } else {
+        } else if (nextAct.type === 'whatsapp' && (nextAct.whatsapp_template_name || nextAct.whatsapp_message_body)) {
+          const result = await sendActivityWhatsApp({
+            activity: nextAct,
+            instanceId: detailInstanceId,
+            clientId: detailInstance.client_id,
+            obligationName: detailObligation.name,
+            referenceMonth: detailInstance.reference_month,
+            dueDay: detailObligation.due_day,
+            departmentId: detailObligation.department_id,
+          });
+          if (!result.success) {
+            toast({ title: 'Erro no envio automático de WhatsApp', description: result.error, variant: 'destructive' });
+            break;
+          }
+          toast({ title: `WhatsApp "${nextAct.title}" enviado automaticamente` });
+        } else if (nextAct.type === 'whatsapp') {
+          break;
           if (nextComp) {
             await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
           } else {
@@ -309,7 +326,23 @@ export default function CalendarView() {
         toast({ title: `E-mail "${nextAct.title}" enviado automaticamente` });
       } else if (nextAct.type === 'email') {
         break;
-      } else {
+      } else if (nextAct.type === 'whatsapp' && (nextAct.whatsapp_template_name || nextAct.whatsapp_message_body)) {
+        const result = await sendActivityWhatsApp({
+          activity: nextAct,
+          instanceId: detailInstanceId,
+          clientId: detailInstance.client_id,
+          obligationName: detailObligation.name,
+          referenceMonth: detailInstance.reference_month,
+          dueDay: detailObligation.due_day,
+          departmentId: detailObligation.department_id,
+        });
+        if (!result.success) {
+          toast({ title: 'Erro no envio automático de WhatsApp', description: result.error, variant: 'destructive' });
+          break;
+        }
+        toast({ title: `WhatsApp "${nextAct.title}" enviado automaticamente` });
+      } else if (nextAct.type === 'whatsapp') {
+        break;
         if (nextComp) {
           await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
         } else {
