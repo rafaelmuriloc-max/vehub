@@ -36,6 +36,7 @@ const PAGE_SIZE = 15;
 
 export default function Email() {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState('');
   const [to, setTo] = useState('');
