@@ -47,7 +47,7 @@ export default function Obligations() {
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '' });
+  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '', whatsapp_template_name: '', whatsapp_message_body: '' });
 
   const [expandedObligation, setExpandedObligation] = useState<string | null>(null);
 
