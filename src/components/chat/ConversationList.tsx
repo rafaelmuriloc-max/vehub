@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, MessageSquarePlus } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,6 +13,7 @@ export interface ConversationItem {
   lastMessageAt: string;
   unreadCount: number;
   isGroup: boolean;
+  avatarUrl?: string;
 }
 
 interface ConversationListProps {
@@ -74,6 +75,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated 
             }`}
           >
             <Avatar className="h-12 w-12 shrink-0">
+              {conv.avatarUrl && <AvatarImage src={conv.avatarUrl} alt={conv.name} />}
               <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                 {conv.name.charAt(0).toUpperCase()}
               </AvatarFallback>

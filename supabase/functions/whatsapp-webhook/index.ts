@@ -187,6 +187,31 @@ Deno.serve(async (req) => {
     if (!conversationId) {
       const convName = clientId ? clientName : clientName;
 
+      // Fetch WhatsApp profile picture from EvolutionAPI
+      let avatarUrl: string | null = null;
+      try {
+        const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+        const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
+        const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
+        if (evolutionUrl && evolutionKey && evolutionInstance) {
+          const profileRes = await fetch(
+            `${evolutionUrl}/chat/fetchProfilePictureUrl/${evolutionInstance}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: evolutionKey },
+              body: JSON.stringify({ number: phoneRaw }),
+            }
+          );
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            avatarUrl = profileData?.profilePictureUrl || null;
+            console.log("Profile picture URL:", avatarUrl);
+          }
+        }
+      } catch (e) {
+        console.log("Failed to fetch profile picture:", e);
+      }
+
       const { data: newConv, error: convErr } = await supabase
         .from("chat_conversations")
         .insert({
@@ -194,6 +219,7 @@ Deno.serve(async (req) => {
           is_group: false,
           created_by: systemUserId,
           client_id: clientId,
+          avatar_url: avatarUrl,
         })
         .select("id")
         .single();

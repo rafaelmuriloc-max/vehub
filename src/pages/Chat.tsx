@@ -33,7 +33,7 @@ export default function Chat() {
 
     const { data: convs } = await supabase
       .from('chat_conversations')
-      .select('*, client_id')
+      .select('*, client_id, avatar_url')
       .in('id', convIds)
       .order('updated_at', { ascending: false });
 
@@ -97,6 +97,7 @@ export default function Chat() {
         lastMessageAt: lastMsg?.created_at || conv.created_at,
         unreadCount: unreadCount || 0,
         isGroup: conv.is_group,
+        avatarUrl: conv.avatar_url || undefined,
       });
     }
 
@@ -262,6 +263,7 @@ export default function Chat() {
             currentUserId={user?.id || ''}
             onSend={sendMessage}
             isGroup={conversations.find(c => c.id === activeConvId)?.isGroup}
+            avatarUrl={conversations.find(c => c.id === activeConvId)?.avatarUrl}
           />
         </div>
       )}

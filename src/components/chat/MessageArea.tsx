@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageCircle } from 'lucide-react';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,6 +22,7 @@ interface MessageAreaProps {
   currentUserId: string;
   onSend: (message: string) => void;
   isGroup?: boolean;
+  avatarUrl?: string;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -31,7 +32,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-[#F0F2F5] dark:bg-zinc-800 border-b">
         <Avatar className="h-10 w-10">
+          {avatarUrl && <AvatarImage src={avatarUrl} alt={conversationName || ''} />}
           <AvatarFallback className="bg-primary/20 text-primary font-semibold">
             {conversationName.charAt(0).toUpperCase()}
           </AvatarFallback>
