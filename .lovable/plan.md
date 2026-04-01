@@ -1,28 +1,29 @@
 
 
-# Assinar mensagens WhatsApp com o nome do usuário logado
+# Adicionar botão de excluir obrigação na lista do calendário
 
-## Problema
-As mensagens enviadas pelo chat aparecem com o nome do usuário na tela, mas no WhatsApp do cliente chegam apenas o texto puro, sem identificar quem enviou.
+## O que será feito
+Adicionar um botão de excluir (ícone Trash2) em cada item da lista de obrigações do calendário (tanto na lista do dia selecionado quanto nas abas pendentes/concluídas do mês). Ao clicar, exibe um diálogo de confirmação e, se confirmado, exclui a `obligation_instance` e suas `obligation_activity_completions` associadas.
 
-## Solução
-Prefixar o texto enviado via WhatsApp com o nome do usuário no formato:
-```
-*Nome do Usuário:*
-texto da mensagem
-```
+## Alterações em `src/pages/CalendarView.tsx`
 
-## Alterações
+### 1. Importar AlertDialog
+Adicionar imports de `AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle`.
 
-### 1. `src/pages/Chat.tsx`
-- No `sendMessage`, ao chamar `whatsapp-send-text`, passar o `senderName` obtido do profile do usuário logado (já disponível via `useAuth()` → `profile.full_name`)
+### 2. Novo estado
+- `deleteInstanceId: string | null` — instância selecionada para exclusão.
 
-### 2. `supabase/functions/whatsapp-send-text/index.ts`
-- Receber `senderName` no body (opcional)
-- Ao montar o texto para envio (tanto Meta API quanto Evolution API), prefixar com `*${senderName}:*\n` quando `senderName` estiver presente
-- O conteúdo salvo no `chat_messages` permanece sem prefixo (apenas o texto original), pois a assinatura é apenas para o destinatário externo
+### 3. Função `deleteInstance`
+- Excluir completions: `delete from obligation_activity_completions where instance_id = ...`
+- Excluir instância: `delete from obligation_instances where id = ...`
+- Limpar estado, exibir toast, recarregar dados.
+
+### 4. Botão na lista
+Em cada card de obrigação (3 locais: lista do dia, aba pendentes, aba concluídas), adicionar um botão Trash2 com `stopPropagation` para não abrir o diálogo de detalhes. O botão seta `deleteInstanceId`.
+
+### 5. AlertDialog de confirmação
+Renderizar um `AlertDialog` controlado por `deleteInstanceId`, com título "Excluir obrigação", descrição de confirmação, e botões Cancelar/Excluir.
 
 ## Arquivos
-- `src/pages/Chat.tsx`
-- `supabase/functions/whatsapp-send-text/index.ts`
+- `src/pages/CalendarView.tsx`
 
