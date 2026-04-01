@@ -337,6 +337,26 @@ export default function Obligations() {
                 <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
               </div>
             )}
+            <div className="flex items-center space-x-3">
+              <Switch
+                checked={obligationForm.is_tax}
+                onCheckedChange={v => setObligationForm({ ...obligationForm, is_tax: v, tax_sphere: v ? obligationForm.tax_sphere : '' })}
+              />
+              <Label>É Imposto?</Label>
+            </div>
+            {obligationForm.is_tax && (
+              <div className="space-y-2">
+                <Label>Esfera Tributária *</Label>
+                <Select value={obligationForm.tax_sphere} onValueChange={v => setObligationForm({ ...obligationForm, tax_sphere: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a esfera" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="federal">Federal</SelectItem>
+                    <SelectItem value="estadual">Estadual</SelectItem>
+                    <SelectItem value="municipal">Municipal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
