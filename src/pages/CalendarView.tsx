@@ -85,6 +85,7 @@ export default function CalendarView() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
+  const [clientOpen, setClientOpen] = useState(false);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
   const [dayPage, setDayPage] = useState(1);
   const [monthPendingPage, setMonthPendingPage] = useState(1);
