@@ -188,7 +188,7 @@ export default function Chat() {
       })));
 
       const unreadIds = data
-        .filter(m => m.sender_id !== user.id && !m.read_at)
+        .filter(m => m.message_type !== 'text' && m.message_type !== 'whatsapp_outgoing' && !m.read_at)
         .map(m => m.id);
 
       if (unreadIds.length > 0) {
@@ -196,6 +196,7 @@ export default function Chat() {
           .from('chat_messages')
           .update({ read_at: new Date().toISOString() })
           .in('id', unreadIds);
+        loadConversations();
       }
     };
 
