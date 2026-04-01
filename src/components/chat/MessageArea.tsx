@@ -24,6 +24,9 @@ interface MessageAreaProps {
   messages: ChatMessage[];
   currentUserId: string;
   onSend: (message: string) => void;
+  onSendMedia?: (file: File, type: 'image' | 'video' | 'document') => void;
+  onSendLocation?: (lat: number, lng: number, name?: string) => void;
+  onSendContact?: (name: string, phone: string) => void;
   isGroup?: boolean;
   avatarUrl?: string;
   companyNames?: string[];
@@ -39,7 +42,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -146,7 +149,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           )}
         </div>
       ) : (
-        <ChatInput onSend={onSend} />
+        <ChatInput
+          onSend={onSend}
+          onSendMedia={onSendMedia}
+          onSendLocation={onSendLocation}
+          onSendContact={onSendContact}
+        />
       )}
     </div>
   );
