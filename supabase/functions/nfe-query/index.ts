@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
         {
           method: "POST",
           headers: {
-            "Content-Type": "text/xml; charset=utf-8",
-            SOAPAction: SOAP_ACTION,
+            "Content-Type": `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`,
+            Accept: "application/soap+xml, text/xml, application/xml, */*",
           },
           body: soapBody,
         },
@@ -407,7 +407,6 @@ async function requestWithFetchHttp1(
 ): Promise<MtlsTextResponse> {
   const httpClient = Deno.createHttpClient({ cert: certPem, http1: true, http2: false, key: keyPem });
   try {
-    // @ts-expect-error Deno fetch supports client
     const response = await fetch(url, { body: init.body, client: httpClient, headers: init.headers, method: init.method });
     const bodyText = await response.text();
     return { bodyText, headers: response.headers, status: response.status, statusText: response.statusText, strategy, url: url.toString() };
@@ -561,10 +560,13 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
 
   if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no PFX");
 
-  const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId) || parsedCerts[0];
-  const chain = buildCertChain(leafCert, parsedCerts);
+  const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId)
+    || parsedCerts.find((c) => c.subject !== c.issuer)
+    || parsedCerts[0];
 
-  return { certPem: chain.map((c) => c.pem.trim()).join("\n"), keyPem };
+  console.log(`[NF-e] PFX carregado com ${parsedCerts.length} certificado(s); enviando apenas o certificado cliente folha no mTLS.`);
+
+  return { certPem: leafCert.pem.trim(), keyPem };
 }
 
 function normalizeLocalKeyId(value: unknown): string | null {
@@ -579,17 +581,6 @@ function stringifyDN(dn: { attributes?: Array<{ shortName?: string; name?: strin
   return (dn.attributes || []).map((a) => `${a.shortName || a.name || "attr"}=${a.value || ""}`).join(",");
 }
 
-function buildCertChain(leaf: ParsedCertificate, all: ParsedCertificate[]): ParsedCertificate[] {
-  const chain = [leaf];
-  const visited = new Set([leaf.pem]);
-  let current = leaf;
-  while (true) {
-    const next = all.find((c) => !visited.has(c.pem) && c.subject === current.issuer);
-    if (!next) break;
-    chain.push(next);
-    visited.add(next.pem);
-    if (next.subject === next.issuer) break;
-    current = next;
-  }
-  return chain;
+function buildCertChain(_leaf: ParsedCertificate, _all: ParsedCertificate[]): ParsedCertificate[] {
+  return [];
 }
