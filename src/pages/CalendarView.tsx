@@ -133,6 +133,7 @@ export default function CalendarView() {
       if (!dept) continue;
       if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
+      if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
 
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const y = refDate.getFullYear();
