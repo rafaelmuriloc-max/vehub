@@ -94,6 +94,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             </p>
           )}
         </div>
+        {!isClosed && onTransferTicket && (
+          <Button variant="outline" size="sm" onClick={onTransferTicket} className="shrink-0 gap-1.5">
+            <UserRoundPlus className="h-4 w-4" />
+            Transferir
+          </Button>
+        )}
         {!isClosed && onCloseTicket && (
           <Button variant="outline" size="sm" onClick={onCloseTicket} className="shrink-0 gap-1.5">
             <CheckCircle2 className="h-4 w-4" />
