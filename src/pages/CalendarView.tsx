@@ -742,7 +742,7 @@ export default function CalendarView() {
                                 {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
                                 <p className="text-xs text-muted-foreground truncate mt-0.5">
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
