@@ -48,11 +48,12 @@ const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho
 const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const ITEMS_PER_PAGE = 10;
+const DAY_ITEMS_PER_PAGE = 5;
 
-function PaginationBlock({ page, totalPages, total, onPageChange }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void }) {
+function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEMS_PER_PAGE }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void; perPage?: number }) {
   if (totalPages <= 1) return null;
-  const start = (page - 1) * ITEMS_PER_PAGE + 1;
-  const end = Math.min(page * ITEMS_PER_PAGE, total);
+  const start = (page - 1) * perPage + 1;
+  const end = Math.min(page * perPage, total);
   return (
     <div className="flex items-center justify-between mt-4">
       <span className="text-xs text-muted-foreground">Mostrando {start}-{end} de {total}</span>
