@@ -16,35 +16,44 @@ export type Database = {
     Tables: {
       chat_conversations: {
         Row: {
+          assigned_to: string | null
           avatar_url: string | null
           client_id: string | null
+          closed_at: string | null
           created_at: string
           created_by: string
           id: string
           is_group: boolean
           name: string | null
+          status: string
           updated_at: string
           whatsapp_phone: string | null
         }
         Insert: {
+          assigned_to?: string | null
           avatar_url?: string | null
           client_id?: string | null
+          closed_at?: string | null
           created_at?: string
           created_by: string
           id?: string
           is_group?: boolean
           name?: string | null
+          status?: string
           updated_at?: string
           whatsapp_phone?: string | null
         }
         Update: {
+          assigned_to?: string | null
           avatar_url?: string | null
           client_id?: string | null
+          closed_at?: string | null
           created_at?: string
           created_by?: string
           id?: string
           is_group?: boolean
           name?: string | null
+          status?: string
           updated_at?: string
           whatsapp_phone?: string | null
         }
