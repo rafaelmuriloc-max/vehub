@@ -393,6 +393,11 @@ export default function Obligations() {
                     ))}
                   </div>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="whatsapp_has_document_header" checked={activityForm.whatsapp_has_document_header} onCheckedChange={v => setActivityForm({ ...activityForm, whatsapp_has_document_header: !!v })} />
+                  <Label htmlFor="whatsapp_has_document_header">Template com documento no header</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">Marque se o template envia documento diretamente no cabeçalho (header tipo DOCUMENT)</p>
                 <div className="space-y-2">
                   <Label>URL do Botão (opcional)</Label>
                   <Input value={activityForm.whatsapp_button_url} onChange={e => setActivityForm({ ...activityForm, whatsapp_button_url: e.target.value })} placeholder="Ex: https://seusite.com/pagamento" />
