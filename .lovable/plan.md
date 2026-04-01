@@ -1,46 +1,105 @@
 
+## Objetivo
+Voltar a integração de NF-e para o método anterior baseado na documentação da SEF-SC, desfazendo a adaptação para o Ambiente Nacional.
 
-# Corrigir NF-e: usar endpoint nacional (AN) em vez do SEF-SC
+## O que precisa ser alterado
 
-## Problema
-O endpoint `satnfe.sef.sc.gov.br` bloqueia conexões de IPs cloud (Supabase). Todas as tentativas de conexão resultam em "connection reset".
+### 1. `supabase/functions/nfe-query/index.ts`
+Reverter a função para o contrato SEF-SC documentado nos anexos:
 
-## Solução
-Trocar para o Web Service nacional de Distribuição de DF-e (Ambiente Nacional - AN), que aceita conexões cloud (assim como o `adn.nfse.gov.br` funciona para NFS-e).
+- Trocar a URL para:
+  - Produção: `https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx`
+  - Homologação: `https://hom.satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx`
+- Trocar o XML de requisição de `distDFeInt` para `distNFeSC`
+- Usar o namespace da SEF-SC:
+  - `http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2`
+- Montar a carga com os campos documentados:
+  - `versao="2.00"` ou `2.02`
+  - `tpAmb`
+  - `verAplic`
+  - `cUF=42`
+  - `CNPJ`
+  - `solRel > indXML=1`
+  - `indAtor=9`
+  - `ultNuNSU`
 
-- **Produção**: `https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`
-- **Homologação**: `https://hom.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`
-
-## Alterações em `supabase/functions/nfe-query/index.ts`
-
-### 1. Trocar URL e SOAP
-- URL: `www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`
-- SOAPAction: `http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse`
-- Namespace: `http://www.portalfiscal.inf.br/nfe`
-
-### 2. Alterar XML de request
-De `distNFeSC` (schema SC) para `distDFeInt` (schema nacional):
+Exemplo esperado:
 ```xml
-<distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
+<distNFeSC versao="2.00" xmlns="http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2">
   <tpAmb>1</tpAmb>
-  <cUFAutor>42</cUFAutor>
+  <verAplic>VeHub 1.0</verAplic>
+  <cUF>42</cUF>
   <CNPJ>{cnpj}</CNPJ>
-  <distNSU>
-    <ultNSU>{ultNSU}</ultNSU>
-  </distNSU>
-</distDFeInt>
+  <solRel>
+    <indXML>1</indXML>
+    <indAtor>9</indAtor>
+    <ultNuNSU>{ultNSU}</ultNuNSU>
+  </solRel>
+</distNFeSC>
 ```
 
-### 3. Alterar parsing do response
-- Tag de retorno: `retDistDFeInt` em vez de `retDistNFeSC`
-- Lote comprimido: `docZip` (base64 gzip) dentro de `loteDistDFeInt`
-- Cada documento vem em `<docZip NSU="..." schema="...">base64gzip</docZip>`
-- Campo `maxNSU` e `ultNSU` no retorno
-- Continue loop: `cStat=138` (documentos localizados) em vez de `118`
+### 2. Parsing do retorno
+Substituir o parsing atual do AN pelo formato SEF-SC:
 
-### 4. Manter toda lógica de mTLS, upsert e parsing de NF-e
-A lógica de PFX, certificado, upsert em `nfe_invoices` e atualização de `last_nfe_nsu` permanece igual. Apenas o transporte SOAP e parsing do envelope mudam.
+- Ler `retDistNFeSC` / `retdistNFeSC`
+- Interpretar:
+  - `cStat`
+  - `xMotivo`
+  - `ultNuNSURet`
+  - `qtDfeRet`
+  - `loteDistComp`
+- Descompactar `loteDistComp` (base64 + gzip)
+- Parsear o XML resultante `loteDistNFeSC`
+- Ler cada item `<distNFeSC NSU="..." chAcesso="...">...</distNFeSC>`
 
-## Arquivo modificado
-- `supabase/functions/nfe-query/index.ts`
+### 3. Regras de continuidade
+Reverter a lógica do loop para o padrão SEF-SC:
 
+- `117` = nenhum DF-e localizado
+- `118` = DF-e localizado
+- `110` = reprocessamento
+- continuar imediatamente quando vier lote cheio (`qtDfeRet = 50`)
+- parar quando vier menos de 50
+- atualizar `clients.last_nfe_nsu` com `ultNuNSURet`
+
+### 4. Aproveitar o que já existe
+Manter sem mexer na estrutura geral já pronta:
+
+- autenticação da edge function
+- download do certificado no bucket `certificates`
+- parsing do PFX
+- mTLS/fallbacks já existentes
+- upsert em `nfe_invoices`
+- UI da aba `NF-e` em `src/components/invoices/NfeTab.tsx`
+
+## Ajustes de compatibilidade importantes
+Na reversão, eu seguiria estes cuidados para evitar quebrar o que já funciona:
+
+- preservar `parseNfeEntry(...)` para continuar gravando na tabela atual
+- adaptar apenas a origem dos documentos:
+  - hoje: `docZip`
+  - anterior: `loteDistComp` → `loteDistNFeSC/distNFeSC`
+- garantir que o parser aceite tanto `retDistNFeSC` quanto `retdistNFeSC`, porque a documentação usa as duas grafias
+- revisar o tipo/padding do NSU:
+  - no XSD da SEF-SC é `xs:long` com até 18 dígitos
+  - então o ideal é usar o valor numérico/string sem forçar o formato de 15 dígitos do AN
+
+## Observação importante
+Isso atende exatamente ao que você pediu: voltar para o método anterior da documentação SEF-SC. Porém, o erro original de `connection reset` provavelmente continuará existindo no Supabase, porque ele ocorre no transporte/TLS com o host da SEF-SC, não no XML.
+
+Ou seja:
+- funcionalmente o código volta ao padrão SEF-SC
+- tecnicamente a integração pode continuar falhando por bloqueio de IP cloud
+
+## Arquivos envolvidos
+- `supabase/functions/nfe-query/index.ts` — reversão principal
+- `src/components/invoices/NfeTab.tsx` — opcionalmente só ajustar o texto do card/título se necessário
+
+## Resumo técnico
+```text
+Atual:
+UI -> nfe-query -> Ambiente Nacional -> retDistDFeInt -> docZip
+
+Após reversão:
+UI -> nfe-query -> SEF-SC nfedownloadV2 -> retDistNFeSC -> loteDistComp -> loteDistNFeSC/distNFeSC
+```
