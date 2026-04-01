@@ -1,38 +1,42 @@
 
 
-# Transferir chamados entre usuários
+# CRUD completo de Usuários
+
+## Situação atual
+A aba Usuários tem apenas **listagem** e **edição** (cargo, departamento, permissão). Faltam **criar** (convidar) e **excluir** usuários.
 
 ## O que será feito
-Adicionar um botão "Transferir" no header da conversa que abre um dropdown/dialog para selecionar outro usuário da equipe. Ao confirmar, o `assigned_to` da conversa é atualizado e a conversa sai da lista "Chat" do usuário atual e aparece na do novo responsável.
 
-## Alterações
+### 1. Edge function `manage-user` (nova)
+Uma edge function com `SUPABASE_SERVICE_ROLE_KEY` para operações admin:
+- **POST** `action: "invite"` — usa `supabase.auth.admin.inviteUserByEmail()` para enviar convite por email
+- **POST** `action: "delete"` — usa `supabase.auth.admin.deleteUser()` + deleta profile e role associados
 
-### 1. `src/components/chat/MessageArea.tsx`
-- Adicionar prop `onTransferTicket` e botão "Transferir" ao lado do botão "Fechar Chamado" no header
-- O botão só aparece quando a conversa está aberta
+Necessário porque o client-side SDK não tem acesso admin ao auth.
 
-### 2. `src/pages/Chat.tsx`
-- Criar estado para controlar o dialog de transferência (`transferDialogOpen`)
-- Carregar lista de usuários (profiles) ao abrir o dialog
-- Implementar função `transferTicket(userId)` que:
-  - Atualiza `chat_conversations.assigned_to` para o novo usuário
-  - Atualiza `chat_participants` (adiciona o novo usuário se não for participante)
-  - Mostra toast de sucesso
-  - Limpa a conversa ativa e recarrega a lista
-- Renderizar um `Dialog` com lista de usuários (nome + cargo) para seleção
+### 2. UI — Botão "Convidar Usuário" (`UsersTab.tsx`)
+- Botão no header do Card (visível apenas para admin)
+- Dialog com campos: **Email**, **Nome**, **Cargo**, **Departamento**, **Permissão**
+- Ao confirmar, chama a edge function `manage-user` com `action: "invite"`
+- O usuário receberá email de convite para definir sua senha
 
-### 3. Dialog de transferência (inline em `Chat.tsx`)
-- Select/lista com os usuários disponíveis (excluindo o atual)
-- Botão "Transferir" para confirmar
-- Busca profiles da tabela `profiles` + `user_roles`
+### 3. UI — Botão "Excluir" na tabela (`UsersTab.tsx`)
+- Ícone de lixeira ao lado do lápis (apenas admin)
+- Confirmação via AlertDialog antes de excluir
+- Chama a edge function `manage-user` com `action: "delete"` + `userId`
+- Impede que o admin exclua a si mesmo
 
-## Fluxo
-1. Usuário abre conversa → clica "Transferir"
-2. Dialog mostra lista de colegas
-3. Seleciona destinatário → confirma
-4. `assigned_to` é atualizado → conversa sai da lista do usuário atual
+### 4. UI — Edição do nome (`UsersTab.tsx`)
+- Adicionar campo **Nome** ao dialog de edição (atualiza `profiles.full_name`)
 
 ## Arquivos
-- `src/components/chat/MessageArea.tsx` (~3 linhas: nova prop + botão)
-- `src/pages/Chat.tsx` (~50 linhas: dialog + função de transferência)
+- `supabase/functions/manage-user/index.ts` (novo, ~60 linhas)
+- `src/components/settings/UsersTab.tsx` (reescrita com Create/Delete, ~200 linhas)
+
+## Fluxo
+```text
+Admin clica "Convidar" → preenche email/nome/cargo → edge function cria user no auth + profile + role → usuário recebe email
+
+Admin clica "Excluir" → confirma → edge function remove do auth (cascata remove profile/role)
+```
 
