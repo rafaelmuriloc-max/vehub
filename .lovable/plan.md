@@ -1,51 +1,46 @@
 
 
-# Criar abas NFS-e, NF-e e NFC-e na página de Notas Fiscais
+# Corrigir NF-e: usar endpoint nacional (AN) em vez do SEF-SC
 
-## Visão geral
-Reestruturar a página de Notas Fiscais em 3 abas. O conteúdo atual (543 linhas) será movido integralmente para `NfseTab.tsx`. As abas NF-e e NFC-e serão criadas como novos componentes. Uma nova Edge Function e tabela serão criadas para a consulta de NF-e via Web Service SEF-SC.
+## Problema
+O endpoint `satnfe.sef.sc.gov.br` bloqueia conexões de IPs cloud (Supabase). Todas as tentativas de conexão resultam em "connection reset".
 
-## Alterações
+## Solução
+Trocar para o Web Service nacional de Distribuição de DF-e (Ambiente Nacional - AN), que aceita conexões cloud (assim como o `adn.nfse.gov.br` funciona para NFS-e).
 
-### 1. `src/pages/Invoices.tsx` — Simplificar para container com Tabs
-- Remover todo o conteúdo atual
-- Renderizar `Tabs` com 3 abas: NFS-e, NF-e, NFC-e
-- Importar os 3 componentes de aba
+- **Produção**: `https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`
+- **Homologação**: `https://hom.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`
 
-### 2. `src/components/invoices/NfseTab.tsx` — Conteúdo atual
-- Mover 100% do código existente de `Invoices.tsx` para cá
-- Sem alteração de lógica, apenas transformar de page em componente
+## Alterações em `supabase/functions/nfe-query/index.ts`
 
-### 3. `src/components/invoices/NfeTab.tsx` — Nova aba NF-e
-- Interface similar à NFS-e: seleção de cliente, botão consultar, tabela de resultados
-- Filtros: cliente, período
-- Tabela: número, chave de acesso, emitente, destinatário, data emissão, valor, status
-- Download de XML individual
-- Chama Edge Function `nfe-query`
+### 1. Trocar URL e SOAP
+- URL: `www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`
+- SOAPAction: `http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse`
+- Namespace: `http://www.portalfiscal.inf.br/nfe`
 
-### 4. `src/components/invoices/NfceTab.tsx` — Placeholder
-- Mensagem "Em breve" com ícone
+### 2. Alterar XML de request
+De `distNFeSC` (schema SC) para `distDFeInt` (schema nacional):
+```xml
+<distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <tpAmb>1</tpAmb>
+  <cUFAutor>42</cUFAutor>
+  <CNPJ>{cnpj}</CNPJ>
+  <distNSU>
+    <ultNSU>{ultNSU}</ultNSU>
+  </distNSU>
+</distDFeInt>
+```
 
-### 5. Migração SQL — tabela `nfe_invoices` + coluna `last_nfe_nsu`
-- `nfe_invoices`: id, client_id (FK), access_key (unique), invoice_number, issue_date, emitter_cnpj, emitter_name, recipient_cnpj, recipient_name, total_value, status, nsu, xml_url, raw_xml, created_at
-- RLS para authenticated
-- Adicionar `last_nfe_nsu` em `clients`
+### 3. Alterar parsing do response
+- Tag de retorno: `retDistDFeInt` em vez de `retDistNFeSC`
+- Lote comprimido: `docZip` (base64 gzip) dentro de `loteDistDFeInt`
+- Cada documento vem em `<docZip NSU="..." schema="...">base64gzip</docZip>`
+- Campo `maxNSU` e `ultNSU` no retorno
+- Continue loop: `cStat=138` (documentos localizados) em vez de `118`
 
-### 6. Edge Function `supabase/functions/nfe-query/index.ts`
-- Recebe `{ client_id }`
-- Carrega certificado A1 do cliente
-- Monta SOAP XML `distNFeSC v2.00` com `ultNuNSU` do `clients.last_nfe_nsu`
-- POST mTLS para `https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx`
-- Descompacta `loteDistComp` (base64 → gzip → XML)
-- Parseia até 50 docs por lote, extrai dados da NF-e
-- Upsert em `nfe_invoices`, atualiza `clients.last_nfe_nsu`
-- Loop se cStat=118 (mais docs disponíveis)
+### 4. Manter toda lógica de mTLS, upsert e parsing de NF-e
+A lógica de PFX, certificado, upsert em `nfe_invoices` e atualização de `last_nfe_nsu` permanece igual. Apenas o transporte SOAP e parsing do envelope mudam.
 
-## Arquivos
-- `src/pages/Invoices.tsx` — reescrito (container com Tabs)
-- `src/components/invoices/NfseTab.tsx` — criado (conteúdo atual)
-- `src/components/invoices/NfeTab.tsx` — criado
-- `src/components/invoices/NfceTab.tsx` — criado
-- `supabase/functions/nfe-query/index.ts` — criado
-- Migração SQL — criada
+## Arquivo modificado
+- `supabase/functions/nfe-query/index.ts`
 
