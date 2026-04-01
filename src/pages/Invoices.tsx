@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen } from 'lucide-react';
 
-type Client = { id: string; company_name: string; document: string | null };
+type Client = { id: string; company_name: string; document: string | null; digital_certificate_url: string | null; digital_certificate_expiry: string | null };
 type Invoice = {
   id: string;
   client_id: string;
@@ -92,7 +92,7 @@ export default function Invoices() {
   async function loadClients() {
     const { data } = await supabase
       .from('clients')
-      .select('id, company_name, document')
+      .select('id, company_name, document, digital_certificate_url, digital_certificate_expiry')
       .eq('status', 'active')
       .order('company_name');
     if (data) setClients(data);
@@ -117,10 +117,18 @@ export default function Invoices() {
 
     const clientIds = selectedClient && selectedClient !== 'all'
       ? [selectedClient]
-      : clients.filter(c => c.document).map(c => c.id);
+      : (() => {
+          const today = new Date().toISOString().slice(0, 10);
+          return clients.filter(c => 
+            c.document && 
+            c.digital_certificate_url && 
+            c.digital_certificate_expiry && 
+            c.digital_certificate_expiry >= today
+          ).map(c => c.id);
+        })();
 
     if (clientIds.length === 0) {
-      toast({ title: 'Nenhum cliente com CNPJ cadastrado', variant: 'destructive' });
+      toast({ title: 'Nenhum cliente com CNPJ e certificado digital válido', variant: 'destructive' });
       return;
     }
 
