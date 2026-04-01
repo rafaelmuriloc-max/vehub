@@ -1,4 +1,6 @@
 import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Receipt, Scale, Plug, MessageCircle, Mail } from 'lucide-react';
+import { useUnreadCount } from '@/hooks/useUnreadCount';
+import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -36,6 +38,7 @@ export function AppSidebar() {
   const { profile, signOut } = useAuth();
 
   const isCadastroActive = cadastroSubItems.some(item => location.pathname === item.path);
+  const unreadCount = useUnreadCount();
 
   return (
     <Sidebar>
@@ -70,6 +73,11 @@ export function AppSidebar() {
                   >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
+                    {item.title === 'Chat' && unreadCount > 0 && (
+                      <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center px-1.5 text-[10px] font-bold bg-destructive text-destructive-foreground border-0">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </Badge>
+                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
