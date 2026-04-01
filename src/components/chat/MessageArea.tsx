@@ -29,6 +29,7 @@ interface MessageAreaProps {
   companyNames?: string[];
   isClosed?: boolean;
   onCloseTicket?: () => void;
+  onReopenTicket?: () => void;
 }
 
 function formatDateLabel(dateStr: string) {
