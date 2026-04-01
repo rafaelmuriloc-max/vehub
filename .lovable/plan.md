@@ -1,25 +1,33 @@
 
 
-# Corrigir indicadores de mensagens não lidas
+# Corrigir indicador de não lida ao abrir conversa
 
 ## Problema
-O webhook do WhatsApp salva **todas** as mensagens (incoming e outgoing) com `sender_id = systemUserId` (o admin logado). O hook `useUnreadCount` filtra `.neq('sender_id', user.id)`, o que exclui 100% das mensagens — resultado: badge sempre zero.
+Dois issues ao abrir uma conversa:
 
-Dados confirmados no banco: 309 mensagens não lidas, todas com `sender_id = a9a263c4...` (o admin), então o filtro `neq` remove todas.
+1. **Filtro incorreto para marcar como lida** (linha 190-192): Usa `m.sender_id !== user.id` para encontrar mensagens não lidas, mas mensagens WhatsApp incoming também têm `sender_id = user.id` (o webhook usa o mesmo systemUserId). Deve usar `message_type` como já feito no `unreadMap`.
 
-## Solução
-Usar `message_type` para identificar mensagens recebidas em vez de `sender_id`. Mensagens recebidas têm `message_type` começando com `whatsapp_incoming` ou `whatsapp_image`, `whatsapp_audio`, etc. Mensagens enviadas têm `whatsapp_outgoing` ou `text`.
+2. **Badge não atualiza na lista**: Após marcar mensagens como lidas no banco, o estado local `conversations` não é recarregado, então o badge continua visível até o próximo evento realtime.
 
-### 1. `src/hooks/useUnreadCount.ts`
-Trocar o filtro `.neq('sender_id', user.id)` por `.not('message_type', 'in', '("text","whatsapp_outgoing")')` — ou seja, contar apenas mensagens que NÃO são do tipo outgoing/text (que são as enviadas pela equipe).
+## Alterações em `src/pages/Chat.tsx`
 
-### 2. `src/pages/Chat.tsx` — cálculo de `unreadMap`
-Na linha ~89, trocar a condição `msg.sender_id !== user.id` pela mesma lógica baseada em `message_type`. A query de mensagens já retorna esse campo, basta usá-lo no filtro.
+### 1. Corrigir filtro de mensagens não lidas (linha ~190-192)
+Trocar:
+```typescript
+const unreadIds = data
+  .filter(m => m.sender_id !== user.id && !m.read_at)
+  .map(m => m.id);
+```
+Por:
+```typescript
+const unreadIds = data
+  .filter(m => m.message_type !== 'text' && m.message_type !== 'whatsapp_outgoing' && !m.read_at)
+  .map(m => m.id);
+```
 
-### 3. `src/pages/Chat.tsx` — query de mensagens
-Garantir que a query que carrega mensagens para o `unreadMap` inclua o campo `message_type` no select.
+### 2. Recarregar conversas após marcar como lidas (após linha ~198)
+Após o `update`, chamar `loadConversations()` para atualizar os badges na lista de conversas. O hook `useUnreadCount` já se atualiza automaticamente via realtime ao detectar o UPDATE.
 
-## Arquivos
-- `src/hooks/useUnreadCount.ts` (~1 linha)
-- `src/pages/Chat.tsx` (~2 linhas)
+## Arquivo
+- `src/pages/Chat.tsx` (~3 linhas alteradas)
 
