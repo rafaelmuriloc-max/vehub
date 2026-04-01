@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -13,15 +13,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import {
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
-  ChevronDown, ChevronRight, Zap, Copy,
+  ChevronDown, ChevronRight, Zap, Copy, Users, Search, CalendarDays,
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type DocumentType = { id: string; name: string };
+type Client = { id: string; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
+type ClientDeptObligation = { id: string; client_id: string; department_id: string; obligation_id: string };
 
 const activityTypeIcons: Record<string, React.ReactNode> = {
   document: <FileText className="h-4 w-4" />,
@@ -33,6 +37,15 @@ const activityTypeLabels: Record<string, string> = {
   document: 'Documento', checklist: 'Checklist', whatsapp: 'WhatsApp', email: 'E-mail',
 };
 
+const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+const taxRegimeOptions = [
+  { value: 'simples_nacional', label: 'Simples Nacional' },
+  { value: 'lucro_presumido', label: 'Lucro Presumido' },
+  { value: 'lucro_real', label: 'Lucro Real' },
+  { value: 'mei', label: 'MEI' },
+];
+
 export default function Obligations() {
   const { isAdmin: admin } = useAuth();
   const { toast } = useToast();
@@ -41,10 +54,26 @@ export default function Obligations() {
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientDeptObligations, setClientDeptObligations] = useState<ClientDeptObligation[]>([]);
 
   const [obligationOpen, setObligationOpen] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
-  const [obligationForm, setObligationForm] = useState({ name: '', description: '', department_id: '', recurrence: 'mensal', alert_day: '' as string, target_day: '' as string, due_day: '' as string, competence_rule: 'current', is_tax: false, tax_sphere: '' });
+  const [obligationForm, setObligationForm] = useState({
+    name: '', description: '', department_id: '', recurrence: 'mensal',
+    alert_day: '' as string, target_day: '' as string, due_day: '' as string,
+    competence_rule: 'current', is_tax: false, tax_sphere: '',
+    assignment_mode: 'manual',
+    segment_has_payroll: false,
+    segment_tax_regimes: [] as string[],
+    segment_city: '',
+  });
+  const [manualSelectedClients, setManualSelectedClients] = useState<string[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
+
+  // Generation state
+  const [generateStartMonth, setGenerateStartMonth] = useState('');
+  const [generating, setGenerating] = useState(false);
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -55,32 +84,89 @@ export default function Obligations() {
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
-    const [dRes, oRes, aRes, dtRes] = await Promise.all([
+    const [dRes, oRes, aRes, dtRes, cRes, cdoRes] = await Promise.all([
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('obligations').select('*').order('name'),
       supabase.from('obligation_activities').select('*').order('order'),
       supabase.from('document_types').select('id, name').order('name'),
+      supabase.from('clients').select('id, company_name, document, tax_regime, payroll_type, address, status').eq('status', 'active').order('company_name'),
+      supabase.from('client_department_obligations').select('*'),
     ]);
     if (dRes.data) setDepartments(dRes.data);
-    if (oRes.data) setObligations(oRes.data);
+    if (oRes.data) setObligations(oRes.data as Obligation[]);
     if (aRes.data) setActivities(aRes.data as Activity[]);
     if (dtRes.data) setDocumentTypes(dtRes.data as DocumentType[]);
+    if (cRes.data) setClients(cRes.data as Client[]);
+    if (cdoRes.data) setClientDeptObligations(cdoRes.data as ClientDeptObligation[]);
   }
+
+  // ---- Segment filtering ----
+  function getFilteredClients(filters: { has_payroll: boolean; tax_regimes: string[]; city: string }) {
+    return clients.filter(c => {
+      if (filters.has_payroll && !c.payroll_type) return false;
+      if (filters.tax_regimes.length > 0 && (!c.tax_regime || !filters.tax_regimes.includes(c.tax_regime))) return false;
+      if (filters.city && c.address && !c.address.toLowerCase().includes(filters.city.toLowerCase())) return false;
+      if (filters.city && !c.address) return false;
+      return true;
+    });
+  }
+
+  const segmentPreviewClients = useMemo(() => {
+    if (obligationForm.assignment_mode === 'all') return clients;
+    if (obligationForm.assignment_mode === 'segment') {
+      return getFilteredClients({
+        has_payroll: obligationForm.segment_has_payroll,
+        tax_regimes: obligationForm.segment_tax_regimes,
+        city: obligationForm.segment_city,
+      });
+    }
+    return clients.filter(c => manualSelectedClients.includes(c.id));
+  }, [obligationForm.assignment_mode, obligationForm.segment_has_payroll, obligationForm.segment_tax_regimes, obligationForm.segment_city, manualSelectedClients, clients]);
+
+  const filteredManualClients = useMemo(() => {
+    if (!clientSearch) return clients;
+    const s = clientSearch.toLowerCase();
+    return clients.filter(c => c.company_name.toLowerCase().includes(s) || (c.document && c.document.includes(s)));
+  }, [clients, clientSearch]);
 
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_has_payroll: false, segment_tax_regimes: [], segment_city: '' });
+    setManualSelectedClients([]);
+    setGenerateStartMonth('');
     setObligationOpen(true);
   }
   function openEditObligation(o: Obligation) {
     setEditingObligation(o);
-    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '', competence_rule: (o as any).competence_rule || 'current', is_tax: (o as any).is_tax || false, tax_sphere: (o as any).tax_sphere || '' });
+    const filters = (o.segment_filters && typeof o.segment_filters === 'object') ? o.segment_filters : {};
+    setObligationForm({
+      name: o.name, description: o.description || '', department_id: o.department_id,
+      recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '',
+      target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '',
+      competence_rule: o.competence_rule || 'current',
+      is_tax: o.is_tax || false, tax_sphere: o.tax_sphere || '',
+      assignment_mode: o.assignment_mode || 'manual',
+      segment_has_payroll: filters.has_payroll || false,
+      segment_tax_regimes: filters.tax_regime || [],
+      segment_city: filters.city || '',
+    });
+    // Load manual selections
+    const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === o.id).map(cdo => cdo.client_id);
+    setManualSelectedClients(linked);
+    setGenerateStartMonth('');
     setObligationOpen(true);
   }
+
   async function saveObligation(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
+    const segmentFilters = obligationForm.assignment_mode === 'segment' ? {
+      has_payroll: obligationForm.segment_has_payroll || undefined,
+      tax_regime: obligationForm.segment_tax_regimes.length > 0 ? obligationForm.segment_tax_regimes : undefined,
+      city: obligationForm.segment_city || undefined,
+    } : {};
+
+    const payload: any = {
       name: obligationForm.name,
       description: obligationForm.description || null,
       department_id: obligationForm.department_id,
@@ -91,15 +177,122 @@ export default function Obligations() {
       competence_rule: obligationForm.recurrence === 'mensal' ? obligationForm.competence_rule : 'current',
       is_tax: obligationForm.is_tax,
       tax_sphere: obligationForm.is_tax && obligationForm.tax_sphere ? obligationForm.tax_sphere : null,
+      assignment_mode: obligationForm.assignment_mode,
+      segment_filters: segmentFilters,
     };
-    const { error } = editingObligation
-      ? await supabase.from('obligations').update(payload).eq('id', editingObligation.id)
-      : await supabase.from('obligations').insert(payload);
-    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+
+    let obligationId = editingObligation?.id;
+
+    if (editingObligation) {
+      const { error } = await supabase.from('obligations').update(payload).eq('id', editingObligation.id);
+      if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    } else {
+      const { data, error } = await supabase.from('obligations').insert(payload).select().single();
+      if (error || !data) { toast({ title: 'Erro', description: error?.message, variant: 'destructive' }); return; }
+      obligationId = data.id;
+    }
+
+    // Sync client_department_obligations
+    if (obligationId) {
+      await syncClientObligations(obligationId, obligationForm.department_id);
+    }
+
     toast({ title: editingObligation ? 'Atualizado' : 'Criado' });
     setObligationOpen(false);
     loadAll();
   }
+
+  async function syncClientObligations(obligationId: string, departmentId: string) {
+    // Delete existing links for this obligation
+    await supabase.from('client_department_obligations').delete().eq('obligation_id', obligationId);
+
+    let targetClients: string[] = [];
+    if (obligationForm.assignment_mode === 'all') {
+      targetClients = clients.map(c => c.id);
+    } else if (obligationForm.assignment_mode === 'segment') {
+      targetClients = segmentPreviewClients.map(c => c.id);
+    } else {
+      targetClients = manualSelectedClients;
+    }
+
+    if (targetClients.length > 0) {
+      const rows = targetClients.map(clientId => ({
+        client_id: clientId,
+        department_id: departmentId,
+        obligation_id: obligationId,
+      }));
+      await supabase.from('client_department_obligations').insert(rows);
+    }
+  }
+
+  async function generateObligationInstances(obligationId: string) {
+    if (!generateStartMonth) return;
+    const startMonth = Number(generateStartMonth);
+    const year = new Date().getFullYear();
+
+    const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === obligationId);
+    // If we just saved, use segmentPreviewClients
+    let clientIds = linked.map(cdo => cdo.client_id);
+    if (clientIds.length === 0) {
+      // Fallback to current preview
+      clientIds = segmentPreviewClients.map(c => c.id);
+    }
+
+    if (clientIds.length === 0) {
+      toast({ title: 'Nenhuma empresa vinculada', variant: 'destructive' });
+      return;
+    }
+
+    setGenerating(true);
+
+    // Get existing instances to avoid duplicates
+    const { data: existing } = await supabase
+      .from('obligation_instances')
+      .select('client_id, reference_month')
+      .eq('obligation_id', obligationId);
+
+    const existingSet = new Set((existing || []).map(e => `${e.client_id}_${e.reference_month}`));
+
+    const ob = obligations.find(o => o.id === obligationId);
+    const rows: any[] = [];
+
+    for (let month = startMonth; month <= 12; month++) {
+      const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
+      const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+
+      for (const clientId of clientIds) {
+        const key = `${clientId}_${refDate}`;
+        if (!existingSet.has(key)) {
+          rows.push({
+            obligation_id: obligationId,
+            client_id: clientId,
+            reference_month: refDate,
+            due_date: dueDate,
+            status: 'pending',
+          });
+        }
+      }
+    }
+
+    if (rows.length > 0) {
+      // Insert in batches of 500
+      for (let i = 0; i < rows.length; i += 500) {
+        const batch = rows.slice(i, i + 500);
+        const { error } = await supabase.from('obligation_instances').insert(batch);
+        if (error) {
+          toast({ title: 'Erro ao gerar', description: error.message, variant: 'destructive' });
+          setGenerating(false);
+          return;
+        }
+      }
+      toast({ title: `${rows.length} instâncias geradas com sucesso` });
+    } else {
+      toast({ title: 'Todas as instâncias já existem' });
+    }
+
+    setGenerating(false);
+  }
+
   async function deleteObligation(id: string) {
     const { error } = await supabase.from('obligations').delete().eq('id', id);
     if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
@@ -115,7 +308,7 @@ export default function Obligations() {
   }
   function openEditActivity(a: Activity) {
     setEditingActivity(a);
-    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '', whatsapp_template_name: (a as any).whatsapp_template_name || '', whatsapp_message_body: (a as any).whatsapp_message_body || '', whatsapp_button_url: (a as any).whatsapp_button_url || '', whatsapp_has_document_header: a.whatsapp_has_document_header || false });
+    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '', whatsapp_template_name: a.whatsapp_template_name || '', whatsapp_message_body: a.whatsapp_message_body || '', whatsapp_button_url: a.whatsapp_button_url || '', whatsapp_has_document_header: a.whatsapp_has_document_header || false });
     setActivityOpen(true);
   }
   async function saveActivity(e: React.FormEvent) {
@@ -162,7 +355,7 @@ export default function Obligations() {
 
   async function cloneObligation(ob: Obligation) {
     const { id, ...rest } = ob;
-    const { data: newOb, error } = await supabase.from('obligations').insert({ ...rest, name: `${ob.name} (cópia)` }).select().single();
+    const { data: newOb, error } = await supabase.from('obligations').insert({ ...rest, name: `${ob.name} (cópia)` } as any).select().single();
     if (error || !newOb) { toast({ title: 'Erro ao clonar', description: error?.message, variant: 'destructive' }); return; }
     const obActivities = activities.filter(a => a.obligation_id === ob.id);
     if (obActivities.length > 0) {
@@ -180,6 +373,10 @@ export default function Obligations() {
     dept,
     items: obligations.filter(o => o.department_id === dept.id),
   })).filter(g => g.items.length > 0);
+
+  function getLinkedCount(obligationId: string) {
+    return clientDeptObligations.filter(cdo => cdo.obligation_id === obligationId).length;
+  }
 
   return (
     <div className="space-y-6">
@@ -203,6 +400,7 @@ export default function Obligations() {
             {items.map(ob => {
               const isExpanded = expandedObligation === ob.id;
               const obActivities = activities.filter(a => a.obligation_id === ob.id);
+              const linkedCount = getLinkedCount(ob.id);
               return (
                 <div key={ob.id} className="border rounded-lg">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2 cursor-pointer hover:bg-muted/50" onClick={() => setExpandedObligation(isExpanded ? null : ob.id)}>
@@ -212,9 +410,14 @@ export default function Obligations() {
                       <span className="font-medium">{ob.name}</span>
                       <div className="flex flex-wrap gap-1">
                         <Badge variant="outline">{ob.recurrence}</Badge>
-                        {(ob as any).is_tax && (
+                        {ob.is_tax && (
                           <Badge className="bg-blue-600 text-white border-0">
-                            Imposto{(ob as any).tax_sphere ? ` - ${(ob as any).tax_sphere.charAt(0).toUpperCase() + (ob as any).tax_sphere.slice(1)}` : ''}
+                            Imposto{ob.tax_sphere ? ` - ${ob.tax_sphere.charAt(0).toUpperCase() + ob.tax_sphere.slice(1)}` : ''}
+                          </Badge>
+                        )}
+                        {linkedCount > 0 && (
+                          <Badge variant="secondary" className="gap-1">
+                            <Users className="h-3 w-3" />{linkedCount}
                           </Badge>
                         )}
                         {ob.alert_day && <Badge className="bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
@@ -299,7 +502,7 @@ export default function Obligations() {
 
       {/* Obligation Dialog */}
       <Dialog open={obligationOpen} onOpenChange={setObligationOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingObligation ? 'Editar Obrigação' : 'Nova Obrigação'}</DialogTitle></DialogHeader>
           <form onSubmit={saveObligation} className="space-y-4">
             <div className="space-y-2"><Label>Nome *</Label><Input value={obligationForm.name} onChange={e => setObligationForm({ ...obligationForm, name: e.target.value })} required /></div>
@@ -383,6 +586,160 @@ export default function Obligations() {
                 <p className="text-xs text-muted-foreground">Prazo final (multa)</p>
               </div>
             </div>
+
+            <Separator />
+
+            {/* === Empresas Vinculadas === */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-base font-semibold">Empresas Vinculadas</Label>
+              </div>
+              <Select value={obligationForm.assignment_mode} onValueChange={v => setObligationForm({ ...obligationForm, assignment_mode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as empresas ativas</SelectItem>
+                  <SelectItem value="segment">Por segmento (filtros)</SelectItem>
+                  <SelectItem value="manual">Seleção manual</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {obligationForm.assignment_mode === 'segment' && (
+                <div className="space-y-3 rounded-lg border p-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="seg_payroll"
+                      checked={obligationForm.segment_has_payroll}
+                      onCheckedChange={v => setObligationForm({ ...obligationForm, segment_has_payroll: !!v })}
+                    />
+                    <Label htmlFor="seg_payroll">Empresas com Folha de Pagamento</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Regime Tributário</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {taxRegimeOptions.map(opt => (
+                        <div key={opt.value} className="flex items-center space-x-1.5">
+                          <Checkbox
+                            id={`regime_${opt.value}`}
+                            checked={obligationForm.segment_tax_regimes.includes(opt.value)}
+                            onCheckedChange={v => {
+                              const regimes = v
+                                ? [...obligationForm.segment_tax_regimes, opt.value]
+                                : obligationForm.segment_tax_regimes.filter(r => r !== opt.value);
+                              setObligationForm({ ...obligationForm, segment_tax_regimes: regimes });
+                            }}
+                          />
+                          <Label htmlFor={`regime_${opt.value}`} className="text-sm">{opt.label}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Cidade (contido no endereço)</Label>
+                    <Input
+                      placeholder="Ex: São Paulo"
+                      value={obligationForm.segment_city}
+                      onChange={e => setObligationForm({ ...obligationForm, segment_city: e.target.value })}
+                    />
+                  </div>
+                  <p className="text-sm font-medium text-primary">
+                    {segmentPreviewClients.length} empresa(s) correspondem aos filtros
+                  </p>
+                </div>
+              )}
+
+              {obligationForm.assignment_mode === 'manual' && (
+                <div className="space-y-2 rounded-lg border p-3">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por nome ou CNPJ..."
+                      className="pl-9"
+                      value={clientSearch}
+                      onChange={e => setClientSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">{manualSelectedClients.length} selecionada(s)</p>
+                    <div className="flex gap-1">
+                      <Button type="button" size="sm" variant="outline" onClick={() => setManualSelectedClients(clients.map(c => c.id))}>
+                        Selecionar todas
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setManualSelectedClients([])}>
+                        Limpar
+                      </Button>
+                    </div>
+                  </div>
+                  <ScrollArea className="h-48">
+                    <div className="space-y-1">
+                      {filteredManualClients.map(c => (
+                        <div key={c.id} className="flex items-center space-x-2 py-1 px-1 rounded hover:bg-muted/50">
+                          <Checkbox
+                            id={`client_${c.id}`}
+                            checked={manualSelectedClients.includes(c.id)}
+                            onCheckedChange={v => {
+                              setManualSelectedClients(v
+                                ? [...manualSelectedClients, c.id]
+                                : manualSelectedClients.filter(id => id !== c.id)
+                              );
+                            }}
+                          />
+                          <Label htmlFor={`client_${c.id}`} className="text-sm flex-1 cursor-pointer">
+                            {c.company_name}
+                            {c.document && <span className="text-muted-foreground ml-1">({c.document})</span>}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {obligationForm.assignment_mode === 'all' && (
+                <p className="text-sm text-muted-foreground">Todas as {clients.length} empresas ativas serão vinculadas.</p>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* === Gerar Obrigações === */}
+            {editingObligation && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-base font-semibold">Gerar Obrigações</Label>
+                </div>
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div className="space-y-2">
+                    <Label>Mês de início</Label>
+                    <Select value={generateStartMonth} onValueChange={setGenerateStartMonth}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
+                      <SelectContent>
+                        {monthNames.map((name, i) => (
+                          <SelectItem key={i} value={String(i + 1)}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {generateStartMonth && (
+                    <p className="text-sm text-muted-foreground">
+                      Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!generateStartMonth || generating}
+                    onClick={() => generateObligationInstances(editingObligation.id)}
+                    className="w-full"
+                  >
+                    <CalendarDays className="h-4 w-4 mr-2" />
+                    {generating ? 'Gerando...' : 'Gerar Obrigações'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Button type="submit" className="w-full" disabled={!obligationForm.name || !obligationForm.department_id}>Salvar</Button>
           </form>
         </DialogContent>
