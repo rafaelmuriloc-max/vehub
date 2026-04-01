@@ -410,97 +410,102 @@ export default function CalendarView() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <CalendarDays className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Calendário</h1>
-            <p className="text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
-          </div>
-        </div>
-      </div>
+      {/* Header + Filters unified */}
+      {(() => {
+        const activeFilters = [filterDept, filterClient, filterObligation].filter(v => v !== 'all').length;
+        return (
+          <div className="bg-card rounded-xl border p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5">
+                  <CalendarDays className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-foreground">Calendário</h1>
+                  <p className="text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
+                </div>
+              </div>
+              {activeFilters > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground gap-1.5"
+                  onClick={() => { setFilterDept('all'); setFilterClient('all'); setFilterObligation('all'); setSelectedDay(null); }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Limpar filtros
+                  <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0">{activeFilters}</Badge>
+                </Button>
+              )}
+            </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">Filtros</span>
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Departamento</label>
-              <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
-                <SelectTrigger className="w-[220px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os departamentos</SelectItem>
-                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Empresa</label>
-              <Popover open={clientOpen} onOpenChange={setClientOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={clientOpen}
-                    className="w-[280px] justify-between font-normal"
-                  >
-                    <span className="truncate">
-                      {filterClient === 'all' ? 'Todas as empresas' : clients.find(c => c.id === filterClient)?.company_name || 'Empresa'}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[320px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Buscar empresa..." />
-                    <CommandList className="max-h-[300px]">
-                      <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="todas-as-empresas"
-                          onSelect={() => { setFilterClient('all'); setSelectedDay(null); setClientOpen(false); }}
-                        >
-                          <Check className={`mr-2 h-4 w-4 ${filterClient === 'all' ? 'opacity-100' : 'opacity-0'}`} />
-                          Todas as empresas
-                        </CommandItem>
-                        {clients.map(c => (
+            <div className="border-t pt-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Departamento" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os departamentos</SelectItem>
+                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+
+                <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={clientOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {filterClient === 'all' ? 'Todas as empresas' : clients.find(c => c.id === filterClient)?.company_name || 'Empresa'}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[320px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar empresa..." />
+                      <CommandList className="max-h-[300px]">
+                        <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
+                        <CommandGroup>
                           <CommandItem
-                            key={c.id}
-                            value={c.company_name}
-                            onSelect={() => { setFilterClient(c.id); setSelectedDay(null); setClientOpen(false); }}
+                            value="todas-as-empresas"
+                            onSelect={() => { setFilterClient('all'); setSelectedDay(null); setClientOpen(false); }}
                           >
-                            <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
-                            {c.company_name}
+                            <Check className={`mr-2 h-4 w-4 ${filterClient === 'all' ? 'opacity-100' : 'opacity-0'}`} />
+                            Todas as empresas
                           </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Obrigação</label>
-              <Select value={filterObligation} onValueChange={v => { setFilterObligation(v); setSelectedDay(null); }}>
-                <SelectTrigger className="w-[280px]"><SelectValue placeholder="Obrigação" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as obrigações</SelectItem>
-                  {obligations
-                    .filter(o => filterDept === 'all' || o.department_id === filterDept)
-                    .map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+                          {clients.map(c => (
+                            <CommandItem
+                              key={c.id}
+                              value={c.company_name}
+                              onSelect={() => { setFilterClient(c.id); setSelectedDay(null); setClientOpen(false); }}
+                            >
+                              <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
+                              {c.company_name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                <Select value={filterObligation} onValueChange={v => { setFilterObligation(v); setSelectedDay(null); }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Obrigação" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as obrigações</SelectItem>
+                    {obligations
+                      .filter(o => filterDept === 'all' || o.department_id === filterDept)
+                      .map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        );
+      })()}
 
       {/* Calendar + Day list side by side */}
       <div className="flex flex-col lg:flex-row gap-6">
