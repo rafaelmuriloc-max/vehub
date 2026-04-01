@@ -1,36 +1,33 @@
 
 
-# Acionar atividades automáticas após upload de documentos
+# Forçar disparo de atividades pendentes (one-time script)
 
-## Problema
-A página de Documentos (`Documents.tsx`) marca a atividade de documento como concluída ao importar, mas não executa a cadeia de `auto_start` (e-mail/WhatsApp). Essa lógica só existe no `ClientObligationsTab` e `CalendarView`.
+## Contexto
+15 instâncias da obrigação "Folha Pró Labore" (referência abril/2026) têm documentos completos mas as 3 atividades auto_start (WhatsApp 1, WhatsApp 2 com docs, E-mail) nunca foram disparadas.
 
 ## Solução
-Após marcar cada atividade de documento como concluída na função `importDocument`, executar a mesma lógica de cadeia automática: buscar as atividades seguintes da obrigação, e para cada uma com `auto_start = true`, disparar e-mail ou WhatsApp conforme o tipo.
+Executar um script Python one-time que, para cada uma das 15 instâncias:
 
-## Alterações em `src/pages/Documents.tsx`
+1. **WhatsApp 1** (order 3) — template `send_output_informations_template_3_header` sem document header
+2. **WhatsApp 2** (order 4) — template `envio_doc` com document header (envia cada documento anexado separadamente)
+3. **E-mail** (order 5) — via SMTP do Depto Pessoal com anexos
 
-### 1. Importar funções de envio
-Adicionar imports de `sendActivityEmail` e `sendActivityWhatsApp`.
+O script chamará as edge functions `whatsapp-send` e `smtp-send` diretamente via HTTP, usando o token do usuário logado (passado como parâmetro ou via env). Após cada envio bem-sucedido, insere o registro de completion na tabela `obligation_activity_completions`.
 
-### 2. Após o loop de completions (linha ~288), adicionar lógica auto_start
-Para cada instância processada:
-- Buscar todas as atividades da obrigação, ordenadas por `order`
-- Encontrar a posição da atividade de documento recém-completada
-- Percorrer as atividades seguintes com `auto_start = true`
-- Para tipo `email`: chamar `sendActivityEmail`
-- Para tipo `whatsapp`: chamar `sendActivityWhatsApp`
-- Parar na primeira falha ou atividade sem `auto_start`
+## Dados já mapeados
+- **Obligation ID**: `8232b5f4-b984-4d39-abef-730debde6321`
+- **Activity IDs**: WhatsApp 1 = `af78b123-...`, WhatsApp 2 = `698239f8-...`, Email = `eda9da43-...`
+- **Department**: Pessoal (`af36437e-da3d-4c6e-bd71-e6584fa96843`)
+- **15 instâncias** com seus `instance_id` e `client_id`
+- Competência: março/2026 (previous rule), vencimento dia 5
 
-A lógica é idêntica à já existente em `ClientObligationsTab.tsx` (linhas 232-285).
-
-### 3. Buscar dados necessários
-Para montar os parâmetros das funções de envio, buscar:
-- Nome da obrigação (já temos o `obligation_id`)
-- `reference_month` e `due_day` da instância/obrigação
-- `department_id` da obrigação
-- Todas as atividades da obrigação com seus campos de email/WhatsApp
+## Execução
+- Script Python usando `requests` + Supabase REST API
+- Busca contatos por departamento para cada cliente
+- Gera signed URLs para documentos
+- Chama edge functions sequencialmente com delay entre clientes
+- Insere email_logs e completions via REST API
 
 ## Arquivos
-- `src/pages/Documents.tsx`
+- Nenhuma alteração de código — script one-time via `code--exec`
 
