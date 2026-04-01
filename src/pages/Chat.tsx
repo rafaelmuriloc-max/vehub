@@ -7,7 +7,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { v4 as uuidv4 } from 'crypto';
+
 
 export type ChatTab = 'mine' | 'closed' | 'all';
 
