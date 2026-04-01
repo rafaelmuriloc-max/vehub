@@ -1,48 +1,58 @@
 
 
-# Otimizar carregamento do chat
+# Chat: receber mensagens de outros dispositivos e enviar mensagens WhatsApp
 
-## Problema
-A função `loadConversations` executa um loop `for...of` sequencial onde cada conversa faz 3-5 queries separadas ao Supabase (última mensagem, contagem de não lidas, nome do participante, empresas vinculadas). Com N conversas, isso gera dezenas de queries sequenciais, causando lentidão.
+## Problemas atuais
 
-## Solução
-Paralelizar as queries e reduzir o número total de chamadas ao banco.
+1. **Mensagens enviadas por outros dispositivos não aparecem**: O webhook (`whatsapp-webhook`) ignora mensagens `fromMe` (linha 44). Mensagens enviadas pelo celular ou WhatsApp Web nunca chegam ao chat.
 
-## Alterações em `src/pages/Chat.tsx`
+2. **Envio de mensagens**: O `sendMessage` atual apenas insere no banco local — não envia via WhatsApp. Precisa chamar a API correta dependendo do contexto (Evolution para iniciar conversa, Meta API oficial após o cliente responder).
 
-### 1. Paralelizar o processamento de conversas
-Substituir o `for...of` sequencial por `Promise.all` com `map`, processando todas as conversas em paralelo.
+## Alterações
 
-### 2. Batch queries onde possível
-- Buscar **todas as últimas mensagens** de uma vez usando uma única query com `in('conversation_id', convIds)` e agrupamento client-side
-- Buscar **todas as contagens de não lidas** em paralelo via `Promise.all`
-- Buscar **todos os clientes vinculados** em uma única query com `in('id', allClientIds)`
-- Buscar **todos os participantes** de conversas 1:1 em uma única query
+### 1. Webhook: aceitar mensagens `fromMe` (`supabase/functions/whatsapp-webhook/index.ts`)
+- Remover o skip de `fromMe` (linhas 44-49)
+- Quando `fromMe === true`:
+  - Usar `channel: "whatsapp"` e `message_type: "whatsapp_outgoing"`
+  - O `sender_id` continua sendo o admin (sistema) mas marcar como `fromMe` para distinguir
+  - Não inserir duplicata: verificar se já existe uma mensagem com o mesmo `content` + `conversation_id` nos últimos 10 segundos (para evitar duplicar mensagens enviadas pelo próprio chat)
 
-### 3. Adicionar estado de loading
-Mostrar skeleton/spinner enquanto as conversas carregam, para feedback imediato ao usuário.
+### 2. Nova edge function: `whatsapp-send-text` (`supabase/functions/whatsapp-send-text/index.ts`)
+- Recebe `{ conversationId, text }`
+- Busca a conversa para obter `whatsapp_phone`
+- Verifica se existe mensagem recebida do cliente nas últimas 24h (`channel = 'whatsapp'` e `message_type` contendo `whatsapp_incoming`)
+  - **Se SIM (janela 24h aberta)**: envia via Meta API oficial (texto livre)
+  - **Se NÃO (fora da janela)**: envia via Evolution API (`sendText`)
+- Insere a mensagem no `chat_messages` com `channel: 'whatsapp'`
+- Atualiza `updated_at` da conversa
 
-### 4. Estrutura otimizada
+### 3. Frontend: enviar via WhatsApp em conversas WhatsApp (`src/pages/Chat.tsx`)
+- No `sendMessage`, verificar se a conversa ativa tem `whatsapp_phone`
+  - Se sim: chamar `supabase.functions.invoke('whatsapp-send-text', ...)` em vez de inserir direto
+  - Se não: manter o comportamento atual (mensagem interna)
+- Adicionar `whatsappPhone` ao tipo `ConversationItem` e passá-lo do `loadConversations`
 
+### 4. ConversationList: expor `whatsappPhone` (`src/components/chat/ConversationList.tsx`)
+- Adicionar `whatsappPhone?: string` ao tipo `ConversationItem`
+
+### 5. Config TOML
+- Adicionar `[functions.whatsapp-send-text]` com `verify_jwt = false`
+
+## Lógica de deduplicação (webhook fromMe)
 ```text
-Antes (sequencial):
-  Conv1: lastMsg → unread → client → contacts → companies
-  Conv2: lastMsg → unread → client → contacts → companies
-  Conv3: lastMsg → unread → client → contacts → companies
-  Total: ~15 queries sequenciais
+Mensagem enviada pelo chat:
+  1. Frontend chama whatsapp-send-text
+  2. Edge function envia + insere no chat_messages
+  3. Webhook recebe fromMe → verifica se existe msg igual nos últimos 10s → SKIP
 
-Depois (paralelo + batch):
-  1. Todas as conversas (já existe)
-  2. Em paralelo:
-     - Todos os clientes vinculados (1 query)
-     - Todos os participantes 1:1 (1 query)
-     - Todos os profiles (1 query)
-  3. Promise.all para cada conversa:
-     - lastMsg + unreadCount + companyLookup (em paralelo por conversa)
-  Total: ~3 queries batch + N×3 queries em paralelo (não sequenciais)
+Mensagem enviada por outro dispositivo:
+  1. Webhook recebe fromMe → não encontra duplicata → INSERE
 ```
 
 ## Arquivos
-- `src/pages/Chat.tsx` -- otimizar `loadConversations`
-- `src/components/chat/ConversationList.tsx` -- adicionar prop `loading` com skeletons
+- `supabase/functions/whatsapp-webhook/index.ts` — aceitar fromMe com deduplicação
+- `supabase/functions/whatsapp-send-text/index.ts` — nova function (Evolution ou Meta)
+- `supabase/config.toml` — registrar nova function
+- `src/pages/Chat.tsx` — roteamento de envio
+- `src/components/chat/ConversationList.tsx` — expor whatsappPhone
 
