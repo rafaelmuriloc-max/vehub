@@ -1,50 +1,25 @@
 
 
-# Indicadores visuais de mensagens não lidas no chat e sidebar
+# Corrigir indicadores de mensagens não lidas
 
-## O que será feito
-Adicionar badges de contagem de mensagens não lidas em três locais:
-1. **Conversa individual** — já existe (badge verde com número)
-2. **Aba "Chat"** no ConversationList — badge com total de não lidas das conversas abertas do usuário
-3. **Menu "Chat" na sidebar** — badge com total global de não lidas
+## Problema
+O webhook do WhatsApp salva **todas** as mensagens (incoming e outgoing) com `sender_id = systemUserId` (o admin logado). O hook `useUnreadCount` filtra `.neq('sender_id', user.id)`, o que exclui 100% das mensagens — resultado: badge sempre zero.
 
-## Alterações
+Dados confirmados no banco: 309 mensagens não lidas, todas com `sender_id = a9a263c4...` (o admin), então o filtro `neq` remove todas.
 
-### 1. Novo hook `src/hooks/useUnreadCount.ts`
-- Query Supabase para contar mensagens não lidas (`read_at IS NULL` e `sender_id != user.id`) em conversas atribuídas ao usuário
-- Subscription realtime na tabela `chat_messages` para atualizar automaticamente
-- Exporta `totalUnread: number`
+## Solução
+Usar `message_type` para identificar mensagens recebidas em vez de `sender_id`. Mensagens recebidas têm `message_type` começando com `whatsapp_incoming` ou `whatsapp_image`, `whatsapp_audio`, etc. Mensagens enviadas têm `whatsapp_outgoing` ou `text`.
 
-### 2. `src/components/chat/ConversationList.tsx`
-- Receber `totalUnread` como prop (calculado a partir das conversations já carregadas)
-- Exibir badge numérico na aba "Chat" quando `totalUnread > 0`
+### 1. `src/hooks/useUnreadCount.ts`
+Trocar o filtro `.neq('sender_id', user.id)` por `.not('message_type', 'in', '("text","whatsapp_outgoing")')` — ou seja, contar apenas mensagens que NÃO são do tipo outgoing/text (que são as enviadas pela equipe).
 
-### 3. `src/pages/Chat.tsx`
-- Calcular `totalUnread` somando `unreadCount` de todas as conversas da aba "mine"
-- Passar para `ConversationList`
+### 2. `src/pages/Chat.tsx` — cálculo de `unreadMap`
+Na linha ~89, trocar a condição `msg.sender_id !== user.id` pela mesma lógica baseada em `message_type`. A query de mensagens já retorna esse campo, basta usá-lo no filtro.
 
-### 4. `src/components/AppSidebar.tsx`
-- Usar o hook `useUnreadCount` para obter contagem global
-- Exibir badge ao lado do item "Chat" no menu quando houver mensagens não lidas
-
-## Detalhes técnicos
-
-### Hook `useUnreadCount`
-```typescript
-// Consulta: chat_messages where sender_id != user.id AND read_at IS NULL
-// JOIN com chat_conversations where assigned_to = user.id AND status = 'open'
-// Realtime: re-fetch ao receber INSERT/UPDATE em chat_messages
-```
-
-### Badge na aba (ConversationList)
-Badge pequeno ao lado do texto "Chat" na TabsTrigger, estilo similar ao WhatsApp (círculo com número).
-
-### Badge na sidebar (AppSidebar)
-Círculo pequeno com número posicionado ao lado direito do item "Chat".
+### 3. `src/pages/Chat.tsx` — query de mensagens
+Garantir que a query que carrega mensagens para o `unreadMap` inclua o campo `message_type` no select.
 
 ## Arquivos
-- `src/hooks/useUnreadCount.ts` (novo)
-- `src/components/chat/ConversationList.tsx`
-- `src/pages/Chat.tsx`
-- `src/components/AppSidebar.tsx`
+- `src/hooks/useUnreadCount.ts` (~1 linha)
+- `src/pages/Chat.tsx` (~2 linhas)
 
