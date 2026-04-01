@@ -14,10 +14,13 @@ export default function Chat() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeConvName, setActiveConvName] = useState<string | null>(null);
+  const [loadingConversations, setLoadingConversations] = useState(true);
 
-  // Load conversations
+  // Load conversations - optimized with batch queries and parallelization
   const loadConversations = useCallback(async () => {
     if (!user) return;
+
+    setLoadingConversations(true);
 
     const { data: participations } = await supabase
       .from('chat_participants')
@@ -26,6 +29,7 @@ export default function Chat() {
 
     if (!participations || participations.length === 0) {
       setConversations([]);
+      setLoadingConversations(false);
       return;
     }
 
@@ -37,93 +41,119 @@ export default function Chat() {
       .in('id', convIds)
       .order('updated_at', { ascending: false });
 
-    if (!convs) return;
+    if (!convs) {
+      setLoadingConversations(false);
+      return;
+    }
 
-    // Get last messages and participant names for 1:1
-    const items: ConversationItem[] = [];
+    // Batch: fetch all client IDs at once
+    const allClientIds = [...new Set(convs.filter(c => c.client_id).map(c => c.client_id!))];
+    const oneToOneConvIds = convs.filter(c => !c.is_group && !c.client_id).map(c => c.id);
+    const whatsappConvs = convs.filter(c => c.whatsapp_phone);
 
-    for (const conv of convs) {
-      // Get last message
-      const { data: lastMsgs } = await supabase
-        .from('chat_messages')
-        .select('content, created_at, sender_id, read_at')
-        .eq('conversation_id', conv.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
+    // Parallel batch queries
+    const [clientsResult, participantsResult, allMessagesResult, whatsappContactsResult] = await Promise.all([
+      // 1. All linked clients in one query
+      allClientIds.length > 0
+        ? supabase.from('clients').select('id, contact_name, company_name').in('id', allClientIds)
+        : Promise.resolve({ data: [] }),
+      // 2. All participants for 1:1 conversations
+      oneToOneConvIds.length > 0
+        ? supabase.from('chat_participants').select('conversation_id, user_id').in('conversation_id', oneToOneConvIds).neq('user_id', user.id)
+        : Promise.resolve({ data: [] }),
+      // 3. All recent messages for all conversations (we'll group client-side)
+      supabase.from('chat_messages')
+        .select('conversation_id, content, created_at, sender_id, read_at')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: false }),
+      // 4. All whatsapp phone contacts
+      whatsappConvs.length > 0
+        ? supabase.from('client_department_contacts').select('client_id, contact_phone')
+        : Promise.resolve({ data: [] }),
+    ]);
 
-      // Count unread
-      const { count: unreadCount } = await supabase
-        .from('chat_messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('conversation_id', conv.id)
-        .neq('sender_id', user.id)
-        .is('read_at', null);
+    // Build lookup maps
+    const clientMap = new Map((clientsResult.data || []).map(c => [c.id, c]));
 
-      // For 1:1, get other participant's name
+    // Get profile names for 1:1 participants
+    const otherUserIds = [...new Set((participantsResult.data || []).map(p => p.user_id))];
+    const profilesResult = otherUserIds.length > 0
+      ? await supabase.from('profiles').select('user_id, full_name').in('user_id', otherUserIds)
+      : { data: [] };
+    const profileMap = new Map((profilesResult.data || []).map(p => [p.user_id, p.full_name || 'Usuário']));
+    const participantMap = new Map((participantsResult.data || []).map(p => [p.conversation_id, p.user_id]));
+
+    // Group messages by conversation - pick latest per conversation
+    const lastMsgMap = new Map<string, { content: string; created_at: string; sender_id: string; read_at: string | null }>();
+    for (const msg of (allMessagesResult.data || [])) {
+      if (!lastMsgMap.has(msg.conversation_id)) {
+        lastMsgMap.set(msg.conversation_id, msg);
+      }
+    }
+
+    // Count unread per conversation
+    const unreadMap = new Map<string, number>();
+    for (const msg of (allMessagesResult.data || [])) {
+      if (msg.sender_id !== user.id && !msg.read_at) {
+        unreadMap.set(msg.conversation_id, (unreadMap.get(msg.conversation_id) || 0) + 1);
+      }
+    }
+
+    // Build whatsapp phone → client_ids map
+    const allContacts = whatsappContactsResult.data || [];
+    
+    // Build company lookup for whatsapp conversations
+    const whatsappCompanyMap = new Map<string, string[]>();
+    if (whatsappConvs.length > 0 && allContacts.length > 0) {
+      const contactClientIds = [...new Set(allContacts.filter(c => c.client_id).map(c => c.client_id))];
+      const { data: contactClients } = contactClientIds.length > 0
+        ? await supabase.from('clients').select('id, company_name').in('id', contactClientIds)
+        : { data: [] };
+      const contactClientMap = new Map((contactClients || []).map(c => [c.id, c.company_name]));
+
+      for (const conv of whatsappConvs) {
+        const digits = conv.whatsapp_phone!.replace(/\D/g, '');
+        const searchPhone = digits.length > 4 ? digits.slice(-8) : digits;
+        const matchedClientIds = [...new Set(
+          allContacts
+            .filter(c => c.contact_phone && c.contact_phone.includes(searchPhone))
+            .map(c => c.client_id)
+        )];
+        const names = matchedClientIds.map(id => contactClientMap.get(id)).filter(Boolean) as string[];
+        if (names.length > 0) whatsappCompanyMap.set(conv.id, names);
+      }
+    }
+
+    // Assemble items
+    const items: ConversationItem[] = convs.map(conv => {
       let name = conv.name || 'Conversa';
 
-      // If conversation has a linked client, use contact_name as priority
-      if (conv.client_id) {
-        const { data: client } = await supabase
-          .from('clients')
-          .select('contact_name, company_name')
-          .eq('id', conv.client_id)
-          .single();
-        if (client) {
-          name = client.contact_name || client.company_name || name;
-        }
-      } else if (!conv.is_group) {
-        const { data: parts } = await supabase
-          .from('chat_participants')
-          .select('user_id')
-          .eq('conversation_id', conv.id)
-          .neq('user_id', user.id);
-
-        if (parts && parts.length > 0) {
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('user_id', parts[0].user_id)
-            .single();
-          if (prof?.full_name) name = prof.full_name;
+      if (conv.client_id && clientMap.has(conv.client_id)) {
+        const client = clientMap.get(conv.client_id)!;
+        name = client.contact_name || client.company_name || name;
+      } else if (!conv.is_group && !conv.client_id) {
+        const otherUserId = participantMap.get(conv.id);
+        if (otherUserId) {
+          name = profileMap.get(otherUserId) || name;
         }
       }
 
-      const lastMsg = lastMsgs?.[0];
-      // Lookup companies linked via department contacts phone
-      let companyNames: string[] = [];
-      if (conv.whatsapp_phone) {
-        const digits = conv.whatsapp_phone.replace(/\D/g, '');
-        const searchPhone = digits.length > 4 ? digits.slice(-8) : digits;
-        const { data: contacts } = await supabase
-          .from('client_department_contacts')
-          .select('client_id')
-          .ilike('contact_phone', `%${searchPhone}%`);
-        if (contacts && contacts.length > 0) {
-          const uniqueIds = [...new Set(contacts.map(c => c.client_id))];
-          const { data: clients } = await supabase
-            .from('clients')
-            .select('company_name')
-            .in('id', uniqueIds);
-          if (clients) {
-            companyNames = clients.map(c => c.company_name);
-          }
-        }
-      }
+      const lastMsg = lastMsgMap.get(conv.id);
 
-      items.push({
+      return {
         id: conv.id,
         name,
         lastMessage: lastMsg?.content || '',
         lastMessageAt: lastMsg?.created_at || conv.created_at,
-        unreadCount: unreadCount || 0,
+        unreadCount: unreadMap.get(conv.id) || 0,
         isGroup: conv.is_group,
         avatarUrl: conv.avatar_url || undefined,
-        companyNames,
-      });
-    }
+        companyNames: whatsappCompanyMap.get(conv.id) || [],
+      };
+    });
 
     setConversations(items);
+    setLoadingConversations(false);
   }, [user]);
 
   useEffect(() => {
@@ -192,9 +222,7 @@ export default function Chat() {
         async (payload) => {
           const newMsg = payload.new as any;
 
-          // If message is in active conversation, add it
           if (newMsg.conversation_id === activeConvId) {
-            // Get sender name
             const { data: prof } = await supabase
               .from('profiles')
               .select('full_name')
@@ -206,7 +234,6 @@ export default function Chat() {
               sender_name: prof?.full_name || 'Usuário',
             }]);
 
-            // Mark as read if from other user
             if (newMsg.sender_id !== user.id) {
               await supabase
                 .from('chat_messages')
@@ -215,7 +242,6 @@ export default function Chat() {
             }
           }
 
-          // Refresh conversation list
           loadConversations();
         }
       )
@@ -236,7 +262,6 @@ export default function Chat() {
       message_type: 'text',
     });
 
-    // Update conversation timestamp
     await supabase
       .from('chat_conversations')
       .update({ updated_at: new Date().toISOString() })
@@ -264,6 +289,7 @@ export default function Chat() {
             activeId={activeConvId}
             onSelect={handleSelectConversation}
             onCreated={handleConversationCreated}
+            loading={loadingConversations}
           />
         </div>
       )}
