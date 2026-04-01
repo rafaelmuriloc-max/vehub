@@ -86,12 +86,12 @@ Deno.serve(async (req) => {
 
       const soapBody = buildSoapRequest(cnpj, lastNsu);
       const response = await requestTextWithMTLS(
-        new URL(SEF_SC_URL),
+        new URL(AN_URL),
         {
           method: "POST",
           headers: {
             "Content-Type": "text/xml; charset=utf-8",
-            SOAPAction: "http://www.satnfe.sef.sc.gov.br/nfedownloadV2/nfedownloadV2",
+            SOAPAction: SOAP_ACTION,
           },
           body: soapBody,
         },
