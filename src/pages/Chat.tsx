@@ -6,6 +6,7 @@ import { MessageArea, ChatMessage } from '@/components/chat/MessageArea';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 export default function Chat() {
   const { user } = useAuth();
