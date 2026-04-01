@@ -330,17 +330,46 @@ export default function Documents() {
         if (matchingActs.length === 0) continue;
 
         const obligationIds = [...new Set(matchingActs.map(a => a.obligation_id))];
-        const { data: instances } = await supabase
-          .from('obligation_instances')
-          .select('id, obligation_id')
-          .eq('client_id', doc.client_id)
-          .eq('reference_month', doc.reference_month)
-          .in('obligation_id', obligationIds);
 
-        if (!instances || instances.length === 0) continue;
+        // Fetch competence_rule for matched obligations
+        const { data: oblRules } = await supabase
+          .from('obligations')
+          .select('id, competence_rule')
+          .in('id', obligationIds);
+
+        const ruleMap = new Map<string, string>();
+        (oblRules || []).forEach(o => ruleMap.set(o.id, o.competence_rule));
+
+        const currentMonthObIds = obligationIds.filter(id => ruleMap.get(id) !== 'previous');
+        const nextMonthObIds = obligationIds.filter(id => ruleMap.get(id) === 'previous');
+        const nextMonth = format(addMonths(new Date(doc.reference_month + 'T00:00:00'), 1), 'yyyy-MM-dd');
+
+        const allInstances: { id: string; obligation_id: string }[] = [];
+
+        if (currentMonthObIds.length > 0) {
+          const { data } = await supabase
+            .from('obligation_instances')
+            .select('id, obligation_id')
+            .eq('client_id', doc.client_id)
+            .eq('reference_month', doc.reference_month)
+            .in('obligation_id', currentMonthObIds);
+          if (data) allInstances.push(...data);
+        }
+
+        if (nextMonthObIds.length > 0) {
+          const { data } = await supabase
+            .from('obligation_instances')
+            .select('id, obligation_id')
+            .eq('client_id', doc.client_id)
+            .eq('reference_month', nextMonth)
+            .in('obligation_id', nextMonthObIds);
+          if (data) allInstances.push(...data);
+        }
+
+        if (allInstances.length === 0) continue;
 
         let linkedObligationId: string | null = null;
-        for (const inst of instances) {
+        for (const inst of allInstances) {
           if (!linkedObligationId) linkedObligationId = inst.obligation_id;
           const relatedActs = matchingActs.filter(a => a.obligation_id === inst.obligation_id);
           for (const act of relatedActs) {
