@@ -12,11 +12,67 @@ const SEF_SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
 const SOAP_ACTION = `${SEF_SC_NS}/distNFeSC`;
 const MAX_LOOPS = 20;
 
+type InfrastructureErrorPayload = {
+  code: string;
+  endpoint: string;
+  error: string;
+  infrastructure: true;
+  message: string;
+  retryable: true;
+  success: false;
+};
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     status,
   });
+}
+
+function getHandledInfrastructureError(error: unknown): InfrastructureErrorPayload | null {
+  const message = error instanceof Error ? error.message : String(error ?? "Erro desconhecido");
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code ?? "")
+    : "";
+  const normalized = `${code} ${message}`.toLowerCase();
+
+  if (normalized.includes("connection reset") || normalized.includes("econnreset")) {
+    return {
+      code: "REMOTE_CONNECTION_RESET",
+      endpoint: SEF_SC_URL,
+      error: "connection reset",
+      infrastructure: true,
+      message: "A SEF-SC resetou a conexão TLS ao receber a chamada do ambiente cloud do Supabase.",
+      retryable: true,
+      success: false,
+    };
+  }
+
+  if (normalized.includes("timeout")) {
+    return {
+      code: "REMOTE_TIMEOUT",
+      endpoint: SEF_SC_URL,
+      error: "timeout",
+      infrastructure: true,
+      message: "A SEF-SC não respondeu dentro do tempo esperado a partir do ambiente cloud do Supabase.",
+      retryable: true,
+      success: false,
+    };
+  }
+
+  if (normalized.includes("refused")) {
+    return {
+      code: "REMOTE_CONNECTION_REFUSED",
+      endpoint: SEF_SC_URL,
+      error: "connection refused",
+      infrastructure: true,
+      message: "A conexão com a SEF-SC foi recusada pelo host remoto.",
+      retryable: true,
+      success: false,
+    };
+  }
+
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -45,7 +101,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "client_id é obrigatório" }, 400);
     }
 
-    // Load client
     const { data: client, error: clientError } = await adminClient
       .from("clients")
       .select("id, company_name, document, digital_certificate_url, digital_certificate_password, last_nfe_nsu")
@@ -63,7 +118,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Cliente sem certificado digital" }, 400);
     }
 
-    // Download certificate
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
       .download(client.digital_certificate_url);
@@ -103,10 +157,9 @@ Deno.serve(async (req) => {
 
       console.log(`[NF-e] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
 
-      // Extract retDistNFeSC content (case-insensitive)
       const retBody = extractTagContent(response.bodyText, "retDistNFeSC") ||
-                      extractTagContent(response.bodyText, "retdistNFeSC") ||
-                      response.bodyText;
+        extractTagContent(response.bodyText, "retdistNFeSC") ||
+        response.bodyText;
 
       const cStat = extractTagContent(retBody, "cStat");
       const xMotivo = extractTagContent(retBody, "xMotivo");
@@ -116,14 +169,12 @@ Deno.serve(async (req) => {
       console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, ultNuNSURet=${ultNuNSURet}, qtDfeRet=${qtDfeRet}`);
 
       if (cStat === "117") {
-        // Nenhum DF-e localizado
         console.log("[NF-e] Nenhum DF-e localizado (117)");
         keepGoing = false;
         break;
       }
 
       if (cStat === "110") {
-        // Reprocessamento - continuar
         console.log("[NF-e] Reprocessamento (110), continuando...");
         if (ultNuNSURet) lastNsu = ultNuNSURet;
         continue;
@@ -137,8 +188,6 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: `Erro SEF-SC: ${cStat} - ${xMotivo}`, cStat }, 400);
       }
 
-      // cStat 118 = DF-e localizados
-      // Extract loteDistComp (base64 + gzip)
       const loteDistComp = extractTagContent(retBody, "loteDistComp");
       if (!loteDistComp) {
         console.log("[NF-e] loteDistComp não encontrado no retorno");
@@ -157,7 +206,6 @@ Deno.serve(async (req) => {
 
       console.log(`[NF-e] loteDistComp descompactado, tamanho=${loteXml.length}`);
 
-      // Parse loteDistNFeSC entries
       const entries = parseDistNFeSCEntries(loteXml);
       console.log(`[NF-e] Parsed ${entries.length} entries from loteDistNFeSC`);
 
@@ -166,13 +214,10 @@ Deno.serve(async (req) => {
         break;
       }
 
-      // Process entries and upsert
       const invoicesToSave = [];
       for (const entry of entries) {
         const parsed = parseNfeEntry(entry, client_id);
-        if (parsed) {
-          invoicesToSave.push(parsed);
-        }
+        if (parsed) invoicesToSave.push(parsed);
       }
 
       if (invoicesToSave.length > 0) {
@@ -189,7 +234,6 @@ Deno.serve(async (req) => {
         totalSaved += invoicesToSave.length;
       }
 
-      // Update last NSU
       const newLastNsu = ultNuNSURet || lastNsu;
       if (newLastNsu && newLastNsu !== "0") {
         lastNsu = newLastNsu;
@@ -199,7 +243,6 @@ Deno.serve(async (req) => {
           .eq("id", client_id);
       }
 
-      // Continue if full batch (50 docs), stop otherwise
       const qtDfe = parseInt(qtDfeRet || "0", 10);
       keepGoing = qtDfe >= 50;
     }
@@ -211,12 +254,17 @@ Deno.serve(async (req) => {
       loops,
     });
   } catch (error) {
+    const infrastructureError = getHandledInfrastructureError(error);
+    if (infrastructureError) {
+      console.error("[NF-e] Infra error:", infrastructureError);
+      return jsonResponse(infrastructureError);
+    }
+
     console.error("[NF-e] Error:", error);
-    return jsonResponse({ error: (error as Error).message }, 500);
+    return jsonResponse({ error: error instanceof Error ? error.message : "Erro interno" }, 500);
   }
 });
 
-// --- SOAP Request Builder (SEF-SC distNFeSC v2.00) ---
 function buildSoapRequest(cnpj: string, ultNSU: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SEF_SC_NS}">
@@ -241,14 +289,12 @@ function buildSoapRequest(cnpj: string, ultNSU: string): string {
 </soap:Envelope>`;
 }
 
-// --- XML Tag Extraction ---
 function extractTagContent(xml: string, tagName: string): string | null {
   const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
   const match = xml.match(regex);
   return match ? match[1].trim() : null;
 }
 
-// --- Gzip Decompression ---
 async function decompressGzip(base64Data: string): Promise<string> {
   const binaryString = atob(base64Data);
   const bytes = new Uint8Array(binaryString.length);
@@ -280,7 +326,6 @@ async function decompressGzip(base64Data: string): Promise<string> {
   return new TextDecoder().decode(result);
 }
 
-// --- Parse distNFeSC entries from loteDistNFeSC ---
 type DistEntry = {
   nsu: string | null;
   chAcesso: string | null;
@@ -290,7 +335,6 @@ type DistEntry = {
 
 function parseDistNFeSCEntries(loteXml: string): DistEntry[] {
   const entries: DistEntry[] = [];
-  // Match <distNFeSC NSU="..." chAcesso="...">...</distNFeSC>
   const entryRegex = /<distNFeSC\s+([^>]*)>([\s\S]*?)<\/distNFeSC>/gi;
   let match;
 
@@ -300,11 +344,8 @@ function parseDistNFeSCEntries(loteXml: string): DistEntry[] {
 
     const nsuMatch = attrs.match(/NSU\s*=\s*"([^"]+)"/i);
     const chAcessoMatch = attrs.match(/chAcesso\s*=\s*"([^"]+)"/i);
-
-    // The inner content is the NF-e XML itself
     const isEvent = /<procEventoNFe/i.test(innerContent);
 
-    // If chAcesso not in attributes, try to extract from XML
     const chAcesso = chAcessoMatch?.[1] ||
       extractTagContent(innerContent, "chNFe") ||
       extractAccessKeyFromXml(innerContent);
@@ -323,16 +364,13 @@ function parseDistNFeSCEntries(loteXml: string): DistEntry[] {
 function extractAccessKeyFromXml(xml: string): string | null {
   const idMatch = xml.match(/Id\s*=\s*"NFe(\d{44})"/i);
   if (idMatch) return idMatch[1];
-  const chNFe = extractTagContent(xml, "chNFe");
-  return chNFe;
+  return extractTagContent(xml, "chNFe");
 }
 
-// --- Parse NF-e entry into DB record ---
 function parseNfeEntry(entry: DistEntry, clientId: string): Record<string, unknown> | null {
   if (!entry.chAcesso) return null;
 
   const xml = entry.xmlContent || "";
-
   const invoiceNumber = extractTagContent(xml, "nNF");
   const issueDate = extractTagContent(xml, "dhEmi")?.slice(0, 10) || extractTagContent(xml, "dEmi");
   const emitterCnpj = extractInnerTag(xml, "emit", "CNPJ");
@@ -370,7 +408,6 @@ function extractInnerTag(xml: string, parentTag: string, childTag: string): stri
   return extractTagContent(parentContent, childTag);
 }
 
-// --- mTLS functions ---
 type MtlsTextResponse = {
   bodyText: string;
   headers: Headers;
@@ -416,12 +453,16 @@ async function requestTextWithMTLS(
       }
     }
   }
+
   throw lastError || new Error("Falha ao conectar via mTLS");
 }
 
 async function requestWithFetchHttp1(
-  url: URL, init: { body?: string; headers?: HeadersInit; method: string },
-  certPem: string, keyPem: string, strategy: string,
+  url: URL,
+  init: { body?: string; headers?: HeadersInit; method: string },
+  certPem: string,
+  keyPem: string,
+  strategy: string,
 ): Promise<MtlsTextResponse> {
   const httpClient = Deno.createHttpClient({ cert: certPem, http1: true, http2: false, key: keyPem });
   try {
@@ -434,15 +475,21 @@ async function requestWithFetchHttp1(
 }
 
 async function sendRawHttpRequestOverTls(
-  url: URL, init: { body?: string; headers?: HeadersInit; method: string },
-  certPem: string, keyPem: string, strategy: string, alpnProtocols?: string[],
+  url: URL,
+  init: { body?: string; headers?: HeadersInit; method: string },
+  certPem: string,
+  keyPem: string,
+  strategy: string,
+  alpnProtocols?: string[],
 ): Promise<MtlsTextResponse> {
   const encoder = new TextEncoder();
   const bodyText = init.body ?? "";
   const bodyBytes = encoder.encode(bodyText);
   const conn = await Deno.connectTls({
-    hostname: url.hostname, port: Number(url.port || 443),
-    cert: certPem, key: keyPem,
+    hostname: url.hostname,
+    port: Number(url.port || 443),
+    cert: certPem,
+    key: keyPem,
     ...(alpnProtocols ? { alpnProtocols } : {}),
   });
 
@@ -460,7 +507,8 @@ async function sendRawHttpRequestOverTls(
     const requestHead = [
       `${init.method} ${url.pathname}${url.search} HTTP/1.1`,
       ...Array.from(headers.entries()).map(([name, value]) => `${name}: ${value}`),
-      "", "",
+      "",
+      "",
     ].join("\r\n");
 
     await conn.write(encoder.encode(requestHead));
@@ -481,7 +529,14 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
   const chunks: Uint8Array[] = [];
   let totalLength = 0;
   let didTimeout = false;
-  const timeout = setTimeout(() => { didTimeout = true; try { conn.close(); } catch {} }, timeoutMs);
+  const timeout = setTimeout(() => {
+    didTimeout = true;
+    try {
+      conn.close();
+    } catch {
+      // noop
+    }
+  }, timeoutMs);
 
   try {
     while (true) {
@@ -500,7 +555,10 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
 
   const result = new Uint8Array(totalLength);
   let offset = 0;
-  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; }
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
   return result;
 }
 
@@ -546,7 +604,6 @@ function decodeChunkedBody(rawBody: string): string {
   return decoded;
 }
 
-// --- PFX Parser ---
 type ParsedCertificate = { issuer: string; localKeyId: string | null; pem: string; subject: string };
 
 async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certPem: string; keyPem: string }> {
@@ -578,7 +635,6 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
 
   if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no PFX");
 
-  // Send leaf cert + chain for mTLS
   const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId)
     || parsedCerts.find((c) => c.subject !== c.issuer)
     || parsedCerts[0];
