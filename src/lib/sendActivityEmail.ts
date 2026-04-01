@@ -97,12 +97,6 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
       fileName: fc.file_url!.split('/').pop() || 'attachment',
     }));
 
-  // Fetch obligation_id from instance for logging
-  const { data: instanceData } = await supabase
-    .from('obligation_instances')
-    .select('obligation_id, reference_month')
-    .eq('id', instanceId)
-    .single();
 
   // Insert log first to get id for tracking pixel
   const { data: logData } = await supabase.from('email_logs').insert({

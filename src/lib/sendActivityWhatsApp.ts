@@ -99,12 +99,6 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     'vencimento': vencimento,
   };
 
-  // Fetch obligation_id from instance
-  const { data: instanceData } = await supabase
-    .from('obligation_instances')
-    .select('obligation_id')
-    .eq('id', instanceId)
-    .single();
 
   // Check for attached documents in this instance
   const { data: attachedDocs } = await supabase
