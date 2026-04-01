@@ -37,6 +37,17 @@ type NfeInvoice = {
   created_at: string;
 };
 
+type NfeQueryResponse = {
+  error?: string;
+  infrastructure?: boolean;
+  invoices_saved?: number;
+  last_nsu?: string;
+  loops?: number;
+  message?: string;
+  retryable?: boolean;
+  success?: boolean;
+};
+
 export default function NfeTab() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
@@ -111,22 +122,45 @@ export default function NfeTab() {
     setSyncing(true);
     let successCount = 0;
     let errorCount = 0;
+    let infrastructureMessage = '';
 
     try {
       for (let i = 0; i < clientIds.length; i++) {
-        if (clientIds.length > 1) {
-          const clientName = clients.find(c => c.id === clientIds[i])?.company_name || '';
-          setSyncProgress(`Consultando ${i + 1}/${clientIds.length} — ${clientName}`);
-        }
+        const clientName = clients.find(c => c.id === clientIds[i])?.company_name || '';
+        setSyncProgress(clientIds.length > 1 ? `Consultando ${i + 1}/${clientIds.length} — ${clientName}` : `Consultando ${clientName}`);
+
         try {
           const { data, error } = await supabase.functions.invoke('nfe-query', {
             body: { client_id: clientIds[i] },
           });
-          if (error || data?.error) { errorCount++; } else { successCount++; }
-        } catch { errorCount++; }
+
+          const response = (data ?? null) as NfeQueryResponse | null;
+          if (error || response?.error) {
+            errorCount++;
+            if (response?.infrastructure) {
+              infrastructureMessage = response.message || 'A SEF-SC resetou a conexão a partir do ambiente atual.';
+              break;
+            }
+          } else {
+            successCount++;
+          }
+        } catch (e) {
+          errorCount++;
+          infrastructureMessage = (e as Error).message;
+          break;
+        }
       }
 
       await loadInvoices();
+
+      if (infrastructureMessage) {
+        toast({
+          title: 'SEF-SC indisponível no ambiente cloud',
+          description: infrastructureMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
 
       if (clientIds.length === 1) {
         toast({ title: errorCount > 0 ? 'Erro na consulta' : 'Consulta realizada com sucesso', variant: errorCount > 0 ? 'destructive' : 'default' });
