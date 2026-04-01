@@ -162,12 +162,7 @@ Deno.serve(async (req) => {
       }
 
       // Update last NSU
-      const maxEntryNsu = entries.reduce((max, e) => {
-        const n = parseInt(e.nsu || "0", 10);
-        return n > max ? n : max;
-      }, 0);
-
-      const newLastNsu = ultNuNSURet || String(maxEntryNsu);
+      const newLastNsu = ultNSU || lastNsu;
       if (newLastNsu && newLastNsu !== "0") {
         lastNsu = newLastNsu;
         await adminClient
@@ -176,8 +171,8 @@ Deno.serve(async (req) => {
           .eq("id", client_id);
       }
 
-      // Continue if we got exactly 50 docs (more available)
-      keepGoing = qtDfeRet >= 50;
+      // Continue if ultNSU < maxNSU (more documents available)
+      keepGoing = !!(maxNSU && ultNSU && ultNSU < maxNSU);
     }
 
     return jsonResponse({
