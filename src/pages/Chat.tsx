@@ -294,6 +294,22 @@ export default function Chat() {
     loadConversations();
   };
 
+  const reopenTicket = async () => {
+    if (!activeConvId) return;
+    const { error } = await supabase
+      .from('chat_conversations')
+      .update({ status: 'open', closed_at: null } as any)
+      .eq('id', activeConvId);
+
+    if (error) {
+      toast({ title: 'Erro ao reabrir chamado', variant: 'destructive' });
+      return;
+    }
+
+    toast({ title: 'Chamado reaberto com sucesso' });
+    loadConversations();
+  };
+
   const handleSelectConversation = (id: string) => {
     setActiveConvId(id);
   };
