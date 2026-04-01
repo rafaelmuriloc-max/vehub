@@ -96,6 +96,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             Fechar Chamado
           </Button>
         )}
+        {isClosed && onReopenTicket && (
+          <Button variant="outline" size="sm" onClick={onReopenTicket} className="shrink-0 gap-1.5">
+            <MessageCircle className="h-4 w-4" />
+            Reabrir Chamado
+          </Button>
+        )}
       </div>
 
       {/* Messages */}
