@@ -117,7 +117,7 @@ export default function Obligations() {
     if (obligationForm.assignment_mode === 'all') return clients;
     if (obligationForm.assignment_mode === 'segment') {
       return getFilteredClients({
-        has_payroll: obligationForm.segment_has_payroll,
+        payroll_filter: obligationForm.segment_payroll_filter,
         tax_regimes: obligationForm.segment_tax_regimes,
         city: obligationForm.segment_city,
       });
