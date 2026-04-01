@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
         {
           method: "POST",
           headers: {
-            "Content-Type": "text/xml; charset=utf-8",
-            SOAPAction: SOAP_ACTION,
+            "Content-Type": `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`,
+            Accept: "application/soap+xml, text/xml, application/xml, */*",
           },
           body: soapBody,
         },
