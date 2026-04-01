@@ -224,10 +224,13 @@ export default function Chat() {
               .eq('user_id', newMsg.sender_id)
               .single();
 
-            setMessages(prev => [...prev, {
-              ...newMsg,
-              sender_name: prof?.full_name || 'Usuário',
-            }]);
+            setMessages(prev => {
+              if (prev.some(m => m.id === newMsg.id)) return prev;
+              return [...prev, {
+                ...newMsg,
+                sender_name: prof?.full_name || 'Usuário',
+              }];
+            });
 
             if (newMsg.sender_id !== user.id) {
               await supabase
