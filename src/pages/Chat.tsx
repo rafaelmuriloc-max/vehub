@@ -86,7 +86,7 @@ export default function Chat() {
 
     const unreadMap = new Map<string, number>();
     for (const msg of (allMessagesResult.data || [])) {
-      if (msg.sender_id !== user.id && !msg.read_at) {
+      if (msg.message_type !== 'text' && msg.message_type !== 'whatsapp_outgoing' && !msg.read_at) {
         unreadMap.set(msg.conversation_id, (unreadMap.get(msg.conversation_id) || 0) + 1);
       }
     }
