@@ -73,9 +73,18 @@ export default function Documents() {
   function matchClient(cnpj: string): string {
     if (!cnpj) return '';
     const clean = cleanCnpj(cnpj);
-    if (clean.length !== 14) return '';
-    const found = clients.find(c => cleanCnpj(c.document) === clean);
-    return found?.id || '';
+    if (clean.length < 8) return '';
+
+    // Busca exata (14 dígitos)
+    if (clean.length === 14) {
+      const exact = clients.find(c => cleanCnpj(c.document) === clean);
+      if (exact) return exact.id;
+    }
+
+    // Fallback: CNPJ raiz (8 primeiros dígitos)
+    const root = clean.substring(0, 8);
+    const byRoot = clients.find(c => cleanCnpj(c.document).substring(0, 8) === root);
+    return byRoot?.id || '';
   }
 
   function matchDocType(name: string): string {
