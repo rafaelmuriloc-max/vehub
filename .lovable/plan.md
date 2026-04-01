@@ -1,42 +1,16 @@
 
 
-# Melhorar UI/UX do cabeçalho do Calendário
+# Paginação de 5 itens na lista de obrigações do dia
 
-## Problema atual
-O cabeçalho tem um layout genérico: ícone + título em uma linha, filtros em um Card separado com label "Filtros" redundante. Os filtros ficam empilhados horizontalmente sem hierarquia visual clara, e o conjunto ocupa muito espaço vertical.
+## O que será feito
+Alterar a paginação da lista de obrigações do dia selecionado de 10 para 5 itens por página. A paginação mensal (pendentes/concluídas) continuará com 10.
 
-## Solução proposta
-Unificar header e filtros em uma única seção coesa, com melhor hierarquia visual, aproveitando o design system existente (Navy/Orange) e aplicando princípios da skill de design:
+## Alteração em `src/pages/CalendarView.tsx`
 
-### Layout redesenhado
+1. **Criar constante separada** `DAY_ITEMS_PER_PAGE = 5` (linha ~50)
+2. **Substituir** nas linhas ~397-398 o uso de `ITEMS_PER_PAGE` por `DAY_ITEMS_PER_PAGE` para `dayTotalPages` e `paginatedDayEvents`
+3. **Atualizar** o `PaginationBlock` do dia (linha 669) para usar `DAY_ITEMS_PER_PAGE` no cálculo de start/end — ou passar o `perPage` como prop ao `PaginationBlock`
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  📅 Calendário                                               │
-│  Acompanhe prazos e obrigações dos seus clientes             │
-│                                                              │
-│  [Departamento ▾]  [🔍 Empresa ▾]  [Obrigação ▾]            │
-│                                                              │
-│  ● 3 filtros ativos                    [Limpar filtros]      │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Detalhes das mudanças em `src/pages/CalendarView.tsx`
-
-1. **Remover Card wrapper dos filtros** -- integrar filtros diretamente abaixo do título, dentro de um único bloco com fundo sutil (`bg-card rounded-xl border p-6`)
-
-2. **Melhorar ícone do header** -- usar um container com gradiente sutil do primary ao invés de `bg-primary/10` flat
-
-3. **Filtros inline com melhor espaçamento** -- usar `grid grid-cols-1 md:grid-cols-3 gap-4` para responsividade, removendo larguras fixas em favor de `w-full`
-
-4. **Remover label "Filtros" redundante** -- o contexto já é claro pela posição
-
-5. **Adicionar indicador de filtros ativos + botão limpar** -- mostrar quantos filtros estão ativos (diferentes de "all") com um badge, e um botão "Limpar filtros" que reseta todos para "all"
-
-6. **Separador visual sutil** -- um `border-t` entre título e filtros para criar hierarquia
-
-7. **Labels dos filtros mais integrados** -- mover labels para dentro dos triggers como placeholders contextuais, mantendo labels externos apenas quando há valor selecionado
-
-## Arquivo
-- `src/pages/CalendarView.tsx` (linhas ~411-503)
+### Detalhe técnico
+Adicionar prop `perPage` ao `PaginationBlock` (default `ITEMS_PER_PAGE`) para que o texto "Mostrando X-Y de Z" fique correto com 5 itens.
 
