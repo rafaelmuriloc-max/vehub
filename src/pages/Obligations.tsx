@@ -164,7 +164,7 @@ export default function Obligations() {
     if (error || !newOb) { toast({ title: 'Erro ao clonar', description: error?.message, variant: 'destructive' }); return; }
     const obActivities = activities.filter(a => a.obligation_id === ob.id);
     if (obActivities.length > 0) {
-      const cloned = obActivities.map(({ id: _id, obligation_id: _oid, ...attrs }) => ({ ...attrs, obligation_id: newOb.id }));
+      const cloned = obActivities.map(({ id: _id, obligation_id: _oid, ...attrs }) => ({ ...attrs, type: attrs.type as any, obligation_id: newOb.id }));
       await supabase.from('obligation_activities').insert(cloned);
     }
     toast({ title: 'Obrigação clonada com sucesso' });
