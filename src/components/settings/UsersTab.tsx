@@ -48,7 +48,7 @@ export function UsersTab() {
 
   const openEdit = (u: UserRow) => {
     setEditing(u);
-    setForm({ job_title: u.job_title || '', role: u.role, department_id: u.department_id || '' });
+    setForm({ job_title: u.job_title || '', role: u.role, department_id: u.department_id || 'none' });
     setOpen(true);
   };
 
@@ -57,7 +57,7 @@ export function UsersTab() {
     // Update profile
     const { error: pErr } = await supabase.from('profiles').update({
       job_title: form.job_title || null,
-      department_id: form.department_id || null,
+      department_id: form.department_id === 'none' ? null : form.department_id || null,
     }).eq('id', editing.id);
 
     // Update role
@@ -121,7 +121,7 @@ export function UsersTab() {
               <Select value={form.department_id} onValueChange={v => setForm({ ...form, department_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="none">Nenhum</SelectItem>
                   {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
