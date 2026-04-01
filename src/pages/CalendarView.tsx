@@ -384,6 +384,16 @@ export default function CalendarView() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   }
 
+  async function deleteInstance() {
+    if (!deleteInstanceId) return;
+    await supabase.from('obligation_activity_completions').delete().eq('instance_id', deleteInstanceId);
+    await supabase.from('obligation_instances').delete().eq('id', deleteInstanceId);
+    toast({ title: 'Obrigação excluída com sucesso' });
+    setDeleteInstanceId(null);
+    if (detailInstanceId === deleteInstanceId) setDetailInstanceId(null);
+    await loadData();
+  }
+
   const dayTotalPages = Math.ceil(selectedEvents.length / ITEMS_PER_PAGE);
   const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * ITEMS_PER_PAGE, dayPage * ITEMS_PER_PAGE);
   const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
