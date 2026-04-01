@@ -1,45 +1,43 @@
 
 
-# Adicionar campo "Competência" no cadastro de obrigações mensais
+# Separar lógica de documento no header vs botão com link no WhatsApp
 
-## Contexto
-Obrigações como Folha de Pagamento vencem em um mês mas se referem à competência do mês anterior. Atualmente, o sistema usa o `reference_month` da instância diretamente como competência nas mensagens (e-mail/WhatsApp), o que gera informação incorreta.
+## Problema
+O template WhatsApp configurado envia o **documento diretamente** (header tipo DOCUMENT), mas **não possui botão com link**. Atualmente o código só envia o header de documento quando `whatsapp_button_url` está preenchido, o que impede o envio do documento no template correto.
+
+## Solução
+Adicionar um campo booleano `whatsapp_has_document_header` na tabela `obligation_activities` para indicar se o template espera um documento no header. Isso desacopla a lógica do header de documento da lógica do botão URL.
 
 ## Alterações
 
-### 1. Migração SQL — adicionar coluna `competence_rule` na tabela `obligations`
+### 1. Migração SQL
 ```sql
-ALTER TABLE obligations ADD COLUMN competence_rule text NOT NULL DEFAULT 'current';
+ALTER TABLE obligation_activities 
+  ADD COLUMN whatsapp_has_document_header boolean NOT NULL DEFAULT false;
 ```
-Valores: `current` (mês atual) ou `previous` (mês anterior).
 
-### 2. `src/pages/Obligations.tsx` — campo condicional no formulário
-- Adicionar `competence_rule` ao `obligationForm` state (default `'current'`)
-- Quando `recurrence === 'mensal'`, exibir um `Select` com:
-  - "Mês atual" (`current`)
-  - "Mês anterior" (`previous`)
-- Incluir `competence_rule` no payload de `saveObligation`
-- Carregar o valor ao editar (`openEditObligation`)
-- Atualizar o tipo `Obligation` para incluir `competence_rule`
+### 2. `src/lib/sendActivityWhatsApp.ts`
+Mudar a condição do header de documento (linha 129):
+- **Antes**: `hasDocuments && ... && activity.whatsapp_button_url`
+- **Depois**: `hasDocuments && ... && activity.whatsapp_has_document_header`
 
-### 3. `src/lib/sendActivityEmail.ts` — ajustar cálculo da competência
-- Buscar `competence_rule` da obrigação (já tem o `obligation_id` via instância)
-- Se `competence_rule === 'previous'`, subtrair 1 mês do `refDate` antes de formatar `[Competencia]`
+A lógica do botão URL (linhas 168-177) continua independente, condicionada apenas a `whatsapp_button_url`.
 
-### 4. `src/lib/sendActivityWhatsApp.ts` — mesmo ajuste
-- Buscar `competence_rule` e aplicar a mesma lógica de subtração de mês
+### 3. `src/pages/Obligations.tsx`
+- Adicionar `whatsapp_has_document_header` ao tipo `Activity`, ao form state e ao payload de save
+- Adicionar um checkbox "Template com documento no header" no formulário de atividade WhatsApp
 
-### 5. `src/components/ClientObligationsTab.tsx` — ajustar variável no dialog de e-mail
-- Ao montar `[Competencia]` para preview, considerar `competence_rule` da obrigação
+### 4. `src/pages/CalendarView.tsx` e `src/components/ClientObligationsTab.tsx`
+- Adicionar `whatsapp_has_document_header` ao tipo `Activity` e à query select
 
-### 6. Atualizar `src/integrations/supabase/types.ts`
-- Adicionar `competence_rule` ao tipo da tabela `obligations`
+### 5. `src/integrations/supabase/types.ts`
+- Adicionar campo ao tipo da tabela `obligation_activities`
 
 ## Arquivos
 - Migração SQL (nova)
-- `src/pages/Obligations.tsx`
-- `src/lib/sendActivityEmail.ts`
 - `src/lib/sendActivityWhatsApp.ts`
+- `src/pages/Obligations.tsx`
+- `src/pages/CalendarView.tsx`
 - `src/components/ClientObligationsTab.tsx`
 - `src/integrations/supabase/types.ts`
 
