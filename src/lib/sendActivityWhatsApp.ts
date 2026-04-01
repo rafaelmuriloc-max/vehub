@@ -58,11 +58,18 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     return { success: false, error: 'Cliente sem telefone de contato cadastrado' };
   }
 
+  // Fetch obligation_id from instance
+  const { data: instanceData } = await supabase
+    .from('obligation_instances')
+    .select('obligation_id')
+    .eq('id', instanceId)
+    .single();
+
   // Fetch competence_rule from obligation
   let competenceRule = 'current';
   if (instanceData?.obligation_id) {
     const { data: oblData } = await supabase.from('obligations').select('competence_rule').eq('id', instanceData.obligation_id).single();
-    if (oblData?.competence_rule) competenceRule = oblData.competence_rule;
+    if ((oblData as any)?.competence_rule) competenceRule = (oblData as any).competence_rule;
   }
 
   const refDate = new Date(referenceMonth + 'T00:00:00');
