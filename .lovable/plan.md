@@ -1,37 +1,33 @@
 
 
-# Corrigir vinculação de documentos com obrigações de competência anterior
+# Mostrar competência ao lado do nome da obrigação no calendário
 
-## Problema
-Quando um documento de competência março/2026 é importado, o sistema busca `obligation_instances` com `reference_month = 2026-03-01`. Porém, obrigações com `competence_rule = 'previous'` (ex: Folha de Pagamento) têm a instância em `reference_month = 2026-04-01` (mês de vencimento), pois a competência é o mês anterior. O documento deveria vincular à instância de abril, não de março.
+## O que será feito
+Exibir a competência da obrigação ao lado do nome, separada por `|`. Exemplo: **"Folha de Pagamento Mensal | Mar/2026"**.
 
-## Solução
-Na função `importDocument` e `relinkDocuments`, ao buscar instâncias correspondentes, consultar a `competence_rule` de cada obrigação. Para obrigações com `competence_rule = 'previous'`, buscar instâncias cujo `reference_month` é o mês seguinte ao `reference_month` do documento.
+A competência é calculada com base na `competence_rule` da obrigação:
+- `current`: competência = `reference_month` da instância
+- `previous`: competência = mês anterior ao `reference_month`
 
-## Alterações em `src/pages/Documents.tsx`
+## Alterações em `src/pages/CalendarView.tsx`
 
-### 1. `importDocument` (linhas ~208-250)
-- Após obter `matchingActivities`, buscar as obrigações correspondentes com `competence_rule`
-- Para cada obrigação, calcular o `reference_month` correto da instância:
-  - Se `competence_rule = 'previous'`: buscar instância com `reference_month = refMonth + 1 mês`
-  - Se `competence_rule = 'current'`: buscar instância com `reference_month = refMonth` (comportamento atual)
-- Agrupar obrigações por regra e fazer queries separadas
+### 1. Adicionar `competence_rule` ao tipo `Obligation` e à query
+- Tipo: `Obligation = { ..., competence_rule: string }`
+- Query: adicionar `competence_rule` no select de `obligations`
 
-### 2. `relinkDocuments` (linhas ~270-340)
-- Mesma lógica: buscar `competence_rule` das obrigações vinculadas às atividades
-- Ajustar o `reference_month` na query de instâncias conforme a regra
+### 2. Adicionar campo `competenceLabel` ao `CalendarEvent`
+- Novo campo `competenceLabel: string` no tipo `CalendarEvent`
+- No loop de criação dos eventos, calcular a competência:
+  - Se `competence_rule = 'previous'`: subtrair 1 mês do `reference_month`
+  - Se `competence_rule = 'current'`: usar o `reference_month` diretamente
+  - Formatar como `"Mmm/AAAA"` (ex: `"Mar/2026"`)
 
-### Lógica de cálculo
-```text
-docMonth = "2026-03-01" (competência do documento)
-
-Se competence_rule = 'current':
-  instanceMonth = "2026-03-01"
-
-Se competence_rule = 'previous':
-  instanceMonth = "2026-04-01" (mês seguinte)
+### 3. Alterar a exibição do nome em todos os locais
+Nos ~5 pontos onde `ev.obligationName` é renderizado (linhas ~601, ~686, ~737 e no dialog de detalhes), alterar para:
+```
+{ev.obligationName} | {ev.competenceLabel}
 ```
 
 ## Arquivos
-- `src/pages/Documents.tsx`
+- `src/pages/CalendarView.tsx`
 
