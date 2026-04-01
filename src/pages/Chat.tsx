@@ -149,6 +149,7 @@ export default function Chat() {
         isGroup: conv.is_group,
         avatarUrl: conv.avatar_url || undefined,
         companyNames: whatsappCompanyMap.get(conv.id) || [],
+        whatsappPhone: conv.whatsapp_phone || undefined,
       };
     });
 
