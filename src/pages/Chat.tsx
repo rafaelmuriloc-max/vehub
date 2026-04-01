@@ -7,6 +7,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 
 export type ChatTab = 'mine' | 'closed' | 'all';
