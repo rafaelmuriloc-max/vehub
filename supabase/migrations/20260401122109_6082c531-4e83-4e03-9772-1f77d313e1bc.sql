@@ -1,0 +1,1 @@
+ALTER TABLE obligations ADD COLUMN competence_rule text NOT NULL DEFAULT 'current';

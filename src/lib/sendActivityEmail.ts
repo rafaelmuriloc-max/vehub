@@ -52,8 +52,23 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
     return { success: false, error: 'Cliente sem e-mail de contato cadastrado' };
   }
 
+  // Fetch obligation_id from instance for logging
+  const { data: instanceData } = await supabase
+    .from('obligation_instances')
+    .select('obligation_id, reference_month')
+    .eq('id', instanceId)
+    .single();
+
+  // Fetch competence_rule from obligation
+  let competenceRule = 'current';
+  if (instanceData?.obligation_id) {
+    const { data: oblData } = await supabase.from('obligations').select('competence_rule').eq('id', instanceData.obligation_id).single();
+    if ((oblData as any)?.competence_rule) competenceRule = (oblData as any).competence_rule;
+  }
+
   const refDate = new Date(referenceMonth + 'T00:00:00');
-  const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const competenceDate = competenceRule === 'previous' ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1) : refDate;
+  const competencia = competenceDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const vencimento = dueDay
     ? new Date(refDate.getFullYear(), refDate.getMonth(), dueDay).toLocaleDateString('pt-BR')
     : '';
@@ -82,12 +97,6 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
       fileName: fc.file_url!.split('/').pop() || 'attachment',
     }));
 
-  // Fetch obligation_id from instance for logging
-  const { data: instanceData } = await supabase
-    .from('obligation_instances')
-    .select('obligation_id, reference_month')
-    .eq('id', instanceId)
-    .single();
 
   // Insert log first to get id for tracking pixel
   const { data: logData } = await supabase.from('email_logs').insert({

@@ -58,8 +58,23 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     return { success: false, error: 'Cliente sem telefone de contato cadastrado' };
   }
 
+  // Fetch obligation_id from instance
+  const { data: instanceData } = await supabase
+    .from('obligation_instances')
+    .select('obligation_id')
+    .eq('id', instanceId)
+    .single();
+
+  // Fetch competence_rule from obligation
+  let competenceRule = 'current';
+  if (instanceData?.obligation_id) {
+    const { data: oblData } = await supabase.from('obligations').select('competence_rule').eq('id', instanceData.obligation_id).single();
+    if ((oblData as any)?.competence_rule) competenceRule = (oblData as any).competence_rule;
+  }
+
   const refDate = new Date(referenceMonth + 'T00:00:00');
-  const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const competenceDate = competenceRule === 'previous' ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1) : refDate;
+  const competencia = competenceDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const vencimento = dueDay
     ? new Date(refDate.getFullYear(), refDate.getMonth(), dueDay).toLocaleDateString('pt-BR')
     : '';
@@ -84,12 +99,6 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     'vencimento': vencimento,
   };
 
-  // Fetch obligation_id from instance
-  const { data: instanceData } = await supabase
-    .from('obligation_instances')
-    .select('obligation_id')
-    .eq('id', instanceId)
-    .single();
 
   // Check for attached documents in this instance
   const { data: attachedDocs } = await supabase

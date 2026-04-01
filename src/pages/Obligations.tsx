@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null };
 type DocumentType = { id: string; name: string };
 
@@ -43,7 +43,7 @@ export default function Obligations() {
 
   const [obligationOpen, setObligationOpen] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
-  const [obligationForm, setObligationForm] = useState({ name: '', description: '', department_id: '', recurrence: 'mensal', alert_day: '' as string, target_day: '' as string, due_day: '' as string });
+  const [obligationForm, setObligationForm] = useState({ name: '', description: '', department_id: '', recurrence: 'mensal', alert_day: '' as string, target_day: '' as string, due_day: '' as string, competence_rule: 'current' });
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -69,12 +69,12 @@ export default function Obligations() {
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current' });
     setObligationOpen(true);
   }
   function openEditObligation(o: Obligation) {
     setEditingObligation(o);
-    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '' });
+    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '', competence_rule: (o as any).competence_rule || 'current' });
     setObligationOpen(true);
   }
   async function saveObligation(e: React.FormEvent) {
@@ -87,6 +87,7 @@ export default function Obligations() {
       alert_day: obligationForm.alert_day ? Number(obligationForm.alert_day) : null,
       target_day: obligationForm.target_day ? Number(obligationForm.target_day) : null,
       due_day: obligationForm.due_day ? Number(obligationForm.due_day) : null,
+      competence_rule: obligationForm.recurrence === 'mensal' ? obligationForm.competence_rule : 'current',
     };
     const { error } = editingObligation
       ? await supabase.from('obligations').update(payload).eq('id', editingObligation.id)
@@ -299,6 +300,19 @@ export default function Obligations() {
                 </SelectContent>
               </Select>
             </div>
+            {obligationForm.recurrence === 'mensal' && (
+              <div className="space-y-2">
+                <Label>Competência</Label>
+                <Select value={obligationForm.competence_rule} onValueChange={v => setObligationForm({ ...obligationForm, competence_rule: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="current">Mês atual (competência = mês de referência)</SelectItem>
+                    <SelectItem value="previous">Mês anterior (ex: Folha de Pagamento)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
