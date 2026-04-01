@@ -60,7 +60,7 @@ export default function Chat() {
         ? supabase.from('chat_participants').select('conversation_id, user_id').in('conversation_id', oneToOneConvIds).neq('user_id', user.id)
         : Promise.resolve({ data: [] }),
       supabase.from('chat_messages')
-        .select('conversation_id, content, created_at, sender_id, read_at')
+        .select('conversation_id, content, created_at, sender_id, read_at, message_type')
         .in('conversation_id', convIds)
         .order('created_at', { ascending: false }),
       whatsappConvs.length > 0
