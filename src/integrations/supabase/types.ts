@@ -1018,6 +1018,7 @@ export type Database = {
       obligations: {
         Row: {
           alert_day: number | null
+          assignment_mode: string
           competence_rule: string
           created_at: string
           department_id: string
@@ -1027,12 +1028,14 @@ export type Database = {
           is_tax: boolean
           name: string
           recurrence: string
+          segment_filters: Json | null
           target_day: number | null
           tax_sphere: string | null
           updated_at: string
         }
         Insert: {
           alert_day?: number | null
+          assignment_mode?: string
           competence_rule?: string
           created_at?: string
           department_id: string
@@ -1042,12 +1045,14 @@ export type Database = {
           is_tax?: boolean
           name: string
           recurrence?: string
+          segment_filters?: Json | null
           target_day?: number | null
           tax_sphere?: string | null
           updated_at?: string
         }
         Update: {
           alert_day?: number | null
+          assignment_mode?: string
           competence_rule?: string
           created_at?: string
           department_id?: string
@@ -1057,6 +1062,7 @@ export type Database = {
           is_tax?: boolean
           name?: string
           recurrence?: string
+          segment_filters?: Json | null
           target_day?: number | null
           tax_sphere?: string | null
           updated_at?: string
