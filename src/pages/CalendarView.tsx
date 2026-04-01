@@ -86,6 +86,7 @@ export default function CalendarView() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
+  const [filterObligation, setFilterObligation] = useState('all');
   const [clientOpen, setClientOpen] = useState(false);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
   const [dayPage, setDayPage] = useState(1);
@@ -132,6 +133,7 @@ export default function CalendarView() {
       if (!dept) continue;
       if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
+      if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
 
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const y = refDate.getFullYear();
@@ -157,7 +159,7 @@ export default function CalendarView() {
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
     }
     return result;
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -419,7 +421,7 @@ export default function CalendarView() {
           <div className="flex flex-wrap gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Departamento</label>
-              <Select value={filterDept} onValueChange={v => { setFilterDept(v); setSelectedDay(null); }}>
+              <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
                 <SelectTrigger className="w-[220px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os departamentos</SelectItem>
@@ -471,6 +473,18 @@ export default function CalendarView() {
                   </Command>
                 </PopoverContent>
               </Popover>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Obrigação</label>
+              <Select value={filterObligation} onValueChange={v => { setFilterObligation(v); setSelectedDay(null); }}>
+                <SelectTrigger className="w-[280px]"><SelectValue placeholder="Obrigação" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as obrigações</SelectItem>
+                  {obligations
+                    .filter(o => filterDept === 'all' || o.department_id === filterDept)
+                    .map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
