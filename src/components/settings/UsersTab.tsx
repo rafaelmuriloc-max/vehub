@@ -57,7 +57,7 @@ export function UsersTab() {
     // Update profile
     const { error: pErr } = await supabase.from('profiles').update({
       job_title: form.job_title || null,
-      department_id: form.department_id || null,
+      department_id: form.department_id === 'none' ? null : form.department_id || null,
     }).eq('id', editing.id);
 
     // Update role
