@@ -217,36 +217,73 @@ export default function Documents() {
 
     if (matchingActivities && matchingActivities.length > 0) {
       const obligationIds = [...new Set(matchingActivities.map(a => a.obligation_id))];
-      const { data: matchingInstances } = await supabase
-        .from('obligation_instances')
-        .select('id, obligation_id')
-        .eq('client_id', clientId)
-        .eq('reference_month', refMonth)
-        .in('obligation_id', obligationIds);
 
-      if (matchingInstances) {
-        for (const inst of matchingInstances) {
-          if (!linkedObligationId) linkedObligationId = inst.obligation_id;
-          const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
-          for (const act of relatedActivities) {
-            const { data: existing } = await supabase
-              .from('obligation_activity_completions')
-              .select('id')
-              .eq('instance_id', inst.id)
-              .eq('activity_id', act.id)
-              .maybeSingle();
+      // Fetch competence_rule for each obligation
+      const { data: oblRules } = await supabase
+        .from('obligations')
+        .select('id, competence_rule')
+        .in('id', obligationIds);
 
-            if (existing) {
-              await supabase.from('obligation_activity_completions').update({
-                completed: true, completed_at: new Date().toISOString(), file_url: path,
-              }).eq('id', existing.id);
-            } else {
-              await supabase.from('obligation_activity_completions').insert({
-                instance_id: inst.id, activity_id: act.id, completed: true, completed_at: new Date().toISOString(), file_url: path,
-              });
-            }
-            associatedCount++;
+      const ruleMap = new Map<string, string>();
+      (oblRules || []).forEach(o => ruleMap.set(o.id, o.competence_rule));
+
+      // Group obligations by the instance reference_month they need
+      const currentMonthObIds: string[] = [];
+      const nextMonthObIds: string[] = [];
+      for (const obId of obligationIds) {
+        if (ruleMap.get(obId) === 'previous') {
+          nextMonthObIds.push(obId);
+        } else {
+          currentMonthObIds.push(obId);
+        }
+      }
+
+      const nextMonth = format(addMonths(new Date(refMonth + 'T00:00:00'), 1), 'yyyy-MM-dd');
+      const allInstances: { id: string; obligation_id: string }[] = [];
+
+      // Fetch instances for current-month obligations
+      if (currentMonthObIds.length > 0) {
+        const { data } = await supabase
+          .from('obligation_instances')
+          .select('id, obligation_id')
+          .eq('client_id', clientId)
+          .eq('reference_month', refMonth)
+          .in('obligation_id', currentMonthObIds);
+        if (data) allInstances.push(...data);
+      }
+
+      // Fetch instances for previous-competence obligations (next month)
+      if (nextMonthObIds.length > 0) {
+        const { data } = await supabase
+          .from('obligation_instances')
+          .select('id, obligation_id')
+          .eq('client_id', clientId)
+          .eq('reference_month', nextMonth)
+          .in('obligation_id', nextMonthObIds);
+        if (data) allInstances.push(...data);
+      }
+
+      for (const inst of allInstances) {
+        if (!linkedObligationId) linkedObligationId = inst.obligation_id;
+        const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
+        for (const act of relatedActivities) {
+          const { data: existing } = await supabase
+            .from('obligation_activity_completions')
+            .select('id')
+            .eq('instance_id', inst.id)
+            .eq('activity_id', act.id)
+            .maybeSingle();
+
+          if (existing) {
+            await supabase.from('obligation_activity_completions').update({
+              completed: true, completed_at: new Date().toISOString(), file_url: path,
+            }).eq('id', existing.id);
+          } else {
+            await supabase.from('obligation_activity_completions').insert({
+              instance_id: inst.id, activity_id: act.id, completed: true, completed_at: new Date().toISOString(), file_url: path,
+            });
           }
+          associatedCount++;
         }
       }
     }
