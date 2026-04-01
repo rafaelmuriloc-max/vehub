@@ -1,49 +1,35 @@
 
 
-# Busca por CNPJ raiz (8 primeiros dígitos) no upload de documentos
+# Exibir nome e quantidade de obrigações dentro de cada dia do calendário
 
-## Problema
-Ao importar documentos como guia do FGTS, o CNPJ extraído pode ser de uma filial (diferente sufixo) ou o sistema não encontra match exato com os 14 dígitos. A busca atual (`matchClient`) exige correspondência exata dos 14 dígitos.
+## O que será feito
+Alterar as células do calendário para mostrar o nome de cada obrigação agrupada com sua quantidade e dot colorido por tipo (alerta/meta/vencimento), em vez de apenas dots genéricos com contagem total.
 
-## Solução
-Alterar a função `matchClient` em `src/pages/Documents.tsx` para, quando não encontrar correspondência exata com 14 dígitos, fazer fallback buscando pelo CNPJ raiz (8 primeiros dígitos).
+## Alterações em `src/pages/CalendarView.tsx`
 
-## Alteração em `src/pages/Documents.tsx`
+### 1. Nova função helper `getDayObligationSummary(day)`
+Agrupa os eventos do dia por `obligationName` + `type`, retornando uma lista com `{ name, type, count }`. Isso permite renderizar cada obrigação individualmente na célula.
 
-### Função `matchClient` (linhas 73-79)
-Lógica atual:
-```typescript
-function matchClient(cnpj: string): string {
-  if (!cnpj) return '';
-  const clean = cleanCnpj(cnpj);
-  if (clean.length !== 14) return '';
-  const found = clients.find(c => cleanCnpj(c.document) === clean);
-  return found?.id || '';
-}
+### 2. Atualizar renderização da célula do dia (linhas ~562-607)
+Substituir os dots genéricos por uma lista compacta de obrigações:
+- Cada linha mostra: dot colorido + nome truncado + contagem
+- Limitar a ~3 itens visíveis por célula com indicador "+N mais" se houver mais
+- Fonte pequena (`text-[10px]`) para caber no espaço
+- Nome truncado com `truncate` para não quebrar o layout
+
+### Layout da célula
+```text
+┌─────────────┐
+│ 5            │
+│ ● FGTS  64  │
+│ ● INSS 116  │
+│ +2 mais      │
+└─────────────┘
 ```
 
-Nova lógica:
-```typescript
-function matchClient(cnpj: string): string {
-  if (!cnpj) return '';
-  const clean = cleanCnpj(cnpj);
-  if (clean.length < 8) return '';
-  
-  // Busca exata (14 dígitos)
-  if (clean.length === 14) {
-    const exact = clients.find(c => cleanCnpj(c.document) === clean);
-    if (exact) return exact.id;
-  }
-  
-  // Fallback: CNPJ raiz (8 primeiros dígitos)
-  const root = clean.substring(0, 8);
-  const byRoot = clients.find(c => cleanCnpj(c.document).substring(0, 8) === root);
-  return byRoot?.id || '';
-}
-```
-
-Isso cobre o caso do FGTS e qualquer outro documento onde o CNPJ extraído seja da mesma raiz mas com sufixo diferente.
+### 3. Ajustar altura mínima das células
+Aumentar `min-h-[80px]` para `min-h-[100px]` para acomodar os nomes.
 
 ## Arquivo
-- `src/pages/Documents.tsx` (apenas a função `matchClient`, ~6 linhas)
+- `src/pages/CalendarView.tsx`
 
