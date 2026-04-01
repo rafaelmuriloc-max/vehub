@@ -256,17 +256,36 @@ export default function Chat() {
   const sendMessage = async (content: string) => {
     if (!user || !activeConvId) return;
 
-    await supabase.from('chat_messages').insert({
-      conversation_id: activeConvId,
-      sender_id: user.id,
-      content,
-      message_type: 'text',
-    });
+    const activeConv = conversations.find(c => c.id === activeConvId);
 
-    await supabase
-      .from('chat_conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', activeConvId);
+    if (activeConv?.whatsappPhone) {
+      // Send via WhatsApp edge function
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: { conversationId: activeConvId, text: content },
+      });
+
+      if (error) {
+        console.error('Error sending WhatsApp message:', error);
+        const { toast } = await import('@/hooks/use-toast');
+        toast({ title: 'Erro ao enviar mensagem', description: 'Tente novamente.', variant: 'destructive' });
+        return;
+      }
+
+      // The realtime subscription will pick up the new message
+    } else {
+      // Internal chat message
+      await supabase.from('chat_messages').insert({
+        conversation_id: activeConvId,
+        sender_id: user.id,
+        content,
+        message_type: 'text',
+      });
+
+      await supabase
+        .from('chat_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', activeConvId);
+    }
   };
 
   const handleSelectConversation = (id: string) => {

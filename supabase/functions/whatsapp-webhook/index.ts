@@ -332,7 +332,27 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Insert the received message
+    // Deduplication for fromMe messages (avoid duplicating messages sent from our chat UI)
+    if (isFromMe) {
+      const tenSecsAgo = new Date(Date.now() - 10000).toISOString();
+      const { data: duplicates } = await supabase
+        .from("chat_messages")
+        .select("id")
+        .eq("conversation_id", conversationId)
+        .eq("content", text || "")
+        .eq("channel", "whatsapp")
+        .gte("created_at", tenSecsAgo)
+        .limit(1);
+
+      if (duplicates && duplicates.length > 0) {
+        console.log("Skipping duplicate fromMe message");
+        return new Response(JSON.stringify({ ok: true, skipped: "duplicate_fromMe" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Insert the message
     const insertData: Record<string, unknown> = {
       conversation_id: conversationId,
       sender_id: systemUserId,
