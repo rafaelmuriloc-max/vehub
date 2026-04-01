@@ -104,8 +104,8 @@ export default function Obligations() {
   function getFilteredClients(filters: { payroll_filter: string; tax_regimes: string[]; city: string }) {
     return clients.filter(c => {
       if (filters.payroll_filter === 'all' && !c.payroll_type) return false;
-      if (filters.payroll_filter === 'normal' && c.payroll_type !== 'Normal') return false;
-      if (filters.payroll_filter === 'pro_labore' && c.payroll_type !== 'Pró-labore') return false;
+      if (filters.payroll_filter === 'normal' && c.payroll_type !== 'normal') return false;
+      if (filters.payroll_filter === 'pro_labore' && c.payroll_type !== 'pro_labore') return false;
       if (filters.tax_regimes.length > 0 && (!c.tax_regime || !filters.tax_regimes.includes(c.tax_regime))) return false;
       if (filters.city && c.address && !c.address.toLowerCase().includes(filters.city.toLowerCase())) return false;
       if (filters.city && !c.address) return false;
