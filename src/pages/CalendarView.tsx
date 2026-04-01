@@ -159,7 +159,7 @@ export default function CalendarView() {
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
     }
     return result;
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
