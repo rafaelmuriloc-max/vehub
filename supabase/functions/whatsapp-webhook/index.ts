@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       mediaKey = "videoMessage";
     } else if (messageObj.audioMessage) {
       text = "";
-      messageType = "whatsapp_audio";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_audio";
       mediaKey = "audioMessage";
     } else if (messageObj.documentMessage) {
       text = messageObj.documentMessage.caption || messageObj.documentMessage.fileName || "";
