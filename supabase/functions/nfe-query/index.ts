@@ -7,7 +7,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SEF_SC_URL = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
+const AN_URL = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
+const SOAP_ACTION = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse";
 const MAX_LOOPS = 20;
 
 function jsonResponse(payload: unknown, status = 200): Response {
@@ -85,12 +86,12 @@ Deno.serve(async (req) => {
 
       const soapBody = buildSoapRequest(cnpj, lastNsu);
       const response = await requestTextWithMTLS(
-        new URL(SEF_SC_URL),
+        new URL(AN_URL),
         {
           method: "POST",
           headers: {
             "Content-Type": "text/xml; charset=utf-8",
-            SOAPAction: "http://www.satnfe.sef.sc.gov.br/nfedownloadV2/nfedownloadV2",
+            SOAPAction: SOAP_ACTION,
           },
           body: soapBody,
         },
@@ -100,48 +101,37 @@ Deno.serve(async (req) => {
 
       console.log(`[NF-e] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
 
-      // Extract retDistNFeSC content
-      const retBody = extractTagContent(response.bodyText, "retdistNFeSC") || 
-                      extractTagContent(response.bodyText, "retDistNFeSC") ||
+      // Extract retDistDFeInt content
+      const retBody = extractTagContent(response.bodyText, "retDistDFeInt") || 
+                      extractTagContent(response.bodyText, "retdistDFeInt") ||
                       response.bodyText;
 
       const cStat = extractTagContent(retBody, "cStat");
       const xMotivo = extractTagContent(retBody, "xMotivo");
-      const ultNuNSURet = extractTagContent(retBody, "ultNuNSURet");
-      const qtDfeRet = parseInt(extractTagContent(retBody, "qtDfeRet") || "0", 10);
+      const maxNSU = extractTagContent(retBody, "maxNSU");
+      const ultNSU = extractTagContent(retBody, "ultNSU");
 
-      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, qtDfeRet=${qtDfeRet}, ultNuNSURet=${ultNuNSURet}`);
+      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, maxNSU=${maxNSU}, ultNSU=${ultNSU}`);
 
-      if (cStat === "117") {
+      if (cStat === "137") {
         // No documents found
-        console.log("[NF-e] Nenhum DF-e localizado (117)");
+        console.log("[NF-e] Nenhum DF-e localizado (137)");
         keepGoing = false;
         break;
       }
 
-      if (cStat === "110") {
-        console.log("[NF-e] DFe em reprocessamento (110)");
-        return jsonResponse({ error: "DFe em reprocessamento na SEF-SC. Tente novamente em 1 hora.", cStat: "110" }, 503);
+      if (cStat !== "138") {
+        if (totalSaved > 0) {
+          keepGoing = false;
+          break;
+        }
+        return jsonResponse({ error: `Erro AN: ${cStat} - ${xMotivo}`, cStat }, 400);
       }
 
-      if (cStat !== "118") {
-        return jsonResponse({ error: `Erro SEF-SC: ${cStat} - ${xMotivo}`, cStat }, 400);
-      }
-
-      // Extract and decompress loteDistComp
-      const loteDistCompB64 = extractTagContent(retBody, "loteDistComp");
-      if (!loteDistCompB64) {
-        console.log("[NF-e] Sem loteDistComp no retorno");
-        keepGoing = false;
-        break;
-      }
-
-      const loteXml = await decompressGzip(loteDistCompB64);
-      console.log(`[NF-e] Lote decompressed, length=${loteXml.length}`);
-
-      // Parse distNFeSC entries from loteDistNFeSC
-      const entries = parseDistEntries(loteXml);
-      console.log(`[NF-e] Parsed ${entries.length} entries`);
+      // Extract loteDistDFeInt and parse docZip entries
+      const loteContent = extractTagContent(retBody, "loteDistDFeInt") || retBody;
+      const entries = await parseDocZipEntries(loteContent);
+      console.log(`[NF-e] Parsed ${entries.length} entries from docZip`);
 
       if (entries.length === 0) {
         keepGoing = false;
@@ -172,12 +162,7 @@ Deno.serve(async (req) => {
       }
 
       // Update last NSU
-      const maxEntryNsu = entries.reduce((max, e) => {
-        const n = parseInt(e.nsu || "0", 10);
-        return n > max ? n : max;
-      }, 0);
-
-      const newLastNsu = ultNuNSURet || String(maxEntryNsu);
+      const newLastNsu = ultNSU || lastNsu;
       if (newLastNsu && newLastNsu !== "0") {
         lastNsu = newLastNsu;
         await adminClient
@@ -186,8 +171,8 @@ Deno.serve(async (req) => {
           .eq("id", client_id);
       }
 
-      // Continue if we got exactly 50 docs (more available)
-      keepGoing = qtDfeRet >= 50;
+      // Continue if ultNSU < maxNSU (more documents available)
+      keepGoing = !!(maxNSU && ultNSU && ultNSU < maxNSU);
     }
 
     return jsonResponse({
@@ -202,22 +187,26 @@ Deno.serve(async (req) => {
   }
 });
 
-// --- SOAP Request Builder ---
-function buildSoapRequest(cnpj: string, ultNuNSU: string): string {
+// --- SOAP Request Builder (AN - distDFeInt v1.01) ---
+function buildSoapRequest(cnpj: string, ultNSU: string): string {
+  // Pad NSU to 15 digits
+  const paddedNSU = ultNSU.padStart(15, "0");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:nfe="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
+  <soap:Header/>
   <soap:Body>
-    <distNFeSC versao="2.00" xmlns="http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2">
-      <tpAmb>1</tpAmb>
-      <verAplic>VeHub 1.0</verAplic>
-      <cUF>42</cUF>
-      <CNPJ>${cnpj}</CNPJ>
-      <solRel>
-        <indXML>1</indXML>
-        <indAtor>3</indAtor>
-        <ultNuNSU>${ultNuNSU}</ultNuNSU>
-      </solRel>
-    </distNFeSC>
+    <nfe:nfeDistDFeInteresse>
+      <nfeDadosMsg>
+        <distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
+          <tpAmb>1</tpAmb>
+          <cUFAutor>42</cUFAutor>
+          <CNPJ>${cnpj}</CNPJ>
+          <distNSU>
+            <ultNSU>${paddedNSU}</ultNSU>
+          </distNSU>
+        </distDFeInt>
+      </nfeDadosMsg>
+    </nfe:nfeDistDFeInteresse>
   </soap:Body>
 </soap:Envelope>`;
 }
@@ -262,7 +251,7 @@ async function decompressGzip(base64Data: string): Promise<string> {
   return new TextDecoder().decode(result);
 }
 
-// --- Parse distNFeSC entries from loteDistNFeSC ---
+// --- Parse docZip entries from loteDistDFeInt ---
 type DistEntry = {
   nsu: string | null;
   chAcesso: string | null;
@@ -270,31 +259,52 @@ type DistEntry = {
   isEvent: boolean;
 };
 
-function parseDistEntries(loteXml: string): DistEntry[] {
+async function parseDocZipEntries(loteXml: string): Promise<DistEntry[]> {
   const entries: DistEntry[] = [];
-  // Match <distNFeSC ... > ... </distNFeSC> entries inside loteDistNFeSC
-  const entryRegex = /<distNFeSC\s+([^>]*)>([\s\S]*?)<\/distNFeSC>/gi;
+  // Match <docZip NSU="..." schema="...">base64gzip</docZip>
+  const entryRegex = /<docZip\s+([^>]*)>([^<]+)<\/docZip>/gi;
   let match;
 
   while ((match = entryRegex.exec(loteXml)) !== null) {
     const attrs = match[1];
-    const content = match[2];
+    const base64Content = match[2].trim();
 
     const nsuMatch = attrs.match(/NSU\s*=\s*"([^"]+)"/i);
-    const chMatch = attrs.match(/chAcesso\s*=\s*"([^"]+)"/i);
+    const schemaMatch = attrs.match(/schema\s*=\s*"([^"]+)"/i);
 
-    const isEvent = /<procEventoNFe/i.test(content);
-    const hasNfeProc = /<nfeProc/i.test(content);
+    let xmlContent: string | null = null;
+    try {
+      xmlContent = await decompressGzip(base64Content);
+    } catch (e) {
+      console.error(`[NF-e] Failed to decompress docZip NSU=${nsuMatch?.[1]}:`, (e as Error).message);
+      continue;
+    }
+
+    const schema = schemaMatch?.[1] || "";
+    const isEvent = schema.includes("procEventoNFe") || /<procEventoNFe/i.test(xmlContent);
+    
+    // Extract chave de acesso from the XML
+    const chAcesso = extractTagContent(xmlContent, "chNFe") || 
+                     extractAccessKeyFromXml(xmlContent);
 
     entries.push({
       nsu: nsuMatch ? nsuMatch[1] : null,
-      chAcesso: chMatch ? chMatch[1] : null,
-      xmlContent: hasNfeProc || isEvent ? content.trim() : null,
+      chAcesso,
+      xmlContent,
       isEvent,
     });
   }
 
   return entries;
+}
+
+function extractAccessKeyFromXml(xml: string): string | null {
+  // Try to extract from infNFe Id attribute
+  const idMatch = xml.match(/Id\s*=\s*"NFe(\d{44})"/i);
+  if (idMatch) return idMatch[1];
+  // Try from protNFe/chNFe
+  const chNFe = extractTagContent(xml, "chNFe");
+  return chNFe;
 }
 
 // --- Parse NF-e entry into DB record ---
@@ -469,7 +479,7 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
     clearTimeout(timeout);
   }
 
-  if (didTimeout) throw new Error(`Timeout na conexão com SEF-SC após ${timeoutMs}ms`);
+  if (didTimeout) throw new Error(`Timeout na conexão com AN após ${timeoutMs}ms`);
 
   const result = new Uint8Array(totalLength);
   let offset = 0;
@@ -479,7 +489,7 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
 
 function parseRawHttpResponse(rawResponse: string): Response {
   const separatorIndex = rawResponse.indexOf("\r\n\r\n");
-  if (separatorIndex === -1) throw new Error("Resposta HTTP inválida da SEF-SC");
+  if (separatorIndex === -1) throw new Error("Resposta HTTP inválida do AN");
 
   const rawHeaders = rawResponse.slice(0, separatorIndex);
   let rawBody = rawResponse.slice(separatorIndex + 4);
