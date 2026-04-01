@@ -407,7 +407,6 @@ async function requestWithFetchHttp1(
 ): Promise<MtlsTextResponse> {
   const httpClient = Deno.createHttpClient({ cert: certPem, http1: true, http2: false, key: keyPem });
   try {
-    // @ts-expect-error Deno fetch supports client
     const response = await fetch(url, { body: init.body, client: httpClient, headers: init.headers, method: init.method });
     const bodyText = await response.text();
     return { bodyText, headers: response.headers, status: response.status, statusText: response.statusText, strategy, url: url.toString() };
