@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen } from 'lucide-react';
 
-type Client = { id: string; company_name: string; document: string | null };
+type Client = { id: string; company_name: string; document: string | null; digital_certificate_url: string | null; digital_certificate_expiry: string | null };
 type Invoice = {
   id: string;
   client_id: string;
