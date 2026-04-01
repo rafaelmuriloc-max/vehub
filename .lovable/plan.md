@@ -1,28 +1,48 @@
 
 
-# Adicionar filtro de obrigações no calendário
+# Otimizar carregamento do chat
 
-## O que será feito
-Adicionar um terceiro filtro (ao lado de Departamento e Empresa) para selecionar uma obrigação específica. Será um Select com a lista de obrigações, filtrado pelo departamento selecionado quando aplicável.
+## Problema
+A função `loadConversations` executa um loop `for...of` sequencial onde cada conversa faz 3-5 queries separadas ao Supabase (última mensagem, contagem de não lidas, nome do participante, empresas vinculadas). Com N conversas, isso gera dezenas de queries sequenciais, causando lentidão.
 
-## Alterações em `src/pages/CalendarView.tsx`
+## Solução
+Paralelizar as queries e reduzir o número total de chamadas ao banco.
 
-### 1. Novo estado
-- `const [filterObligation, setFilterObligation] = useState('all');`
+## Alterações em `src/pages/Chat.tsx`
 
-### 2. Filtro no memo `events`
-- Adicionar condição: `if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;`
-- Adicionar `filterObligation` nas dependências do `useMemo`
+### 1. Paralelizar o processamento de conversas
+Substituir o `for...of` sequencial por `Promise.all` com `map`, processando todas as conversas em paralelo.
 
-### 3. Resetar filtro quando departamento mudar
-- No `onValueChange` do filtro de departamento, adicionar `setFilterObligation('all')`
+### 2. Batch queries onde possível
+- Buscar **todas as últimas mensagens** de uma vez usando uma única query com `in('conversation_id', convIds)` e agrupamento client-side
+- Buscar **todas as contagens de não lidas** em paralelo via `Promise.all`
+- Buscar **todos os clientes vinculados** em uma única query com `in('id', allClientIds)`
+- Buscar **todos os participantes** de conversas 1:1 em uma única query
 
-### 4. UI do filtro (entre Empresa e o fechamento do flex)
-- Adicionar um `Select` com label "Obrigação"
-- Opção "Todas as obrigações" (value `all`)
-- Listar obrigações filtradas pelo departamento selecionado (se `filterDept !== 'all'`, mostrar só as do departamento)
-- Largura `w-[280px]`
+### 3. Adicionar estado de loading
+Mostrar skeleton/spinner enquanto as conversas carregam, para feedback imediato ao usuário.
+
+### 4. Estrutura otimizada
+
+```text
+Antes (sequencial):
+  Conv1: lastMsg → unread → client → contacts → companies
+  Conv2: lastMsg → unread → client → contacts → companies
+  Conv3: lastMsg → unread → client → contacts → companies
+  Total: ~15 queries sequenciais
+
+Depois (paralelo + batch):
+  1. Todas as conversas (já existe)
+  2. Em paralelo:
+     - Todos os clientes vinculados (1 query)
+     - Todos os participantes 1:1 (1 query)
+     - Todos os profiles (1 query)
+  3. Promise.all para cada conversa:
+     - lastMsg + unreadCount + companyLookup (em paralelo por conversa)
+  Total: ~3 queries batch + N×3 queries em paralelo (não sequenciais)
+```
 
 ## Arquivos
-- `src/pages/CalendarView.tsx`
+- `src/pages/Chat.tsx` -- otimizar `loadConversations`
+- `src/components/chat/ConversationList.tsx` -- adicionar prop `loading` com skeletons
 
