@@ -474,6 +474,18 @@ export default function CalendarView() {
                 </PopoverContent>
               </Popover>
             </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Obrigação</label>
+              <Select value={filterObligation} onValueChange={v => { setFilterObligation(v); setSelectedDay(null); }}>
+                <SelectTrigger className="w-[280px]"><SelectValue placeholder="Obrigação" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as obrigações</SelectItem>
+                  {obligations
+                    .filter(o => filterDept === 'all' || o.department_id === filterDept)
+                    .map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
