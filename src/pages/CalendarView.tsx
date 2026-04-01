@@ -667,7 +667,7 @@ export default function CalendarView() {
                     );
                   })}
                 </div>
-                <PaginationBlock page={dayPage} totalPages={dayTotalPages} total={selectedEvents.length} onPageChange={setDayPage} />
+                <PaginationBlock page={dayPage} totalPages={dayTotalPages} total={selectedEvents.length} onPageChange={setDayPage} perPage={DAY_ITEMS_PER_PAGE} />
               </>
             )}
           </CardContent>
