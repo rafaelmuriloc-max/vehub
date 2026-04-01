@@ -15,7 +15,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { conversationId, text } = await req.json();
+    const { conversationId, text, senderName } = await req.json();
+    const signedText = senderName ? `*${senderName}:*\n${text}` : text;
 
     if (!conversationId || !text) {
       return new Response(JSON.stringify({ error: "conversationId and text are required" }), {
@@ -90,7 +91,7 @@ Deno.serve(async (req) => {
             messaging_product: "whatsapp",
             to: metaPhone,
             type: "text",
-            text: { body: text },
+            text: { body: signedText },
           }),
         }
       );
@@ -127,7 +128,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             number: phone,
-            text: text,
+            text: signedText,
           }),
         }
       );

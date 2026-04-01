@@ -11,7 +11,7 @@ import { toast } from '@/hooks/use-toast';
 export type ChatTab = 'mine' | 'closed' | 'all';
 
 export default function Chat() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const isMobile = useIsMobile();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -254,7 +254,7 @@ export default function Chat() {
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-text', {
-        body: { conversationId: activeConvId, text: content },
+        body: { conversationId: activeConvId, text: content, senderName: profile?.full_name || undefined },
       });
 
       if (error) {
