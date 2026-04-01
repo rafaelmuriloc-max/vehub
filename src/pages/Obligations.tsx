@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
-  ChevronDown, ChevronRight, Zap,
+  ChevronDown, ChevronRight, Zap, Copy,
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
