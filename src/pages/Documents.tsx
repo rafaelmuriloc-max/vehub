@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Upload, Download, Trash2, FileText, Loader2 } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
+import { sendActivityEmail } from '@/lib/sendActivityEmail';
+import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { ptBR } from 'date-fns/locale';
 import * as pdfjs from 'pdfjs-dist';
 import DocumentReviewDialog, { type AiExtraction, type ReviewData } from '@/components/DocumentReviewDialog';
