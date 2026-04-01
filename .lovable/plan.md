@@ -1,30 +1,51 @@
 
 
-# Ignorar clientes sem certificado ou com certificado vencido na busca de NFS-e
+# Criar abas NFS-e, NF-e e NFC-e na página de Notas Fiscais
 
-## Problema
-Na busca em lote (quando nenhum cliente específico é selecionado), o sistema tenta consultar todos os clientes com CNPJ, incluindo aqueles sem certificado digital ou com certificado vencido. Isso gera erros desnecessários.
+## Visão geral
+Reestruturar a página de Notas Fiscais em 3 abas. O conteúdo atual (543 linhas) será movido integralmente para `NfseTab.tsx`. As abas NF-e e NFC-e serão criadas como novos componentes. Uma nova Edge Function e tabela serão criadas para a consulta de NF-e via Web Service SEF-SC.
 
 ## Alterações
 
-### `src/pages/Invoices.tsx`
+### 1. `src/pages/Invoices.tsx` — Simplificar para container com Tabs
+- Remover todo o conteúdo atual
+- Renderizar `Tabs` com 3 abas: NFS-e, NF-e, NFC-e
+- Importar os 3 componentes de aba
 
-1. Atualizar o tipo `Client` para incluir `digital_certificate_url` e `digital_certificate_expiry`
-2. Atualizar a query `loadClients` para buscar esses campos adicionais
-3. No `handleSync`, ao montar a lista de clientes para busca em lote, filtrar apenas clientes que:
-   - Possuem `document` (CNPJ)
-   - Possuem `digital_certificate_url` (certificado cadastrado)
-   - Possuem `digital_certificate_expiry` com data futura (não vencido)
-4. Atualizar a mensagem de erro caso nenhum cliente elegível seja encontrado
+### 2. `src/components/invoices/NfseTab.tsx` — Conteúdo atual
+- Mover 100% do código existente de `Invoices.tsx` para cá
+- Sem alteração de lógica, apenas transformar de page em componente
 
-### Lógica do filtro
-```typescript
-const today = new Date().toISOString().slice(0, 10);
-clients.filter(c => 
-  c.document && 
-  c.digital_certificate_url && 
-  c.digital_certificate_expiry && 
-  c.digital_certificate_expiry >= today
-)
-```
+### 3. `src/components/invoices/NfeTab.tsx` — Nova aba NF-e
+- Interface similar à NFS-e: seleção de cliente, botão consultar, tabela de resultados
+- Filtros: cliente, período
+- Tabela: número, chave de acesso, emitente, destinatário, data emissão, valor, status
+- Download de XML individual
+- Chama Edge Function `nfe-query`
+
+### 4. `src/components/invoices/NfceTab.tsx` — Placeholder
+- Mensagem "Em breve" com ícone
+
+### 5. Migração SQL — tabela `nfe_invoices` + coluna `last_nfe_nsu`
+- `nfe_invoices`: id, client_id (FK), access_key (unique), invoice_number, issue_date, emitter_cnpj, emitter_name, recipient_cnpj, recipient_name, total_value, status, nsu, xml_url, raw_xml, created_at
+- RLS para authenticated
+- Adicionar `last_nfe_nsu` em `clients`
+
+### 6. Edge Function `supabase/functions/nfe-query/index.ts`
+- Recebe `{ client_id }`
+- Carrega certificado A1 do cliente
+- Monta SOAP XML `distNFeSC v2.00` com `ultNuNSU` do `clients.last_nfe_nsu`
+- POST mTLS para `https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx`
+- Descompacta `loteDistComp` (base64 → gzip → XML)
+- Parseia até 50 docs por lote, extrai dados da NF-e
+- Upsert em `nfe_invoices`, atualiza `clients.last_nfe_nsu`
+- Loop se cStat=118 (mais docs disponíveis)
+
+## Arquivos
+- `src/pages/Invoices.tsx` — reescrito (container com Tabs)
+- `src/components/invoices/NfseTab.tsx` — criado (conteúdo atual)
+- `src/components/invoices/NfeTab.tsx` — criado
+- `src/components/invoices/NfceTab.tsx` — criado
+- `supabase/functions/nfe-query/index.ts` — criado
+- Migração SQL — criada
 
