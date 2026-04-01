@@ -267,7 +267,6 @@ export default function Chat() {
 
       if (error) {
         console.error('Error sending WhatsApp message:', error);
-        const { toast } = await import('@/hooks/use-toast');
         toast({ title: 'Erro ao enviar mensagem', description: 'Tente novamente.', variant: 'destructive' });
         return;
       }
