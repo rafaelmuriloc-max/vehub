@@ -75,7 +75,7 @@ export default function Obligations() {
   }
   function openEditObligation(o: Obligation) {
     setEditingObligation(o);
-    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '', competence_rule: (o as any).competence_rule || 'current' });
+    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '', competence_rule: (o as any).competence_rule || 'current', is_tax: (o as any).is_tax || false, tax_sphere: (o as any).tax_sphere || '' });
     setObligationOpen(true);
   }
   async function saveObligation(e: React.FormEvent) {
