@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
             messaging_product: "whatsapp",
             to: metaPhone,
             type: "text",
-            text: { body: text },
+            text: { body: signedText },
           }),
         }
       );
