@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageCircle, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, CheckCircle2, UserRoundPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
