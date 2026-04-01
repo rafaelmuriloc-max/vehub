@@ -34,11 +34,6 @@ export function AppLayout() {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <main className="flex-1 overflow-auto">
-          <div className="flex items-center gap-3 border-b bg-card px-6 py-3 shadow-sm">
-            <SidebarTrigger />
-            <Separator orientation="vertical" className="h-5" />
-            <h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1>
-          </div>
           <div className="p-6">
             <Outlet />
           </div>
