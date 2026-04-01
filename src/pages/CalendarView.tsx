@@ -122,8 +122,16 @@ export default function CalendarView() {
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+    const monthStart = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    const nextMonth = m + 1 > 11 ? 0 : m + 1;
+    const nextYear = m + 1 > 11 ? y + 1 : y;
+    const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
+
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
-      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month'),
+      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month')
+        .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
@@ -136,7 +144,7 @@ export default function CalendarView() {
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
     setCompletions((compRes.data as Completion[]) || []);
-  }, []);
+  }, [currentDate]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
