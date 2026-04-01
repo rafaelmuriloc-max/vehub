@@ -1,35 +1,28 @@
 
 
-# Exibir nome e quantidade de obrigações dentro de cada dia do calendário
+# Corrigir duplicação de mensagens enviadas no chat
 
-## O que será feito
-Alterar as células do calendário para mostrar o nome de cada obrigação agrupada com sua quantidade e dot colorido por tipo (alerta/meta/vencimento), em vez de apenas dots genéricos com contagem total.
+## Problema
+Quando uma mensagem é enviada via WhatsApp:
+1. A edge function `whatsapp-send-text` insere a mensagem no `chat_messages` → realtime adiciona na UI
+2. O webhook recebe a mesma mensagem de volta como `fromMe` e pode inserir novamente → realtime adiciona de novo na UI
 
-## Alterações em `src/pages/CalendarView.tsx`
+A subscription realtime (linha 227 do Chat.tsx) faz `setMessages(prev => [...prev, newMsg])` sem verificar se o `id` já existe no array.
 
-### 1. Nova função helper `getDayObligationSummary(day)`
-Agrupa os eventos do dia por `obligationName` + `type`, retornando uma lista com `{ name, type, count }`. Isso permite renderizar cada obrigação individualmente na célula.
+## Solução
+Adicionar verificação de duplicidade no handler do realtime em `src/pages/Chat.tsx`.
 
-### 2. Atualizar renderização da célula do dia (linhas ~562-607)
-Substituir os dots genéricos por uma lista compacta de obrigações:
-- Cada linha mostra: dot colorido + nome truncado + contagem
-- Limitar a ~3 itens visíveis por célula com indicador "+N mais" se houver mais
-- Fonte pequena (`text-[10px]`) para caber no espaço
-- Nome truncado com `truncate` para não quebrar o layout
-
-### Layout da célula
-```text
-┌─────────────┐
-│ 5            │
-│ ● FGTS  64  │
-│ ● INSS 116  │
-│ +2 mais      │
-└─────────────┘
+### Alteração (linha ~227)
+```typescript
+setMessages(prev => {
+  if (prev.some(m => m.id === newMsg.id)) return prev;
+  return [...prev, {
+    ...newMsg,
+    sender_name: prof?.full_name || 'Usuário',
+  }];
+});
 ```
 
-### 3. Ajustar altura mínima das células
-Aumentar `min-h-[80px]` para `min-h-[100px]` para acomodar os nomes.
-
 ## Arquivo
-- `src/pages/CalendarView.tsx`
+- `src/pages/Chat.tsx` (~2 linhas alteradas)
 
