@@ -41,12 +41,7 @@ Deno.serve(async (req) => {
     }
 
     const key = data.key;
-    if (key?.fromMe) {
-      console.log("Skipping fromMe message");
-      return new Response(JSON.stringify({ ok: true, skipped: "fromMe" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const isFromMe = !!key?.fromMe;
 
     const remoteJid = key?.remoteJid || "";
     const phoneRaw = remoteJid.replace("@s.whatsapp.net", "").replace("@c.us", "");
