@@ -38,6 +38,7 @@ export function AppSidebar() {
   const { profile, signOut } = useAuth();
 
   const isCadastroActive = cadastroSubItems.some(item => location.pathname === item.path);
+  const unreadCount = useUnreadCount();
 
   return (
     <Sidebar>
