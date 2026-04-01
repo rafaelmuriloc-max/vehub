@@ -78,7 +78,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
       // Create new conversation
       const { data: conv, error } = await supabase
         .from('chat_conversations')
-        .insert({ name: otherName, created_by: user.id, is_group: false })
+        .insert({ name: otherName, created_by: user.id, is_group: false, assigned_to: user.id } as any)
         .select('id')
         .single();
 

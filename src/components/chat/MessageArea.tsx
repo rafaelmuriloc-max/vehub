@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -25,6 +27,8 @@ interface MessageAreaProps {
   isGroup?: boolean;
   avatarUrl?: string;
   companyNames?: string[];
+  isClosed?: boolean;
+  onCloseTicket?: () => void;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -34,7 +38,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl, companyNames }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,14 +76,25 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             {conversationName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
-        <div>
-          <p className="text-sm font-semibold">{conversationName}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold truncate">{conversationName}</p>
+            {isClosed && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Fechado</Badge>
+            )}
+          </div>
           {companyNames && companyNames.length > 0 && (
             <p className="text-xs text-muted-foreground truncate max-w-[400px]">
               {companyNames.join(' | ')}
             </p>
           )}
         </div>
+        {!isClosed && onCloseTicket && (
+          <Button variant="outline" size="sm" onClick={onCloseTicket} className="shrink-0 gap-1.5">
+            <CheckCircle2 className="h-4 w-4" />
+            Fechar Chamado
+          </Button>
+        )}
       </div>
 
       {/* Messages */}
@@ -113,7 +128,13 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
       </div>
 
       {/* Input */}
-      <ChatInput onSend={onSend} />
+      {isClosed ? (
+        <div className="px-4 py-3 bg-muted text-center text-sm text-muted-foreground border-t">
+          Este chamado foi encerrado.
+        </div>
+      ) : (
+        <ChatInput onSend={onSend} />
+      )}
     </div>
   );
 }
