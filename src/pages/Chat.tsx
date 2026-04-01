@@ -396,6 +396,54 @@ export default function Chat() {
     loadConversations();
   };
 
+  // Transfer ticket
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<{ user_id: string; full_name: string; job_title: string | null }[]>([]);
+
+  const openTransferDialog = async () => {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, full_name, job_title');
+    setTeamMembers((profiles || []).filter(p => p.user_id !== user?.id));
+    setTransferDialogOpen(true);
+  };
+
+  const transferTicket = async (targetUserId: string) => {
+    if (!activeConvId) return;
+
+    // Update assigned_to
+    const { error } = await supabase
+      .from('chat_conversations')
+      .update({ assigned_to: targetUserId })
+      .eq('id', activeConvId);
+
+    if (error) {
+      toast({ title: 'Erro ao transferir chamado', variant: 'destructive' });
+      return;
+    }
+
+    // Add as participant if not already
+    const { data: existing } = await supabase
+      .from('chat_participants')
+      .select('id')
+      .eq('conversation_id', activeConvId)
+      .eq('user_id', targetUserId);
+
+    if (!existing || existing.length === 0) {
+      await supabase.from('chat_participants').insert({
+        conversation_id: activeConvId,
+        user_id: targetUserId,
+      });
+    }
+
+    const targetName = teamMembers.find(m => m.user_id === targetUserId)?.full_name || 'usuário';
+    toast({ title: `Chamado transferido para ${targetName}` });
+    setTransferDialogOpen(false);
+    setActiveConvId(null);
+    setActiveConvName(null);
+    loadConversations();
+  };
+
   const handleSelectConversation = (id: string) => {
     setActiveConvId(id);
   };
@@ -450,9 +498,43 @@ export default function Chat() {
             isClosed={isClosed}
             onCloseTicket={closeTicket}
             onReopenTicket={reopenTicket}
+            onTransferTicket={openTransferDialog}
           />
         </div>
       )}
+
+      {/* Transfer Dialog */}
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Transferir Chamado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1 max-h-[300px] overflow-y-auto">
+            {teamMembers.map(member => (
+              <button
+                key={member.user_id}
+                onClick={() => transferTicket(member.user_id)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-accent text-left transition-colors"
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className="bg-primary/20 text-primary text-sm font-semibold">
+                    {(member.full_name || 'U').charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{member.full_name || 'Usuário'}</p>
+                  {member.job_title && (
+                    <p className="text-xs text-muted-foreground truncate">{member.job_title}</p>
+                  )}
+                </div>
+              </button>
+            ))}
+            {teamMembers.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum usuário disponível</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
