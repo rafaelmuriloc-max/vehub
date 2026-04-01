@@ -606,7 +606,7 @@ export default function CalendarView() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                            <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
                               <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                             </p>
