@@ -1,33 +1,34 @@
 
 
-# Mostrar competência ao lado do nome da obrigação no calendário
+# Importar contatos da planilha CSV para o cadastro de clientes
 
 ## O que será feito
-Exibir a competência da obrigação ao lado do nome, separada por `|`. Exemplo: **"Folha de Pagamento Mensal | Mar/2026"**.
+Executar um script Python que lê o CSV de contatos, faz match de cada linha com o cliente (via CNPJ) e o departamento (via nome), e insere os registros na tabela `client_department_contacts`. O prefixo "55" será removido dos telefones.
 
-A competência é calculada com base na `competence_rule` da obrigação:
-- `current`: competência = `reference_month` da instância
-- `previous`: competência = mês anterior ao `reference_month`
+## Mapeamento de departamentos
+- "Fiscal" → `7403523f-3518-4f8e-b6c3-5f252ced0f34` (Depto Fiscal)
+- "Pessoal" → `af36437e-da3d-4c6e-bd71-e6584fa96843` (Depto Pessoal)
+- "Societário" → `97d0a192-63aa-425f-8f46-4f4620b12f09` (Depto Societários)
+- "Financeiro" → `e9dce0d9-76b8-4115-893c-71a22871a6f0` (Depto Financeiro)
 
-## Alterações em `src/pages/CalendarView.tsx`
+## Lógica do script
+1. Ler o CSV (~809 linhas, ~200 clientes × 4 departamentos)
+2. Buscar todos os clientes do banco via API (match por CNPJ/`document`)
+3. Para cada linha do CSV:
+   - Encontrar o `client_id` pelo CNPJ
+   - Mapear o departamento para o `department_id`
+   - Remover prefixo "55" do telefone
+   - Usar o campo NOME como `contact_name`
+4. Limpar contatos existentes (são apenas 5) e inserir os novos
+5. Inserir em lotes via Supabase REST API
 
-### 1. Adicionar `competence_rule` ao tipo `Obligation` e à query
-- Tipo: `Obligation = { ..., competence_rule: string }`
-- Query: adicionar `competence_rule` no select de `obligations`
-
-### 2. Adicionar campo `competenceLabel` ao `CalendarEvent`
-- Novo campo `competenceLabel: string` no tipo `CalendarEvent`
-- No loop de criação dos eventos, calcular a competência:
-  - Se `competence_rule = 'previous'`: subtrair 1 mês do `reference_month`
-  - Se `competence_rule = 'current'`: usar o `reference_month` diretamente
-  - Formatar como `"Mmm/AAAA"` (ex: `"Mar/2026"`)
-
-### 3. Alterar a exibição do nome em todos os locais
-Nos ~5 pontos onde `ev.obligationName` é renderizado (linhas ~601, ~686, ~737 e no dialog de detalhes), alterar para:
-```
-{ev.obligationName} | {ev.competenceLabel}
-```
+## Dados inseridos por registro
+- `client_id`: do match por CNPJ
+- `department_id`: do mapeamento acima
+- `contact_name`: coluna NOME do CSV
+- `contact_email`: coluna EMAIL
+- `contact_phone`: coluna Telefone (sem prefixo 55)
 
 ## Arquivos
-- `src/pages/CalendarView.tsx`
+- Nenhuma alteração de código — apenas operação de dados via script
 
