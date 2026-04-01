@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
       mediaKey = "documentMessage";
     } else if (messageObj.stickerMessage) {
       text = "";
-      messageType = "whatsapp_image";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_image";
       mediaKey = "stickerMessage";
     }
 
