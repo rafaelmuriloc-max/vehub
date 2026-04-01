@@ -64,7 +64,7 @@ export default function Obligations() {
     alert_day: '' as string, target_day: '' as string, due_day: '' as string,
     competence_rule: 'current', is_tax: false, tax_sphere: '',
     assignment_mode: 'manual',
-    segment_has_payroll: false,
+    segment_payroll_filter: '' as string,
     segment_tax_regimes: [] as string[],
     segment_city: '',
   });
