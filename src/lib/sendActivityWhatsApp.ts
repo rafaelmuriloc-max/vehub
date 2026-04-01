@@ -110,52 +110,15 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
   const hasDocuments = attachedDocs && attachedDocs.length > 0;
 
-  // Build request body
-  const body: Record<string, unknown> = {
-    to: recipientPhone,
-    clientId,
-    obligationId: instanceData?.obligation_id || null,
-    instanceId,
-  };
+  // Build shared body/button components once
+  const sharedComponents: Record<string, unknown>[] = [];
 
   if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
-    // Template message (required for business-initiated conversations)
-    body.type = 'template';
-    body.templateName = activity.whatsapp_template_name;
-    body.templateLanguage = 'pt_BR';
-
-    const components: Record<string, unknown>[] = [];
-
-    // Only add DOCUMENT header if template has a button URL configured (document-sharing templates)
-    if (hasDocuments && attachedDocs && attachedDocs.length > 0 && activity.whatsapp_has_document_header) {
-      const firstFileUrl = attachedDocs[0].file_url!;
-      const filePath = firstFileUrl.includes('/documents/') 
-        ? firstFileUrl.split('/documents/').pop()! 
-        : firstFileUrl;
-      const { data: signedData } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(filePath, 604800); // 7 days
-      
-      if (signedData?.signedUrl) {
-        const fileName = filePath.split('/').pop() || 'documento.pdf';
-        components.push({
-          type: 'header',
-          parameters: [{
-            type: 'document',
-            document: {
-              link: signedData.signedUrl,
-              filename: fileName,
-            },
-          }],
-        });
-      }
-    }
-
     // Extract {{var}} from message body to build named parameters
     if (activity.whatsapp_message_body) {
       const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
       if (matches.length > 0) {
-        components.push({
+        sharedComponents.push({
           type: 'body',
           parameters: matches.map(m => ({
             type: 'text',
@@ -166,30 +129,96 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
       }
     }
 
-    // Button URL param (index 0) — only if template has a button (whatsapp_button_url configured)
+    // Button URL param
     if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
       const buttonValue = hasDocuments ? instanceId : activity.whatsapp_button_url;
-      components.push({
+      sharedComponents.push({
         type: 'button',
         sub_type: 'url',
         index: '0',
         parameters: [{ type: 'text', text: buttonValue }],
       });
     }
-
-    if (components.length > 0) {
-      body.templateParams = components;
-    }
-  } else if (activity.whatsapp_message_body) {
-    // Text fallback (only works within 24h conversation window)
-    body.type = 'text';
-    body.text = replaceVariables(activity.whatsapp_message_body, variables);
   }
 
-  const { data, error } = await supabase.functions.invoke('whatsapp-send', { body });
+  // Determine if we need multi-send (one message per document)
+  const needsMultiSend = activity.whatsapp_has_document_header && hasDocuments && attachedDocs && attachedDocs.length > 0
+    && activity.whatsapp_template_name && activity.whatsapp_template_name.trim();
 
-  if (error) return { success: false, error: error.message };
-  if (data?.error) return { success: false, error: data.error };
+  if (needsMultiSend) {
+    // Send one message per attached document
+    const errors: string[] = [];
+
+    for (const doc of attachedDocs!) {
+      const fileUrl = doc.file_url!;
+      const filePath = fileUrl.includes('/documents/')
+        ? fileUrl.split('/documents/').pop()!
+        : fileUrl;
+      const { data: signedData } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(filePath, 604800);
+
+      if (!signedData?.signedUrl) {
+        errors.push(`Não foi possível gerar URL para ${filePath}`);
+        continue;
+      }
+
+      const fileName = filePath.split('/').pop() || 'documento.pdf';
+      const components: Record<string, unknown>[] = [
+        {
+          type: 'header',
+          parameters: [{
+            type: 'document',
+            document: { link: signedData.signedUrl, filename: fileName },
+          }],
+        },
+        ...sharedComponents,
+      ];
+
+      const msgBody: Record<string, unknown> = {
+        to: recipientPhone,
+        clientId,
+        obligationId: instanceData?.obligation_id || null,
+        instanceId,
+        type: 'template',
+        templateName: activity.whatsapp_template_name,
+        templateLanguage: 'pt_BR',
+        ...(components.length > 0 ? { templateParams: components } : {}),
+      };
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-send', { body: msgBody });
+      if (error) errors.push(error.message);
+      else if (data?.error) errors.push(data.error);
+    }
+
+    if (errors.length > 0 && errors.length === attachedDocs!.length) {
+      return { success: false, error: errors.join('; ') };
+    }
+  } else {
+    // Single message (no document header or text fallback)
+    const body: Record<string, unknown> = {
+      to: recipientPhone,
+      clientId,
+      obligationId: instanceData?.obligation_id || null,
+      instanceId,
+    };
+
+    if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
+      body.type = 'template';
+      body.templateName = activity.whatsapp_template_name;
+      body.templateLanguage = 'pt_BR';
+      if (sharedComponents.length > 0) {
+        body.templateParams = sharedComponents;
+      }
+    } else if (activity.whatsapp_message_body) {
+      body.type = 'text';
+      body.text = replaceVariables(activity.whatsapp_message_body, variables);
+    }
+
+    const { data, error } = await supabase.functions.invoke('whatsapp-send', { body });
+    if (error) return { success: false, error: error.message };
+    if (data?.error) return { success: false, error: data.error };
+  }
 
   // Mark activity as completed
   const { data: existing } = await supabase
