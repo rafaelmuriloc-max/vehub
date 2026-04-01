@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
@@ -98,6 +99,7 @@ export default function CalendarView() {
   const [emailPrefill, setEmailPrefill] = useState<{ departmentId?: string; subject?: string; body?: string }>({});
   const [emailRecipient, setEmailRecipient] = useState('');
   const [emailAttachments, setEmailAttachments] = useState<{ fileUrl: string; fileName: string }[]>([]);
+  const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
@@ -382,6 +384,16 @@ export default function CalendarView() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   }
 
+  async function deleteInstance() {
+    if (!deleteInstanceId) return;
+    await supabase.from('obligation_activity_completions').delete().eq('instance_id', deleteInstanceId);
+    await supabase.from('obligation_instances').delete().eq('id', deleteInstanceId);
+    toast({ title: 'Obrigação excluída com sucesso' });
+    setDeleteInstanceId(null);
+    if (detailInstanceId === deleteInstanceId) setDetailInstanceId(null);
+    await loadData();
+  }
+
   const dayTotalPages = Math.ceil(selectedEvents.length / ITEMS_PER_PAGE);
   const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * ITEMS_PER_PAGE, dayPage * ITEMS_PER_PAGE);
   const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
@@ -625,9 +637,14 @@ export default function CalendarView() {
                               <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                             </p>
                           </div>
-                          <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
-                            {typeConfig[ev.type].label}
-                          </Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                              {typeConfig[ev.type].label}
+                            </Badge>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between mt-2">
                           <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
@@ -710,9 +727,14 @@ export default function CalendarView() {
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
                               </div>
-                              <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
-                                {typeConfig[ev.type].label}
-                              </Badge>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                                  {typeConfig[ev.type].label}
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="flex items-center justify-between mt-2">
                               <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
@@ -761,9 +783,14 @@ export default function CalendarView() {
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
                               </div>
-                              <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
-                                {typeConfig[ev.type].label}
-                              </Badge>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                                  {typeConfig[ev.type].label}
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="flex items-center justify-between mt-2">
                               <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
@@ -940,6 +967,24 @@ export default function CalendarView() {
           setEmailActivityId(null);
         }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteInstanceId} onOpenChange={open => { if (!open) setDeleteInstanceId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obrigação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta obrigação? Todas as atividades e arquivos associados serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteInstance} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
