@@ -109,7 +109,8 @@ export default function CalendarView() {
   const [filterObligation, setFilterObligation] = useState('all');
   const [clientOpen, setClientOpen] = useState(false);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
-  const [dayPage, setDayPage] = useState(1);
+  const [dayPendingPage, setDayPendingPage] = useState(1);
+  const [dayCompletedPage, setDayCompletedPage] = useState(1);
   const [monthPendingPage, setMonthPendingPage] = useState(1);
   const [monthCompletedPage, setMonthCompletedPage] = useState(1);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
