@@ -91,11 +91,8 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             : 'bg-white dark:bg-zinc-700 text-foreground rounded-tl-none'
         }`}
       >
-        {isMine && !isIncoming && senderName && (
+        {!isIncoming && senderName && (
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">{senderName}</p>
-        )}
-        {isGroup && !isMine && !isIncoming && senderName && (
-          <p className="text-xs font-semibold text-primary mb-0.5">{senderName}</p>
         )}
         {isWhatsApp && !isIncoming && (
           <div className="flex items-center gap-1 mb-0.5">
