@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type DocumentType = { id: string; name: string };
 
@@ -44,7 +44,7 @@ export default function Obligations() {
 
   const [obligationOpen, setObligationOpen] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
-  const [obligationForm, setObligationForm] = useState({ name: '', description: '', department_id: '', recurrence: 'mensal', alert_day: '' as string, target_day: '' as string, due_day: '' as string, competence_rule: 'current' });
+  const [obligationForm, setObligationForm] = useState({ name: '', description: '', department_id: '', recurrence: 'mensal', alert_day: '' as string, target_day: '' as string, due_day: '' as string, competence_rule: 'current', is_tax: false, tax_sphere: '' });
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -70,12 +70,12 @@ export default function Obligations() {
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '' });
     setObligationOpen(true);
   }
   function openEditObligation(o: Obligation) {
     setEditingObligation(o);
-    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '', competence_rule: (o as any).competence_rule || 'current' });
+    setObligationForm({ name: o.name, description: o.description || '', department_id: o.department_id, recurrence: o.recurrence, alert_day: o.alert_day?.toString() || '', target_day: o.target_day?.toString() || '', due_day: o.due_day?.toString() || '', competence_rule: (o as any).competence_rule || 'current', is_tax: (o as any).is_tax || false, tax_sphere: (o as any).tax_sphere || '' });
     setObligationOpen(true);
   }
   async function saveObligation(e: React.FormEvent) {
@@ -89,6 +89,8 @@ export default function Obligations() {
       target_day: obligationForm.target_day ? Number(obligationForm.target_day) : null,
       due_day: obligationForm.due_day ? Number(obligationForm.due_day) : null,
       competence_rule: obligationForm.recurrence === 'mensal' ? obligationForm.competence_rule : 'current',
+      is_tax: obligationForm.is_tax,
+      tax_sphere: obligationForm.is_tax && obligationForm.tax_sphere ? obligationForm.tax_sphere : null,
     };
     const { error } = editingObligation
       ? await supabase.from('obligations').update(payload).eq('id', editingObligation.id)
@@ -210,6 +212,11 @@ export default function Obligations() {
                       <span className="font-medium">{ob.name}</span>
                       <div className="flex flex-wrap gap-1">
                         <Badge variant="outline">{ob.recurrence}</Badge>
+                        {(ob as any).is_tax && (
+                          <Badge className="bg-blue-600 text-white border-0">
+                            Imposto{(ob as any).tax_sphere ? ` - ${(ob as any).tax_sphere.charAt(0).toUpperCase() + (ob as any).tax_sphere.slice(1)}` : ''}
+                          </Badge>
+                        )}
                         {ob.alert_day && <Badge className="bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
                         {ob.target_day && <Badge className="bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
                         {ob.due_day && <Badge className="bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
@@ -328,6 +335,26 @@ export default function Obligations() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
+              </div>
+            )}
+            <div className="flex items-center space-x-3">
+              <Switch
+                checked={obligationForm.is_tax}
+                onCheckedChange={v => setObligationForm({ ...obligationForm, is_tax: v, tax_sphere: v ? obligationForm.tax_sphere : '' })}
+              />
+              <Label>É Imposto?</Label>
+            </div>
+            {obligationForm.is_tax && (
+              <div className="space-y-2">
+                <Label>Esfera Tributária *</Label>
+                <Select value={obligationForm.tax_sphere} onValueChange={v => setObligationForm({ ...obligationForm, tax_sphere: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a esfera" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="federal">Federal</SelectItem>
+                    <SelectItem value="estadual">Estadual</SelectItem>
+                    <SelectItem value="municipal">Municipal</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
