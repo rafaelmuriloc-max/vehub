@@ -187,24 +187,29 @@ Deno.serve(async (req) => {
   }
 });
 
-// --- SOAP Request Builder ---
-function buildSoapRequest(cnpj: string, ultNuNSU: string): string {
+// --- SOAP Request Builder (AN - distDFeInt v1.01) ---
+function buildSoapRequest(cnpj: string, ultNSU: string): string {
+  // Pad NSU to 15 digits
+  const paddedNSU = ultNSU.padStart(15, "0");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:nfe="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
+  <soap:Header/>
   <soap:Body>
-    <distNFeSC versao="2.00" xmlns="http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2">
-      <tpAmb>1</tpAmb>
-      <verAplic>VeHub 1.0</verAplic>
-      <cUF>42</cUF>
-      <CNPJ>${cnpj}</CNPJ>
-      <solRel>
-        <indXML>1</indXML>
-        <indAtor>3</indAtor>
-        <ultNuNSU>${ultNuNSU}</ultNuNSU>
-      </solRel>
-    </distNFeSC>
+    <nfe:nfeDistDFeInteresse>
+      <nfeDadosMsg>
+        <distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
+          <tpAmb>1</tpAmb>
+          <cUFAutor>42</cUFAutor>
+          <CNPJ>${cnpj}</CNPJ>
+          <distNSU>
+            <ultNSU>${paddedNSU}</ultNSU>
+          </distNSU>
+        </distDFeInt>
+      </nfeDadosMsg>
+    </nfe:nfeDistDFeInteresse>
   </soap:Body>
 </soap:Envelope>`;
+}
 }
 
 // --- XML Tag Extraction ---
