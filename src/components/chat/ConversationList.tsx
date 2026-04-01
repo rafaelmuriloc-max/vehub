@@ -3,9 +3,11 @@ import { Search, MessageSquarePlus } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { NewConversationDialog } from './NewConversationDialog';
+import type { ChatTab } from '@/pages/Chat';
 
 export interface ConversationItem {
   id: string;
@@ -17,6 +19,7 @@ export interface ConversationItem {
   avatarUrl?: string;
   companyNames?: string[];
   whatsappPhone?: string;
+  status?: string;
 }
 
 interface ConversationListProps {
@@ -25,6 +28,8 @@ interface ConversationListProps {
   onSelect: (id: string) => void;
   onCreated: (id: string) => void;
   loading?: boolean;
+  activeTab: ChatTab;
+  onTabChange: (tab: ChatTab) => void;
 }
 
 function formatTime(dateStr: string) {
@@ -49,7 +54,7 @@ function ConversationSkeleton() {
   );
 }
 
-export function ConversationList({ conversations, activeId, onSelect, onCreated, loading }: ConversationListProps) {
+export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange }: ConversationListProps) {
   const [search, setSearch] = useState('');
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
@@ -65,6 +70,17 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
         <Button variant="ghost" size="icon" onClick={() => setNewDialogOpen(true)}>
           <MessageSquarePlus className="h-5 w-5" />
         </Button>
+      </div>
+
+      {/* Tabs */}
+      <div className="px-2 pt-2">
+        <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ChatTab)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="mine" className="flex-1 text-xs">Chat</TabsTrigger>
+            <TabsTrigger value="closed" className="flex-1 text-xs">Atendidos</TabsTrigger>
+            <TabsTrigger value="all" className="flex-1 text-xs">Todos</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Search */}

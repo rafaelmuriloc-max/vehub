@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
+export type ChatTab = 'mine' | 'closed' | 'all';
+
 export default function Chat() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -16,67 +18,57 @@ export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeConvName, setActiveConvName] = useState<string | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [activeTab, setActiveTab] = useState<ChatTab>('mine');
 
-  // Load conversations - optimized with batch queries and parallelization
-  const loadConversations = useCallback(async () => {
+  // Load conversations based on active tab
+  const loadConversations = useCallback(async (tab?: ChatTab) => {
     if (!user) return;
+    const currentTab = tab || activeTab;
 
     setLoadingConversations(true);
 
-    const { data: participations } = await supabase
-      .from('chat_participants')
-      .select('conversation_id')
-      .eq('user_id', user.id);
+    let query = supabase.from('chat_conversations').select('*');
 
-    if (!participations || participations.length === 0) {
+    if (currentTab === 'mine') {
+      query = query.eq('assigned_to', user.id).eq('status', 'open');
+    } else if (currentTab === 'closed') {
+      query = query.eq('assigned_to', user.id).eq('status', 'closed');
+    } else {
+      // all: all open conversations
+      query = query.eq('status', 'open');
+    }
+
+    const { data: convs } = await query.order('updated_at', { ascending: false });
+
+    if (!convs || convs.length === 0) {
       setConversations([]);
       setLoadingConversations(false);
       return;
     }
 
-    const convIds = participations.map(p => p.conversation_id);
-
-    const { data: convs } = await supabase
-      .from('chat_conversations')
-      .select('*, client_id, avatar_url')
-      .in('id', convIds)
-      .order('updated_at', { ascending: false });
-
-    if (!convs) {
-      setLoadingConversations(false);
-      return;
-    }
-
-    // Batch: fetch all client IDs at once
+    const convIds = convs.map(c => c.id);
     const allClientIds = [...new Set(convs.filter(c => c.client_id).map(c => c.client_id!))];
     const oneToOneConvIds = convs.filter(c => !c.is_group && !c.client_id).map(c => c.id);
     const whatsappConvs = convs.filter(c => c.whatsapp_phone);
 
-    // Parallel batch queries
     const [clientsResult, participantsResult, allMessagesResult, whatsappContactsResult] = await Promise.all([
-      // 1. All linked clients in one query
       allClientIds.length > 0
         ? supabase.from('clients').select('id, contact_name, company_name').in('id', allClientIds)
         : Promise.resolve({ data: [] }),
-      // 2. All participants for 1:1 conversations
       oneToOneConvIds.length > 0
         ? supabase.from('chat_participants').select('conversation_id, user_id').in('conversation_id', oneToOneConvIds).neq('user_id', user.id)
         : Promise.resolve({ data: [] }),
-      // 3. All recent messages for all conversations (we'll group client-side)
       supabase.from('chat_messages')
         .select('conversation_id, content, created_at, sender_id, read_at')
         .in('conversation_id', convIds)
         .order('created_at', { ascending: false }),
-      // 4. All whatsapp phone contacts
       whatsappConvs.length > 0
         ? supabase.from('client_department_contacts').select('client_id, contact_phone')
         : Promise.resolve({ data: [] }),
     ]);
 
-    // Build lookup maps
     const clientMap = new Map((clientsResult.data || []).map(c => [c.id, c]));
 
-    // Get profile names for 1:1 participants
     const otherUserIds = [...new Set((participantsResult.data || []).map(p => p.user_id))];
     const profilesResult = otherUserIds.length > 0
       ? await supabase.from('profiles').select('user_id, full_name').in('user_id', otherUserIds)
@@ -84,7 +76,6 @@ export default function Chat() {
     const profileMap = new Map((profilesResult.data || []).map(p => [p.user_id, p.full_name || 'Usuário']));
     const participantMap = new Map((participantsResult.data || []).map(p => [p.conversation_id, p.user_id]));
 
-    // Group messages by conversation - pick latest per conversation
     const lastMsgMap = new Map<string, { content: string; created_at: string; sender_id: string; read_at: string | null }>();
     for (const msg of (allMessagesResult.data || [])) {
       if (!lastMsgMap.has(msg.conversation_id)) {
@@ -92,7 +83,6 @@ export default function Chat() {
       }
     }
 
-    // Count unread per conversation
     const unreadMap = new Map<string, number>();
     for (const msg of (allMessagesResult.data || [])) {
       if (msg.sender_id !== user.id && !msg.read_at) {
@@ -100,10 +90,7 @@ export default function Chat() {
       }
     }
 
-    // Build whatsapp phone → client_ids map
     const allContacts = whatsappContactsResult.data || [];
-    
-    // Build company lookup for whatsapp conversations
     const whatsappCompanyMap = new Map<string, string[]>();
     if (whatsappConvs.length > 0 && allContacts.length > 0) {
       const contactClientIds = [...new Set(allContacts.filter(c => c.client_id).map(c => c.client_id))];
@@ -125,7 +112,6 @@ export default function Chat() {
       }
     }
 
-    // Assemble items
     const items: ConversationItem[] = convs.map(conv => {
       let name = conv.name || 'Conversa';
 
@@ -151,16 +137,25 @@ export default function Chat() {
         avatarUrl: conv.avatar_url || undefined,
         companyNames: whatsappCompanyMap.get(conv.id) || [],
         whatsappPhone: conv.whatsapp_phone || undefined,
+        status: (conv as any).status || 'open',
       };
     });
 
     setConversations(items);
     setLoadingConversations(false);
-  }, [user]);
+  }, [user, activeTab]);
 
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  const handleTabChange = (tab: ChatTab) => {
+    setActiveTab(tab);
+    setActiveConvId(null);
+    setActiveConvName(null);
+    setMessages([]);
+    loadConversations(tab);
+  };
 
   // Load messages for active conversation
   useEffect(() => {
@@ -178,7 +173,6 @@ export default function Chat() {
 
       if (!data) return;
 
-      // Get sender names
       const senderIds = [...new Set(data.map(m => m.sender_id))];
       const { data: profiles } = await supabase
         .from('profiles')
@@ -192,7 +186,6 @@ export default function Chat() {
         sender_name: nameMap.get(m.sender_id) || 'Usuário',
       })));
 
-      // Mark unread messages as read
       const unreadIds = data
         .filter(m => m.sender_id !== user.id && !m.read_at)
         .map(m => m.id);
@@ -207,7 +200,6 @@ export default function Chat() {
 
     loadMessages();
 
-    // Set conversation name
     const conv = conversations.find(c => c.id === activeConvId);
     setActiveConvName(conv?.name || null);
   }, [activeConvId, user, conversations]);
@@ -254,26 +246,22 @@ export default function Chat() {
     };
   }, [user, activeConvId, loadConversations]);
 
-  const sendMessage = async (content: string) => {
-    if (!user || !activeConvId) return;
+  const activeConv = conversations.find(c => c.id === activeConvId);
+  const isClosed = activeConv?.status === 'closed';
 
-    const activeConv = conversations.find(c => c.id === activeConvId);
+  const sendMessage = async (content: string) => {
+    if (!user || !activeConvId || isClosed) return;
 
     if (activeConv?.whatsappPhone) {
-      // Send via WhatsApp edge function
-      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+      const { error } = await supabase.functions.invoke('whatsapp-send-text', {
         body: { conversationId: activeConvId, text: content },
       });
 
       if (error) {
         console.error('Error sending WhatsApp message:', error);
         toast({ title: 'Erro ao enviar mensagem', description: 'Tente novamente.', variant: 'destructive' });
-        return;
       }
-
-      // The realtime subscription will pick up the new message
     } else {
-      // Internal chat message
       await supabase.from('chat_messages').insert({
         conversation_id: activeConvId,
         sender_id: user.id,
@@ -286,6 +274,24 @@ export default function Chat() {
         .update({ updated_at: new Date().toISOString() })
         .eq('id', activeConvId);
     }
+  };
+
+  const closeTicket = async () => {
+    if (!activeConvId) return;
+    const { error } = await supabase
+      .from('chat_conversations')
+      .update({ status: 'closed', closed_at: new Date().toISOString() } as any)
+      .eq('id', activeConvId);
+
+    if (error) {
+      toast({ title: 'Erro ao fechar chamado', variant: 'destructive' });
+      return;
+    }
+
+    toast({ title: 'Chamado fechado com sucesso' });
+    setActiveConvId(null);
+    setActiveConvName(null);
+    loadConversations();
   };
 
   const handleSelectConversation = (id: string) => {
@@ -310,6 +316,8 @@ export default function Chat() {
             onSelect={handleSelectConversation}
             onCreated={handleConversationCreated}
             loading={loadingConversations}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
           />
         </div>
       )}
@@ -330,9 +338,11 @@ export default function Chat() {
             messages={messages}
             currentUserId={user?.id || ''}
             onSend={sendMessage}
-            isGroup={conversations.find(c => c.id === activeConvId)?.isGroup}
-            avatarUrl={conversations.find(c => c.id === activeConvId)?.avatarUrl}
-            companyNames={conversations.find(c => c.id === activeConvId)?.companyNames}
+            isGroup={activeConv?.isGroup}
+            avatarUrl={activeConv?.avatarUrl}
+            companyNames={activeConv?.companyNames}
+            isClosed={isClosed}
+            onCloseTicket={closeTicket}
           />
         </div>
       )}
