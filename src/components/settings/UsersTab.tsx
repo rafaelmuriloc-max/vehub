@@ -48,7 +48,7 @@ export function UsersTab() {
 
   const openEdit = (u: UserRow) => {
     setEditing(u);
-    setForm({ job_title: u.job_title || '', role: u.role, department_id: u.department_id || '' });
+    setForm({ job_title: u.job_title || '', role: u.role, department_id: u.department_id || 'none' });
     setOpen(true);
   };
 
