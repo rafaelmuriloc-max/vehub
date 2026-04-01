@@ -55,7 +55,7 @@ function ConversationSkeleton() {
   );
 }
 
-export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange }: ConversationListProps) {
+export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange, totalUnread }: ConversationListProps) {
   const [search, setSearch] = useState('');
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
