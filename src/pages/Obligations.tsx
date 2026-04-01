@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
   ChevronDown, ChevronRight, Zap,
@@ -19,7 +20,7 @@ import {
 
 type Department = { id: string; name: string };
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type DocumentType = { id: string; name: string };
 
 const activityTypeIcons: Record<string, React.ReactNode> = {
@@ -47,7 +48,7 @@ export default function Obligations() {
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '', whatsapp_template_name: '', whatsapp_message_body: '', whatsapp_button_url: '' });
+  const [activityForm, setActivityForm] = useState({ title: '', type: 'checklist', description: '', order: 0, obligation_id: '', document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '', whatsapp_template_name: '', whatsapp_message_body: '', whatsapp_button_url: '', whatsapp_has_document_header: false });
 
   const [expandedObligation, setExpandedObligation] = useState<string | null>(null);
 
@@ -107,12 +108,12 @@ export default function Obligations() {
   // ---- Activity CRUD ----
   function openNewActivity(obligationId: string) {
     setEditingActivity(null);
-    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '', whatsapp_template_name: '', whatsapp_message_body: '', whatsapp_button_url: '' });
+    setActivityForm({ title: '', type: 'checklist', description: '', order: activities.filter(a => a.obligation_id === obligationId).length, obligation_id: obligationId, document_type_id: '', auto_start: false, email_department_id: '', email_subject: '', email_body: '', whatsapp_template_name: '', whatsapp_message_body: '', whatsapp_button_url: '', whatsapp_has_document_header: false });
     setActivityOpen(true);
   }
   function openEditActivity(a: Activity) {
     setEditingActivity(a);
-    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '', whatsapp_template_name: (a as any).whatsapp_template_name || '', whatsapp_message_body: (a as any).whatsapp_message_body || '', whatsapp_button_url: (a as any).whatsapp_button_url || '' });
+    setActivityForm({ title: a.title, type: a.type, description: a.description || '', order: a.order, obligation_id: a.obligation_id, document_type_id: a.document_type_id || '', auto_start: a.auto_start, email_department_id: a.email_department_id || '', email_subject: a.email_subject || '', email_body: a.email_body || '', whatsapp_template_name: (a as any).whatsapp_template_name || '', whatsapp_message_body: (a as any).whatsapp_message_body || '', whatsapp_button_url: (a as any).whatsapp_button_url || '', whatsapp_has_document_header: a.whatsapp_has_document_header || false });
     setActivityOpen(true);
   }
   async function saveActivity(e: React.FormEvent) {
@@ -136,10 +137,12 @@ export default function Obligations() {
       payload.whatsapp_template_name = activityForm.whatsapp_template_name || null;
       payload.whatsapp_message_body = activityForm.whatsapp_message_body || null;
       payload.whatsapp_button_url = activityForm.whatsapp_button_url || null;
+      payload.whatsapp_has_document_header = activityForm.whatsapp_has_document_header;
     } else {
       payload.whatsapp_template_name = null;
       payload.whatsapp_message_body = null;
       payload.whatsapp_button_url = null;
+      payload.whatsapp_has_document_header = false;
     }
     const { error } = editingActivity
       ? await supabase.from('obligation_activities').update(payload).eq('id', editingActivity.id)
@@ -391,6 +394,11 @@ export default function Obligations() {
                     ))}
                   </div>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="whatsapp_has_document_header" checked={activityForm.whatsapp_has_document_header} onCheckedChange={v => setActivityForm({ ...activityForm, whatsapp_has_document_header: !!v })} />
+                  <Label htmlFor="whatsapp_has_document_header">Template com documento no header</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">Marque se o template envia documento diretamente no cabeçalho (header tipo DOCUMENT)</p>
                 <div className="space-y-2">
                   <Label>URL do Botão (opcional)</Label>
                   <Input value={activityForm.whatsapp_button_url} onChange={e => setActivityForm({ ...activityForm, whatsapp_button_url: e.target.value })} placeholder="Ex: https://seusite.com/pagamento" />

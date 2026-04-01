@@ -17,7 +17,7 @@ import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null };
-type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null };
+type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Instance = { id: string; obligation_id: string; client_id: string; reference_month: string; status: string; assigned_to: string | null; due_date: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null; file_url: string | null; notes: string | null };
 type Department = { id: string; name: string };

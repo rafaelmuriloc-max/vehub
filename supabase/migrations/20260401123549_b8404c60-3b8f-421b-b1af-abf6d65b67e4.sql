@@ -1,0 +1,1 @@
+ALTER TABLE obligation_activities ADD COLUMN whatsapp_has_document_header boolean NOT NULL DEFAULT false;

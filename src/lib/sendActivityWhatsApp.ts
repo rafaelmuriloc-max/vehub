@@ -6,6 +6,7 @@ interface SendActivityWhatsAppParams {
     whatsapp_template_name: string | null;
     whatsapp_message_body: string | null;
     whatsapp_button_url?: string | null;
+    whatsapp_has_document_header?: boolean;
   };
   instanceId: string;
   clientId: string;
@@ -126,7 +127,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     const components: Record<string, unknown>[] = [];
 
     // Only add DOCUMENT header if template has a button URL configured (document-sharing templates)
-    if (hasDocuments && attachedDocs && attachedDocs.length > 0 && activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
+    if (hasDocuments && attachedDocs && attachedDocs.length > 0 && activity.whatsapp_has_document_header) {
       const firstFileUrl = attachedDocs[0].file_url!;
       const filePath = firstFileUrl.includes('/documents/') 
         ? firstFileUrl.split('/documents/').pop()! 
