@@ -581,17 +581,6 @@ function stringifyDN(dn: { attributes?: Array<{ shortName?: string; name?: strin
   return (dn.attributes || []).map((a) => `${a.shortName || a.name || "attr"}=${a.value || ""}`).join(",");
 }
 
-function buildCertChain(leaf: ParsedCertificate, all: ParsedCertificate[]): ParsedCertificate[] {
-  const chain = [leaf];
-  const visited = new Set([leaf.pem]);
-  let current = leaf;
-  while (true) {
-    const next = all.find((c) => !visited.has(c.pem) && c.subject === current.issuer);
-    if (!next) break;
-    chain.push(next);
-    visited.add(next.pem);
-    if (next.subject === next.issuer) break;
-    current = next;
-  }
-  return chain;
+function buildCertChain(_leaf: ParsedCertificate, _all: ParsedCertificate[]): ParsedCertificate[] {
+  return [];
 }
