@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
@@ -84,6 +85,7 @@ export default function CalendarView() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
+  const [clientOpen, setClientOpen] = useState(false);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
   const [dayPage, setDayPage] = useState(1);
   const [monthPendingPage, setMonthPendingPage] = useState(1);
@@ -419,13 +421,48 @@ export default function CalendarView() {
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Empresa</label>
-              <Select value={filterClient} onValueChange={v => { setFilterClient(v); setSelectedDay(null); }}>
-                <SelectTrigger className="w-[280px]"><SelectValue placeholder="Empresa" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as empresas</SelectItem>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={clientOpen}
+                    className="w-[280px] justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {filterClient === 'all' ? 'Todas as empresas' : clients.find(c => c.id === filterClient)?.company_name || 'Empresa'}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar empresa..." />
+                    <CommandList className="max-h-[300px]">
+                      <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="todas-as-empresas"
+                          onSelect={() => { setFilterClient('all'); setSelectedDay(null); setClientOpen(false); }}
+                        >
+                          <Check className={`mr-2 h-4 w-4 ${filterClient === 'all' ? 'opacity-100' : 'opacity-0'}`} />
+                          Todas as empresas
+                        </CommandItem>
+                        {clients.map(c => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.company_name}
+                            onSelect={() => { setFilterClient(c.id); setSelectedDay(null); setClientOpen(false); }}
+                          >
+                            <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
+                            {c.company_name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </CardContent>
