@@ -11,7 +11,7 @@ import { toast } from '@/hooks/use-toast';
 export type ChatTab = 'mine' | 'closed' | 'all';
 
 export default function Chat() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const isMobile = useIsMobile();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);

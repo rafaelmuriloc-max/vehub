@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             number: phone,
-            text: text,
+            text: signedText,
           }),
         }
       );
