@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, CheckCheck, Phone, FileDown, MapPin, Contact } from 'lucide-react';
+import { CheckCheck, Phone, FileDown, MapPin, Contact } from 'lucide-react';
 
 interface MessageBubbleProps {
   content: string;
@@ -155,9 +155,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             {format(new Date(timestamp), 'HH:mm', { locale: ptBR })}
           </span>
           {isMine && (
-            isRead
-              ? <CheckCheck className="h-3.5 w-3.5 text-blue-500" />
-              : <Check className="h-3.5 w-3.5 text-muted-foreground" />
+            <CheckCheck className={`h-3.5 w-3.5 ${isRead ? 'text-blue-500' : 'text-muted-foreground'}`} />
           )}
         </div>
       </div>
