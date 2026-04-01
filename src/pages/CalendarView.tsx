@@ -421,7 +421,7 @@ export default function CalendarView() {
           <div className="flex flex-wrap gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Departamento</label>
-              <Select value={filterDept} onValueChange={v => { setFilterDept(v); setSelectedDay(null); }}>
+              <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
                 <SelectTrigger className="w-[220px]"><SelectValue placeholder="Departamento" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os departamentos</SelectItem>
