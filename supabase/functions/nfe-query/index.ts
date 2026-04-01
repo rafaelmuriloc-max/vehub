@@ -252,7 +252,7 @@ async function decompressGzip(base64Data: string): Promise<string> {
   return new TextDecoder().decode(result);
 }
 
-// --- Parse distNFeSC entries from loteDistNFeSC ---
+// --- Parse docZip entries from loteDistDFeInt ---
 type DistEntry = {
   nsu: string | null;
   chAcesso: string | null;
@@ -260,31 +260,52 @@ type DistEntry = {
   isEvent: boolean;
 };
 
-function parseDistEntries(loteXml: string): DistEntry[] {
+async function parseDocZipEntries(loteXml: string): Promise<DistEntry[]> {
   const entries: DistEntry[] = [];
-  // Match <distNFeSC ... > ... </distNFeSC> entries inside loteDistNFeSC
-  const entryRegex = /<distNFeSC\s+([^>]*)>([\s\S]*?)<\/distNFeSC>/gi;
+  // Match <docZip NSU="..." schema="...">base64gzip</docZip>
+  const entryRegex = /<docZip\s+([^>]*)>([^<]+)<\/docZip>/gi;
   let match;
 
   while ((match = entryRegex.exec(loteXml)) !== null) {
     const attrs = match[1];
-    const content = match[2];
+    const base64Content = match[2].trim();
 
     const nsuMatch = attrs.match(/NSU\s*=\s*"([^"]+)"/i);
-    const chMatch = attrs.match(/chAcesso\s*=\s*"([^"]+)"/i);
+    const schemaMatch = attrs.match(/schema\s*=\s*"([^"]+)"/i);
 
-    const isEvent = /<procEventoNFe/i.test(content);
-    const hasNfeProc = /<nfeProc/i.test(content);
+    let xmlContent: string | null = null;
+    try {
+      xmlContent = await decompressGzip(base64Content);
+    } catch (e) {
+      console.error(`[NF-e] Failed to decompress docZip NSU=${nsuMatch?.[1]}:`, (e as Error).message);
+      continue;
+    }
+
+    const schema = schemaMatch?.[1] || "";
+    const isEvent = schema.includes("procEventoNFe") || /<procEventoNFe/i.test(xmlContent);
+    
+    // Extract chave de acesso from the XML
+    const chAcesso = extractTagContent(xmlContent, "chNFe") || 
+                     extractAccessKeyFromXml(xmlContent);
 
     entries.push({
       nsu: nsuMatch ? nsuMatch[1] : null,
-      chAcesso: chMatch ? chMatch[1] : null,
-      xmlContent: hasNfeProc || isEvent ? content.trim() : null,
+      chAcesso,
+      xmlContent,
       isEvent,
     });
   }
 
   return entries;
+}
+
+function extractAccessKeyFromXml(xml: string): string | null {
+  // Try to extract from infNFe Id attribute
+  const idMatch = xml.match(/Id\s*=\s*"NFe(\d{44})"/i);
+  if (idMatch) return idMatch[1];
+  // Try from protNFe/chNFe
+  const chNFe = extractTagContent(xml, "chNFe");
+  return chNFe;
 }
 
 // --- Parse NF-e entry into DB record ---
