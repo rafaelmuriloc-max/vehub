@@ -1,37 +1,49 @@
 
 
-# Corrigir exibição de obrigações no calendário (limite de 1000 linhas)
+# Busca por CNPJ raiz (8 primeiros dígitos) no upload de documentos
 
 ## Problema
-A tabela `obligation_instances` tem **1955 registros**, mas o Supabase retorna no máximo **1000 por query** (limite padrão). O calendário carrega apenas as primeiras 1000 instâncias, e as do FGTS ficam de fora.
+Ao importar documentos como guia do FGTS, o CNPJ extraído pode ser de uma filial (diferente sufixo) ou o sistema não encontra match exato com os 14 dígitos. A busca atual (`matchClient`) exige correspondência exata dos 14 dígitos.
 
 ## Solução
-Filtrar as instâncias no lado do servidor para trazer apenas as do mês visualizado, em vez de carregar todas. Isso resolve o limite e melhora a performance.
+Alterar a função `matchClient` em `src/pages/Documents.tsx` para, quando não encontrar correspondência exata com 14 dígitos, fazer fallback buscando pelo CNPJ raiz (8 primeiros dígitos).
 
-## Alterações em `src/pages/CalendarView.tsx`
+## Alteração em `src/pages/Documents.tsx`
 
-### 1. Filtrar `obligation_instances` pelo mês atual
-Na função `loadData`, adicionar filtro por `reference_month` baseado no mês/ano exibido no calendário:
-
+### Função `matchClient` (linhas 73-79)
+Lógica atual:
 ```typescript
-// Antes (sem filtro, bate no limite de 1000):
-supabase.from('obligation_instances').select('...')
-
-// Depois (filtra pelo mês visualizado):
-const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`;
-const monthEnd = `${year}-${String(month+2 > 12 ? 1 : month+2).padStart(2,'0')}-01`;
-supabase.from('obligation_instances')
-  .select('...')
-  .gte('reference_month', monthStart)
-  .lt('reference_month', monthEnd)
+function matchClient(cnpj: string): string {
+  if (!cnpj) return '';
+  const clean = cleanCnpj(cnpj);
+  if (clean.length !== 14) return '';
+  const found = clients.find(c => cleanCnpj(c.document) === clean);
+  return found?.id || '';
+}
 ```
 
-### 2. Adicionar `currentDate` como dependência do `loadData`
-O `useCallback` do `loadData` precisa depender de `currentDate` (ou `year`/`month`) para recarregar quando o usuário muda de mês.
+Nova lógica:
+```typescript
+function matchClient(cnpj: string): string {
+  if (!cnpj) return '';
+  const clean = cleanCnpj(cnpj);
+  if (clean.length < 8) return '';
+  
+  // Busca exata (14 dígitos)
+  if (clean.length === 14) {
+    const exact = clients.find(c => cleanCnpj(c.document) === clean);
+    if (exact) return exact.id;
+  }
+  
+  // Fallback: CNPJ raiz (8 primeiros dígitos)
+  const root = clean.substring(0, 8);
+  const byRoot = clients.find(c => cleanCnpj(c.document).substring(0, 8) === root);
+  return byRoot?.id || '';
+}
+```
 
-### 3. Lógica de eventos (`events` memo)
-Mantém como está — já filtra por mês ao gerar as datas dos dias. Com o filtro no servidor, os dados já vêm corretos.
+Isso cobre o caso do FGTS e qualquer outro documento onde o CNPJ extraído seja da mesma raiz mas com sufixo diferente.
 
 ## Arquivo
-- `src/pages/CalendarView.tsx`
+- `src/pages/Documents.tsx` (apenas a função `matchClient`, ~6 linhas)
 
