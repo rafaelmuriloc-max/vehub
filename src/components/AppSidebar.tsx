@@ -73,6 +73,11 @@ export function AppSidebar() {
                   >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
+                    {item.title === 'Chat' && unreadCount > 0 && (
+                      <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center px-1.5 text-[10px] font-bold bg-destructive text-destructive-foreground border-0">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </Badge>
+                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

@@ -77,7 +77,14 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
       <div className="px-2 pt-2">
         <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ChatTab)}>
           <TabsList className="w-full">
-            <TabsTrigger value="mine" className="flex-1 text-xs">Chat</TabsTrigger>
+            <TabsTrigger value="mine" className="flex-1 text-xs relative">
+              Chat
+              {totalUnread != null && totalUnread > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="closed" className="flex-1 text-xs">Atendidos</TabsTrigger>
             <TabsTrigger value="all" className="flex-1 text-xs">Todos</TabsTrigger>
           </TabsList>
