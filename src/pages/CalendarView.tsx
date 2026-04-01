@@ -781,7 +781,7 @@ export default function CalendarView() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ListChecks className="h-5 w-5 text-primary" />
-              {detailObligation?.name}
+              {detailObligation?.name}{detailInstance ? (() => { const rd = new Date(detailInstance.reference_month + 'T00:00:00'); const cd = detailObligation?.competence_rule === 'previous' ? new Date(rd.getFullYear(), rd.getMonth() - 1, 1) : rd; const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; return ` | ${mn[cd.getMonth()]}/${cd.getFullYear()}`; })() : ''}
             </DialogTitle>
             {detailInstance && (
               <p className="text-sm text-muted-foreground mt-1">
