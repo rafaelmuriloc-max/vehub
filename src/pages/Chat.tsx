@@ -434,6 +434,9 @@ export default function Chat() {
             messages={messages}
             currentUserId={user?.id || ''}
             onSend={sendMessage}
+            onSendMedia={sendMedia}
+            onSendLocation={sendLocation}
+            onSendContact={sendContact}
             isGroup={activeConv?.isGroup}
             avatarUrl={activeConv?.avatarUrl}
             companyNames={activeConv?.companyNames}
