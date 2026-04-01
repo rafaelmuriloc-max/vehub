@@ -141,7 +141,14 @@ export default function CalendarView() {
         return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       };
 
-      const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id };
+      // Calcular competência
+      const compDate = obl.competence_rule === 'previous'
+        ? new Date(y, m - 1, 1)
+        : refDate;
+      const compMonthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const competenceLabel = `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
+
+      const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id, competenceLabel };
       const alertDate = makeDate(obl.alert_day);
       const targetDate = makeDate(obl.target_day);
       const dueDate = makeDate(obl.due_day);
