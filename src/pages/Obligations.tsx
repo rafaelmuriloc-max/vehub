@@ -300,6 +300,19 @@ export default function Obligations() {
                 </SelectContent>
               </Select>
             </div>
+            {obligationForm.recurrence === 'mensal' && (
+              <div className="space-y-2">
+                <Label>Competência</Label>
+                <Select value={obligationForm.competence_rule} onValueChange={v => setObligationForm({ ...obligationForm, competence_rule: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="current">Mês atual (competência = mês de referência)</SelectItem>
+                    <SelectItem value="previous">Mês anterior (ex: Folha de Pagamento)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">

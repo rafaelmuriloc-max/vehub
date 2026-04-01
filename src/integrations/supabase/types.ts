@@ -1006,6 +1006,7 @@ export type Database = {
       obligations: {
         Row: {
           alert_day: number | null
+          competence_rule: string
           created_at: string
           department_id: string
           description: string | null
@@ -1018,6 +1019,7 @@ export type Database = {
         }
         Insert: {
           alert_day?: number | null
+          competence_rule?: string
           created_at?: string
           department_id: string
           description?: string | null
@@ -1030,6 +1032,7 @@ export type Database = {
         }
         Update: {
           alert_day?: number | null
+          competence_rule?: string
           created_at?: string
           department_id?: string
           description?: string | null

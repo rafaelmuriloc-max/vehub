@@ -58,8 +58,16 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     return { success: false, error: 'Cliente sem telefone de contato cadastrado' };
   }
 
+  // Fetch competence_rule from obligation
+  let competenceRule = 'current';
+  if (instanceData?.obligation_id) {
+    const { data: oblData } = await supabase.from('obligations').select('competence_rule').eq('id', instanceData.obligation_id).single();
+    if (oblData?.competence_rule) competenceRule = oblData.competence_rule;
+  }
+
   const refDate = new Date(referenceMonth + 'T00:00:00');
-  const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const competenceDate = competenceRule === 'previous' ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1) : refDate;
+  const competencia = competenceDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const vencimento = dueDay
     ? new Date(refDate.getFullYear(), refDate.getMonth(), dueDay).toLocaleDateString('pt-BR')
     : '';
