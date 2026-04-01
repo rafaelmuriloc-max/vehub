@@ -18,7 +18,7 @@ import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
-type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null };
+type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
@@ -27,6 +27,7 @@ type Completion = { id: string; instance_id: string; activity_id: string; comple
 type CalendarEvent = {
   clientId: string; clientName: string; obligationName: string; deptName: string;
   type: 'alert' | 'target' | 'due'; date: string; instanceId: string; obligationId: string;
+  competenceLabel: string;
 };
 
 const typeConfig = {
@@ -100,7 +101,7 @@ export default function CalendarView() {
   const loadData = useCallback(async () => {
     const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
       supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month'),
-      supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day'),
+      supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
@@ -140,7 +141,14 @@ export default function CalendarView() {
         return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       };
 
-      const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id };
+      // Calcular competência
+      const compDate = obl.competence_rule === 'previous'
+        ? new Date(y, m - 1, 1)
+        : refDate;
+      const compMonthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const competenceLabel = `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
+
+      const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id, competenceLabel };
       const alertDate = makeDate(obl.alert_day);
       const targetDate = makeDate(obl.target_day);
       const dueDate = makeDate(obl.due_day);
@@ -598,7 +606,7 @@ export default function CalendarView() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                            <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
                               <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                             </p>
@@ -683,7 +691,7 @@ export default function CalendarView() {
                                 {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
                                 <p className="text-xs text-muted-foreground truncate mt-0.5">
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
@@ -734,7 +742,7 @@ export default function CalendarView() {
                                 {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName}</p>
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
                                 <p className="text-xs text-muted-foreground truncate mt-0.5">
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
@@ -773,7 +781,7 @@ export default function CalendarView() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ListChecks className="h-5 w-5 text-primary" />
-              {detailObligation?.name}
+              {detailObligation?.name}{detailInstance ? (() => { const rd = new Date(detailInstance.reference_month + 'T00:00:00'); const cd = detailObligation?.competence_rule === 'previous' ? new Date(rd.getFullYear(), rd.getMonth() - 1, 1) : rd; const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; return ` | ${mn[cd.getMonth()]}/${cd.getFullYear()}`; })() : ''}
             </DialogTitle>
             {detailInstance && (
               <p className="text-sm text-muted-foreground mt-1">
