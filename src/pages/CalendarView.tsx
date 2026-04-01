@@ -213,7 +213,7 @@ export default function CalendarView() {
     return events.filter(e => e.date.startsWith(prefix) && e.type === 'target').sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
-  useEffect(() => { setDayPage(1); }, [selectedDay]);
+  useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); }, [selectedDay]);
   useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); }, [year, month, filterDept, filterClient]);
 
   const detailInstance = instances.find(i => i.id === detailInstanceId);
