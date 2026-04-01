@@ -277,6 +277,85 @@ export default function Chat() {
     }
   };
 
+  const sendMedia = async (file: File, type: 'image' | 'video' | 'document') => {
+    if (!user || !activeConvId || isClosed) return;
+
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${activeConvId}/${Date.now()}_${sanitizedName}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from('chat-media')
+      .upload(path, file);
+
+    if (uploadErr) {
+      toast({ title: 'Erro ao enviar arquivo', description: uploadErr.message, variant: 'destructive' });
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
+    const mediaUrl = urlData.publicUrl;
+
+    if (activeConv?.whatsappPhone) {
+      const { error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: { conversationId: activeConvId, type, mediaUrl, fileName: file.name, senderName: profile?.full_name || undefined },
+      });
+      if (error) {
+        toast({ title: 'Erro ao enviar mídia', variant: 'destructive' });
+      }
+    } else {
+      await supabase.from('chat_messages').insert({
+        conversation_id: activeConvId,
+        sender_id: user.id,
+        content: file.name,
+        message_type: `whatsapp_${type}`,
+        media_url: mediaUrl,
+      });
+      await supabase.from('chat_conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConvId);
+    }
+  };
+
+  const sendLocation = async (lat: number, lng: number) => {
+    if (!user || !activeConvId || isClosed) return;
+
+    if (activeConv?.whatsappPhone) {
+      const { error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: { conversationId: activeConvId, type: 'location', latitude: lat, longitude: lng, senderName: profile?.full_name || undefined },
+      });
+      if (error) {
+        toast({ title: 'Erro ao enviar localização', variant: 'destructive' });
+      }
+    } else {
+      await supabase.from('chat_messages').insert({
+        conversation_id: activeConvId,
+        sender_id: user.id,
+        content: `${lat},${lng}`,
+        message_type: 'whatsapp_location',
+      });
+      await supabase.from('chat_conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConvId);
+    }
+  };
+
+  const sendContact = async (name: string, phone: string) => {
+    if (!user || !activeConvId || isClosed) return;
+
+    if (activeConv?.whatsappPhone) {
+      const { error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: { conversationId: activeConvId, type: 'contacts', contactName: name, contactPhone: phone, senderName: profile?.full_name || undefined },
+      });
+      if (error) {
+        toast({ title: 'Erro ao enviar contato', variant: 'destructive' });
+      }
+    } else {
+      await supabase.from('chat_messages').insert({
+        conversation_id: activeConvId,
+        sender_id: user.id,
+        content: `${name}|${phone}`,
+        message_type: 'whatsapp_contact',
+      });
+      await supabase.from('chat_conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConvId);
+    }
+  };
+
   const closeTicket = async () => {
     if (!activeConvId) return;
     const { error } = await supabase
