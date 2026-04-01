@@ -163,7 +163,7 @@ export default function Obligations() {
   async function saveObligation(e: React.FormEvent) {
     e.preventDefault();
     const segmentFilters = obligationForm.assignment_mode === 'segment' ? {
-      has_payroll: obligationForm.segment_has_payroll || undefined,
+      payroll_type: obligationForm.segment_payroll_filter || undefined,
       tax_regime: obligationForm.segment_tax_regimes.length > 0 ? obligationForm.segment_tax_regimes : undefined,
       city: obligationForm.segment_city || undefined,
     } : {};
