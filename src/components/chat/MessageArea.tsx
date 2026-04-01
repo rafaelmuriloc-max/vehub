@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageCircle, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, CheckCircle2, UserRoundPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
@@ -33,6 +33,7 @@ interface MessageAreaProps {
   isClosed?: boolean;
   onCloseTicket?: () => void;
   onReopenTicket?: () => void;
+  onTransferTicket?: () => void;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -42,7 +43,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,6 +94,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             </p>
           )}
         </div>
+        {!isClosed && onTransferTicket && (
+          <Button variant="outline" size="sm" onClick={onTransferTicket} className="shrink-0 gap-1.5">
+            <UserRoundPlus className="h-4 w-4" />
+            Transferir
+          </Button>
+        )}
         {!isClosed && onCloseTicket && (
           <Button variant="outline" size="sm" onClick={onCloseTicket} className="shrink-0 gap-1.5">
             <CheckCircle2 className="h-4 w-4" />
