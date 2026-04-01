@@ -606,7 +606,7 @@ export default function CalendarView() {
         </Card>
 
         {/* Day obligations - right side */}
-        <Card className="flex-1 lg:flex-[1]">
+        <Card className="flex-1 lg:flex-[1] max-w-2xl">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
