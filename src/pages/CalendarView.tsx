@@ -27,6 +27,7 @@ type Completion = { id: string; instance_id: string; activity_id: string; comple
 type CalendarEvent = {
   clientId: string; clientName: string; obligationName: string; deptName: string;
   type: 'alert' | 'target' | 'due'; date: string; instanceId: string; obligationId: string;
+  competenceLabel: string;
 };
 
 const typeConfig = {
