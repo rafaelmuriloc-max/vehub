@@ -48,11 +48,12 @@ const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho
 const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const ITEMS_PER_PAGE = 10;
+const DAY_ITEMS_PER_PAGE = 5;
 
-function PaginationBlock({ page, totalPages, total, onPageChange }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void }) {
+function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEMS_PER_PAGE }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void; perPage?: number }) {
   if (totalPages <= 1) return null;
-  const start = (page - 1) * ITEMS_PER_PAGE + 1;
-  const end = Math.min(page * ITEMS_PER_PAGE, total);
+  const start = (page - 1) * perPage + 1;
+  const end = Math.min(page * perPage, total);
   return (
     <div className="flex items-center justify-between mt-4">
       <span className="text-xs text-muted-foreground">Mostrando {start}-{end} de {total}</span>
@@ -394,8 +395,8 @@ export default function CalendarView() {
     await loadData();
   }
 
-  const dayTotalPages = Math.ceil(selectedEvents.length / ITEMS_PER_PAGE);
-  const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * ITEMS_PER_PAGE, dayPage * ITEMS_PER_PAGE);
+  const dayTotalPages = Math.ceil(selectedEvents.length / DAY_ITEMS_PER_PAGE);
+  const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * DAY_ITEMS_PER_PAGE, dayPage * DAY_ITEMS_PER_PAGE);
   const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
   const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
   const monthPendingTotalPages = Math.ceil(monthEventsPending.length / ITEMS_PER_PAGE);
@@ -666,7 +667,7 @@ export default function CalendarView() {
                     );
                   })}
                 </div>
-                <PaginationBlock page={dayPage} totalPages={dayTotalPages} total={selectedEvents.length} onPageChange={setDayPage} />
+                <PaginationBlock page={dayPage} totalPages={dayTotalPages} total={selectedEvents.length} onPageChange={setDayPage} perPage={DAY_ITEMS_PER_PAGE} />
               </>
             )}
           </CardContent>
