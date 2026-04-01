@@ -101,48 +101,37 @@ Deno.serve(async (req) => {
 
       console.log(`[NF-e] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
 
-      // Extract retDistNFeSC content
-      const retBody = extractTagContent(response.bodyText, "retdistNFeSC") || 
-                      extractTagContent(response.bodyText, "retDistNFeSC") ||
+      // Extract retDistDFeInt content
+      const retBody = extractTagContent(response.bodyText, "retDistDFeInt") || 
+                      extractTagContent(response.bodyText, "retdistDFeInt") ||
                       response.bodyText;
 
       const cStat = extractTagContent(retBody, "cStat");
       const xMotivo = extractTagContent(retBody, "xMotivo");
-      const ultNuNSURet = extractTagContent(retBody, "ultNuNSURet");
-      const qtDfeRet = parseInt(extractTagContent(retBody, "qtDfeRet") || "0", 10);
+      const maxNSU = extractTagContent(retBody, "maxNSU");
+      const ultNSU = extractTagContent(retBody, "ultNSU");
 
-      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, qtDfeRet=${qtDfeRet}, ultNuNSURet=${ultNuNSURet}`);
+      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, maxNSU=${maxNSU}, ultNSU=${ultNSU}`);
 
-      if (cStat === "117") {
+      if (cStat === "137") {
         // No documents found
-        console.log("[NF-e] Nenhum DF-e localizado (117)");
+        console.log("[NF-e] Nenhum DF-e localizado (137)");
         keepGoing = false;
         break;
       }
 
-      if (cStat === "110") {
-        console.log("[NF-e] DFe em reprocessamento (110)");
-        return jsonResponse({ error: "DFe em reprocessamento na SEF-SC. Tente novamente em 1 hora.", cStat: "110" }, 503);
+      if (cStat !== "138") {
+        if (totalSaved > 0) {
+          keepGoing = false;
+          break;
+        }
+        return jsonResponse({ error: `Erro AN: ${cStat} - ${xMotivo}`, cStat }, 400);
       }
 
-      if (cStat !== "118") {
-        return jsonResponse({ error: `Erro SEF-SC: ${cStat} - ${xMotivo}`, cStat }, 400);
-      }
-
-      // Extract and decompress loteDistComp
-      const loteDistCompB64 = extractTagContent(retBody, "loteDistComp");
-      if (!loteDistCompB64) {
-        console.log("[NF-e] Sem loteDistComp no retorno");
-        keepGoing = false;
-        break;
-      }
-
-      const loteXml = await decompressGzip(loteDistCompB64);
-      console.log(`[NF-e] Lote decompressed, length=${loteXml.length}`);
-
-      // Parse distNFeSC entries from loteDistNFeSC
-      const entries = parseDistEntries(loteXml);
-      console.log(`[NF-e] Parsed ${entries.length} entries`);
+      // Extract loteDistDFeInt and parse docZip entries
+      const loteContent = extractTagContent(retBody, "loteDistDFeInt") || retBody;
+      const entries = await parseDocZipEntries(loteContent);
+      console.log(`[NF-e] Parsed ${entries.length} entries from docZip`);
 
       if (entries.length === 0) {
         keepGoing = false;
