@@ -41,12 +41,7 @@ Deno.serve(async (req) => {
     }
 
     const key = data.key;
-    if (key?.fromMe) {
-      console.log("Skipping fromMe message");
-      return new Response(JSON.stringify({ ok: true, skipped: "fromMe" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const isFromMe = !!key?.fromMe;
 
     const remoteJid = key?.remoteJid || "";
     const phoneRaw = remoteJid.replace("@s.whatsapp.net", "").replace("@c.us", "");
@@ -61,7 +56,7 @@ Deno.serve(async (req) => {
 
     // Detect message type and extract text/caption
     let text: string | null = null;
-    let messageType = "whatsapp_incoming";
+    let messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_incoming";
     let mediaKey: string | null = null; // which media type key to use
 
     if (messageObj.conversation) {
@@ -70,23 +65,23 @@ Deno.serve(async (req) => {
       text = messageObj.extendedTextMessage.text;
     } else if (messageObj.imageMessage) {
       text = messageObj.imageMessage.caption || "";
-      messageType = "whatsapp_image";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_image";
       mediaKey = "imageMessage";
     } else if (messageObj.videoMessage) {
       text = messageObj.videoMessage.caption || "";
-      messageType = "whatsapp_video";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_video";
       mediaKey = "videoMessage";
     } else if (messageObj.audioMessage) {
       text = "";
-      messageType = "whatsapp_audio";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_audio";
       mediaKey = "audioMessage";
     } else if (messageObj.documentMessage) {
       text = messageObj.documentMessage.caption || messageObj.documentMessage.fileName || "";
-      messageType = "whatsapp_document";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_document";
       mediaKey = "documentMessage";
     } else if (messageObj.stickerMessage) {
       text = "";
-      messageType = "whatsapp_image";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_image";
       mediaKey = "stickerMessage";
     }
 
@@ -337,7 +332,27 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Insert the received message
+    // Deduplication for fromMe messages (avoid duplicating messages sent from our chat UI)
+    if (isFromMe) {
+      const tenSecsAgo = new Date(Date.now() - 10000).toISOString();
+      const { data: duplicates } = await supabase
+        .from("chat_messages")
+        .select("id")
+        .eq("conversation_id", conversationId)
+        .eq("content", text || "")
+        .eq("channel", "whatsapp")
+        .gte("created_at", tenSecsAgo)
+        .limit(1);
+
+      if (duplicates && duplicates.length > 0) {
+        console.log("Skipping duplicate fromMe message");
+        return new Response(JSON.stringify({ ok: true, skipped: "duplicate_fromMe" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Insert the message
     const insertData: Record<string, unknown> = {
       conversation_id: conversationId,
       sender_id: systemUserId,

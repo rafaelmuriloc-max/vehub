@@ -6,6 +6,7 @@ import { MessageArea, ChatMessage } from '@/components/chat/MessageArea';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 export default function Chat() {
   const { user } = useAuth();
@@ -149,6 +150,7 @@ export default function Chat() {
         isGroup: conv.is_group,
         avatarUrl: conv.avatar_url || undefined,
         companyNames: whatsappCompanyMap.get(conv.id) || [],
+        whatsappPhone: conv.whatsapp_phone || undefined,
       };
     });
 
@@ -255,17 +257,35 @@ export default function Chat() {
   const sendMessage = async (content: string) => {
     if (!user || !activeConvId) return;
 
-    await supabase.from('chat_messages').insert({
-      conversation_id: activeConvId,
-      sender_id: user.id,
-      content,
-      message_type: 'text',
-    });
+    const activeConv = conversations.find(c => c.id === activeConvId);
 
-    await supabase
-      .from('chat_conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', activeConvId);
+    if (activeConv?.whatsappPhone) {
+      // Send via WhatsApp edge function
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: { conversationId: activeConvId, text: content },
+      });
+
+      if (error) {
+        console.error('Error sending WhatsApp message:', error);
+        toast({ title: 'Erro ao enviar mensagem', description: 'Tente novamente.', variant: 'destructive' });
+        return;
+      }
+
+      // The realtime subscription will pick up the new message
+    } else {
+      // Internal chat message
+      await supabase.from('chat_messages').insert({
+        conversation_id: activeConvId,
+        sender_id: user.id,
+        content,
+        message_type: 'text',
+      });
+
+      await supabase
+        .from('chat_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', activeConvId);
+    }
   };
 
   const handleSelectConversation = (id: string) => {

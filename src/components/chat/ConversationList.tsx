@@ -16,6 +16,7 @@ export interface ConversationItem {
   isGroup: boolean;
   avatarUrl?: string;
   companyNames?: string[];
+  whatsappPhone?: string;
 }
 
 interface ConversationListProps {
