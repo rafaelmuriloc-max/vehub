@@ -1,26 +1,22 @@
 
 
-# Enviar todos os documentos anexados via WhatsApp
+# Clonar Obrigação
 
-## Problema
-Quando há múltiplos documentos anexados, apenas o primeiro é enviado. A API da Meta aceita apenas um documento por header, então basta repetir o envio completo para cada documento.
+## O que será feito
+Adicionar um botão "Clonar" ao lado dos botões Editar/Excluir de cada obrigação. Ao clicar, o sistema cria uma cópia da obrigação (com nome "[nome] (cópia)") e todas as suas atividades vinculadas.
 
-## Alteração
+## Alterações
 
-### `src/lib/sendActivityWhatsApp.ts`
+### `src/pages/Obligations.tsx`
 
-Quando `whatsapp_has_document_header` é `true` e há múltiplos documentos, em vez de montar um único `body` e chamar `whatsapp-send` uma vez, iterar sobre cada documento e enviar uma mensagem completa (header + body + button) para cada um.
-
-**Lógica:**
-1. Montar os `components` de body e button uma vez (são iguais para todos)
-2. Para cada documento em `attachedDocs`:
-   - Gerar signed URL
-   - Montar header com o documento atual
-   - Concatenar header + body + button nos components
-   - Chamar `whatsapp-send`
-3. Se `whatsapp_has_document_header` é `false` ou não há documentos, manter o comportamento atual (uma única chamada)
-4. Marcar atividade como concluída apenas se todos os envios foram bem-sucedidos
+1. **Importar ícone `Copy`** do lucide-react
+2. **Criar função `cloneObligation(ob: Obligation)`**:
+   - Inserir nova obrigação com os mesmos dados (nome com sufixo " (cópia)")
+   - Buscar todas as atividades da obrigação original
+   - Inserir cópias das atividades vinculadas à nova obrigação
+   - Recarregar dados com `loadAll()`
+3. **Adicionar botão Clone** na linha de ações (entre Editar e Excluir), visível apenas para admin
 
 ## Arquivos
-- `src/lib/sendActivityWhatsApp.ts`
+- `src/pages/Obligations.tsx`
 
