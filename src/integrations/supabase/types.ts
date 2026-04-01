@@ -1024,9 +1024,11 @@ export type Database = {
           description: string | null
           due_day: number | null
           id: string
+          is_tax: boolean
           name: string
           recurrence: string
           target_day: number | null
+          tax_sphere: string | null
           updated_at: string
         }
         Insert: {
@@ -1037,9 +1039,11 @@ export type Database = {
           description?: string | null
           due_day?: number | null
           id?: string
+          is_tax?: boolean
           name: string
           recurrence?: string
           target_day?: number | null
+          tax_sphere?: string | null
           updated_at?: string
         }
         Update: {
@@ -1050,9 +1054,11 @@ export type Database = {
           description?: string | null
           due_day?: number | null
           id?: string
+          is_tax?: boolean
           name?: string
           recurrence?: string
           target_day?: number | null
+          tax_sphere?: string | null
           updated_at?: string
         }
         Relationships: [
