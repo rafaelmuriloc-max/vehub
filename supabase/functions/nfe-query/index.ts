@@ -210,7 +210,6 @@ function buildSoapRequest(cnpj: string, ultNSU: string): string {
   </soap:Body>
 </soap:Envelope>`;
 }
-}
 
 // --- XML Tag Extraction ---
 function extractTagContent(xml: string, tagName: string): string | null {
