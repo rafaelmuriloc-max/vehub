@@ -136,10 +136,12 @@ export default function Obligations() {
       payload.whatsapp_template_name = activityForm.whatsapp_template_name || null;
       payload.whatsapp_message_body = activityForm.whatsapp_message_body || null;
       payload.whatsapp_button_url = activityForm.whatsapp_button_url || null;
+      payload.whatsapp_has_document_header = activityForm.whatsapp_has_document_header;
     } else {
       payload.whatsapp_template_name = null;
       payload.whatsapp_message_body = null;
       payload.whatsapp_button_url = null;
+      payload.whatsapp_has_document_header = false;
     }
     const { error } = editingActivity
       ? await supabase.from('obligation_activities').update(payload).eq('id', editingActivity.id)
