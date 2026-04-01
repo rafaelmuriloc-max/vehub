@@ -1,36 +1,33 @@
 
 
-# Dividir obrigações do dia em abas "A Fazer" e "Concluído"
+# Corrigir exibição do nome do remetente no chat
 
-## O que será feito
-Substituir a lista única de obrigações do dia selecionado por duas abas (Tabs), separando pendentes e concluídas — mesmo padrão já usado nas obrigações do mês.
+## Problema
+O nome do usuário logado aparece em **todas** as mensagens enviadas (linha 94 do `MessageBubble`), inclusive em conversas 1:1 com clientes WhatsApp. O correto é mostrar o nome apenas nas mensagens enviadas por usuários internos (para diferenciar quem da equipe respondeu), sem mostrar nas mensagens recebidas do cliente.
 
-## Alterações em `src/pages/CalendarView.tsx`
+## Solução
 
-### 1. Separar eventos do dia em pendentes/concluídos (após linha ~417)
-```typescript
-const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
-const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
+### `src/components/chat/MessageBubble.tsx`
+
+Alterar a lógica de exibição do `senderName` (linhas 94-99):
+
+- **Remover** a condição `isMine && !isIncoming` (que mostra o nome apenas do usuário logado atual)
+- **Substituir** por: mostrar `senderName` em **todas as mensagens que não são incoming do WhatsApp** (ou seja, mensagens enviadas por qualquer usuário interno da equipe), independentemente de ser `isMine` ou não
+- Mensagens `whatsapp_incoming` (do cliente) não exibem nome — o nome já está no header da conversa
+
+Lógica final:
+```
+// Mostra nome em mensagens outgoing (enviadas por usuários internos)
+{!isIncoming && senderName && (isMine || isWhatsApp) && (
+  <p className="...">{senderName}</p>
+)}
 ```
 
-### 2. Adicionar states de paginação por aba do dia
-Novos states `dayPendingPage` e `dayCompletedPage` (substituindo `dayPage`), resetados ao mudar `selectedDay`.
-
-### 3. Calcular paginação por aba
-```typescript
-const dayPendingTotalPages = Math.ceil(dayEventsPending.length / DAY_ITEMS_PER_PAGE);
-const paginatedDayPending = dayEventsPending.slice(...);
-const dayCompletedTotalPages = Math.ceil(dayEventsCompleted.length / DAY_ITEMS_PER_PAGE);
-const paginatedDayCompleted = dayEventsCompleted.slice(...);
-```
-
-### 4. Substituir a lista direta por Tabs (linhas ~641-689)
-Usar `<Tabs defaultValue="pending">` com:
-- Aba "A Fazer" com badge de contagem `dayEventsPending.length` — renderiza `paginatedDayPending` + `PaginationBlock`
-- Aba "Concluído" com badge de contagem `dayEventsCompleted.length` — renderiza `paginatedDayCompleted` + `PaginationBlock`
-
-O card de cada obrigação permanece idêntico (já tem estilo verde para concluídas).
+Isso garante que:
+- Mensagens enviadas por mim: mostra meu nome
+- Mensagens enviadas por outro colega (outgoing via webhook `fromMe`): mostra o nome dele
+- Mensagens recebidas do cliente (incoming): não mostra nome
 
 ## Arquivo
-- `src/pages/CalendarView.tsx`
+- `src/components/chat/MessageBubble.tsx`
 
