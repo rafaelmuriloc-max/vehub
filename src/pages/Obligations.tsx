@@ -158,6 +158,19 @@ export default function Obligations() {
     loadAll();
   }
 
+  async function cloneObligation(ob: Obligation) {
+    const { id, ...rest } = ob;
+    const { data: newOb, error } = await supabase.from('obligations').insert({ ...rest, name: `${ob.name} (cópia)` }).select().single();
+    if (error || !newOb) { toast({ title: 'Erro ao clonar', description: error?.message, variant: 'destructive' }); return; }
+    const obActivities = activities.filter(a => a.obligation_id === ob.id);
+    if (obActivities.length > 0) {
+      const cloned = obActivities.map(({ id: _id, obligation_id: _oid, ...attrs }) => ({ ...attrs, obligation_id: newOb.id }));
+      await supabase.from('obligation_activities').insert(cloned);
+    }
+    toast({ title: 'Obrigação clonada com sucesso' });
+    loadAll();
+  }
+
   function getDeptName(id: string) { return departments.find(d => d.id === id)?.name || ''; }
   function getDocTypeName(id: string | null) { if (!id) return ''; return documentTypes.find(d => d.id === id)?.name || ''; }
 
