@@ -1,23 +1,37 @@
 
-# Corrigir filtro de tipo de folha na segmentação
+
+# Corrigir exibição de obrigações no calendário (limite de 1000 linhas)
 
 ## Problema
-O banco de dados armazena `payroll_type` como `'normal'` e `'pro_labore'` (minúsculo), mas o filtro compara com `'Normal'` e `'Pró-labore'` (capitalizado). Por isso nenhuma empresa é encontrada.
+A tabela `obligation_instances` tem **1955 registros**, mas o Supabase retorna no máximo **1000 por query** (limite padrão). O calendário carrega apenas as primeiras 1000 instâncias, e as do FGTS ficam de fora.
 
-Dados reais no banco:
-- `normal`: 47 empresas
-- `pro_labore`: 20 empresas
+## Solução
+Filtrar as instâncias no lado do servidor para trazer apenas as do mês visualizado, em vez de carregar todas. Isso resolve o limite e melhora a performance.
 
-## Correção em `src/pages/Obligations.tsx`
+## Alterações em `src/pages/CalendarView.tsx`
 
-Linha 107-108: Alterar as comparações para usar os valores reais do banco:
+### 1. Filtrar `obligation_instances` pelo mês atual
+Na função `loadData`, adicionar filtro por `reference_month` baseado no mês/ano exibido no calendário:
 
 ```typescript
-if (filters.payroll_filter === 'normal' && c.payroll_type !== 'normal') return false;
-if (filters.payroll_filter === 'pro_labore' && c.payroll_type !== 'pro_labore') return false;
+// Antes (sem filtro, bate no limite de 1000):
+supabase.from('obligation_instances').select('...')
+
+// Depois (filtra pelo mês visualizado):
+const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`;
+const monthEnd = `${year}-${String(month+2 > 12 ? 1 : month+2).padStart(2,'0')}-01`;
+supabase.from('obligation_instances')
+  .select('...')
+  .gte('reference_month', monthStart)
+  .lt('reference_month', monthEnd)
 ```
 
-Alternativamente, usar comparação case-insensitive para ser mais robusto.
+### 2. Adicionar `currentDate` como dependência do `loadData`
+O `useCallback` do `loadData` precisa depender de `currentDate` (ou `year`/`month`) para recarregar quando o usuário muda de mês.
+
+### 3. Lógica de eventos (`events` memo)
+Mantém como está — já filtra por mês ao gerar as datas dos dias. Com o filtro no servidor, os dados já vêm corretos.
 
 ## Arquivo
-- `src/pages/Obligations.tsx` (2 linhas)
+- `src/pages/CalendarView.tsx`
+
