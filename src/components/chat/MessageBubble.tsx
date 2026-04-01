@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, CheckCheck, Phone, FileDown, MapPin, Contact } from 'lucide-react';
+import { CheckCheck, Phone, FileDown, MapPin, Contact } from 'lucide-react';
 
 interface MessageBubbleProps {
   content: string;
