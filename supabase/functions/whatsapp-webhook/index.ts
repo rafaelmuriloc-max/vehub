@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
     // Detect message type and extract text/caption
     let text: string | null = null;
-    let messageType = "whatsapp_incoming";
+    let messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_incoming";
     let mediaKey: string | null = null; // which media type key to use
 
     if (messageObj.conversation) {
