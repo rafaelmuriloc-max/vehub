@@ -89,6 +89,8 @@ export default function Obligations() {
       target_day: obligationForm.target_day ? Number(obligationForm.target_day) : null,
       due_day: obligationForm.due_day ? Number(obligationForm.due_day) : null,
       competence_rule: obligationForm.recurrence === 'mensal' ? obligationForm.competence_rule : 'current',
+      is_tax: obligationForm.is_tax,
+      tax_sphere: obligationForm.is_tax && obligationForm.tax_sphere ? obligationForm.tax_sphere : null,
     };
     const { error } = editingObligation
       ? await supabase.from('obligations').update(payload).eq('id', editingObligation.id)
