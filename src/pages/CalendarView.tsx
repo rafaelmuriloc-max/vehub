@@ -414,8 +414,12 @@ export default function CalendarView() {
     await loadData();
   }
 
-  const dayTotalPages = Math.ceil(selectedEvents.length / DAY_ITEMS_PER_PAGE);
-  const paginatedDayEvents = selectedEvents.slice((dayPage - 1) * DAY_ITEMS_PER_PAGE, dayPage * DAY_ITEMS_PER_PAGE);
+  const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const dayPendingTotalPages = Math.ceil(dayEventsPending.length / DAY_ITEMS_PER_PAGE);
+  const dayCompletedTotalPages = Math.ceil(dayEventsCompleted.length / DAY_ITEMS_PER_PAGE);
+  const paginatedDayPending = dayEventsPending.slice((dayPendingPage - 1) * DAY_ITEMS_PER_PAGE, dayPendingPage * DAY_ITEMS_PER_PAGE);
+  const paginatedDayCompleted = dayEventsCompleted.slice((dayCompletedPage - 1) * DAY_ITEMS_PER_PAGE, dayCompletedPage * DAY_ITEMS_PER_PAGE);
   const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
   const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
   const monthPendingTotalPages = Math.ceil(monthEventsPending.length / ITEMS_PER_PAGE);
