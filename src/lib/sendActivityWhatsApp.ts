@@ -125,6 +125,32 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
     const components: Record<string, unknown>[] = [];
 
+    // If template expects a DOCUMENT header and we have attached documents, add header component
+    if (hasDocuments && attachedDocs && attachedDocs.length > 0) {
+      const firstFileUrl = attachedDocs[0].file_url!;
+      // Generate a signed URL for the document
+      const filePath = firstFileUrl.includes('/documents/') 
+        ? firstFileUrl.split('/documents/').pop()! 
+        : firstFileUrl;
+      const { data: signedData } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(filePath, 604800); // 7 days
+      
+      if (signedData?.signedUrl) {
+        const fileName = filePath.split('/').pop() || 'documento.pdf';
+        components.push({
+          type: 'header',
+          parameters: [{
+            type: 'document',
+            document: {
+              link: signedData.signedUrl,
+              filename: fileName,
+            },
+          }],
+        });
+      }
+    }
+
     // Extract {{var}} from message body to build named parameters
     if (activity.whatsapp_message_body) {
       const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
@@ -142,7 +168,6 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
     // Button URL param (index 0) — only if template has a button (whatsapp_button_url configured)
     if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
-      // If there are attached documents, use instanceId as dynamic suffix for the public link
       const buttonValue = hasDocuments ? instanceId : activity.whatsapp_button_url;
       components.push({
         type: 'button',
