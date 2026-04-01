@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       text = messageObj.extendedTextMessage.text;
     } else if (messageObj.imageMessage) {
       text = messageObj.imageMessage.caption || "";
-      messageType = "whatsapp_image";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_image";
       mediaKey = "imageMessage";
     } else if (messageObj.videoMessage) {
       text = messageObj.videoMessage.caption || "";
