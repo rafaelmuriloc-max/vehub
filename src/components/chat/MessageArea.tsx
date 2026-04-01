@@ -136,8 +136,14 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
 
       {/* Input */}
       {isClosed ? (
-        <div className="px-4 py-3 bg-muted text-center text-sm text-muted-foreground border-t">
-          Este chamado foi encerrado.
+        <div className="px-4 py-3 bg-muted flex items-center justify-center gap-3 border-t">
+          <span className="text-sm text-muted-foreground">Este chamado foi encerrado.</span>
+          {onReopenTicket && (
+            <Button variant="outline" size="sm" onClick={onReopenTicket} className="gap-1.5">
+              <MessageCircle className="h-4 w-4" />
+              Reabrir Chamado
+            </Button>
+          )}
         </div>
       ) : (
         <ChatInput onSend={onSend} />

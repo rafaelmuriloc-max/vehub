@@ -359,6 +359,7 @@ export default function Chat() {
             companyNames={activeConv?.companyNames}
             isClosed={isClosed}
             onCloseTicket={closeTicket}
+            onReopenTicket={reopenTicket}
           />
         </div>
       )}
