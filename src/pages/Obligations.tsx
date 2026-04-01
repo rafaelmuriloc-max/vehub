@@ -212,6 +212,11 @@ export default function Obligations() {
                       <span className="font-medium">{ob.name}</span>
                       <div className="flex flex-wrap gap-1">
                         <Badge variant="outline">{ob.recurrence}</Badge>
+                        {(ob as any).is_tax && (
+                          <Badge className="bg-blue-600 text-white border-0">
+                            Imposto{(ob as any).tax_sphere ? ` - ${(ob as any).tax_sphere.charAt(0).toUpperCase() + (ob as any).tax_sphere.slice(1)}` : ''}
+                          </Badge>
+                        )}
                         {ob.alert_day && <Badge className="bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
                         {ob.target_day && <Badge className="bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
                         {ob.due_day && <Badge className="bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
