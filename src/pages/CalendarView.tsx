@@ -644,54 +644,79 @@ export default function CalendarView() {
                 <p className="text-muted-foreground text-sm">Nenhuma obrigação neste dia</p>
               </div>
             ) : (
-              <>
-                <div className="space-y-2">
-                  {paginatedDayEvents.map((ev, idx) => {
-                    const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
-                    const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => setDetailInstanceId(ev.instanceId)}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
-                          ${completed
-                            ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
-                            : 'border-border hover:border-primary/30 hover:bg-muted/30'
-                          }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
-                            <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
-                              {typeConfig[ev.type].label}
-                            </Badge>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between mt-2">
-                          <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
-                          {progress.total > 0 && (
-                            <span className={`text-[10px] font-medium ${completed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
-                              {progress.completed}/{progress.total} atividades
-                            </span>
-                          )}
-                        </div>
-                        {progress.total > 0 && (
-                          <Progress value={progress.percent} className="h-1 mt-2" />
-                        )}
+              <Tabs defaultValue="pending">
+                <TabsList className="mb-4 w-full grid grid-cols-2">
+                  <TabsTrigger value="pending">
+                    A Fazer
+                    <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{dayEventsPending.length}</Badge>
+                  </TabsTrigger>
+                  <TabsTrigger value="completed">
+                    Concluído
+                    <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{dayEventsCompleted.length}</Badge>
+                  </TabsTrigger>
+                </TabsList>
+                {[
+                  { key: 'pending', items: paginatedDayPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
+                  { key: 'completed', items: paginatedDayCompleted, page: dayCompletedPage, totalPages: dayCompletedTotalPages, total: dayEventsCompleted.length, setPage: setDayCompletedPage },
+                ].map(tab => (
+                  <TabsContent key={tab.key} value={tab.key}>
+                    {tab.items.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-6 text-center">
+                        <p className="text-muted-foreground text-sm">{tab.key === 'pending' ? 'Nenhuma obrigação pendente' : 'Nenhuma obrigação concluída'}</p>
                       </div>
-                    );
-                  })}
-                </div>
-                <PaginationBlock page={dayPage} totalPages={dayTotalPages} total={selectedEvents.length} onPageChange={setDayPage} perPage={DAY_ITEMS_PER_PAGE} />
-              </>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          {tab.items.map((ev, idx) => {
+                            const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                            const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                            return (
+                              <div
+                                key={idx}
+                                onClick={() => setDetailInstanceId(ev.instanceId)}
+                                className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
+                                  ${completed
+                                    ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+                                    : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                  }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                      <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                                      {typeConfig[ev.type].label}
+                                    </Badge>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                  <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                                  {progress.total > 0 && (
+                                    <span className={`text-[10px] font-medium ${completed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                                      {progress.completed}/{progress.total} atividades
+                                    </span>
+                                  )}
+                                </div>
+                                {progress.total > 0 && (
+                                  <Progress value={progress.percent} className="h-1 mt-2" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <PaginationBlock page={tab.page} totalPages={tab.totalPages} total={tab.total} onPageChange={tab.setPage} perPage={DAY_ITEMS_PER_PAGE} />
+                      </>
+                    )}
+                  </TabsContent>
+                ))}
+              </Tabs>
             )}
           </CardContent>
         </Card>
