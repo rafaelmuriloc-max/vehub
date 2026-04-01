@@ -1,16 +1,18 @@
 
 
-# Paginação de 5 itens na lista de obrigações do dia
+# Reduzir largura do card e limitar páginas visíveis na paginação
 
-## O que será feito
-Alterar a paginação da lista de obrigações do dia selecionado de 10 para 5 itens por página. A paginação mensal (pendentes/concluídas) continuará com 10.
+## Problema
+O card de obrigações do dia ocupa largura excessiva e a paginação mostra todas as páginas (ex: 13 páginas), ocupando muito espaço horizontal.
 
-## Alteração em `src/pages/CalendarView.tsx`
+## Alterações em `src/pages/CalendarView.tsx`
 
-1. **Criar constante separada** `DAY_ITEMS_PER_PAGE = 5` (linha ~50)
-2. **Substituir** nas linhas ~397-398 o uso de `ITEMS_PER_PAGE` por `DAY_ITEMS_PER_PAGE` para `dayTotalPages` e `paginatedDayEvents`
-3. **Atualizar** o `PaginationBlock` do dia (linha 669) para usar `DAY_ITEMS_PER_PAGE` no cálculo de start/end — ou passar o `perPage` como prop ao `PaginationBlock`
+### 1. Limitar páginas visíveis na paginação
+No `PaginationBlock`, em vez de renderizar todas as páginas, mostrar no máximo 5 páginas com ellipsis. Lógica: mostrar primeira, última e até 3 páginas ao redor da atual, com `PaginationEllipsis` entre gaps.
 
-### Detalhe técnico
-Adicionar prop `perPage` ao `PaginationBlock` (default `ITEMS_PER_PAGE`) para que o texto "Mostrando X-Y de Z" fique correto com 5 itens.
+### 2. Limitar largura do card do dia
+Adicionar `max-w-2xl` ao container do card de obrigações do dia selecionado para que não se estenda demais.
+
+## Arquivo
+- `src/pages/CalendarView.tsx`
 
