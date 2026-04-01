@@ -421,13 +421,48 @@ export default function CalendarView() {
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Empresa</label>
-              <Select value={filterClient} onValueChange={v => { setFilterClient(v); setSelectedDay(null); }}>
-                <SelectTrigger className="w-[280px]"><SelectValue placeholder="Empresa" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as empresas</SelectItem>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={clientOpen}
+                    className="w-[280px] justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {filterClient === 'all' ? 'Todas as empresas' : clients.find(c => c.id === filterClient)?.company_name || 'Empresa'}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar empresa..." />
+                    <CommandList className="max-h-[300px]">
+                      <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="todas-as-empresas"
+                          onSelect={() => { setFilterClient('all'); setSelectedDay(null); setClientOpen(false); }}
+                        >
+                          <Check className={`mr-2 h-4 w-4 ${filterClient === 'all' ? 'opacity-100' : 'opacity-0'}`} />
+                          Todas as empresas
+                        </CommandItem>
+                        {clients.map(c => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.company_name}
+                            onSelect={() => { setFilterClient(c.id); setSelectedDay(null); setClientOpen(false); }}
+                          >
+                            <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
+                            {c.company_name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </CardContent>
