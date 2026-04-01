@@ -33,6 +33,7 @@ interface MessageAreaProps {
   isClosed?: boolean;
   onCloseTicket?: () => void;
   onReopenTicket?: () => void;
+  onTransferTicket?: () => void;
 }
 
 function formatDateLabel(dateStr: string) {
