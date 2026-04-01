@@ -117,7 +117,15 @@ export default function Invoices() {
 
     const clientIds = selectedClient && selectedClient !== 'all'
       ? [selectedClient]
-      : clients.filter(c => c.document).map(c => c.id);
+      : (() => {
+          const today = new Date().toISOString().slice(0, 10);
+          return clients.filter(c => 
+            c.document && 
+            c.digital_certificate_url && 
+            c.digital_certificate_expiry && 
+            c.digital_certificate_expiry >= today
+          ).map(c => c.id);
+        })();
 
     if (clientIds.length === 0) {
       toast({ title: 'Nenhum cliente com CNPJ cadastrado', variant: 'destructive' });
