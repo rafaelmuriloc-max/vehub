@@ -149,7 +149,7 @@ export default function Obligations() {
       competence_rule: o.competence_rule || 'current',
       is_tax: o.is_tax || false, tax_sphere: o.tax_sphere || '',
       assignment_mode: o.assignment_mode || 'manual',
-      segment_has_payroll: filters.has_payroll || false,
+      segment_payroll_filter: filters.payroll_type || (filters.has_payroll ? 'all' : ''),
       segment_tax_regimes: filters.tax_regime || [],
       segment_city: filters.city || '',
     });
