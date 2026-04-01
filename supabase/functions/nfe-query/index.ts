@@ -490,7 +490,7 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
 
 function parseRawHttpResponse(rawResponse: string): Response {
   const separatorIndex = rawResponse.indexOf("\r\n\r\n");
-  if (separatorIndex === -1) throw new Error("Resposta HTTP inválida da SEF-SC");
+  if (separatorIndex === -1) throw new Error("Resposta HTTP inválida do AN");
 
   const rawHeaders = rawResponse.slice(0, separatorIndex);
   let rawBody = rawResponse.slice(separatorIndex + 4);
