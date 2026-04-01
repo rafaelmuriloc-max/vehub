@@ -125,10 +125,9 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
     const components: Record<string, unknown>[] = [];
 
-    // If template expects a DOCUMENT header and we have attached documents, add header component
-    if (hasDocuments && attachedDocs && attachedDocs.length > 0) {
+    // Only add DOCUMENT header if template has a button URL configured (document-sharing templates)
+    if (hasDocuments && attachedDocs && attachedDocs.length > 0 && activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
       const firstFileUrl = attachedDocs[0].file_url!;
-      // Generate a signed URL for the document
       const filePath = firstFileUrl.includes('/documents/') 
         ? firstFileUrl.split('/documents/').pop()! 
         : firstFileUrl;
