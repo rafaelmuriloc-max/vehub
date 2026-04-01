@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       mediaKey = "audioMessage";
     } else if (messageObj.documentMessage) {
       text = messageObj.documentMessage.caption || messageObj.documentMessage.fileName || "";
-      messageType = "whatsapp_document";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_document";
       mediaKey = "documentMessage";
     } else if (messageObj.stickerMessage) {
       text = "";
