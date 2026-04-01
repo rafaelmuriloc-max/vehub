@@ -611,11 +611,21 @@ export default function Obligations() {
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="seg_payroll"
-                      checked={obligationForm.segment_has_payroll}
-                      onCheckedChange={v => setObligationForm({ ...obligationForm, segment_has_payroll: !!v })}
+                      checked={!!obligationForm.segment_payroll_filter}
+                      onCheckedChange={v => setObligationForm({ ...obligationForm, segment_payroll_filter: v ? 'all' : '' })}
                     />
                     <Label htmlFor="seg_payroll">Empresas com Folha de Pagamento</Label>
                   </div>
+                  {!!obligationForm.segment_payroll_filter && (
+                    <Select value={obligationForm.segment_payroll_filter} onValueChange={v => setObligationForm({ ...obligationForm, segment_payroll_filter: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as folhas</SelectItem>
+                        <SelectItem value="normal">Folha Normal</SelectItem>
+                        <SelectItem value="pro_labore">Só Pró-labore</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                   <div className="space-y-2">
                     <Label>Regime Tributário</Label>
                     <div className="flex flex-wrap gap-2">
