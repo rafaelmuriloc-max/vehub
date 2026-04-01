@@ -1,34 +1,36 @@
 
 
-# Importar contatos da planilha CSV para o cadastro de clientes
+# Acionar atividades automáticas após upload de documentos
 
-## O que será feito
-Executar um script Python que lê o CSV de contatos, faz match de cada linha com o cliente (via CNPJ) e o departamento (via nome), e insere os registros na tabela `client_department_contacts`. O prefixo "55" será removido dos telefones.
+## Problema
+A página de Documentos (`Documents.tsx`) marca a atividade de documento como concluída ao importar, mas não executa a cadeia de `auto_start` (e-mail/WhatsApp). Essa lógica só existe no `ClientObligationsTab` e `CalendarView`.
 
-## Mapeamento de departamentos
-- "Fiscal" → `7403523f-3518-4f8e-b6c3-5f252ced0f34` (Depto Fiscal)
-- "Pessoal" → `af36437e-da3d-4c6e-bd71-e6584fa96843` (Depto Pessoal)
-- "Societário" → `97d0a192-63aa-425f-8f46-4f4620b12f09` (Depto Societários)
-- "Financeiro" → `e9dce0d9-76b8-4115-893c-71a22871a6f0` (Depto Financeiro)
+## Solução
+Após marcar cada atividade de documento como concluída na função `importDocument`, executar a mesma lógica de cadeia automática: buscar as atividades seguintes da obrigação, e para cada uma com `auto_start = true`, disparar e-mail ou WhatsApp conforme o tipo.
 
-## Lógica do script
-1. Ler o CSV (~809 linhas, ~200 clientes × 4 departamentos)
-2. Buscar todos os clientes do banco via API (match por CNPJ/`document`)
-3. Para cada linha do CSV:
-   - Encontrar o `client_id` pelo CNPJ
-   - Mapear o departamento para o `department_id`
-   - Remover prefixo "55" do telefone
-   - Usar o campo NOME como `contact_name`
-4. Limpar contatos existentes (são apenas 5) e inserir os novos
-5. Inserir em lotes via Supabase REST API
+## Alterações em `src/pages/Documents.tsx`
 
-## Dados inseridos por registro
-- `client_id`: do match por CNPJ
-- `department_id`: do mapeamento acima
-- `contact_name`: coluna NOME do CSV
-- `contact_email`: coluna EMAIL
-- `contact_phone`: coluna Telefone (sem prefixo 55)
+### 1. Importar funções de envio
+Adicionar imports de `sendActivityEmail` e `sendActivityWhatsApp`.
+
+### 2. Após o loop de completions (linha ~288), adicionar lógica auto_start
+Para cada instância processada:
+- Buscar todas as atividades da obrigação, ordenadas por `order`
+- Encontrar a posição da atividade de documento recém-completada
+- Percorrer as atividades seguintes com `auto_start = true`
+- Para tipo `email`: chamar `sendActivityEmail`
+- Para tipo `whatsapp`: chamar `sendActivityWhatsApp`
+- Parar na primeira falha ou atividade sem `auto_start`
+
+A lógica é idêntica à já existente em `ClientObligationsTab.tsx` (linhas 232-285).
+
+### 3. Buscar dados necessários
+Para montar os parâmetros das funções de envio, buscar:
+- Nome da obrigação (já temos o `obligation_id`)
+- `reference_month` e `due_day` da instância/obrigação
+- `department_id` da obrigação
+- Todas as atividades da obrigação com seus campos de email/WhatsApp
 
 ## Arquivos
-- Nenhuma alteração de código — apenas operação de dados via script
+- `src/pages/Documents.tsx`
 
