@@ -286,6 +286,62 @@ export default function Documents() {
             });
           }
           associatedCount++;
+
+          // Auto-start chain for subsequent activities
+          const { data: allObActivities } = await supabase
+            .from('obligation_activities')
+            .select('id, obligation_id, type, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header')
+            .eq('obligation_id', inst.obligation_id)
+            .order('order');
+
+          if (allObActivities) {
+            const actIdx = allObActivities.findIndex(a => a.id === act.id);
+            if (actIdx >= 0) {
+              // Fetch obligation details for sending
+              const { data: oblDetail } = await supabase
+                .from('obligations')
+                .select('name, due_day, department_id')
+                .eq('id', inst.obligation_id)
+                .single();
+
+              const { data: instDetail } = await supabase
+                .from('obligation_instances')
+                .select('reference_month')
+                .eq('id', inst.id)
+                .single();
+
+              for (let ai = actIdx + 1; ai < allObActivities.length; ai++) {
+                const nextAct = allObActivities[ai];
+                if (!nextAct.auto_start) break;
+
+                if (nextAct.type === 'email' && oblDetail && instDetail) {
+                  const result = await sendActivityEmail({
+                    activity: nextAct,
+                    instanceId: inst.id,
+                    clientId,
+                    obligationName: oblDetail.name,
+                    referenceMonth: instDetail.reference_month,
+                    dueDay: oblDetail.due_day,
+                    departmentId: oblDetail.department_id,
+                  });
+                  if (!result.success) break;
+                } else if (nextAct.type === 'whatsapp' && oblDetail && instDetail) {
+                  const result = await sendActivityWhatsApp({
+                    activity: nextAct,
+                    instanceId: inst.id,
+                    clientId,
+                    obligationName: oblDetail.name,
+                    referenceMonth: instDetail.reference_month,
+                    dueDay: oblDetail.due_day,
+                    departmentId: oblDetail.department_id,
+                  });
+                  if (!result.success) break;
+                } else {
+                  break;
+                }
+              }
+            }
+          }
         }
       }
     }
