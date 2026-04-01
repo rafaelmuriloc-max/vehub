@@ -480,7 +480,7 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
     clearTimeout(timeout);
   }
 
-  if (didTimeout) throw new Error(`Timeout na conexão com SEF-SC após ${timeoutMs}ms`);
+  if (didTimeout) throw new Error(`Timeout na conexão com AN após ${timeoutMs}ms`);
 
   const result = new Uint8Array(totalLength);
   let offset = 0;
