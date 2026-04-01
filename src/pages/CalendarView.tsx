@@ -54,6 +54,20 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
   if (totalPages <= 1) return null;
   const start = (page - 1) * perPage + 1;
   const end = Math.min(page * perPage, total);
+
+  const getVisiblePages = () => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | 'ellipsis-start' | 'ellipsis-end')[] = [];
+    pages.push(1);
+    if (page > 3) pages.push('ellipsis-start');
+    const rangeStart = Math.max(2, page - 1);
+    const rangeEnd = Math.min(totalPages - 1, page + 1);
+    for (let i = rangeStart; i <= rangeEnd; i++) pages.push(i);
+    if (page < totalPages - 2) pages.push('ellipsis-end');
+    pages.push(totalPages);
+    return pages;
+  };
+
   return (
     <div className="flex items-center justify-between mt-4">
       <span className="text-xs text-muted-foreground">Mostrando {start}-{end} de {total}</span>
@@ -62,11 +76,15 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
           <PaginationItem>
             <PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) onPageChange(page - 1); }} />
           </PaginationItem>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <PaginationItem key={p}>
-              <PaginationLink href="#" isActive={p === page} onClick={e => { e.preventDefault(); onPageChange(p); }}>{p}</PaginationLink>
-            </PaginationItem>
-          ))}
+          {getVisiblePages().map((p, idx) =>
+            typeof p === 'string' ? (
+              <PaginationItem key={p}><PaginationEllipsis /></PaginationItem>
+            ) : (
+              <PaginationItem key={p}>
+                <PaginationLink href="#" isActive={p === page} onClick={e => { e.preventDefault(); onPageChange(p); }}>{p}</PaginationLink>
+              </PaginationItem>
+            )
+          )}
           <PaginationItem>
             <PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < totalPages) onPageChange(page + 1); }} />
           </PaginationItem>
