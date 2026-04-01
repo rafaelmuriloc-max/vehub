@@ -637,9 +637,14 @@ export default function CalendarView() {
                               <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                             </p>
                           </div>
-                          <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>
-                            {typeConfig[ev.type].label}
-                          </Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                              {typeConfig[ev.type].label}
+                            </Badge>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between mt-2">
                           <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
