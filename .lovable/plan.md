@@ -1,43 +1,26 @@
 
 
-# Separar lógica de documento no header vs botão com link no WhatsApp
+# Enviar todos os documentos anexados via WhatsApp
 
 ## Problema
-O template WhatsApp configurado envia o **documento diretamente** (header tipo DOCUMENT), mas **não possui botão com link**. Atualmente o código só envia o header de documento quando `whatsapp_button_url` está preenchido, o que impede o envio do documento no template correto.
+Quando há múltiplos documentos anexados, apenas o primeiro é enviado. A API da Meta aceita apenas um documento por header, então basta repetir o envio completo para cada documento.
 
-## Solução
-Adicionar um campo booleano `whatsapp_has_document_header` na tabela `obligation_activities` para indicar se o template espera um documento no header. Isso desacopla a lógica do header de documento da lógica do botão URL.
+## Alteração
 
-## Alterações
+### `src/lib/sendActivityWhatsApp.ts`
 
-### 1. Migração SQL
-```sql
-ALTER TABLE obligation_activities 
-  ADD COLUMN whatsapp_has_document_header boolean NOT NULL DEFAULT false;
-```
+Quando `whatsapp_has_document_header` é `true` e há múltiplos documentos, em vez de montar um único `body` e chamar `whatsapp-send` uma vez, iterar sobre cada documento e enviar uma mensagem completa (header + body + button) para cada um.
 
-### 2. `src/lib/sendActivityWhatsApp.ts`
-Mudar a condição do header de documento (linha 129):
-- **Antes**: `hasDocuments && ... && activity.whatsapp_button_url`
-- **Depois**: `hasDocuments && ... && activity.whatsapp_has_document_header`
-
-A lógica do botão URL (linhas 168-177) continua independente, condicionada apenas a `whatsapp_button_url`.
-
-### 3. `src/pages/Obligations.tsx`
-- Adicionar `whatsapp_has_document_header` ao tipo `Activity`, ao form state e ao payload de save
-- Adicionar um checkbox "Template com documento no header" no formulário de atividade WhatsApp
-
-### 4. `src/pages/CalendarView.tsx` e `src/components/ClientObligationsTab.tsx`
-- Adicionar `whatsapp_has_document_header` ao tipo `Activity` e à query select
-
-### 5. `src/integrations/supabase/types.ts`
-- Adicionar campo ao tipo da tabela `obligation_activities`
+**Lógica:**
+1. Montar os `components` de body e button uma vez (são iguais para todos)
+2. Para cada documento em `attachedDocs`:
+   - Gerar signed URL
+   - Montar header com o documento atual
+   - Concatenar header + body + button nos components
+   - Chamar `whatsapp-send`
+3. Se `whatsapp_has_document_header` é `false` ou não há documentos, manter o comportamento atual (uma única chamada)
+4. Marcar atividade como concluída apenas se todos os envios foram bem-sucedidos
 
 ## Arquivos
-- Migração SQL (nova)
 - `src/lib/sendActivityWhatsApp.ts`
-- `src/pages/Obligations.tsx`
-- `src/pages/CalendarView.tsx`
-- `src/components/ClientObligationsTab.tsx`
-- `src/integrations/supabase/types.ts`
 
