@@ -214,6 +214,17 @@ export default function CalendarView() {
     return counts;
   }
 
+  function getDayObligationSummary(day: number) {
+    const dayEvents = getEventsForDay(day);
+    const grouped: Record<string, { name: string; type: 'alert' | 'target' | 'due'; count: number }> = {};
+    for (const e of dayEvents) {
+      const key = `${e.obligationName}-${e.type}`;
+      if (!grouped[key]) grouped[key] = { name: e.obligationName, type: e.type, count: 0 };
+      grouped[key].count++;
+    }
+    return Object.values(grouped).sort((a, b) => b.count - a.count);
+  }
+
   const selectedEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
   const monthEvents = useMemo(() => {
