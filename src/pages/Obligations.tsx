@@ -64,7 +64,7 @@ export default function Obligations() {
     alert_day: '' as string, target_day: '' as string, due_day: '' as string,
     competence_rule: 'current', is_tax: false, tax_sphere: '',
     assignment_mode: 'manual',
-    segment_has_payroll: false,
+    segment_payroll_filter: '' as string,
     segment_tax_regimes: [] as string[],
     segment_city: '',
   });
@@ -101,9 +101,11 @@ export default function Obligations() {
   }
 
   // ---- Segment filtering ----
-  function getFilteredClients(filters: { has_payroll: boolean; tax_regimes: string[]; city: string }) {
+  function getFilteredClients(filters: { payroll_filter: string; tax_regimes: string[]; city: string }) {
     return clients.filter(c => {
-      if (filters.has_payroll && !c.payroll_type) return false;
+      if (filters.payroll_filter === 'all' && !c.payroll_type) return false;
+      if (filters.payroll_filter === 'normal' && c.payroll_type !== 'Normal') return false;
+      if (filters.payroll_filter === 'pro_labore' && c.payroll_type !== 'Pró-labore') return false;
       if (filters.tax_regimes.length > 0 && (!c.tax_regime || !filters.tax_regimes.includes(c.tax_regime))) return false;
       if (filters.city && c.address && !c.address.toLowerCase().includes(filters.city.toLowerCase())) return false;
       if (filters.city && !c.address) return false;
@@ -115,13 +117,13 @@ export default function Obligations() {
     if (obligationForm.assignment_mode === 'all') return clients;
     if (obligationForm.assignment_mode === 'segment') {
       return getFilteredClients({
-        has_payroll: obligationForm.segment_has_payroll,
+        payroll_filter: obligationForm.segment_payroll_filter,
         tax_regimes: obligationForm.segment_tax_regimes,
         city: obligationForm.segment_city,
       });
     }
     return clients.filter(c => manualSelectedClients.includes(c.id));
-  }, [obligationForm.assignment_mode, obligationForm.segment_has_payroll, obligationForm.segment_tax_regimes, obligationForm.segment_city, manualSelectedClients, clients]);
+  }, [obligationForm.assignment_mode, obligationForm.segment_payroll_filter, obligationForm.segment_tax_regimes, obligationForm.segment_city, manualSelectedClients, clients]);
 
   const filteredManualClients = useMemo(() => {
     if (!clientSearch) return clients;
@@ -132,7 +134,7 @@ export default function Obligations() {
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_has_payroll: false, segment_tax_regimes: [], segment_city: '' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '' });
     setManualSelectedClients([]);
     setGenerateStartMonth('');
     setObligationOpen(true);
@@ -147,7 +149,7 @@ export default function Obligations() {
       competence_rule: o.competence_rule || 'current',
       is_tax: o.is_tax || false, tax_sphere: o.tax_sphere || '',
       assignment_mode: o.assignment_mode || 'manual',
-      segment_has_payroll: filters.has_payroll || false,
+      segment_payroll_filter: filters.payroll_type || (filters.has_payroll ? 'all' : ''),
       segment_tax_regimes: filters.tax_regime || [],
       segment_city: filters.city || '',
     });
@@ -161,7 +163,7 @@ export default function Obligations() {
   async function saveObligation(e: React.FormEvent) {
     e.preventDefault();
     const segmentFilters = obligationForm.assignment_mode === 'segment' ? {
-      has_payroll: obligationForm.segment_has_payroll || undefined,
+      payroll_type: obligationForm.segment_payroll_filter || undefined,
       tax_regime: obligationForm.segment_tax_regimes.length > 0 ? obligationForm.segment_tax_regimes : undefined,
       city: obligationForm.segment_city || undefined,
     } : {};
@@ -609,11 +611,21 @@ export default function Obligations() {
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="seg_payroll"
-                      checked={obligationForm.segment_has_payroll}
-                      onCheckedChange={v => setObligationForm({ ...obligationForm, segment_has_payroll: !!v })}
+                      checked={!!obligationForm.segment_payroll_filter}
+                      onCheckedChange={v => setObligationForm({ ...obligationForm, segment_payroll_filter: v ? 'all' : '' })}
                     />
                     <Label htmlFor="seg_payroll">Empresas com Folha de Pagamento</Label>
                   </div>
+                  {!!obligationForm.segment_payroll_filter && (
+                    <Select value={obligationForm.segment_payroll_filter} onValueChange={v => setObligationForm({ ...obligationForm, segment_payroll_filter: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as folhas</SelectItem>
+                        <SelectItem value="normal">Folha Normal</SelectItem>
+                        <SelectItem value="pro_labore">Só Pró-labore</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                   <div className="space-y-2">
                     <Label>Regime Tributário</Label>
                     <div className="flex flex-wrap gap-2">
