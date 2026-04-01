@@ -1,58 +1,61 @@
 
 
-# Chat: receber mensagens de outros dispositivos e enviar mensagens WhatsApp
+# Help Desk: abas, atribuição e fechamento de chamados
 
-## Problemas atuais
+## Visão geral
+Transformar o chat em sistema de help desk com status (aberto/fechado), atribuição a usuário, 3 abas de visualização e botão de fechar chamado.
 
-1. **Mensagens enviadas por outros dispositivos não aparecem**: O webhook (`whatsapp-webhook`) ignora mensagens `fromMe` (linha 44). Mensagens enviadas pelo celular ou WhatsApp Web nunca chegam ao chat.
+## 1. Migração de banco de dados
 
-2. **Envio de mensagens**: O `sendMessage` atual apenas insere no banco local — não envia via WhatsApp. Precisa chamar a API correta dependendo do contexto (Evolution para iniciar conversa, Meta API oficial após o cliente responder).
+Adicionar 2 colunas à tabela `chat_conversations`:
+- `status text NOT NULL DEFAULT 'open'` — valores: `open`, `closed`
+- `assigned_to uuid` — usuário responsável pelo chamado
+- `closed_at timestamptz` — data de fechamento
 
-## Alterações
+Atualizar conversas existentes: setar `assigned_to = created_by` para todas as conversas atuais.
 
-### 1. Webhook: aceitar mensagens `fromMe` (`supabase/functions/whatsapp-webhook/index.ts`)
-- Remover o skip de `fromMe` (linhas 44-49)
-- Quando `fromMe === true`:
-  - Usar `channel: "whatsapp"` e `message_type: "whatsapp_outgoing"`
-  - O `sender_id` continua sendo o admin (sistema) mas marcar como `fromMe` para distinguir
-  - Não inserir duplicata: verificar se já existe uma mensagem com o mesmo `content` + `conversation_id` nos últimos 10 segundos (para evitar duplicar mensagens enviadas pelo próprio chat)
+Adicionar RLS policy para permitir que qualquer usuário autenticado veja conversas (aba "Todos" precisa ver conversas de outros). Atualmente a policy de SELECT exige participação — precisamos de uma policy adicional para autenticados verem conversas abertas.
 
-### 2. Nova edge function: `whatsapp-send-text` (`supabase/functions/whatsapp-send-text/index.ts`)
-- Recebe `{ conversationId, text }`
-- Busca a conversa para obter `whatsapp_phone`
-- Verifica se existe mensagem recebida do cliente nas últimas 24h (`channel = 'whatsapp'` e `message_type` contendo `whatsapp_incoming`)
-  - **Se SIM (janela 24h aberta)**: envia via Meta API oficial (texto livre)
-  - **Se NÃO (fora da janela)**: envia via Evolution API (`sendText`)
-- Insere a mensagem no `chat_messages` com `channel: 'whatsapp'`
-- Atualiza `updated_at` da conversa
+## 2. ConversationList — 3 abas (`src/components/chat/ConversationList.tsx`)
 
-### 3. Frontend: enviar via WhatsApp em conversas WhatsApp (`src/pages/Chat.tsx`)
-- No `sendMessage`, verificar se a conversa ativa tem `whatsapp_phone`
-  - Se sim: chamar `supabase.functions.invoke('whatsapp-send-text', ...)` em vez de inserir direto
-  - Se não: manter o comportamento atual (mensagem interna)
-- Adicionar `whatsappPhone` ao tipo `ConversationItem` e passá-lo do `loadConversations`
+Adicionar Tabs (usando componente existente) acima da busca:
+- **Chat** (default): conversas onde `assigned_to === user.id` e `status === 'open'`
+- **Atendidos**: conversas onde `assigned_to === user.id` e `status === 'closed'`
+- **Todos**: todas as conversas com `status === 'open'` (de todos os usuários)
 
-### 4. ConversationList: expor `whatsappPhone` (`src/components/chat/ConversationList.tsx`)
-- Adicionar `whatsappPhone?: string` ao tipo `ConversationItem`
+Props novas: `activeTab`, `onTabChange`.
 
-### 5. Config TOML
-- Adicionar `[functions.whatsapp-send-text]` com `verify_jwt = false`
+## 3. Chat.tsx — carregar por aba (`src/pages/Chat.tsx`)
 
-## Lógica de deduplicação (webhook fromMe)
-```text
-Mensagem enviada pelo chat:
-  1. Frontend chama whatsapp-send-text
-  2. Edge function envia + insere no chat_messages
-  3. Webhook recebe fromMe → verifica se existe msg igual nos últimos 10s → SKIP
+- Novo estado `activeTab: 'mine' | 'closed' | 'all'`
+- `loadConversations` recebe o tab e ajusta a query:
+  - `mine`: buscar conversas com `assigned_to = user.id` e `status = 'open'` (direto da tabela, sem filtrar por participações)
+  - `closed`: buscar conversas com `assigned_to = user.id` e `status = 'closed'`
+  - `all`: buscar todas as conversas com `status = 'open'`
+- Passar `activeTab` e `onTabChange` para ConversationList
 
-Mensagem enviada por outro dispositivo:
-  1. Webhook recebe fromMe → não encontra duplicata → INSERE
-```
+## 4. Botão "Fechar Chamado" no MessageArea (`src/components/chat/MessageArea.tsx`)
 
-## Arquivos
-- `supabase/functions/whatsapp-webhook/index.ts` — aceitar fromMe com deduplicação
-- `supabase/functions/whatsapp-send-text/index.ts` — nova function (Evolution ou Meta)
-- `supabase/config.toml` — registrar nova function
-- `src/pages/Chat.tsx` — roteamento de envio
-- `src/components/chat/ConversationList.tsx` — expor whatsappPhone
+- Nova prop: `onCloseTicket`, `isClosed`
+- No header, ao lado do nome, mostrar botão "Fechar Chamado" (ícone CheckCircle)
+- Se `isClosed`, mostrar badge "Fechado" e desabilitar input
+- Ao clicar: `update chat_conversations set status='closed', closed_at=now() where id=...`
+
+## 5. Chat.tsx — handler de fechamento
+
+- Função `closeTicket` que faz o update e recarrega conversas
+- Passar `onCloseTicket` e `isClosed` para MessageArea
+- Desabilitar envio de mensagens em conversas fechadas
+
+## 6. Atribuição na criação
+
+- No `NewConversationDialog`, ao criar conversa, setar `assigned_to = user.id`
+- Conversas criadas via webhook (WhatsApp) já usam `created_by` que será o default para `assigned_to`
+
+## Arquivos modificados
+- **Migração SQL**: adicionar colunas + policy
+- `src/pages/Chat.tsx`: lógica de abas, query condicional, closeTicket
+- `src/components/chat/ConversationList.tsx`: UI das 3 abas
+- `src/components/chat/MessageArea.tsx`: botão fechar + estado fechado
+- `src/components/chat/NewConversationDialog.tsx`: setar assigned_to
 
