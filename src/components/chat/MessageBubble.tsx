@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Check, CheckCheck, Phone, FileDown } from 'lucide-react';
+import { Check, CheckCheck, Phone, FileDown, MapPin, Contact } from 'lucide-react';
 
 interface MessageBubbleProps {
   content: string;
@@ -18,6 +18,44 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   const isIncoming = messageType === 'whatsapp_incoming' || messageType === 'whatsapp_image' || messageType === 'whatsapp_video' || messageType === 'whatsapp_audio' || messageType === 'whatsapp_document';
 
   const renderMedia = () => {
+    if (messageType === 'whatsapp_location') {
+      // Parse lat/lng from content like "lat,lng" or from mediaUrl
+      let lat = 0, lng = 0;
+      try {
+        const parts = content.split(',').map(s => parseFloat(s.trim()));
+        if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          lat = parts[0];
+          lng = parts[1];
+        }
+      } catch {}
+      const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+      return (
+        <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 mb-1 rounded-md bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition-colors">
+          <MapPin className="h-5 w-5 text-red-500 shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-primary">Localização</p>
+            <p className="text-[11px] text-muted-foreground">{lat.toFixed(6)}, {lng.toFixed(6)}</p>
+          </div>
+        </a>
+      );
+    }
+
+    if (messageType === 'whatsapp_contact') {
+      // Parse contact from content like "Nome|Telefone"
+      const parts = content.split('|');
+      const cName = parts[0] || 'Contato';
+      const cPhone = parts[1] || '';
+      return (
+        <div className="flex items-center gap-2 p-2 mb-1 rounded-md bg-black/5 dark:bg-white/10">
+          <Contact className="h-5 w-5 text-primary shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium">{cName}</p>
+            {cPhone && <p className="text-[11px] text-muted-foreground">{cPhone}</p>}
+          </div>
+        </div>
+      );
+    }
+
     if (!mediaUrl) return null;
 
     switch (messageType) {
@@ -82,6 +120,9 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
     }
   };
 
+  // Don't show text for location/contact types (content is structured data)
+  const hideTextContent = messageType === 'whatsapp_location' || messageType === 'whatsapp_contact';
+
   return (
     <div className={`flex ${isMine && !isIncoming ? 'justify-end' : 'justify-start'} mb-1`}>
       <div
@@ -101,12 +142,12 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
           </div>
         )}
         {renderMedia()}
-        {/* Show text content - skip for documents if already shown in the link */}
-        {content && messageType !== 'whatsapp_document' && (
+        {/* Show text content - skip for documents/location/contact */}
+        {content && !hideTextContent && messageType !== 'whatsapp_document' && (
           <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
         )}
         {/* For audio with no text, don't show empty paragraph */}
-        {!content && !mediaUrl && (
+        {!content && !mediaUrl && !hideTextContent && (
           <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
         )}
         <div className={`flex items-center gap-1 justify-end mt-0.5 ${isMine ? '-mr-1' : ''}`}>
