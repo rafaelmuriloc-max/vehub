@@ -123,7 +123,7 @@ export default function Obligations() {
       });
     }
     return clients.filter(c => manualSelectedClients.includes(c.id));
-  }, [obligationForm.assignment_mode, obligationForm.segment_has_payroll, obligationForm.segment_tax_regimes, obligationForm.segment_city, manualSelectedClients, clients]);
+  }, [obligationForm.assignment_mode, obligationForm.segment_payroll_filter, obligationForm.segment_tax_regimes, obligationForm.segment_city, manualSelectedClients, clients]);
 
   const filteredManualClients = useMemo(() => {
     if (!clientSearch) return clients;
