@@ -128,7 +128,7 @@ export default function Invoices() {
         })();
 
     if (clientIds.length === 0) {
-      toast({ title: 'Nenhum cliente com CNPJ cadastrado', variant: 'destructive' });
+      toast({ title: 'Nenhum cliente com CNPJ e certificado digital válido', variant: 'destructive' });
       return;
     }
 
