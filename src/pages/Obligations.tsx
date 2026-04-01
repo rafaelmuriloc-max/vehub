@@ -218,6 +218,7 @@ export default function Obligations() {
                     {admin && (
                       <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                         <Button size="icon" variant="ghost" onClick={() => openEditObligation(ob)}><Pencil className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => cloneObligation(ob)} title="Clonar"><Copy className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => deleteObligation(ob.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     )}
