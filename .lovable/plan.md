@@ -1,29 +1,23 @@
 
+# Corrigir filtro de tipo de folha na segmentação
 
-# Adicionar tipo de folha na segmentação de obrigações
+## Problema
+O banco de dados armazena `payroll_type` como `'normal'` e `'pro_labore'` (minúsculo), mas o filtro compara com `'Normal'` e `'Pró-labore'` (capitalizado). Por isso nenhuma empresa é encontrada.
 
-## O que será feito
-Quando o checkbox "Empresas com Folha de Pagamento" estiver ativo, exibir um select para escolher o tipo de folha: "Todas", "Folha Normal" ou "Só Pró-labore". Isso filtra clientes pelo campo `payroll_type`.
+Dados reais no banco:
+- `normal`: 47 empresas
+- `pro_labore`: 20 empresas
 
-## Alterações em `src/pages/Obligations.tsx`
+## Correção em `src/pages/Obligations.tsx`
 
-### 1. Estado do formulário
-- Substituir `segment_has_payroll: boolean` por `segment_payroll_filter: string` com valores: `''` (desativado), `'all'` (qualquer folha), `'normal'` (só Normal), `'pro_labore'` (só Pró-labore).
-- Atualizar `openNewObligation`, `openEditObligation`, e `saveObligation` para usar o novo campo.
+Linha 107-108: Alterar as comparações para usar os valores reais do banco:
 
-### 2. Lógica de filtro (`getFilteredClients`)
-- Quando `payroll_filter === 'all'`: cliente precisa ter `payroll_type` não nulo.
-- Quando `payroll_filter === 'normal'`: `payroll_type === 'Normal'`.
-- Quando `payroll_filter === 'pro_labore'`: `payroll_type === 'Pró-labore'`.
+```typescript
+if (filters.payroll_filter === 'normal' && c.payroll_type !== 'normal') return false;
+if (filters.payroll_filter === 'pro_labore' && c.payroll_type !== 'pro_labore') return false;
+```
 
-### 3. UI (linhas ~608-616)
-- Manter o Checkbox "Empresas com Folha de Pagamento".
-- Quando ativado, exibir um Select com opções: "Todas as folhas", "Folha Normal", "Só Pró-labore".
-
-### 4. Persistência (`segment_filters` JSONB)
-- Salvar `payroll_type: 'all' | 'normal' | 'pro_labore'` em vez de `has_payroll: true`.
-- Manter retrocompatibilidade: ao carregar `has_payroll: true` antigo, tratar como `'all'`.
+Alternativamente, usar comparação case-insensitive para ser mais robusto.
 
 ## Arquivo
-- `src/pages/Obligations.tsx` (sem migration necessária — dados já são JSONB flexível)
-
+- `src/pages/Obligations.tsx` (2 linhas)
