@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
-  ChevronDown, ChevronRight, Zap,
+  ChevronDown, ChevronRight, Zap, Copy,
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
@@ -158,6 +158,19 @@ export default function Obligations() {
     loadAll();
   }
 
+  async function cloneObligation(ob: Obligation) {
+    const { id, ...rest } = ob;
+    const { data: newOb, error } = await supabase.from('obligations').insert({ ...rest, name: `${ob.name} (cópia)` }).select().single();
+    if (error || !newOb) { toast({ title: 'Erro ao clonar', description: error?.message, variant: 'destructive' }); return; }
+    const obActivities = activities.filter(a => a.obligation_id === ob.id);
+    if (obActivities.length > 0) {
+      const cloned = obActivities.map(({ id: _id, obligation_id: _oid, ...attrs }) => ({ ...attrs, type: attrs.type as any, obligation_id: newOb.id }));
+      await supabase.from('obligation_activities').insert(cloned);
+    }
+    toast({ title: 'Obrigação clonada com sucesso' });
+    loadAll();
+  }
+
   function getDeptName(id: string) { return departments.find(d => d.id === id)?.name || ''; }
   function getDocTypeName(id: string | null) { if (!id) return ''; return documentTypes.find(d => d.id === id)?.name || ''; }
 
@@ -205,6 +218,7 @@ export default function Obligations() {
                     {admin && (
                       <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                         <Button size="icon" variant="ghost" onClick={() => openEditObligation(ob)}><Pencil className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => cloneObligation(ob)} title="Clonar"><Copy className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => deleteObligation(ob.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     )}
