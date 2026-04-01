@@ -571,17 +571,20 @@ export default function CalendarView() {
                 <div key={d} className="p-2 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">{d}</div>
               ))}
               {days.map((day, i) => {
-                if (!day) return <div key={i} className="min-h-[80px] p-1" />;
+                if (!day) return <div key={i} className="min-h-[100px] p-1" />;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
-                const counts = getDayDots(day);
-                const hasAny = counts.alert > 0 || counts.target > 0 || counts.due > 0;
+                const summary = getDayObligationSummary(day);
+                const maxVisible = 3;
+                const visible = summary.slice(0, maxVisible);
+                const remaining = summary.length - maxVisible;
+                const typeColor = { alert: 'bg-green-500', target: 'bg-orange-500', due: 'bg-red-500' };
                 return (
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
-                    className={`min-h-[80px] rounded-lg p-2 cursor-pointer transition-all duration-200
+                    className={`min-h-[100px] rounded-lg p-1.5 cursor-pointer transition-all duration-200
                       ${isSelected
                         ? 'bg-primary/15 border-2 border-primary shadow-md'
                         : isToday
@@ -593,25 +596,17 @@ export default function CalendarView() {
                       ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
                       {day}
                     </span>
-                    {hasAny && (
-                      <div className="flex gap-1 mt-1.5 flex-wrap">
-                        {counts.alert > 0 && (
-                          <span className="flex items-center gap-0.5">
-                            <span className="w-2 h-2 rounded-full bg-green-500" />
-                            <span className="text-[10px] text-muted-foreground">{counts.alert}</span>
-                          </span>
-                        )}
-                        {counts.target > 0 && (
-                          <span className="flex items-center gap-0.5">
-                            <span className="w-2 h-2 rounded-full bg-orange-500" />
-                            <span className="text-[10px] text-muted-foreground">{counts.target}</span>
-                          </span>
-                        )}
-                        {counts.due > 0 && (
-                          <span className="flex items-center gap-0.5">
-                            <span className="w-2 h-2 rounded-full bg-red-500" />
-                            <span className="text-[10px] text-muted-foreground">{counts.due}</span>
-                          </span>
+                    {visible.length > 0 && (
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        {visible.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-1 min-w-0">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeColor[item.type]}`} />
+                            <span className="text-[10px] text-foreground truncate leading-tight">{item.name}</span>
+                            <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{item.count}</span>
+                          </div>
+                        ))}
+                        {remaining > 0 && (
+                          <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
                         )}
                       </div>
                     )}
