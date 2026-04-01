@@ -1,28 +1,32 @@
 
 
-# Indicadores de mensagem estilo WhatsApp
+# Adicionar campo "É Imposto?" com esfera tributária no cadastro de obrigações
 
-## Problema atual
-Os indicadores de entrega/leitura usam ícones genéricos: um `Check` cinza para entregue e `CheckCheck` azul para lido. No WhatsApp real, a lógica é:
-- ✓ (um check cinza) = enviada
-- ✓✓ (dois checks cinza) = entregue
-- ✓✓ (dois checks azuis) = lida
+## O que será feito
+Adicionar um campo booleano "É Imposto?" no formulário de obrigações. Quando ativado, exibe um select para escolher a esfera: Federal, Estadual ou Municipal.
 
-Atualmente, mensagens não lidas mostram um único check, e lidas mostram dois checks azuis. Falta o estado intermediário "entregue" (dois checks cinza).
+## Alterações
 
-## Solução
+### 1. Migration — adicionar colunas na tabela `obligations`
+```sql
+ALTER TABLE obligations ADD COLUMN is_tax boolean NOT NULL DEFAULT false;
+ALTER TABLE obligations ADD COLUMN tax_sphere text; -- 'federal', 'estadual', 'municipal'
+```
 
-### `src/components/chat/MessageBubble.tsx` (linhas 157-161)
+### 2. `src/pages/Obligations.tsx`
+- Adicionar `is_tax: false` e `tax_sphere: ''` ao `obligationForm`
+- No `openEditObligation`, carregar `o.is_tax` e `o.tax_sphere`
+- No `saveObligation`, incluir `is_tax` e `tax_sphere` (null se não for imposto) no payload
+- No dialog do formulário (após competência, antes dos dias), adicionar:
+  - Switch/Checkbox "É Imposto?" controlando `is_tax`
+  - Quando `is_tax === true`, exibir Select com opções Federal/Estadual/Municipal
+- Opcionalmente exibir badge "Imposto - Federal" nos cards de obrigação
 
-Alterar a lógica dos ícones para replicar o padrão WhatsApp:
+### 3. `src/integrations/supabase/types.ts`
+- Adicionar `is_tax` e `tax_sphere` aos tipos Row/Insert/Update da tabela `obligations`
 
-- **Enviada (não lida)**: `CheckCheck` com cor cinza (`text-muted-foreground`) — no WhatsApp, mensagens enviadas pelo servidor já mostram dois checks cinza (entregue). Como não temos estado separado de "enviada mas não entregue", tratamos toda mensagem não lida como entregue (dois checks cinza).
-- **Lida**: `CheckCheck` com cor azul (`text-blue-500`)
-
-Ambos os estados usam `CheckCheck` (dois checks). A diferença é apenas a cor: cinza = entregue, azul = lida.
-
-Remover o ícone `Check` (check único) da importação se não for mais usado. O check único só faria sentido se tivéssemos um estado "sending/pending", que não existe no modelo atual.
-
-## Arquivo
-- `src/components/chat/MessageBubble.tsx`
+## Arquivos
+- Migration SQL (nova)
+- `src/pages/Obligations.tsx`
+- `src/integrations/supabase/types.ts`
 
