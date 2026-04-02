@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { DANFe } from 'node-sped-pdf';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
