@@ -343,7 +343,7 @@ export default function NfeTab() {
             <p className="text-center text-muted-foreground py-8">Carregando...</p>
           ) : filteredInvoices.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              Nenhuma NF-e encontrada. Use a consulta acima para buscar NF-e na SEF-SC.
+              Nenhuma NF-e encontrada. Use a consulta acima para buscar NF-e no Ambiente Nacional.
             </p>
           ) : (
             <Table>

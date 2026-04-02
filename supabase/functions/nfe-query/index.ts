@@ -204,6 +204,19 @@ Deno.serve(async (req) => {
 
       const invoicesToSave = [];
       for (const entry of entries) {
+        // Decompress docZip content
+        if (entry.xmlContent?.startsWith("__BASE64__")) {
+          const b64 = entry.xmlContent.slice(10);
+          try {
+            const decompressed = await decompressGzip(b64);
+            entry.xmlContent = decompressed;
+            entry.isEvent = /<procEventoNFe/i.test(decompressed);
+            entry.chAcesso = extractAccessKeyFromXml(decompressed) || extractTagContent(decompressed, "chNFe");
+          } catch (e) {
+            console.warn(`[NF-e] Failed to decompress docZip NSU=${entry.nsu}:`, (e as Error).message);
+            continue;
+          }
+        }
         const parsed = parseNfeEntry(entry, client_id);
         if (parsed) invoicesToSave.push(parsed);
       }
