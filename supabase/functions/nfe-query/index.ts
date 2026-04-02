@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("id, company_name, document, digital_certificate_url, digital_certificate_password, last_nfe_nsu")
+      .select("id, company_name, document, last_nfe_nsu")
       .eq("id", client_id)
       .single();
 
@@ -117,19 +117,33 @@ Deno.serve(async (req) => {
     if (!client.document) {
       return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
     }
-    if (!client.digital_certificate_url) {
-      return jsonResponse({ error: "Cliente sem certificado digital" }, 400);
+
+    // NfeDownloadContab exige o certificado do CONTADOR, não do cliente
+    const { data: companySettings, error: csError } = await adminClient
+      .from("company_settings")
+      .select("accountant_certificate_url, accountant_certificate_password, digital_certificate_url, digital_certificate_password")
+      .limit(1)
+      .single();
+
+    // Prioriza certificado do contador; fallback para certificado do escritório
+    const certUrl = companySettings?.accountant_certificate_url || companySettings?.digital_certificate_url;
+    const certPass = companySettings?.accountant_certificate_url
+      ? (companySettings?.accountant_certificate_password || "")
+      : (companySettings?.digital_certificate_password || "");
+
+    if (csError || !certUrl) {
+      return jsonResponse({ error: "Certificado do contador não configurado. Vá em Configurações > Empresa para cadastrar." }, 400);
     }
 
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
-      .download(client.digital_certificate_url);
+      .download(certUrl);
     if (certError || !certData) {
-      return jsonResponse({ error: "Erro ao baixar certificado: " + (certError?.message || "desconhecido") }, 500);
+      return jsonResponse({ error: "Erro ao baixar certificado do contador: " + (certError?.message || "desconhecido") }, 500);
     }
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const password = client.digital_certificate_password || "";
+    const password = certPass;
     const { certPem, keyPem } = await parsePfx(pfxBytes, password);
 
     const cnpj = client.document.replace(/\D/g, "");
