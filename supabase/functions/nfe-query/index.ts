@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     }
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const password = certPass;
+    const password = client.digital_certificate_password || "";
     const { certPem, keyPem } = await parsePfx(pfxBytes, password);
 
     const cnpj = client.document.replace(/\D/g, "");
