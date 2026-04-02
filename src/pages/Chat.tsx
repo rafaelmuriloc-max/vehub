@@ -37,8 +37,8 @@ export default function Chat() {
     } else if (currentTab === 'closed') {
       query = query.eq('assigned_to', user.id).eq('status', 'closed');
     } else {
-      // all: all open conversations
-      query = query.eq('status', 'open');
+      // all: todas as conversas (abertas e fechadas)
+      // sem filtro — admins veem tudo via RLS
     }
 
     const { data: convs } = await query.order('updated_at', { ascending: false });
