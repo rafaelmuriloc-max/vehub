@@ -455,6 +455,9 @@ async function requestTextWithMTLS(
 
       if (proxyData.success && proxyData.body) {
         console.log(`[NF-e] Proxy retornou status ${proxyData.status}`);
+        if (proxyData.status >= 400) {
+          console.warn(`[NF-e] Proxy: SEF-SC retornou erro HTTP ${proxyData.status}. Body (primeiros 1000 chars): ${proxyData.body.substring(0, 1000)}`);
+        }
         return {
           bodyText: proxyData.body,
           headers: new Headers(),
