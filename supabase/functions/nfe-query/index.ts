@@ -12,6 +12,9 @@ const SEF_SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
 const SOAP_ACTION = `${SEF_SC_NS}/distNFeSC`;
 const MAX_LOOPS = 20;
 
+const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
+const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
+
 type InfrastructureErrorPayload = {
   code: string;
   endpoint: string;
