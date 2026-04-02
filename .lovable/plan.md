@@ -1,56 +1,26 @@
 
 
-# Corrigir visibilidade de conversas transferidas na aba "Todos"
+# Corrigir exibição do nome do remetente nas mensagens
 
 ## Problema
 
-Dois problemas combinados:
-
-1. **Aba "Todos"** filtra apenas `status = 'open'` — conversas fechadas transferidas não aparecem
-2. **Aba "Atendidos"** filtra por `assigned_to = user.id` — após transferir, o usuário original perde acesso porque o `assigned_to` mudou
-
-No caso específico: a conversa "Rafael Murilo" foi transferida para Bruno e está com `status = 'closed'`, então não aparece em nenhuma aba para o usuário original.
+O `senderName` aparece no topo de **todas** as mensagens enviadas pela equipe (outgoing), mas deveria aparecer apenas como **assinatura** nas mensagens enviadas pelo próprio usuário logado. Atualmente, a condição `!isIncoming && senderName` exibe o nome em todas as mensagens não-incoming.
 
 ## Solução
 
-Ajustar os filtros da aba "Todos" para mostrar **todas as conversas** (abertas e fechadas) em vez de apenas as abertas. Isso garante que qualquer membro da equipe possa ver todas as conversas, incluindo as transferidas.
+Passar uma nova prop `showSenderName` do `MessageArea` para o `MessageBubble`, controlando a exibição baseada em `msg.sender_id === currentUserId`.
 
-### Alteração em `src/pages/Chat.tsx`
+### Alterações
 
-Na função `loadConversations`, linha ~40-41, trocar o filtro da aba "all":
+#### `src/components/chat/MessageArea.tsx` (~1 linha)
+- Na renderização do `MessageBubble`, passar `senderName` apenas quando `msg.sender_id === currentUserId`:
 
-**Antes:**
-```typescript
-} else {
-  query = query.eq('status', 'open');
-}
+```tsx
+senderName={msg.sender_id === currentUserId ? msg.sender_name : undefined}
 ```
 
-**Depois:**
-```typescript
-} else {
-  // all: todas as conversas (abertas e fechadas)
-  // sem filtro de status nem de assigned_to
-}
-```
-
-Isso remove o filtro `eq('status', 'open')` da aba "Todos", permitindo que todas as conversas sejam listadas independentemente do status ou de quem está atribuído.
-
-### RLS
-
-A política "Authenticated users can view all open conversations" só permite ver conversas com `status = 'open'`. Para que conversas fechadas também apareçam na aba "Todos", é preciso **adicionar uma nova política RLS** ou **alterar a existente** para permitir que usuários admin vejam todas as conversas:
-
-```sql
-CREATE POLICY "Admins can view all conversations"
-ON public.chat_conversations
-FOR SELECT
-TO authenticated
-USING (has_role(auth.uid(), 'admin'));
-```
-
-Isso garante que administradores possam ver todas as conversas (abertas e fechadas) na aba "Todos".
+Isso garante que apenas as mensagens enviadas pelo usuário logado exibam o nome como assinatura. Mensagens de outros membros da equipe e mensagens recebidas não mostrarão o nome.
 
 ## Arquivos
-- `src/pages/Chat.tsx` (~2 linhas alteradas)
-- Migration: nova política RLS em `chat_conversations`
+- `src/components/chat/MessageArea.tsx` (1 linha alterada)
 
