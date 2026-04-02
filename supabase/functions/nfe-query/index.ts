@@ -269,13 +269,7 @@ Deno.serve(async (req) => {
 });
 
 function buildSoapRequest(cnpj: string, ultNSU: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SEF_SC_NS}">
-  <soap:Header/>
-  <soap:Body>
-    <ns:distNFeSC>
-      <ns:nfeDadosMsg>
-        <distNFeSC versao="2.00" xmlns="${SEF_SC_NS}">
+  const innerXml = `<distNFeSC versao="2.00" xmlns="${SEF_SC_NS}">
           <tpAmb>1</tpAmb>
           <verAplic>VeHub 1.0</verAplic>
           <cUF>42</cUF>
@@ -285,9 +279,14 @@ function buildSoapRequest(cnpj: string, ultNSU: string): string {
             <indAtor>9</indAtor>
             <ultNuNSU>${ultNSU}</ultNuNSU>
           </solRel>
-        </distNFeSC>
-      </ns:nfeDadosMsg>
-    </ns:distNFeSC>
+        </distNFeSC>`;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SEF_SC_NS}">
+  <soap:Body>
+    <ns:NfeDownloadContab>
+      <ns:pXml>${innerXml}</ns:pXml>
+    </ns:NfeDownloadContab>
   </soap:Body>
 </soap:Envelope>`;
 }
