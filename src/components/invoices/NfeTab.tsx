@@ -155,7 +155,7 @@ export default function NfeTab() {
 
       if (infrastructureMessage) {
         toast({
-          title: 'SEF-SC indisponível no ambiente cloud',
+          title: 'Ambiente Nacional indisponível',
           description: infrastructureMessage,
           variant: 'destructive',
         });
