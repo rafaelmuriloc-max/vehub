@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, RefreshCw, FileCode, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, FileCode, FileText, Loader2, ExternalLink } from 'lucide-react';
 
 type Client = {
   id: string;
@@ -183,9 +183,17 @@ export default function NfeTab() {
     const key = `${inv.id}-xml`;
     setDownloadingMap(prev => ({ ...prev, [key]: true }));
     try {
-      // If we have raw_xml, download directly
-      if (inv.raw_xml) {
-        const blob = new Blob([inv.raw_xml], { type: 'application/xml' });
+      // Try to get full XML via edge function
+      const { data, error } = await supabase.functions.invoke('nfe-download', {
+        body: { nfe_invoice_id: inv.id, type: 'xml' },
+      });
+
+      if (error) throw new Error(error.message || 'Erro ao baixar XML');
+
+      if (data?.type === 'signed_url' && data?.url) {
+        // Download from signed URL
+        const resp = await fetch(data.url);
+        const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -196,29 +204,23 @@ export default function NfeTab() {
         URL.revokeObjectURL(url);
         return;
       }
-      // If we have xml_url in storage
-      if (inv.xml_url) {
-        const { data } = await supabase.storage.from('documents').createSignedUrl(inv.xml_url, 300);
-        if (data?.signedUrl) {
-          const resp = await fetch(data.signedUrl);
-          const blob = await resp.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${inv.access_key || inv.invoice_number || inv.id}.xml`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          return;
-        }
-      }
-      toast({ title: 'XML não disponível', variant: 'destructive' });
+
+      toast({ title: 'XML não disponível', description: data?.error || '', variant: 'destructive' });
     } catch (e) {
       toast({ title: 'Erro ao baixar XML', description: (e as Error).message, variant: 'destructive' });
     } finally {
       setDownloadingMap(prev => ({ ...prev, [key]: false }));
     }
+  }
+
+  function handleDownloadPdf(inv: NfeInvoice) {
+    if (!inv.access_key) {
+      toast({ title: 'NF-e sem chave de acesso', variant: 'destructive' });
+      return;
+    }
+    // Open the Fazenda portal in a new tab
+    const url = `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=completa&nfe=${inv.access_key}`;
+    window.open(url, '_blank');
   }
 
   function getClientName(clientId: string) {
@@ -384,17 +386,29 @@ export default function NfeTab() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {(inv.raw_xml || inv.xml_url) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={xmlLoading}
-                            onClick={() => handleDownloadXml(inv)}
-                            title="Baixar XML"
-                          >
-                            {xmlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode className="h-4 w-4" />}
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {inv.access_key && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={xmlLoading}
+                                onClick={() => handleDownloadXml(inv)}
+                                title="Baixar XML completo"
+                              >
+                                {xmlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDownloadPdf(inv)}
+                                title="Consultar DANFE no portal da Fazenda"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

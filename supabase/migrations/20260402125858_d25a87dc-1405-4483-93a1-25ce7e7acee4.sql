@@ -1,0 +1,1 @@
+ALTER TABLE public.nfe_invoices ADD COLUMN IF NOT EXISTS pdf_url text;
