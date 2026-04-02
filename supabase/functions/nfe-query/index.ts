@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
         totalSaved += invoicesToSave.length;
       }
 
-      const newLastNsu = ultNuNSURet || lastNsu;
+      const newLastNsu = ultNSURet || lastNsu;
       if (newLastNsu && newLastNsu !== "0") {
         lastNsu = newLastNsu;
         await adminClient
@@ -231,8 +231,8 @@ Deno.serve(async (req) => {
           .eq("id", client_id);
       }
 
-      const qtDfe = parseInt(qtDfeRet || "0", 10);
-      keepGoing = qtDfe >= 50;
+      // Continue if ultNSU < maxNSU
+      keepGoing = !!(maxNSU && ultNSURet && ultNSURet < maxNSU);
     }
 
     return jsonResponse({
