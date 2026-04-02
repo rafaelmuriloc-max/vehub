@@ -1,51 +1,28 @@
 
 
-# Proxy PHP na Hostinger para NF-e (SEF-SC)
+# Corrigir incompatibilidade entre proxy PHP e edge function
 
 ## Problema
-A SEF-SC bloqueia conexões TLS de IPs cloud (Supabase). A edge function `nfe-query` tenta conectar diretamente e recebe `connection reset`.
+O proxy PHP no servidor (`187.77.228.202:8090`) está com uma versão antiga que espera o campo `pfx_base64`, mas a edge function envia `cert_pem` e `key_pem`. Resultado: proxy rejeita com "Missing required fields: soap_body, pfx_base64, url" e o fallback direto falha com "connection reset".
 
 ## Solução
-Criar um proxy PHP na Hostinger que recebe a requisição SOAP + certificado PFX em base64, faz a chamada mTLS para a SEF-SC, e retorna a resposta. A edge function passa a enviar para o proxy ao invés de conectar diretamente.
+Não há alteração de código necessária no projeto — os arquivos já estão corretos. O problema é que **o arquivo PHP no servidor precisa ser atualizado**.
 
-## Alterações
+## Ação necessária (manual)
+1. Faça upload do arquivo `.lovable/tmp/proxy-nfe.php` atualizado para o servidor `187.77.228.202:8090`, substituindo a versão antiga
+2. O arquivo atual espera os campos `cert_pem`, `key_pem`, `soap_body`, `url` — que é exatamente o que a edge function envia
+3. Verifique que o `PROXY_TOKEN` definido no PHP coincide com o secret `NFE_PROXY_TOKEN` do Supabase
 
-### 1. Script PHP para a Hostinger (arquivo de referência)
-Criar `proxy-nfe.php` que:
-- Recebe POST JSON com `{ soap_body, pfx_base64, pfx_password, url, soap_action }`
-- Valida um token de segurança no header `X-Proxy-Token`
-- Converte PFX para PEM temporário
-- Faz cURL com `CURLOPT_SSLCERT` + `CURLOPT_SSLKEY` para a SEF-SC
-- Retorna `{ status, body, headers }`
-- Limpa arquivos temporários
+## Observação adicional
+O proxy está acessível via HTTP (`http://187.77.228.202:8090`) e não HTTPS. Considere configurar HTTPS para proteger os certificados e dados SOAP em trânsito.
 
-### 2. Alterar `supabase/functions/nfe-query/index.ts`
-- Adicionar constante `NFE_PROXY_URL` lendo de `Deno.env.get("NFE_PROXY_URL")`
-- Na função `requestTextWithMTLS`, **antes** das tentativas diretas, tentar via proxy:
-  - Converter PEM cert/key para PFX (ou enviar os PEMs diretamente)
-  - POST para o proxy com os dados SOAP
-  - Se o proxy responder, retornar o resultado
-  - Se falhar, cair no fluxo direto existente como fallback
-
-### 3. Secrets necessários
-- `NFE_PROXY_URL` — URL do proxy na Hostinger (ex: `https://seudominio.com.br/proxy-nfe.php`)
-- `NFE_PROXY_TOKEN` — token de autenticação do proxy
-
-## Fluxo
+## Após atualizar o PHP
+Teste novamente a consulta NF-e pela interface. O fluxo será:
 ```text
-Edge Function → POST JSON (SOAP + cert PEM) → Proxy PHP Hostinger
-                                                    ↓
-                                              cURL mTLS → SEF-SC
-                                                    ↓
-                                              Response SOAP ← SEF-SC
-                                                    ↓
-Edge Function ← JSON { status, body } ← Proxy PHP
+Edge Function → POST {soap_body, cert_pem, key_pem, url} → Proxy PHP
+                                                              ↓
+                                                        cURL mTLS → SEF-SC
+                                                              ↓
+Edge Function ← JSON {status, body, success} ← Proxy PHP
 ```
-
-## Arquivos
-- `.lovable/tmp/proxy-nfe.php` (referência para deploy manual na Hostinger)
-- `supabase/functions/nfe-query/index.ts` (adicionar tentativa via proxy antes do mTLS direto)
-
-## Observação
-O PHP na Hostinger precisa ser hospedado manualmente. O arquivo será gerado como referência no projeto para facilitar o deploy.
 
