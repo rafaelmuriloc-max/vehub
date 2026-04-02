@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
 
       const soapBody = buildSoapRequest(cnpj, lastNsu);
       const response = await requestTextWithMTLS(
-        new URL(SEF_SC_URL),
+        new URL(AN_URL),
         {
           method: "POST",
           headers: {
