@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Separator } from '@/components/ui/separator';
+import { useChatNotification } from '@/hooks/useChatNotification';
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -23,6 +24,7 @@ const pageTitles: Record<string, string> = {
 export function AppLayout() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  useChatNotification();
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Carregando...</p></div>;
   if (!user) return <Navigate to="/auth" replace />;
