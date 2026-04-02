@@ -318,27 +318,37 @@ type DistEntry = {
   isEvent: boolean;
 };
 
-function parseDistNFeSCEntries(loteXml: string): DistEntry[] {
+function parseDocZipEntries(loteXml: string): DistEntry[] {
   const entries: DistEntry[] = [];
-  const entryRegex = /<distNFeSC\s+([^>]*)>([\s\S]*?)<\/distNFeSC>/gi;
+  const docZipRegex = /<docZip\s+([^>]*)>([^<]+)<\/docZip>/gi;
   let match;
 
-  while ((match = entryRegex.exec(loteXml)) !== null) {
+  while ((match = docZipRegex.exec(loteXml)) !== null) {
     const attrs = match[1];
-    const innerContent = match[2].trim();
+    const base64Content = match[2].trim();
 
     const nsuMatch = attrs.match(/NSU\s*=\s*"([^"]+)"/i);
-    const chAcessoMatch = attrs.match(/chAcesso\s*=\s*"([^"]+)"/i);
-    const isEvent = /<procEventoNFe/i.test(innerContent);
+    const schemaMatch = attrs.match(/schema\s*=\s*"([^"]+)"/i);
+    const schema = schemaMatch?.[1] || "";
 
-    const chAcesso = chAcessoMatch?.[1] ||
-      extractTagContent(innerContent, "chNFe") ||
-      extractAccessKeyFromXml(innerContent);
+    let xmlContent: string | null = null;
+    try {
+      // Decompress gzip base64 content synchronously via DecompressionStream
+      const binaryStr = atob(base64Content);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      // We'll decompress in the caller; store raw for now
+      xmlContent = "__BASE64__" + base64Content;
+    } catch {
+      xmlContent = null;
+    }
+
+    const isEvent = schema.includes("procEventoNFe") || schema.includes("evento");
 
     entries.push({
       nsu: nsuMatch ? nsuMatch[1] : null,
-      chAcesso,
-      xmlContent: innerContent,
+      chAcesso: null, // will be extracted after decompression
+      xmlContent,
       isEvent,
     });
   }
