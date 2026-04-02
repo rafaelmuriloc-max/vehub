@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { DANFe } from 'node-sped-pdf';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -9,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, RefreshCw, FileCode, FileText, Loader2, ExternalLink } from 'lucide-react';
+import { Search, RefreshCw, FileCode, FileText, Loader2 } from 'lucide-react';
 
 type Client = {
   id: string;
@@ -213,14 +214,41 @@ export default function NfeTab() {
     }
   }
 
-  function handleDownloadPdf(inv: NfeInvoice) {
+  async function handleDownloadPdf(inv: NfeInvoice) {
     if (!inv.access_key) {
       toast({ title: 'NF-e sem chave de acesso', variant: 'destructive' });
       return;
     }
-    // Open the Fazenda portal in a new tab
-    const url = `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=completa&nfe=${inv.access_key}`;
-    window.open(url, '_blank');
+    const key = `${inv.id}-pdf`;
+    setDownloadingMap(prev => ({ ...prev, [key]: true }));
+    try {
+      // 1. Get the full XML via edge function
+      const { data, error } = await supabase.functions.invoke('nfe-download', {
+        body: { nfe_invoice_id: inv.id, type: 'xml' },
+      });
+      if (error) throw new Error(error.message || 'Erro ao obter XML');
+      if (!data?.url) throw new Error('XML não disponível para esta NF-e');
+
+      // 2. Fetch the XML content
+      const resp = await fetch(data.url);
+      const xmlContent = await resp.text();
+
+      // 3. Generate DANFE PDF from XML
+      const pdfBytes = await DANFe({ xml: xmlContent });
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${inv.access_key}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast({ title: 'Erro ao gerar DANFE', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setDownloadingMap(prev => ({ ...prev, [key]: false }));
+    }
   }
 
   function getClientName(clientId: string) {
@@ -363,6 +391,7 @@ export default function NfeTab() {
               <TableBody>
                 {filteredInvoices.map(inv => {
                   const xmlLoading = downloadingMap[`${inv.id}-xml`];
+                  const pdfLoading = downloadingMap[`${inv.id}-pdf`];
                   return (
                     <TableRow key={inv.id}>
                       <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
@@ -401,10 +430,11 @@ export default function NfeTab() {
                               <Button
                                 size="sm"
                                 variant="ghost"
+                                disabled={pdfLoading}
                                 onClick={() => handleDownloadPdf(inv)}
-                                title="Consultar DANFE no portal da Fazenda"
+                                title="Baixar DANFE em PDF"
                               >
-                                <ExternalLink className="h-4 w-4" />
+                                {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                               </Button>
                             </>
                           )}
