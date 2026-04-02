@@ -254,24 +254,22 @@ Deno.serve(async (req) => {
 });
 
 function buildSoapRequest(cnpj: string, ultNSU: string): string {
-  const innerXml = `<distNFeSC versao="2.00" xmlns="${SEF_SC_NS}">
-          <tpAmb>1</tpAmb>
-          <verAplic>VeHub 1.0</verAplic>
-          <cUF>42</cUF>
-          <CNPJ>${cnpj}</CNPJ>
-          <solRel>
-            <indXML>1</indXML>
-            <indAtor>9</indAtor>
-            <ultNuNSU>${ultNSU}</ultNuNSU>
-          </solRel>
-        </distNFeSC>`;
-
+  const nsuPadded = ultNSU.padStart(15, "0");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SEF_SC_NS}">
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${AN_NS}">
   <soap:Body>
-    <ns:NfeDownloadContab>
-      <ns:pXml>${innerXml}</ns:pXml>
-    </ns:NfeDownloadContab>
+    <ns:nfeDistDFeInteresse>
+      <ns:nfeDadosMsg>
+        <distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
+          <tpAmb>1</tpAmb>
+          <cUFAutor>42</cUFAutor>
+          <CNPJ>${cnpj}</CNPJ>
+          <distNSU>
+            <ultNSU>${nsuPadded}</ultNSU>
+          </distNSU>
+        </distDFeInt>
+      </ns:nfeDadosMsg>
+    </ns:nfeDistDFeInteresse>
   </soap:Body>
 </soap:Envelope>`;
 }
