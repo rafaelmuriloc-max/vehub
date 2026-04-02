@@ -789,6 +789,7 @@ export type Database = {
           invoice_number: string | null
           issue_date: string | null
           nsu: string | null
+          pdf_url: string | null
           raw_xml: string | null
           recipient_cnpj: string | null
           recipient_name: string | null
@@ -806,6 +807,7 @@ export type Database = {
           invoice_number?: string | null
           issue_date?: string | null
           nsu?: string | null
+          pdf_url?: string | null
           raw_xml?: string | null
           recipient_cnpj?: string | null
           recipient_name?: string | null
@@ -823,6 +825,7 @@ export type Database = {
           invoice_number?: string | null
           issue_date?: string | null
           nsu?: string | null
+          pdf_url?: string | null
           raw_xml?: string | null
           recipient_cnpj?: string | null
           recipient_name?: string | null
