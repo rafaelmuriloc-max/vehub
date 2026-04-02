@@ -214,14 +214,41 @@ export default function NfeTab() {
     }
   }
 
-  function handleDownloadPdf(inv: NfeInvoice) {
+  async function handleDownloadPdf(inv: NfeInvoice) {
     if (!inv.access_key) {
       toast({ title: 'NF-e sem chave de acesso', variant: 'destructive' });
       return;
     }
-    // Open the Fazenda portal in a new tab
-    const url = `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=completa&nfe=${inv.access_key}`;
-    window.open(url, '_blank');
+    const key = `${inv.id}-pdf`;
+    setDownloadingMap(prev => ({ ...prev, [key]: true }));
+    try {
+      // 1. Get the full XML via edge function
+      const { data, error } = await supabase.functions.invoke('nfe-download', {
+        body: { nfe_invoice_id: inv.id, type: 'xml' },
+      });
+      if (error) throw new Error(error.message || 'Erro ao obter XML');
+      if (!data?.url) throw new Error('XML não disponível para esta NF-e');
+
+      // 2. Fetch the XML content
+      const resp = await fetch(data.url);
+      const xmlContent = await resp.text();
+
+      // 3. Generate DANFE PDF from XML
+      const pdfBytes = await DANFe({ xml: xmlContent });
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${inv.access_key}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast({ title: 'Erro ao gerar DANFE', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setDownloadingMap(prev => ({ ...prev, [key]: false }));
+    }
   }
 
   function getClientName(clientId: string) {
