@@ -161,16 +161,16 @@ Deno.serve(async (req) => {
 
       console.log(`[NF-e] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
 
-      const retBody = extractTagContent(response.bodyText, "retDistNFeSC") ||
-        extractTagContent(response.bodyText, "retdistNFeSC") ||
+      const retBody = extractTagContent(response.bodyText, "retDistDFeInt") ||
+        extractTagContent(response.bodyText, "retdistDFeInt") ||
         response.bodyText;
 
       const cStat = extractTagContent(retBody, "cStat");
       const xMotivo = extractTagContent(retBody, "xMotivo");
-      const ultNuNSURet = extractTagContent(retBody, "ultNuNSURet");
-      const qtDfeRet = extractTagContent(retBody, "qtDfeRet");
+      const ultNSURet = extractTagContent(retBody, "ultNSU");
+      const maxNSU = extractTagContent(retBody, "maxNSU");
 
-      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, ultNuNSURet=${ultNuNSURet}, qtDfeRet=${qtDfeRet}`);
+      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, ultNSU=${ultNSURet}, maxNSU=${maxNSU}`);
 
       if (cStat === "117") {
         console.log("[NF-e] Nenhum DF-e localizado (117)");
