@@ -426,6 +426,53 @@ async function requestTextWithMTLS(
   certPem: string,
   keyPem: string,
 ): Promise<MtlsTextResponse> {
+  // ===== Tentativa via proxy PHP (Hostinger) =====
+  if (NFE_PROXY_URL) {
+    try {
+      console.log(`[NF-e] Tentando via proxy: ${NFE_PROXY_URL}`);
+      const soapAction = init.headers
+        ? (init.headers instanceof Headers
+            ? init.headers.get("SOAPAction")
+            : (init.headers as Record<string, string>)["SOAPAction"])
+        : null;
+
+      const proxyResponse = await fetch(NFE_PROXY_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Proxy-Token": NFE_PROXY_TOKEN,
+        },
+        body: JSON.stringify({
+          soap_body: init.body || "",
+          cert_pem: certPem,
+          key_pem: keyPem,
+          url: url.toString(),
+          soap_action: soapAction || SOAP_ACTION,
+        }),
+      });
+
+      const proxyData = await proxyResponse.json();
+
+      if (proxyData.success && proxyData.body) {
+        console.log(`[NF-e] Proxy retornou status ${proxyData.status}`);
+        return {
+          bodyText: proxyData.body,
+          headers: new Headers(),
+          status: proxyData.status || 200,
+          statusText: "OK",
+          strategy: "proxy-php",
+          url: url.toString(),
+        };
+      }
+
+      console.warn(`[NF-e] Proxy falhou:`, proxyData.error || "resposta inválida");
+    } catch (proxyError) {
+      console.warn(`[NF-e] Erro ao usar proxy:`, (proxyError as Error).message);
+    }
+    console.log(`[NF-e] Fallback para conexão direta mTLS...`);
+  }
+
+  // ===== Tentativas diretas (fallback) =====
   const attempts = [
     { label: "fetch-http1", type: "fetch" as const },
     { alpnProtocols: ["http/1.1"], label: "raw-http1-alpn", type: "raw" as const },
