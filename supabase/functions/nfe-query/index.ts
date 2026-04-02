@@ -180,38 +180,22 @@ Deno.serve(async (req) => {
 
       if (cStat === "110") {
         console.log("[NF-e] Reprocessamento (110), continuando...");
-        if (ultNuNSURet) lastNsu = ultNuNSURet;
+        if (ultNSURet) lastNsu = ultNSURet;
         continue;
       }
 
-      if (cStat !== "118") {
+      if (cStat !== "138") {
         if (totalSaved > 0) {
           keepGoing = false;
           break;
         }
-        return jsonResponse({ error: `Erro SEF-SC: ${cStat} - ${xMotivo}`, cStat }, 400);
+        return jsonResponse({ error: `Erro Ambiente Nacional: ${cStat} - ${xMotivo}`, cStat }, 400);
       }
 
-      const loteDistComp = extractTagContent(retBody, "loteDistComp");
-      if (!loteDistComp) {
-        console.log("[NF-e] loteDistComp não encontrado no retorno");
-        keepGoing = false;
-        break;
-      }
-
-      let loteXml: string;
-      try {
-        loteXml = await decompressGzip(loteDistComp.trim());
-      } catch (e) {
-        console.error("[NF-e] Erro ao descompactar loteDistComp:", (e as Error).message);
-        keepGoing = false;
-        break;
-      }
-
-      console.log(`[NF-e] loteDistComp descompactado, tamanho=${loteXml.length}`);
-
-      const entries = parseDistNFeSCEntries(loteXml);
-      console.log(`[NF-e] Parsed ${entries.length} entries from loteDistNFeSC`);
+      // Parse docZip entries from loteDistDFeInt
+      const loteDistDFeInt = extractTagContent(retBody, "loteDistDFeInt") || retBody;
+      const entries = parseDocZipEntries(loteDistDFeInt);
+      console.log(`[NF-e] Parsed ${entries.length} docZip entries`);
 
       if (entries.length === 0) {
         keepGoing = false;
