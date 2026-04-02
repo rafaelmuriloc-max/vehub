@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Separator } from '@/components/ui/separator';
+import { useChatNotification } from '@/hooks/useChatNotification';
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
