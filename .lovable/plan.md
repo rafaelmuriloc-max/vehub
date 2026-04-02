@@ -1,71 +1,43 @@
 
 
-# Baixar XML completo e DANFE PDF de NF-e
+# Download direto de XML e DANFE PDF no sistema
 
-## Diagnóstico
-
-O sistema atual salva apenas o **resumo** (`resNFe`) retornado pela distribuição. Esse resumo contém apenas chave de acesso, emitente, valor e data — **não é o XML completo da NF-e**. Por isso, ao baixar o XML, o usuário recebe apenas a chave.
-
-Para obter o XML completo e o DANFE PDF, é preciso:
-1. **XML completo**: Fazer uma nova consulta ao Ambiente Nacional usando `consChNFe` (consulta por chave) no mesmo endpoint de distribuição
-2. **DANFE PDF**: Usar o portal público `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx` ou gerar o DANFE a partir do XML
+## Situação atual
+- **XML**: Já baixa via edge function `nfe-download`, mas precisa buscar no AN se não estiver em cache. Funciona.
+- **PDF (DANFE)**: Apenas abre o portal da Fazenda em nova aba (requer captcha manual). Não baixa direto.
 
 ## Solução
 
-### 1. Nova edge function `nfe-download/index.ts`
+Usar a biblioteca `node-sped-pdf` (compatível com browser via ESM) para gerar o DANFE PDF diretamente no frontend a partir do XML completo.
 
-Função que recebe `{ nfe_invoice_id, type: "xml" | "pdf" }` e:
-
-**Para XML**:
-- Verifica se já tem XML completo em cache (storage)
-- Se não, monta SOAP `consChNFe` para o Ambiente Nacional usando o certificado do cliente
-- Envia via proxy PHP (mesmo já usado pelo nfe-query)
-- Descompacta o `docZip` retornado (gzip+base64) — agora contém o `procNFe` completo
-- Salva no storage `nfe/{client_id}/{access_key}.xml`
-- Retorna signed URL
-
-**Para PDF**:
-- Verifica se já tem PDF em cache (storage)
-- Se não, gera o DANFE a partir do XML completo usando uma abordagem simplificada: baixa o XML completo primeiro (mesmo fluxo acima) e usa o serviço público da Fazenda ou retorna o XML para o frontend gerar
-- Alternativa mais prática: redirecionar para `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=completa&nfe={chave}` (requer interação manual) ou usar API de geração de DANFE
-
-**Abordagem recomendada para PDF**: Como não existe API pública sem captcha para baixar o DANFE, a melhor opção é:
-- Gerar o DANFE no frontend usando uma lib JS como `danfe-js` ou similar
-- Ou fornecer link direto para o portal da Fazenda
-
-### 2. Atualizar `NfeTab.tsx`
-
-- Adicionar botão de download PDF ao lado do XML
-- Ambos chamam `nfe-download` com o type correspondente
-- Para PDF, abrir link do portal da Fazenda em nova aba como solução imediata
-
-### 3. Atualizar `nfe-query` para buscar XML completo
-
-Ao invés de salvar apenas o resumo, quando o docZip retornar um `resNFe`, fazer uma segunda consulta `consChNFe` para obter o XML completo e salvar no `raw_xml`.
-
-## Estrutura SOAP `consChNFe`
-
-```xml
-<distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
-  <tpAmb>1</tpAmb>
-  <cUFAutor>42</cUFAutor>
-  <CNPJ>{cnpj}</CNPJ>
-  <consChNFe>
-    <chNFe>{chave_acesso_44_digitos}</chNFe>
-  </consChNFe>
-</distDFeInt>
+### Fluxo
+```text
+1. Usuário clica "Baixar XML" → edge function retorna signed URL → download direto ✓ (já funciona)
+2. Usuário clica "Baixar DANFE" → 
+   a. Chama edge function nfe-download type=xml para obter o XML completo
+   b. Com o XML em mãos, usa node-sped-pdf no browser para gerar o PDF
+   c. Dispara download automático do PDF gerado
 ```
 
-Mesmo endpoint, mesmo SOAPAction. A resposta retorna o `docZip` com o `procNFe` completo.
+### Alterações
 
-## Plano de implementação
+#### 1. Instalar `node-sped-pdf` no projeto
+- `npm install node-sped-pdf`
 
-1. **Criar `supabase/functions/nfe-download/index.ts`**: ~200 linhas, reutiliza lógica de mTLS/proxy do nfe-query
-2. **Atualizar `src/components/invoices/NfeTab.tsx`**: Adicionar botões XML e PDF na tabela, com handlers que chamam a nova edge function
-3. **Adicionar coluna `pdf_url`** na tabela `nfe_invoices` (se não existir) para cache do PDF
+#### 2. Atualizar `src/components/invoices/NfeTab.tsx`
+- Importar `DANFe` de `node-sped-pdf`
+- Reescrever `handleDownloadPdf`:
+  1. Chamar `nfe-download` com `type: "xml"` para obter a signed URL do XML completo
+  2. Fetch do XML via signed URL
+  3. Passar o XML para `DANFe({ xml })` que retorna um Blob PDF
+  4. Disparar download do blob como `{chave}.pdf`
+- Adicionar estado de loading para o botão PDF (já existe pattern com `downloadingMap`)
+- Trocar ícone de `ExternalLink` para `FileText` (já importado)
+
+#### 3. Edge function `nfe-download` — sem alteração
+Já retorna signed URL do XML completo. O PDF será gerado no frontend.
 
 ## Arquivos
-- `supabase/functions/nfe-download/index.ts` (novo, ~250 linhas)
-- `src/components/invoices/NfeTab.tsx` (atualizar botões de download)
-- Migration: adicionar coluna `pdf_url` em `nfe_invoices` se necessário
+- `package.json` (adicionar `node-sped-pdf`)
+- `src/components/invoices/NfeTab.tsx` (~30 linhas alteradas no handler de PDF + import)
 
