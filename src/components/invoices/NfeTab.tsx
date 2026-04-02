@@ -138,7 +138,7 @@ export default function NfeTab() {
           if (error || response?.error) {
             errorCount++;
             if (response?.infrastructure) {
-              infrastructureMessage = response.message || 'A SEF-SC resetou a conexão a partir do ambiente atual.';
+              infrastructureMessage = response.message || 'O Ambiente Nacional está indisponível no momento.';
               break;
             }
           } else {
