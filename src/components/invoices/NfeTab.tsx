@@ -249,7 +249,7 @@ export default function NfeTab() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Search className="h-5 w-5" />
-              Consultar NF-e na SEF-SC
+              Consultar NF-e no Ambiente Nacional
             </CardTitle>
           </CardHeader>
           <CardContent>
