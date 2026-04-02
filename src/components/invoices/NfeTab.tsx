@@ -391,6 +391,7 @@ export default function NfeTab() {
               <TableBody>
                 {filteredInvoices.map(inv => {
                   const xmlLoading = downloadingMap[`${inv.id}-xml`];
+                  const pdfLoading = downloadingMap[`${inv.id}-pdf`];
                   return (
                     <TableRow key={inv.id}>
                       <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
@@ -429,10 +430,11 @@ export default function NfeTab() {
                               <Button
                                 size="sm"
                                 variant="ghost"
+                                disabled={pdfLoading}
                                 onClick={() => handleDownloadPdf(inv)}
-                                title="Consultar DANFE no portal da Fazenda"
+                                title="Baixar DANFE em PDF"
                               >
-                                <ExternalLink className="h-4 w-4" />
+                                {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                               </Button>
                             </>
                           )}
