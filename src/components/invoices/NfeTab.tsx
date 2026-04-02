@@ -138,7 +138,7 @@ export default function NfeTab() {
           if (error || response?.error) {
             errorCount++;
             if (response?.infrastructure) {
-              infrastructureMessage = response.message || 'A SEF-SC resetou a conexão a partir do ambiente atual.';
+              infrastructureMessage = response.message || 'O Ambiente Nacional está indisponível no momento.';
               break;
             }
           } else {
@@ -155,7 +155,7 @@ export default function NfeTab() {
 
       if (infrastructureMessage) {
         toast({
-          title: 'SEF-SC indisponível no ambiente cloud',
+          title: 'Ambiente Nacional indisponível',
           description: infrastructureMessage,
           variant: 'destructive',
         });
@@ -249,7 +249,7 @@ export default function NfeTab() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Search className="h-5 w-5" />
-              Consultar NF-e na SEF-SC
+              Consultar NF-e no Ambiente Nacional
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -343,7 +343,7 @@ export default function NfeTab() {
             <p className="text-center text-muted-foreground py-8">Carregando...</p>
           ) : filteredInvoices.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              Nenhuma NF-e encontrada. Use a consulta acima para buscar NF-e na SEF-SC.
+              Nenhuma NF-e encontrada. Use a consulta acima para buscar NF-e no Ambiente Nacional.
             </p>
           ) : (
             <Table>

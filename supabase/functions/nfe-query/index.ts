@@ -7,9 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SEF_SC_URL = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
-const SEF_SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
-const SOAP_ACTION = `${SEF_SC_NS}/NfeDownloadContab`;
+const AN_URL = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
+const AN_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe";
+const SOAP_ACTION = `${AN_NS}/nfeDistDFeInteresse`;
 const MAX_LOOPS = 20;
 
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
@@ -42,10 +42,10 @@ function getHandledInfrastructureError(error: unknown): InfrastructureErrorPaylo
   if (normalized.includes("connection reset") || normalized.includes("econnreset")) {
     return {
       code: "REMOTE_CONNECTION_RESET",
-      endpoint: SEF_SC_URL,
+      endpoint: AN_URL,
       error: "connection reset",
       infrastructure: true,
-      message: "A SEF-SC resetou a conexão TLS ao receber a chamada do ambiente cloud do Supabase.",
+      message: "O Ambiente Nacional resetou a conexão TLS.",
       retryable: true,
       success: false,
     };
@@ -54,10 +54,10 @@ function getHandledInfrastructureError(error: unknown): InfrastructureErrorPaylo
   if (normalized.includes("timeout")) {
     return {
       code: "REMOTE_TIMEOUT",
-      endpoint: SEF_SC_URL,
+      endpoint: AN_URL,
       error: "timeout",
       infrastructure: true,
-      message: "A SEF-SC não respondeu dentro do tempo esperado a partir do ambiente cloud do Supabase.",
+      message: "O Ambiente Nacional não respondeu dentro do tempo esperado.",
       retryable: true,
       success: false,
     };
@@ -66,10 +66,10 @@ function getHandledInfrastructureError(error: unknown): InfrastructureErrorPaylo
   if (normalized.includes("refused")) {
     return {
       code: "REMOTE_CONNECTION_REFUSED",
-      endpoint: SEF_SC_URL,
+      endpoint: AN_URL,
       error: "connection refused",
       infrastructure: true,
-      message: "A conexão com a SEF-SC foi recusada pelo host remoto.",
+      message: "A conexão com o Ambiente Nacional foi recusada.",
       retryable: true,
       success: false,
     };
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("id, company_name, document, last_nfe_nsu")
+      .select("id, company_name, document, last_nfe_nsu, digital_certificate_url, digital_certificate_password")
       .eq("id", client_id)
       .single();
 
@@ -118,32 +118,19 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
     }
 
-    // NfeDownloadContab exige o certificado do CONTADOR, não do cliente
-    const { data: companySettings, error: csError } = await adminClient
-      .from("company_settings")
-      .select("accountant_certificate_url, accountant_certificate_password, digital_certificate_url, digital_certificate_password")
-      .limit(1)
-      .single();
-
-    // Prioriza certificado do contador; fallback para certificado do escritório
-    const certUrl = companySettings?.accountant_certificate_url || companySettings?.digital_certificate_url;
-    const certPass = companySettings?.accountant_certificate_url
-      ? (companySettings?.accountant_certificate_password || "")
-      : (companySettings?.digital_certificate_password || "");
-
-    if (csError || !certUrl) {
-      return jsonResponse({ error: "Certificado do contador não configurado. Vá em Configurações > Empresa para cadastrar." }, 400);
+    if (!client.digital_certificate_url) {
+      return jsonResponse({ error: "Cliente sem certificado digital cadastrado" }, 400);
     }
 
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
-      .download(certUrl);
+      .download(client.digital_certificate_url);
     if (certError || !certData) {
-      return jsonResponse({ error: "Erro ao baixar certificado do contador: " + (certError?.message || "desconhecido") }, 500);
+      return jsonResponse({ error: "Erro ao baixar certificado do cliente: " + (certError?.message || "desconhecido") }, 500);
     }
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const password = certPass;
+    const password = client.digital_certificate_password || "";
     const { certPem, keyPem } = await parsePfx(pfxBytes, password);
 
     const cnpj = client.document.replace(/\D/g, "");
@@ -158,7 +145,7 @@ Deno.serve(async (req) => {
 
       const soapBody = buildSoapRequest(cnpj, lastNsu);
       const response = await requestTextWithMTLS(
-        new URL(SEF_SC_URL),
+        new URL(AN_URL),
         {
           method: "POST",
           headers: {
@@ -174,16 +161,16 @@ Deno.serve(async (req) => {
 
       console.log(`[NF-e] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
 
-      const retBody = extractTagContent(response.bodyText, "retDistNFeSC") ||
-        extractTagContent(response.bodyText, "retdistNFeSC") ||
+      const retBody = extractTagContent(response.bodyText, "retDistDFeInt") ||
+        extractTagContent(response.bodyText, "retdistDFeInt") ||
         response.bodyText;
 
       const cStat = extractTagContent(retBody, "cStat");
       const xMotivo = extractTagContent(retBody, "xMotivo");
-      const ultNuNSURet = extractTagContent(retBody, "ultNuNSURet");
-      const qtDfeRet = extractTagContent(retBody, "qtDfeRet");
+      const ultNSURet = extractTagContent(retBody, "ultNSU");
+      const maxNSU = extractTagContent(retBody, "maxNSU");
 
-      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, ultNuNSURet=${ultNuNSURet}, qtDfeRet=${qtDfeRet}`);
+      console.log(`[NF-e] cStat=${cStat}, xMotivo=${xMotivo}, ultNSU=${ultNSURet}, maxNSU=${maxNSU}`);
 
       if (cStat === "117") {
         console.log("[NF-e] Nenhum DF-e localizado (117)");
@@ -193,38 +180,22 @@ Deno.serve(async (req) => {
 
       if (cStat === "110") {
         console.log("[NF-e] Reprocessamento (110), continuando...");
-        if (ultNuNSURet) lastNsu = ultNuNSURet;
+        if (ultNSURet) lastNsu = ultNSURet;
         continue;
       }
 
-      if (cStat !== "118") {
+      if (cStat !== "138") {
         if (totalSaved > 0) {
           keepGoing = false;
           break;
         }
-        return jsonResponse({ error: `Erro SEF-SC: ${cStat} - ${xMotivo}`, cStat }, 400);
+        return jsonResponse({ error: `Erro Ambiente Nacional: ${cStat} - ${xMotivo}`, cStat }, 400);
       }
 
-      const loteDistComp = extractTagContent(retBody, "loteDistComp");
-      if (!loteDistComp) {
-        console.log("[NF-e] loteDistComp não encontrado no retorno");
-        keepGoing = false;
-        break;
-      }
-
-      let loteXml: string;
-      try {
-        loteXml = await decompressGzip(loteDistComp.trim());
-      } catch (e) {
-        console.error("[NF-e] Erro ao descompactar loteDistComp:", (e as Error).message);
-        keepGoing = false;
-        break;
-      }
-
-      console.log(`[NF-e] loteDistComp descompactado, tamanho=${loteXml.length}`);
-
-      const entries = parseDistNFeSCEntries(loteXml);
-      console.log(`[NF-e] Parsed ${entries.length} entries from loteDistNFeSC`);
+      // Parse docZip entries from loteDistDFeInt
+      const loteDistDFeInt = extractTagContent(retBody, "loteDistDFeInt") || retBody;
+      const entries = parseDocZipEntries(loteDistDFeInt);
+      console.log(`[NF-e] Parsed ${entries.length} docZip entries`);
 
       if (entries.length === 0) {
         keepGoing = false;
@@ -233,6 +204,19 @@ Deno.serve(async (req) => {
 
       const invoicesToSave = [];
       for (const entry of entries) {
+        // Decompress docZip content
+        if (entry.xmlContent?.startsWith("__BASE64__")) {
+          const b64 = entry.xmlContent.slice(10);
+          try {
+            const decompressed = await decompressGzip(b64);
+            entry.xmlContent = decompressed;
+            entry.isEvent = /<procEventoNFe/i.test(decompressed);
+            entry.chAcesso = extractAccessKeyFromXml(decompressed) || extractTagContent(decompressed, "chNFe");
+          } catch (e) {
+            console.warn(`[NF-e] Failed to decompress docZip NSU=${entry.nsu}:`, (e as Error).message);
+            continue;
+          }
+        }
         const parsed = parseNfeEntry(entry, client_id);
         if (parsed) invoicesToSave.push(parsed);
       }
@@ -251,7 +235,7 @@ Deno.serve(async (req) => {
         totalSaved += invoicesToSave.length;
       }
 
-      const newLastNsu = ultNuNSURet || lastNsu;
+      const newLastNsu = ultNSURet || lastNsu;
       if (newLastNsu && newLastNsu !== "0") {
         lastNsu = newLastNsu;
         await adminClient
@@ -260,8 +244,8 @@ Deno.serve(async (req) => {
           .eq("id", client_id);
       }
 
-      const qtDfe = parseInt(qtDfeRet || "0", 10);
-      keepGoing = qtDfe >= 50;
+      // Continue if ultNSU < maxNSU
+      keepGoing = !!(maxNSU && ultNSURet && ultNSURet < maxNSU);
     }
 
     return jsonResponse({
@@ -283,24 +267,22 @@ Deno.serve(async (req) => {
 });
 
 function buildSoapRequest(cnpj: string, ultNSU: string): string {
-  const innerXml = `<distNFeSC versao="2.00" xmlns="${SEF_SC_NS}">
-          <tpAmb>1</tpAmb>
-          <verAplic>VeHub 1.0</verAplic>
-          <cUF>42</cUF>
-          <CNPJ>${cnpj}</CNPJ>
-          <solRel>
-            <indXML>1</indXML>
-            <indAtor>9</indAtor>
-            <ultNuNSU>${ultNSU}</ultNuNSU>
-          </solRel>
-        </distNFeSC>`;
-
+  const nsuPadded = ultNSU.padStart(15, "0");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SEF_SC_NS}">
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${AN_NS}">
   <soap:Body>
-    <ns:NfeDownloadContab>
-      <ns:pXml>${innerXml}</ns:pXml>
-    </ns:NfeDownloadContab>
+    <ns:nfeDistDFeInteresse>
+      <ns:nfeDadosMsg>
+        <distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
+          <tpAmb>1</tpAmb>
+          <cUFAutor>42</cUFAutor>
+          <CNPJ>${cnpj}</CNPJ>
+          <distNSU>
+            <ultNSU>${nsuPadded}</ultNSU>
+          </distNSU>
+        </distDFeInt>
+      </ns:nfeDadosMsg>
+    </ns:nfeDistDFeInteresse>
   </soap:Body>
 </soap:Envelope>`;
 }
@@ -349,27 +331,37 @@ type DistEntry = {
   isEvent: boolean;
 };
 
-function parseDistNFeSCEntries(loteXml: string): DistEntry[] {
+function parseDocZipEntries(loteXml: string): DistEntry[] {
   const entries: DistEntry[] = [];
-  const entryRegex = /<distNFeSC\s+([^>]*)>([\s\S]*?)<\/distNFeSC>/gi;
+  const docZipRegex = /<docZip\s+([^>]*)>([^<]+)<\/docZip>/gi;
   let match;
 
-  while ((match = entryRegex.exec(loteXml)) !== null) {
+  while ((match = docZipRegex.exec(loteXml)) !== null) {
     const attrs = match[1];
-    const innerContent = match[2].trim();
+    const base64Content = match[2].trim();
 
     const nsuMatch = attrs.match(/NSU\s*=\s*"([^"]+)"/i);
-    const chAcessoMatch = attrs.match(/chAcesso\s*=\s*"([^"]+)"/i);
-    const isEvent = /<procEventoNFe/i.test(innerContent);
+    const schemaMatch = attrs.match(/schema\s*=\s*"([^"]+)"/i);
+    const schema = schemaMatch?.[1] || "";
 
-    const chAcesso = chAcessoMatch?.[1] ||
-      extractTagContent(innerContent, "chNFe") ||
-      extractAccessKeyFromXml(innerContent);
+    let xmlContent: string | null = null;
+    try {
+      // Decompress gzip base64 content synchronously via DecompressionStream
+      const binaryStr = atob(base64Content);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      // We'll decompress in the caller; store raw for now
+      xmlContent = "__BASE64__" + base64Content;
+    } catch {
+      xmlContent = null;
+    }
+
+    const isEvent = schema.includes("procEventoNFe") || schema.includes("evento");
 
     entries.push({
       nsu: nsuMatch ? nsuMatch[1] : null,
-      chAcesso,
-      xmlContent: innerContent,
+      chAcesso: null, // will be extracted after decompression
+      xmlContent,
       isEvent,
     });
   }
