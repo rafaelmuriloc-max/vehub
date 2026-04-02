@@ -1,41 +1,51 @@
 
 
-# Notificação sonora e visual para novas mensagens fora do chat
+# Proxy PHP na Hostinger para NF-e (SEF-SC)
 
-## O que será feito
-Criar um hook global que monitora novas mensagens via Realtime e, quando o usuário **não está na página `/chat`**, emite:
-1. Um som de notificação
-2. Um toast no canto inferior direito com o nome do contato e preview da mensagem
+## Problema
+A SEF-SC bloqueia conexões TLS de IPs cloud (Supabase). A edge function `nfe-query` tenta conectar diretamente e recebe `connection reset`.
+
+## Solução
+Criar um proxy PHP na Hostinger que recebe a requisição SOAP + certificado PFX em base64, faz a chamada mTLS para a SEF-SC, e retorna a resposta. A edge function passa a enviar para o proxy ao invés de conectar diretamente.
 
 ## Alterações
 
-### 1. Criar arquivo de som `public/notification.mp3`
-Usar um som curto de notificação gerado via Web Audio API (fallback) ou um arquivo mp3 simples.
+### 1. Script PHP para a Hostinger (arquivo de referência)
+Criar `proxy-nfe.php` que:
+- Recebe POST JSON com `{ soap_body, pfx_base64, pfx_password, url, soap_action }`
+- Valida um token de segurança no header `X-Proxy-Token`
+- Converte PFX para PEM temporário
+- Faz cURL com `CURLOPT_SSLCERT` + `CURLOPT_SSLKEY` para a SEF-SC
+- Retorna `{ status, body, headers }`
+- Limpa arquivos temporários
 
-### 2. Criar hook `src/hooks/useChatNotification.ts`
-- Usa `useLocation()` para saber se está em `/chat`
-- Assina Realtime em `chat_messages` para eventos INSERT
-- Quando recebe mensagem com `message_type` diferente de `text` e `whatsapp_outgoing` (mensagem incoming):
-  - Se `location.pathname !== '/chat'`:
-    - Toca som via `new Audio()` ou Web Audio API
-    - Exibe toast via `sonner` (toast do canto inferior) com nome da conversa e preview do conteúdo
-- Busca o nome da conversa em `chat_conversations` para exibir no toast
+### 2. Alterar `supabase/functions/nfe-query/index.ts`
+- Adicionar constante `NFE_PROXY_URL` lendo de `Deno.env.get("NFE_PROXY_URL")`
+- Na função `requestTextWithMTLS`, **antes** das tentativas diretas, tentar via proxy:
+  - Converter PEM cert/key para PFX (ou enviar os PEMs diretamente)
+  - POST para o proxy com os dados SOAP
+  - Se o proxy responder, retornar o resultado
+  - Se falhar, cair no fluxo direto existente como fallback
 
-### 3. Integrar em `AppLayout.tsx`
-- Chamar `useChatNotification()` dentro do AppLayout para que funcione em todas as páginas (exceto `/chat`)
+### 3. Secrets necessários
+- `NFE_PROXY_URL` — URL do proxy na Hostinger (ex: `https://seudominio.com.br/proxy-nfe.php`)
+- `NFE_PROXY_TOKEN` — token de autenticação do proxy
 
-### Layout do toast
+## Fluxo
 ```text
-┌──────────────────────────┐
-│ 💬 Nova mensagem         │
-│ João Silva: Olá, tudo... │
-└──────────────────────────┘
+Edge Function → POST JSON (SOAP + cert PEM) → Proxy PHP Hostinger
+                                                    ↓
+                                              cURL mTLS → SEF-SC
+                                                    ↓
+                                              Response SOAP ← SEF-SC
+                                                    ↓
+Edge Function ← JSON { status, body } ← Proxy PHP
 ```
 
-## Som
-Usar Web Audio API para gerar um beep curto programaticamente (sem necessidade de arquivo externo), com fallback silencioso se o navegador bloquear autoplay.
-
 ## Arquivos
-- `src/hooks/useChatNotification.ts` (novo, ~50 linhas)
-- `src/components/AppLayout.tsx` (~2 linhas: import + chamada do hook)
+- `.lovable/tmp/proxy-nfe.php` (referência para deploy manual na Hostinger)
+- `supabase/functions/nfe-query/index.ts` (adicionar tentativa via proxy antes do mTLS direto)
+
+## Observação
+O PHP na Hostinger precisa ser hospedado manualmente. O arquivo será gerado como referência no projeto para facilitar o deploy.
 
