@@ -9,7 +9,7 @@ const corsHeaders = {
 
 const SEF_SC_URL = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
 const SEF_SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
-const SOAP_ACTION = `${SEF_SC_NS}/distNFeSC`;
+const SOAP_ACTION = `${SEF_SC_NS}/NfeDownloadContab`;
 const MAX_LOOPS = 20;
 
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
