@@ -42,10 +42,10 @@ function getHandledInfrastructureError(error: unknown): InfrastructureErrorPaylo
   if (normalized.includes("connection reset") || normalized.includes("econnreset")) {
     return {
       code: "REMOTE_CONNECTION_RESET",
-      endpoint: SEF_SC_URL,
+      endpoint: AN_URL,
       error: "connection reset",
       infrastructure: true,
-      message: "A SEF-SC resetou a conexão TLS ao receber a chamada do ambiente cloud do Supabase.",
+      message: "O Ambiente Nacional resetou a conexão TLS.",
       retryable: true,
       success: false,
     };
@@ -54,10 +54,10 @@ function getHandledInfrastructureError(error: unknown): InfrastructureErrorPaylo
   if (normalized.includes("timeout")) {
     return {
       code: "REMOTE_TIMEOUT",
-      endpoint: SEF_SC_URL,
+      endpoint: AN_URL,
       error: "timeout",
       infrastructure: true,
-      message: "A SEF-SC não respondeu dentro do tempo esperado a partir do ambiente cloud do Supabase.",
+      message: "O Ambiente Nacional não respondeu dentro do tempo esperado.",
       retryable: true,
       success: false,
     };
@@ -66,10 +66,10 @@ function getHandledInfrastructureError(error: unknown): InfrastructureErrorPaylo
   if (normalized.includes("refused")) {
     return {
       code: "REMOTE_CONNECTION_REFUSED",
-      endpoint: SEF_SC_URL,
+      endpoint: AN_URL,
       error: "connection refused",
       infrastructure: true,
-      message: "A conexão com a SEF-SC foi recusada pelo host remoto.",
+      message: "A conexão com o Ambiente Nacional foi recusada.",
       retryable: true,
       success: false,
     };
