@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any; annual_month: number | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type DocumentType = { id: string; name: string };
 type Client = { id: string; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
@@ -67,6 +67,7 @@ export default function Obligations() {
     segment_payroll_filter: '' as string,
     segment_tax_regimes: [] as string[],
     segment_city: '',
+    annual_month: '' as string,
   });
   const [manualSelectedClients, setManualSelectedClients] = useState<string[]>([]);
   const [clientSearch, setClientSearch] = useState('');
@@ -134,7 +135,7 @@ export default function Obligations() {
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '', annual_month: '' });
     setManualSelectedClients([]);
     setGenerateStartMonth('');
     setObligationOpen(true);
@@ -152,6 +153,7 @@ export default function Obligations() {
       segment_payroll_filter: filters.payroll_type || (filters.has_payroll ? 'all' : ''),
       segment_tax_regimes: filters.tax_regime || [],
       segment_city: filters.city || '',
+      annual_month: o.annual_month?.toString() || '',
     });
     // Load manual selections
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === o.id).map(cdo => cdo.client_id);
@@ -176,7 +178,8 @@ export default function Obligations() {
       alert_day: obligationForm.alert_day ? Number(obligationForm.alert_day) : null,
       target_day: obligationForm.target_day ? Number(obligationForm.target_day) : null,
       due_day: obligationForm.due_day ? Number(obligationForm.due_day) : null,
-      competence_rule: obligationForm.recurrence === 'mensal' ? obligationForm.competence_rule : 'current',
+      competence_rule: ['mensal', 'anual'].includes(obligationForm.recurrence) ? obligationForm.competence_rule : 'current',
+      annual_month: obligationForm.recurrence === 'anual' && obligationForm.annual_month ? Number(obligationForm.annual_month) : null,
       is_tax: obligationForm.is_tax,
       tax_sphere: obligationForm.is_tax && obligationForm.tax_sphere ? obligationForm.tax_sphere : null,
       assignment_mode: obligationForm.assignment_mode,
@@ -258,7 +261,13 @@ export default function Obligations() {
     const ob = obligations.find(o => o.id === obligationId);
     const rows: any[] = [];
 
-    for (let month = startMonth; month <= 12; month++) {
+    // For annual obligations, only generate for the specific month
+    const monthsToGenerate = ob?.recurrence === 'anual' && ob.annual_month
+      ? [ob.annual_month]
+      : Array.from({ length: 12 - startMonth + 1 }, (_, i) => startMonth + i);
+
+    for (const month of monthsToGenerate) {
+      if (month < startMonth) continue;
       const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
       const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
 
@@ -541,6 +550,33 @@ export default function Obligations() {
                 </Select>
                 <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
               </div>
+            )}
+            {obligationForm.recurrence === 'anual' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Mês de referência *</Label>
+                  <Select value={obligationForm.annual_month} onValueChange={v => setObligationForm({ ...obligationForm, annual_month: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
+                    <SelectContent>
+                      {monthNames.map((name, idx) => (
+                        <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Mês em que a obrigação anual deve ser cumprida</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Competência</Label>
+                  <Select value={obligationForm.competence_rule} onValueChange={v => setObligationForm({ ...obligationForm, competence_rule: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="current">Ano atual</SelectItem>
+                      <SelectItem value="previous">Ano anterior (ex: RAIS, DIRF)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Define se a competência se refere ao ano atual ou ao ano anterior</p>
+                </div>
+              </>
             )}
             <div className="flex items-center space-x-3">
               <Switch

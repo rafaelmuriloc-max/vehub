@@ -1021,6 +1021,7 @@ export type Database = {
       obligations: {
         Row: {
           alert_day: number | null
+          annual_month: number | null
           assignment_mode: string
           competence_rule: string
           created_at: string
@@ -1038,6 +1039,7 @@ export type Database = {
         }
         Insert: {
           alert_day?: number | null
+          annual_month?: number | null
           assignment_mode?: string
           competence_rule?: string
           created_at?: string
@@ -1055,6 +1057,7 @@ export type Database = {
         }
         Update: {
           alert_day?: number | null
+          annual_month?: number | null
           assignment_mode?: string
           competence_rule?: string
           created_at?: string

@@ -16,7 +16,7 @@ import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; annual_month: number | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Instance = { id: string; obligation_id: string; client_id: string; reference_month: string; status: string; assigned_to: string | null; due_date: string | null };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null; file_url: string | null; notes: string | null };
@@ -110,7 +110,11 @@ export default function ClientObligationsTab({ clientId }: Props) {
       const toInsert: { obligation_id: string; client_id: string; reference_month: string }[] = [];
 
       for (const { obligation } of linkedObligations) {
-        for (const monthIdx of months) {
+        // For annual obligations, only generate for the specific month
+        const oblMonths = obligation.recurrence === 'anual' && obligation.annual_month
+          ? [obligation.annual_month - 1].filter(m => months.includes(m))
+          : months;
+        for (const monthIdx of oblMonths) {
           const key = monthKey(monthIdx);
           const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === key);
           if (!exists) {
