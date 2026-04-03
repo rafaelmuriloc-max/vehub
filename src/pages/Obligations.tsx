@@ -261,7 +261,13 @@ export default function Obligations() {
     const ob = obligations.find(o => o.id === obligationId);
     const rows: any[] = [];
 
-    for (let month = startMonth; month <= 12; month++) {
+    // For annual obligations, only generate for the specific month
+    const monthsToGenerate = ob?.recurrence === 'anual' && ob.annual_month
+      ? [ob.annual_month]
+      : Array.from({ length: 12 - startMonth + 1 }, (_, i) => startMonth + i);
+
+    for (const month of monthsToGenerate) {
+      if (month < startMonth) continue;
       const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
       const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
 
