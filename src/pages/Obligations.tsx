@@ -139,6 +139,7 @@ export default function Obligations() {
     setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '', annual_month: '' });
     setManualSelectedClients([]);
     setGenerateStartMonth('');
+    setGenerateStartYear('');
     setObligationOpen(true);
   }
   function openEditObligation(o: Obligation) {
