@@ -1,34 +1,46 @@
 
 
-# Geração de obrigações anuais: Ano de início em vez de Mês de início
+# Refatoração visual da listagem de obrigações
 
-## Problema
-Para obrigações anuais, o seletor atual pede "Mês de início" e gera de mês X a dezembro. Mas para anuais (ex: DEFIS), o correto é escolher o **ano-calendário** (ex: 2025), e o sistema gerar uma única instância no mês configurado (`annual_month`, ex: março) do **ano seguinte** (2026), com `reference_month` referente ao ano-calendário escolhido.
+Alteração puramente visual — nenhuma função, estado, hook ou chamada Supabase será modificada. Apenas o JSX e classes CSS da seção de listagem (linhas 416-536) serão reescritos.
 
-## Solução
+## O que muda
 
-### 1. Adicionar estado `generateStartYear` em `Obligations.tsx`
-Novo estado para armazenar o ano selecionado quando a obrigação é anual.
+### 1. Barra de filtros (linha 418-424)
+Manter header existente (título + botão Nova Obrigação). Abaixo, adicionar barra flex horizontal com:
+- Input de busca com ícone Search absoluto à esquerda, estilo customizado (border `#E3E8F2`, radius 10px, focus laranja `#E8710A`)
+- Divider vertical 1px × 28px `#E3E8F2`
+- Selects de filtro (departamento, frequência) com mesma estética
 
-### 2. Alterar UI de geração (linhas 755-788)
-Quando `editingObligation.recurrence === 'anual'`:
-- Trocar o seletor de "Mês de início" por "Ano de início" (ex: 2024, 2025, 2026)
-- Texto descritivo: "Será gerada obrigação DEFIS em **Março/2026** referente ao ano-calendário **2025** para **100** empresa(s)"
+**Nota**: a busca e filtros serão visuais apenas — usarão `useState` local para filtrar `groupedByDept` sem alterar dados ou lógica existente. Dois novos estados locais: `searchTerm` e `filterDept`.
 
-Quando mensal: manter o comportamento atual.
+### 2. Seções por departamento (linhas 429-536)
+Substituir `<Card>` + `<CardHeader>` + `<CardContent>` por:
 
-### 3. Alterar lógica de geração (`generateObligationInstances`, linhas 233-286)
-Para obrigações anuais:
-- Usar o ano selecionado como ano-calendário
-- O `annual_month` define o mês da instância
-- Se `competence_rule === 'previous'`, a instância é gerada no `annual_month` do **ano seguinte** (ano-calendário + 1), com `reference_month` = `{ano-calendário + 1}-{annual_month}-01`
-- Se `competence_rule === 'current'`, a instância é no `annual_month` do **mesmo ano**, com `reference_month` = `{ano}-{annual_month}-01`
-- `due_date` usa o `due_day` no mesmo mês/ano da instância
+**Header da seção**: barra vertical 3px colorida + nome uppercase 12px 600 + pill de contagem
 
-### 4. Também atualizar `ClientObligationsTab.tsx`
-Mesma lógica de geração para a aba de obrigações por cliente — aplicar condição para anuais.
+**Card da seção**: div branco com `border: 1px solid #E3E8F2`, `border-left: 3px solid [cor]`, `border-radius: 14px`, sombra sutil. Sem padding — linhas preenchem.
 
-## Arquivos
-- `src/pages/Obligations.tsx` (~20 linhas alteradas: novo estado, UI condicional, lógica de geração)
-- `src/components/ClientObligationsTab.tsx` (ajuste menor na geração anual)
+Cores: mapa por nome de departamento, com fallback. "Fiscal" → `#6366F1`, "Pessoal" → `#0EA5E9`, outros → `#8B5CF6`, etc.
+
+### 3. Cada linha de obrigação (linhas 440-531)
+Layout flex horizontal com padding `13px 18px`, `border-bottom: 1px solid #E3E8F2`, última sem border. Hover `#F0F3FA`.
+
+Elementos em ordem:
+1. **Chevron** 18×18 com transição rotate(90deg) e cor laranja quando aberto
+2. **Ícone** em caixa 34×34 com fundo `#F0F3FA` e border
+3. **Nome** flex-1, 14px 500, truncate
+4. **Badge frequência** pill outline com fundo `#F0F3FA`
+5. **Badge tipo imposto** (se `is_tax`) pill com fundo `#EEF2FF` cor `#4338CA`
+6. **Badge clientes** com ícone Users
+7. **Grupo de badges prazo** (alert/target/due) com dots coloridos verde/âmbar/vermelho
+8. **Botões ação** (editar/clonar/excluir) — `opacity-0 group-hover:opacity-100` com cores específicas por ação
+
+### 4. Conteúdo accordion expandido (linhas 471-530)
+Fundo gradiente `linear-gradient(to bottom, #F0F3FA, #F5F7FC)`, border-top, padding esquerdo 64px. Grid 3 colunas com labels uppercase 10.5px e valores 13px. Animação max-height 300ms.
+
+A tabela de atividades mantém a mesma estrutura, apenas dentro do novo container.
+
+## Arquivos alterados
+- `src/pages/Obligations.tsx` — apenas o JSX de retorno (linhas ~416-536), adição de 2 estados locais para busca/filtro visual, e constante de cores por departamento
 
