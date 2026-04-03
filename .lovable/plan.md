@@ -1,26 +1,43 @@
 
 
-# Corrigir exibição do nome do remetente nas mensagens
+# Obrigações anuais: mês de referência e competência (ano anterior/atual)
 
 ## Problema
-
-O `senderName` aparece no topo de **todas** as mensagens enviadas pela equipe (outgoing), mas deveria aparecer apenas como **assinatura** nas mensagens enviadas pelo próprio usuário logado. Atualmente, a condição `!isIncoming && senderName` exibe o nome em todas as mensagens não-incoming.
+Obrigações com periodicidade "anual" não permitem escolher em qual mês elas ocorrem, nem se a competência se refere ao ano atual ou ao ano anterior (ex: RAIS, DIRF referem-se ao ano anterior).
 
 ## Solução
 
-Passar uma nova prop `showSenderName` do `MessageArea` para o `MessageBubble`, controlando a exibição baseada em `msg.sender_id === currentUserId`.
+### 1. Migração: adicionar coluna `annual_month` na tabela `obligations`
+```sql
+ALTER TABLE public.obligations ADD COLUMN annual_month integer;
+```
+Armazena o mês (1-12) em que a obrigação anual deve ser gerada. A coluna `competence_rule` já existe e será reutilizada com valores `current` (ano atual) e `previous` (ano anterior).
 
-### Alterações
+### 2. Atualizar `src/pages/Obligations.tsx`
 
-#### `src/components/chat/MessageArea.tsx` (~1 linha)
-- Na renderização do `MessageBubble`, passar `senderName` apenas quando `msg.sender_id === currentUserId`:
+**Form state**: Adicionar `annual_month: ''` ao `obligationForm`.
 
-```tsx
-senderName={msg.sender_id === currentUserId ? msg.sender_name : undefined}
+**Payload de save** (linha 179): Mudar a lógica para salvar `competence_rule` também quando `recurrence === 'anual'`, e salvar `annual_month`:
+```typescript
+competence_rule: ['mensal', 'anual'].includes(obligationForm.recurrence) 
+  ? obligationForm.competence_rule : 'current',
+annual_month: obligationForm.recurrence === 'anual' && obligationForm.annual_month 
+  ? Number(obligationForm.annual_month) : null,
 ```
 
-Isso garante que apenas as mensagens enviadas pelo usuário logado exibam o nome como assinatura. Mensagens de outros membros da equipe e mensagens recebidas não mostrarão o nome.
+**UI do formulário** (após linha 531): Mostrar campos extras quando `recurrence === 'anual'`:
+- Select de "Mês de referência" com os 12 meses
+- Select de "Competência" com opções "Ano atual" e "Ano anterior"
+
+**Geração de instâncias** (função `generateObligationInstances`): Para obrigações anuais, gerar apenas 1 instância no mês selecionado (em vez de iterar de startMonth a 12).
+
+**openEditObligation**: Carregar `annual_month` do objeto da obrigação.
+
+### 3. Atualizar geração no `ClientObligationsTab.tsx` e `CalendarView.tsx`
+Ajustar a lógica de geração/exibição para respeitar `annual_month` em obrigações anuais (gerar apenas no mês correto).
 
 ## Arquivos
-- `src/components/chat/MessageArea.tsx` (1 linha alterada)
+- Migration: `ALTER TABLE obligations ADD COLUMN annual_month integer`
+- `src/pages/Obligations.tsx` (~30 linhas alteradas)
+- `src/components/ClientObligationsTab.tsx` (ajuste menor na geração)
 
