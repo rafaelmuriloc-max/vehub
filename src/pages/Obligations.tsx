@@ -74,6 +74,7 @@ export default function Obligations() {
 
   // Generation state
   const [generateStartMonth, setGenerateStartMonth] = useState('');
+  const [generateStartYear, setGenerateStartYear] = useState('');
   const [generating, setGenerating] = useState(false);
 
   const [activityOpen, setActivityOpen] = useState(false);
@@ -138,6 +139,7 @@ export default function Obligations() {
     setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '', annual_month: '' });
     setManualSelectedClients([]);
     setGenerateStartMonth('');
+    setGenerateStartYear('');
     setObligationOpen(true);
   }
   function openEditObligation(o: Obligation) {
@@ -159,6 +161,7 @@ export default function Obligations() {
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === o.id).map(cdo => cdo.client_id);
     setManualSelectedClients(linked);
     setGenerateStartMonth('');
+    setGenerateStartYear('');
     setObligationOpen(true);
   }
 
@@ -231,15 +234,18 @@ export default function Obligations() {
   }
 
   async function generateObligationInstances(obligationId: string) {
-    if (!generateStartMonth) return;
-    const startMonth = Number(generateStartMonth);
-    const year = new Date().getFullYear();
+    const ob = obligations.find(o => o.id === obligationId);
+    const isAnnual = ob?.recurrence === 'anual';
+
+    if (isAnnual) {
+      if (!generateStartYear) return;
+    } else {
+      if (!generateStartMonth) return;
+    }
 
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === obligationId);
-    // If we just saved, use segmentPreviewClients
     let clientIds = linked.map(cdo => cdo.client_id);
     if (clientIds.length === 0) {
-      // Fallback to current preview
       clientIds = segmentPreviewClients.map(c => c.id);
     }
 
@@ -250,7 +256,6 @@ export default function Obligations() {
 
     setGenerating(true);
 
-    // Get existing instances to avoid duplicates
     const { data: existing } = await supabase
       .from('obligation_instances')
       .select('client_id, reference_month')
@@ -258,18 +263,15 @@ export default function Obligations() {
 
     const existingSet = new Set((existing || []).map(e => `${e.client_id}_${e.reference_month}`));
 
-    const ob = obligations.find(o => o.id === obligationId);
     const rows: any[] = [];
 
-    // For annual obligations, only generate for the specific month
-    const monthsToGenerate = ob?.recurrence === 'anual' && ob.annual_month
-      ? [ob.annual_month]
-      : Array.from({ length: 12 - startMonth + 1 }, (_, i) => startMonth + i);
-
-    for (const month of monthsToGenerate) {
-      if (month < startMonth) continue;
-      const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
-      const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+    if (isAnnual && ob.annual_month) {
+      const calendarYear = Number(generateStartYear);
+      // If competence is 'previous', the obligation is delivered in the NEXT year
+      const instanceYear = ob.competence_rule === 'previous' ? calendarYear + 1 : calendarYear;
+      const month = ob.annual_month;
+      const refDate = `${instanceYear}-${String(month).padStart(2, '0')}-01`;
+      const dueDate = ob.due_day ? `${instanceYear}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
 
       for (const clientId of clientIds) {
         const key = `${clientId}_${refDate}`;
@@ -281,6 +283,28 @@ export default function Obligations() {
             due_date: dueDate,
             status: 'pending',
           });
+        }
+      }
+    } else {
+      const startMonth = Number(generateStartMonth);
+      const year = new Date().getFullYear();
+      const monthsToGenerate = Array.from({ length: 12 - startMonth + 1 }, (_, i) => startMonth + i);
+
+      for (const month of monthsToGenerate) {
+        const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+
+        for (const clientId of clientIds) {
+          const key = `${clientId}_${refDate}`;
+          if (!existingSet.has(key)) {
+            rows.push({
+              obligation_id: obligationId,
+              client_id: clientId,
+              reference_month: refDate,
+              due_date: dueDate,
+              status: 'pending',
+            });
+          }
         }
       }
     }
@@ -758,26 +782,52 @@ export default function Obligations() {
                   <Label className="text-base font-semibold">Gerar Obrigações</Label>
                 </div>
                 <div className="rounded-lg border p-3 space-y-3">
-                  <div className="space-y-2">
-                    <Label>Mês de início</Label>
-                    <Select value={generateStartMonth} onValueChange={setGenerateStartMonth}>
-                      <SelectTrigger><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
-                      <SelectContent>
-                        {monthNames.map((name, i) => (
-                          <SelectItem key={i} value={String(i + 1)}>{name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {generateStartMonth && (
-                    <p className="text-sm text-muted-foreground">
-                      Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)
-                    </p>
+                  {editingObligation.recurrence === 'anual' ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Ano de início (ano-calendário)</Label>
+                        <Select value={generateStartYear} onValueChange={setGenerateStartYear}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o ano" /></SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {generateStartYear && editingObligation.annual_month && (
+                        <p className="text-sm text-muted-foreground">
+                          Será gerada obrigação <strong>{editingObligation.name}</strong> em{' '}
+                          <strong>{monthNames[editingObligation.annual_month - 1]}/{editingObligation.competence_rule === 'previous' ? Number(generateStartYear) + 1 : generateStartYear}</strong>{' '}
+                          referente ao ano-calendário <strong>{generateStartYear}</strong> para{' '}
+                          <strong>{segmentPreviewClients.length}</strong> empresa(s)
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Mês de início</Label>
+                        <Select value={generateStartMonth} onValueChange={setGenerateStartMonth}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
+                          <SelectContent>
+                            {monthNames.map((name, i) => (
+                              <SelectItem key={i} value={String(i + 1)}>{name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {generateStartMonth && (
+                        <p className="text-sm text-muted-foreground">
+                          Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)
+                        </p>
+                      )}
+                    </>
                   )}
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={!generateStartMonth || generating}
+                    disabled={editingObligation.recurrence === 'anual' ? (!generateStartYear || generating) : (!generateStartMonth || generating)}
                     onClick={() => generateObligationInstances(editingObligation.id)}
                     className="w-full"
                   >
