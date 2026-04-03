@@ -153,6 +153,7 @@ export default function Obligations() {
       segment_payroll_filter: filters.payroll_type || (filters.has_payroll ? 'all' : ''),
       segment_tax_regimes: filters.tax_regime || [],
       segment_city: filters.city || '',
+      annual_month: o.annual_month?.toString() || '',
     });
     // Load manual selections
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === o.id).map(cdo => cdo.client_id);
