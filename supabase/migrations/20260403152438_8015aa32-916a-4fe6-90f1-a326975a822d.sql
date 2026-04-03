@@ -1,0 +1,1 @@
+ALTER TABLE public.obligations ADD COLUMN annual_month integer;
