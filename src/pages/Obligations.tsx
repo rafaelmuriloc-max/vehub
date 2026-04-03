@@ -161,6 +161,7 @@ export default function Obligations() {
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === o.id).map(cdo => cdo.client_id);
     setManualSelectedClients(linked);
     setGenerateStartMonth('');
+    setGenerateStartYear('');
     setObligationOpen(true);
   }
 
