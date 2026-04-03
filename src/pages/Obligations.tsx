@@ -74,6 +74,7 @@ export default function Obligations() {
 
   // Generation state
   const [generateStartMonth, setGenerateStartMonth] = useState('');
+  const [generateStartYear, setGenerateStartYear] = useState('');
   const [generating, setGenerating] = useState(false);
 
   const [activityOpen, setActivityOpen] = useState(false);
