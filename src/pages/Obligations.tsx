@@ -416,9 +416,6 @@ export default function Obligations() {
     return clientDeptObligations.filter(cdo => cdo.obligation_id === obligationId).length;
   }
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterDept, setFilterDept] = useState('all');
-  const [filterFreq, setFilterFreq] = useState('all');
 
   const deptColorMap: Record<string, string> = {};
   const defaultColors = ['#6366F1', '#0EA5E9', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444'];
