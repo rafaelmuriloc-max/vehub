@@ -413,6 +413,31 @@ export default function Obligations() {
     return clientDeptObligations.filter(cdo => cdo.obligation_id === obligationId).length;
   }
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDept, setFilterDept] = useState('all');
+  const [filterFreq, setFilterFreq] = useState('all');
+
+  const deptColorMap: Record<string, string> = {};
+  const defaultColors = ['#6366F1', '#0EA5E9', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444'];
+  departments.forEach((d, i) => {
+    const name = d.name.toLowerCase();
+    if (name.includes('fiscal')) deptColorMap[d.id] = '#6366F1';
+    else if (name.includes('pessoal')) deptColorMap[d.id] = '#0EA5E9';
+    else deptColorMap[d.id] = defaultColors[i % defaultColors.length];
+  });
+
+  const filteredGrouped = groupedByDept
+    .filter(g => filterDept === 'all' || g.dept.id === filterDept)
+    .map(g => ({
+      ...g,
+      items: g.items.filter(ob => {
+        if (searchTerm && !ob.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+        if (filterFreq !== 'all' && ob.recurrence !== filterFreq) return false;
+        return true;
+      }),
+    }))
+    .filter(g => g.items.length > 0);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -423,117 +448,236 @@ export default function Obligations() {
         {admin && <Button onClick={openNewObligation} className="w-full sm:w-auto"><Plus className="h-4 w-4 mr-2" />Nova Obrigação</Button>}
       </div>
 
-      {groupedByDept.length === 0 && (
-        <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhuma obrigação cadastrada.</CardContent></Card>
+      {/* Filter bar */}
+      <div className="flex items-center gap-[10px] flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-[320px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#94A3B8' }} />
+          <input
+            type="text"
+            placeholder="Buscar obrigação..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full h-10 pl-9 pr-3 text-sm bg-white rounded-[10px] outline-none transition-all"
+            style={{ border: '1px solid #E3E8F2' }}
+            onFocus={e => { e.currentTarget.style.borderColor = '#E8710A'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(232,113,10,.12)'; }}
+            onBlur={e => { e.currentTarget.style.borderColor = '#E3E8F2'; e.currentTarget.style.boxShadow = 'none'; }}
+          />
+        </div>
+        <div style={{ width: 1, height: 28, background: '#E3E8F2' }} />
+        <select
+          value={filterDept}
+          onChange={e => setFilterDept(e.target.value)}
+          className="h-10 px-3 text-sm bg-white rounded-[10px] outline-none min-w-[150px] appearance-none cursor-pointer"
+          style={{ border: '1px solid #E3E8F2', color: '#64748B' }}
+        >
+          <option value="all">Todos os deptos</option>
+          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+        <select
+          value={filterFreq}
+          onChange={e => setFilterFreq(e.target.value)}
+          className="h-10 px-3 text-sm bg-white rounded-[10px] outline-none min-w-[150px] appearance-none cursor-pointer"
+          style={{ border: '1px solid #E3E8F2', color: '#64748B' }}
+        >
+          <option value="all">Todas frequências</option>
+          <option value="diaria">Diária</option>
+          <option value="semanal">Semanal</option>
+          <option value="quinzenal">Quinzenal</option>
+          <option value="mensal">Mensal</option>
+          <option value="anual">Anual</option>
+        </select>
+      </div>
+
+      {filteredGrouped.length === 0 && (
+        <div className="rounded-[14px] bg-white py-8 text-center text-sm" style={{ border: '1px solid #E3E8F2', color: '#94A3B8' }}>Nenhuma obrigação encontrada.</div>
       )}
-      {groupedByDept.map(({ dept, items }) => (
-        <Card key={dept.id}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">{dept.name}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {items.map(ob => {
-              const isExpanded = expandedObligation === ob.id;
-              const obActivities = activities.filter(a => a.obligation_id === ob.id);
-              const linkedCount = getLinkedCount(ob.id);
-              return (
-                <div key={ob.id} className="border rounded-lg">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2 cursor-pointer hover:bg-muted/50" onClick={() => setExpandedObligation(isExpanded ? null : ob.id)}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                      <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="font-medium">{ob.name}</span>
-                      <div className="flex flex-wrap gap-1">
-                        <Badge variant="outline">{ob.recurrence}</Badge>
-                        {ob.is_tax && (
-                          <Badge className="bg-blue-600 text-white border-0">
-                            Imposto{ob.tax_sphere ? ` - ${ob.tax_sphere.charAt(0).toUpperCase() + ob.tax_sphere.slice(1)}` : ''}
-                          </Badge>
+
+      {filteredGrouped.map(({ dept, items }) => {
+        const color = deptColorMap[dept.id] || '#6366F1';
+        return (
+          <div key={dept.id} className="space-y-2">
+            {/* Section header */}
+            <div className="flex items-center gap-2">
+              <div style={{ width: 3, height: 16, background: color, borderRadius: 99 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.9px', color: '#64748B', textTransform: 'uppercase' as const }}>{dept.name}</span>
+              <span className="inline-flex items-center justify-center px-2 py-0.5 text-[11px]" style={{ background: '#F0F3FA', border: '1px solid #E3E8F2', borderRadius: 99, color: '#64748B' }}>{items.length}</span>
+            </div>
+            {/* Section card */}
+            <div className="overflow-hidden" style={{ background: 'white', border: '1px solid #E3E8F2', borderLeft: `3px solid ${color}`, borderRadius: 14, boxShadow: '0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04)' }}>
+              {items.map((ob, obIdx) => {
+                const isExpanded = expandedObligation === ob.id;
+                const obActivities = activities.filter(a => a.obligation_id === ob.id);
+                const linkedCount = getLinkedCount(ob.id);
+                const isLast = obIdx === items.length - 1;
+                return (
+                  <div key={ob.id}>
+                    {/* Obligation row */}
+                    <div
+                      className="group flex items-center gap-[10px] cursor-pointer transition-colors duration-[120ms]"
+                      style={{ padding: '13px 18px', borderBottom: isLast && !isExpanded ? 'none' : '1px solid #E3E8F2' }}
+                      onClick={() => setExpandedObligation(isExpanded ? null : ob.id)}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F0F3FA'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                    >
+                      {/* 1. Chevron */}
+                      <ChevronRight
+                        className="shrink-0 transition-transform duration-300"
+                        style={{
+                          width: 18, height: 18,
+                          color: isExpanded ? '#E8710A' : '#94A3B8',
+                          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                          transitionTimingFunction: 'cubic-bezier(.34,1.56,.64,1)',
+                        }}
+                      />
+                      {/* 2. Icon box */}
+                      <div className="shrink-0 flex items-center justify-center group-hover:bg-white transition-colors" style={{ width: 34, height: 34, background: '#F0F3FA', border: '1px solid #E3E8F2', borderRadius: 6 }}>
+                        <ClipboardList style={{ width: 14, height: 14, color: '#94A3B8' }} />
+                      </div>
+                      {/* 3. Name */}
+                      <span className="flex-1 truncate" style={{ fontSize: 14, fontWeight: 500, color: '#0F172A' }}>{ob.name}</span>
+                      {/* 4. Badge frequência */}
+                      <span className="hidden sm:inline-flex shrink-0 items-center" style={{ background: '#F0F3FA', border: '1px solid #E3E8F2', color: '#64748B', fontSize: 11, padding: '4px 10px', borderRadius: 99 }}>{ob.recurrence}</span>
+                      {/* 5. Badge tipo imposto */}
+                      {ob.is_tax && (
+                        <span className="hidden sm:inline-flex shrink-0 items-center" style={{ background: '#EEF2FF', color: '#4338CA', fontSize: 11.5, padding: '4px 10px', borderRadius: 99 }}>
+                          Imposto{ob.tax_sphere ? ` ${ob.tax_sphere.charAt(0).toUpperCase() + ob.tax_sphere.slice(1)}` : ''}
+                        </span>
+                      )}
+                      {/* 6. Badge clientes */}
+                      {linkedCount > 0 && (
+                        <span className="hidden sm:inline-flex shrink-0 items-center gap-1" style={{ background: '#F0F3FA', border: '1px solid #E3E8F2', color: '#64748B', fontSize: 11, padding: '4px 10px', borderRadius: 99 }}>
+                          <Users style={{ width: 11, height: 11 }} />{linkedCount}
+                        </span>
+                      )}
+                      {/* 7. Badges prazo */}
+                      <div className="hidden md:flex items-center gap-[5px] shrink-0">
+                        {ob.alert_day && (
+                          <span className="inline-flex items-center gap-1" style={{ background: '#ECFDF5', color: '#065F46', fontSize: 11, padding: '4px 10px', borderRadius: 99 }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />D{ob.alert_day}
+                          </span>
                         )}
-                        {linkedCount > 0 && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Users className="h-3 w-3" />{linkedCount}
-                          </Badge>
+                        {ob.target_day && (
+                          <span className="inline-flex items-center gap-1" style={{ background: '#FFFBEB', color: '#92400E', fontSize: 11, padding: '4px 10px', borderRadius: 99 }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} />D{ob.target_day}
+                          </span>
                         )}
-                        {ob.alert_day && <Badge className="bg-green-500 text-white border-0">🟢 D{ob.alert_day}</Badge>}
-                        {ob.target_day && <Badge className="bg-orange-500 text-white border-0">🟠 D{ob.target_day}</Badge>}
-                        {ob.due_day && <Badge className="bg-red-500 text-white border-0">🔴 D{ob.due_day}</Badge>}
+                        {ob.due_day && (
+                          <span className="inline-flex items-center gap-1" style={{ background: '#FEF2F2', color: '#991B1B', fontSize: 11, padding: '4px 10px', borderRadius: 99 }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} />D{ob.due_day}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                    {admin && (
-                      <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                        <Button size="icon" variant="ghost" onClick={() => openEditObligation(ob)}><Pencil className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => cloneObligation(ob)} title="Clonar"><Copy className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => deleteObligation(ob.id)}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    )}
-                  </div>
-                  {isExpanded && (
-                    <div className="border-t p-3 space-y-3">
-                      {ob.description && <p className="text-sm text-muted-foreground">{ob.description}</p>}
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold">Atividades ({obActivities.length})</h4>
-                        {admin && <Button size="sm" variant="outline" onClick={() => openNewActivity(ob.id)}><Plus className="h-3 w-3 mr-1" />Atividade</Button>}
-                      </div>
-                      {obActivities.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nenhuma atividade cadastrada.</p>
-                      ) : (
-                        <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-8">#</TableHead>
-                              <TableHead>Título</TableHead>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead className="hidden md:table-cell">Tipo Doc.</TableHead>
-                              <TableHead className="hidden md:table-cell">Descrição</TableHead>
-                              {admin && <TableHead className="w-20">Ações</TableHead>}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {obActivities.map((act, i) => (
-                              <TableRow key={act.id}>
-                                <TableCell>{i + 1}</TableCell>
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    {act.title}
-                                    {act.auto_start && (
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary">
-                                        <Zap className="h-3 w-3 mr-0.5" />Auto
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-1">
-                                    {activityTypeIcons[act.type]}
-                                    <span className="text-sm">{activityTypeLabels[act.type]}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="hidden md:table-cell text-sm">{getDocTypeName(act.document_type_id) || '—'}</TableCell>
-                                <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{act.description || '—'}</TableCell>
-                                {admin && (
-                                  <TableCell>
-                                    <div className="flex gap-1">
-                                      <Button size="icon" variant="ghost" onClick={() => openEditActivity(act)}><Pencil className="h-3 w-3" /></Button>
-                                      <Button size="icon" variant="ghost" onClick={() => deleteActivity(act.id)}><Trash2 className="h-3 w-3" /></Button>
-                                    </div>
-                                  </TableCell>
-                                )}
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                      {/* 8. Action buttons */}
+                      {admin && (
+                        <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150" onClick={e => e.stopPropagation()}>
+                          <button
+                            className="flex items-center justify-center rounded-[6px] transition-colors"
+                            style={{ width: 30, height: 30 }}
+                            onClick={() => openEditObligation(ob)}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#ECFDF5'; (e.currentTarget as HTMLElement).style.color = '#065F46'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = ''; }}
+                          ><Pencil style={{ width: 14, height: 14 }} /></button>
+                          <button
+                            className="flex items-center justify-center rounded-[6px] transition-colors"
+                            style={{ width: 30, height: 30 }}
+                            onClick={() => cloneObligation(ob)}
+                            title="Clonar"
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#EEF2FF'; (e.currentTarget as HTMLElement).style.color = '#4338CA'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = ''; }}
+                          ><Copy style={{ width: 14, height: 14 }} /></button>
+                          <button
+                            className="flex items-center justify-center rounded-[6px] transition-colors"
+                            style={{ width: 30, height: 30 }}
+                            onClick={() => deleteObligation(ob.id)}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#FEF2F2'; (e.currentTarget as HTMLElement).style.color = '#991B1B'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = ''; }}
+                          ><Trash2 style={{ width: 14, height: 14 }} /></button>
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      ))}
+                    {/* Expanded accordion content */}
+                    {isExpanded && (
+                      <div style={{ background: 'linear-gradient(to bottom, #F0F3FA, #F5F7FC)', borderTop: '1px solid #E3E8F2', padding: '16px 20px 16px 64px' }}>
+                        {ob.description && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                            <div>
+                              <div style={{ fontSize: 10.5, textTransform: 'uppercase' as const, letterSpacing: '.6px', color: '#94A3B8', fontWeight: 500, marginBottom: 4 }}>Descrição</div>
+                              <div style={{ fontSize: 13, color: '#64748B' }}>{ob.description}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10.5, textTransform: 'uppercase' as const, letterSpacing: '.6px', color: '#94A3B8', fontWeight: 500, marginBottom: 4 }}>Competência</div>
+                              <div style={{ fontSize: 13, color: '#64748B' }}>{ob.competence_rule === 'previous' ? 'Mês/Ano anterior' : 'Mês/Ano atual'}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10.5, textTransform: 'uppercase' as const, letterSpacing: '.6px', color: '#94A3B8', fontWeight: 500, marginBottom: 4 }}>Atribuição</div>
+                              <div style={{ fontSize: 13, color: '#64748B' }}>{ob.assignment_mode === 'all' ? 'Todas as empresas' : ob.assignment_mode === 'segment' ? 'Por segmento' : 'Manual'}</div>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Atividades ({obActivities.length})</h4>
+                          {admin && <Button size="sm" variant="outline" onClick={() => openNewActivity(ob.id)}><Plus className="h-3 w-3 mr-1" />Atividade</Button>}
+                        </div>
+                        {obActivities.length === 0 ? (
+                          <p style={{ fontSize: 13, color: '#94A3B8' }}>Nenhuma atividade cadastrada.</p>
+                        ) : (
+                          <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-8">#</TableHead>
+                                <TableHead>Título</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead className="hidden md:table-cell">Tipo Doc.</TableHead>
+                                <TableHead className="hidden md:table-cell">Descrição</TableHead>
+                                {admin && <TableHead className="w-20">Ações</TableHead>}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {obActivities.map((act, i) => (
+                                <TableRow key={act.id}>
+                                  <TableCell>{i + 1}</TableCell>
+                                  <TableCell className="font-medium">
+                                    <div className="flex items-center gap-2">
+                                      {act.title}
+                                      {act.auto_start && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary">
+                                          <Zap className="h-3 w-3 mr-0.5" />Auto
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      {activityTypeIcons[act.type]}
+                                      <span className="text-sm">{activityTypeLabels[act.type]}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="hidden md:table-cell text-sm">{getDocTypeName(act.document_type_id) || '—'}</TableCell>
+                                  <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{act.description || '—'}</TableCell>
+                                  {admin && (
+                                    <TableCell>
+                                      <div className="flex gap-1">
+                                        <Button size="icon" variant="ghost" onClick={() => openEditActivity(act)}><Pencil className="h-3 w-3" /></Button>
+                                        <Button size="icon" variant="ghost" onClick={() => deleteActivity(act.id)}><Trash2 className="h-3 w-3" /></Button>
+                                      </div>
+                                    </TableCell>
+                                  )}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
 
       {/* Obligation Dialog */}
       <Dialog open={obligationOpen} onOpenChange={setObligationOpen}>
