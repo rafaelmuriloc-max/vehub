@@ -782,26 +782,52 @@ export default function Obligations() {
                   <Label className="text-base font-semibold">Gerar Obrigações</Label>
                 </div>
                 <div className="rounded-lg border p-3 space-y-3">
-                  <div className="space-y-2">
-                    <Label>Mês de início</Label>
-                    <Select value={generateStartMonth} onValueChange={setGenerateStartMonth}>
-                      <SelectTrigger><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
-                      <SelectContent>
-                        {monthNames.map((name, i) => (
-                          <SelectItem key={i} value={String(i + 1)}>{name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {generateStartMonth && (
-                    <p className="text-sm text-muted-foreground">
-                      Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)
-                    </p>
+                  {editingObligation.recurrence === 'anual' ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Ano de início (ano-calendário)</Label>
+                        <Select value={generateStartYear} onValueChange={setGenerateStartYear}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o ano" /></SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {generateStartYear && editingObligation.annual_month && (
+                        <p className="text-sm text-muted-foreground">
+                          Será gerada obrigação <strong>{editingObligation.name}</strong> em{' '}
+                          <strong>{monthNames[editingObligation.annual_month - 1]}/{editingObligation.competence_rule === 'previous' ? Number(generateStartYear) + 1 : generateStartYear}</strong>{' '}
+                          referente ao ano-calendário <strong>{generateStartYear}</strong> para{' '}
+                          <strong>{segmentPreviewClients.length}</strong> empresa(s)
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Mês de início</Label>
+                        <Select value={generateStartMonth} onValueChange={setGenerateStartMonth}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
+                          <SelectContent>
+                            {monthNames.map((name, i) => (
+                              <SelectItem key={i} value={String(i + 1)}>{name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {generateStartMonth && (
+                        <p className="text-sm text-muted-foreground">
+                          Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)
+                        </p>
+                      )}
+                    </>
                   )}
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={!generateStartMonth || generating}
+                    disabled={editingObligation.recurrence === 'anual' ? (!generateStartYear || generating) : (!generateStartMonth || generating)}
                     onClick={() => generateObligationInstances(editingObligation.id)}
                     className="w-full"
                   >
