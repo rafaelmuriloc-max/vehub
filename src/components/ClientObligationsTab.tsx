@@ -110,15 +110,24 @@ export default function ClientObligationsTab({ clientId }: Props) {
       const toInsert: { obligation_id: string; client_id: string; reference_month: string }[] = [];
 
       for (const { obligation } of linkedObligations) {
-        // For annual obligations, only generate for the specific month
-        const oblMonths = obligation.recurrence === 'anual' && obligation.annual_month
-          ? [obligation.annual_month - 1].filter(m => months.includes(m))
-          : months;
-        for (const monthIdx of oblMonths) {
-          const key = monthKey(monthIdx);
-          const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === key);
+        if (obligation.recurrence === 'anual' && obligation.annual_month) {
+          // For annual: generate for current calendar year
+          // If competence_rule is 'previous', instance goes in next year's annual_month
+          const instanceYear = obligation.competence_rule === 'previous' ? currentYear + 1 : currentYear;
+          const month = obligation.annual_month;
+          const refDate = `${instanceYear}-${String(month).padStart(2, '0')}-01`;
+          const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === refDate);
           if (!exists) {
-            toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: key });
+            toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: refDate });
+          }
+        } else {
+          // Monthly: generate from current month to December
+          for (const monthIdx of months) {
+            const key = monthKey(monthIdx);
+            const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === key);
+            if (!exists) {
+              toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: key });
+            }
           }
         }
       }
