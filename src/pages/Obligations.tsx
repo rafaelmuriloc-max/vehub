@@ -67,6 +67,7 @@ export default function Obligations() {
     segment_payroll_filter: '' as string,
     segment_tax_regimes: [] as string[],
     segment_city: '',
+    annual_month: '' as string,
   });
   const [manualSelectedClients, setManualSelectedClients] = useState<string[]>([]);
   const [clientSearch, setClientSearch] = useState('');
