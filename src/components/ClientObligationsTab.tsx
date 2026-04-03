@@ -110,7 +110,11 @@ export default function ClientObligationsTab({ clientId }: Props) {
       const toInsert: { obligation_id: string; client_id: string; reference_month: string }[] = [];
 
       for (const { obligation } of linkedObligations) {
-        for (const monthIdx of months) {
+        // For annual obligations, only generate for the specific month
+        const oblMonths = obligation.recurrence === 'anual' && obligation.annual_month
+          ? [obligation.annual_month - 1].filter(m => months.includes(m))
+          : months;
+        for (const monthIdx of oblMonths) {
           const key = monthKey(monthIdx);
           const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === key);
           if (!exists) {

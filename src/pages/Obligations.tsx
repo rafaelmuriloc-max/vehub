@@ -551,6 +551,33 @@ export default function Obligations() {
                 <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
               </div>
             )}
+            {obligationForm.recurrence === 'anual' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Mês de referência *</Label>
+                  <Select value={obligationForm.annual_month} onValueChange={v => setObligationForm({ ...obligationForm, annual_month: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
+                    <SelectContent>
+                      {monthNames.map((name, idx) => (
+                        <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Mês em que a obrigação anual deve ser cumprida</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Competência</Label>
+                  <Select value={obligationForm.competence_rule} onValueChange={v => setObligationForm({ ...obligationForm, competence_rule: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="current">Ano atual</SelectItem>
+                      <SelectItem value="previous">Ano anterior (ex: RAIS, DIRF)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Define se a competência se refere ao ano atual ou ao ano anterior</p>
+                </div>
+              </>
+            )}
             <div className="flex items-center space-x-3">
               <Switch
                 checked={obligationForm.is_tax}
