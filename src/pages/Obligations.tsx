@@ -234,15 +234,18 @@ export default function Obligations() {
   }
 
   async function generateObligationInstances(obligationId: string) {
-    if (!generateStartMonth) return;
-    const startMonth = Number(generateStartMonth);
-    const year = new Date().getFullYear();
+    const ob = obligations.find(o => o.id === obligationId);
+    const isAnnual = ob?.recurrence === 'anual';
+
+    if (isAnnual) {
+      if (!generateStartYear) return;
+    } else {
+      if (!generateStartMonth) return;
+    }
 
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === obligationId);
-    // If we just saved, use segmentPreviewClients
     let clientIds = linked.map(cdo => cdo.client_id);
     if (clientIds.length === 0) {
-      // Fallback to current preview
       clientIds = segmentPreviewClients.map(c => c.id);
     }
 
@@ -253,7 +256,6 @@ export default function Obligations() {
 
     setGenerating(true);
 
-    // Get existing instances to avoid duplicates
     const { data: existing } = await supabase
       .from('obligation_instances')
       .select('client_id, reference_month')
@@ -261,18 +263,15 @@ export default function Obligations() {
 
     const existingSet = new Set((existing || []).map(e => `${e.client_id}_${e.reference_month}`));
 
-    const ob = obligations.find(o => o.id === obligationId);
     const rows: any[] = [];
 
-    // For annual obligations, only generate for the specific month
-    const monthsToGenerate = ob?.recurrence === 'anual' && ob.annual_month
-      ? [ob.annual_month]
-      : Array.from({ length: 12 - startMonth + 1 }, (_, i) => startMonth + i);
-
-    for (const month of monthsToGenerate) {
-      if (month < startMonth) continue;
-      const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
-      const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+    if (isAnnual && ob.annual_month) {
+      const calendarYear = Number(generateStartYear);
+      // If competence is 'previous', the obligation is delivered in the NEXT year
+      const instanceYear = ob.competence_rule === 'previous' ? calendarYear + 1 : calendarYear;
+      const month = ob.annual_month;
+      const refDate = `${instanceYear}-${String(month).padStart(2, '0')}-01`;
+      const dueDate = ob.due_day ? `${instanceYear}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
 
       for (const clientId of clientIds) {
         const key = `${clientId}_${refDate}`;
@@ -284,6 +283,28 @@ export default function Obligations() {
             due_date: dueDate,
             status: 'pending',
           });
+        }
+      }
+    } else {
+      const startMonth = Number(generateStartMonth);
+      const year = new Date().getFullYear();
+      const monthsToGenerate = Array.from({ length: 12 - startMonth + 1 }, (_, i) => startMonth + i);
+
+      for (const month of monthsToGenerate) {
+        const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+
+        for (const clientId of clientIds) {
+          const key = `${clientId}_${refDate}`;
+          if (!existingSet.has(key)) {
+            rows.push({
+              obligation_id: obligationId,
+              client_id: clientId,
+              reference_month: refDate,
+              due_date: dueDate,
+              status: 'pending',
+            });
+          }
         }
       }
     }
