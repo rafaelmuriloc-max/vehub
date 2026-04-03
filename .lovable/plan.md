@@ -1,43 +1,34 @@
 
 
-# Obrigações anuais: mês de referência e competência (ano anterior/atual)
+# Geração de obrigações anuais: Ano de início em vez de Mês de início
 
 ## Problema
-Obrigações com periodicidade "anual" não permitem escolher em qual mês elas ocorrem, nem se a competência se refere ao ano atual ou ao ano anterior (ex: RAIS, DIRF referem-se ao ano anterior).
+Para obrigações anuais, o seletor atual pede "Mês de início" e gera de mês X a dezembro. Mas para anuais (ex: DEFIS), o correto é escolher o **ano-calendário** (ex: 2025), e o sistema gerar uma única instância no mês configurado (`annual_month`, ex: março) do **ano seguinte** (2026), com `reference_month` referente ao ano-calendário escolhido.
 
 ## Solução
 
-### 1. Migração: adicionar coluna `annual_month` na tabela `obligations`
-```sql
-ALTER TABLE public.obligations ADD COLUMN annual_month integer;
-```
-Armazena o mês (1-12) em que a obrigação anual deve ser gerada. A coluna `competence_rule` já existe e será reutilizada com valores `current` (ano atual) e `previous` (ano anterior).
+### 1. Adicionar estado `generateStartYear` em `Obligations.tsx`
+Novo estado para armazenar o ano selecionado quando a obrigação é anual.
 
-### 2. Atualizar `src/pages/Obligations.tsx`
+### 2. Alterar UI de geração (linhas 755-788)
+Quando `editingObligation.recurrence === 'anual'`:
+- Trocar o seletor de "Mês de início" por "Ano de início" (ex: 2024, 2025, 2026)
+- Texto descritivo: "Será gerada obrigação DEFIS em **Março/2026** referente ao ano-calendário **2025** para **100** empresa(s)"
 
-**Form state**: Adicionar `annual_month: ''` ao `obligationForm`.
+Quando mensal: manter o comportamento atual.
 
-**Payload de save** (linha 179): Mudar a lógica para salvar `competence_rule` também quando `recurrence === 'anual'`, e salvar `annual_month`:
-```typescript
-competence_rule: ['mensal', 'anual'].includes(obligationForm.recurrence) 
-  ? obligationForm.competence_rule : 'current',
-annual_month: obligationForm.recurrence === 'anual' && obligationForm.annual_month 
-  ? Number(obligationForm.annual_month) : null,
-```
+### 3. Alterar lógica de geração (`generateObligationInstances`, linhas 233-286)
+Para obrigações anuais:
+- Usar o ano selecionado como ano-calendário
+- O `annual_month` define o mês da instância
+- Se `competence_rule === 'previous'`, a instância é gerada no `annual_month` do **ano seguinte** (ano-calendário + 1), com `reference_month` = `{ano-calendário + 1}-{annual_month}-01`
+- Se `competence_rule === 'current'`, a instância é no `annual_month` do **mesmo ano**, com `reference_month` = `{ano}-{annual_month}-01`
+- `due_date` usa o `due_day` no mesmo mês/ano da instância
 
-**UI do formulário** (após linha 531): Mostrar campos extras quando `recurrence === 'anual'`:
-- Select de "Mês de referência" com os 12 meses
-- Select de "Competência" com opções "Ano atual" e "Ano anterior"
-
-**Geração de instâncias** (função `generateObligationInstances`): Para obrigações anuais, gerar apenas 1 instância no mês selecionado (em vez de iterar de startMonth a 12).
-
-**openEditObligation**: Carregar `annual_month` do objeto da obrigação.
-
-### 3. Atualizar geração no `ClientObligationsTab.tsx` e `CalendarView.tsx`
-Ajustar a lógica de geração/exibição para respeitar `annual_month` em obrigações anuais (gerar apenas no mês correto).
+### 4. Também atualizar `ClientObligationsTab.tsx`
+Mesma lógica de geração para a aba de obrigações por cliente — aplicar condição para anuais.
 
 ## Arquivos
-- Migration: `ALTER TABLE obligations ADD COLUMN annual_month integer`
-- `src/pages/Obligations.tsx` (~30 linhas alteradas)
-- `src/components/ClientObligationsTab.tsx` (ajuste menor na geração)
+- `src/pages/Obligations.tsx` (~20 linhas alteradas: novo estado, UI condicional, lógica de geração)
+- `src/components/ClientObligationsTab.tsx` (ajuste menor na geração anual)
 
