@@ -584,7 +584,7 @@ export default function CalendarView() {
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
-                    className={`min-h-[100px] rounded-lg p-1.5 cursor-pointer transition-all duration-200
+                    className={`min-h-[48px] md:min-h-[100px] rounded-lg p-1 md:p-1.5 cursor-pointer transition-all duration-200
                       ${isSelected
                         ? 'bg-primary/15 border-2 border-primary shadow-md'
                         : isToday
