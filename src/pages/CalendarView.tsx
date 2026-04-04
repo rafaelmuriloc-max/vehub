@@ -464,8 +464,8 @@ export default function CalendarView() {
                   <CalendarDays className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-foreground">Calendário</h1>
-                  <p className="text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground">Calendário</h1>
+                  <p className="hidden md:block text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
                 </div>
               </div>
               {activeFilters > 0 && (
