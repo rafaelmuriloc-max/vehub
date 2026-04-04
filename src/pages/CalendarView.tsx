@@ -571,7 +571,7 @@ export default function CalendarView() {
                 <div key={d} className="p-1 md:p-2 text-center text-[10px] md:text-xs font-semibold text-muted-foreground uppercase md:tracking-wider">{d}</div>
               ))}
               {days.map((day, i) => {
-                if (!day) return <div key={i} className="min-h-[48px] md:min-h-[100px] p-1" />;
+                if (!day) return <div key={i} className="min-h-[32px] md:min-h-[100px] p-0.5 md:p-1" />;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
@@ -584,7 +584,7 @@ export default function CalendarView() {
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
-                    className={`min-h-[48px] md:min-h-[100px] rounded-lg p-1 md:p-1.5 cursor-pointer transition-all duration-200
+                    className={`min-h-[32px] md:min-h-[100px] rounded-lg p-0.5 md:p-1.5 cursor-pointer transition-all duration-200
                       ${isSelected
                         ? 'bg-primary/15 border-2 border-primary shadow-md'
                         : isToday
@@ -592,7 +592,7 @@ export default function CalendarView() {
                           : 'border border-border hover:bg-muted/60 hover:shadow-sm'
                       }`}
                   >
-                    <span className={`inline-flex items-center justify-center text-xs font-semibold w-6 h-6 rounded-full
+                    <span className={`inline-flex items-center justify-center text-[10px] md:text-xs font-semibold w-5 h-5 md:w-6 md:h-6 rounded-full
                       ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
                       {day}
                     </span>
@@ -601,7 +601,7 @@ export default function CalendarView() {
                         {/* Mobile: dots only */}
                         <div className="flex flex-wrap gap-0.5 mt-1 md:hidden">
                           {summary.slice(0, 5).map((item, idx) => (
-                            <span key={idx} className={`w-1.5 h-1.5 rounded-full ${typeColor[item.type]}`} />
+                            <span key={idx} className={`w-1 h-1 rounded-full ${typeColor[item.type]}`} />
                           ))}
                           {summary.length > 5 && <span className="text-[8px] text-muted-foreground">+{summary.length - 5}</span>}
                         </div>
