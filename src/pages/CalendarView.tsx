@@ -464,8 +464,8 @@ export default function CalendarView() {
                   <CalendarDays className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-foreground">Calendário</h1>
-                  <p className="text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground">Calendário</h1>
+                  <p className="hidden md:block text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
                 </div>
               </div>
               {activeFilters > 0 && (
@@ -506,7 +506,7 @@ export default function CalendarView() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[320px] p-0" align="start">
+                  <PopoverContent className="w-[calc(100vw-2rem)] md:w-[320px] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Buscar empresa..." />
                       <CommandList className="max-h-[300px]">
@@ -568,10 +568,10 @@ export default function CalendarView() {
           <CardContent>
             <div className="grid grid-cols-7 gap-1">
               {weekdays.map(d => (
-                <div key={d} className="p-2 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">{d}</div>
+                <div key={d} className="p-1 md:p-2 text-center text-[10px] md:text-xs font-semibold text-muted-foreground uppercase md:tracking-wider">{d}</div>
               ))}
               {days.map((day, i) => {
-                if (!day) return <div key={i} className="min-h-[100px] p-1" />;
+                if (!day) return <div key={i} className="min-h-[48px] md:min-h-[100px] p-1" />;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
@@ -584,7 +584,7 @@ export default function CalendarView() {
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
-                    className={`min-h-[100px] rounded-lg p-1.5 cursor-pointer transition-all duration-200
+                    className={`min-h-[48px] md:min-h-[100px] rounded-lg p-1 md:p-1.5 cursor-pointer transition-all duration-200
                       ${isSelected
                         ? 'bg-primary/15 border-2 border-primary shadow-md'
                         : isToday
@@ -597,18 +597,28 @@ export default function CalendarView() {
                       {day}
                     </span>
                     {visible.length > 0 && (
-                      <div className="flex flex-col gap-0.5 mt-1">
-                        {visible.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-1 min-w-0">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeColor[item.type]}`} />
-                            <span className="text-[10px] text-foreground truncate leading-tight">{item.name}</span>
-                            <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{item.count}</span>
-                          </div>
-                        ))}
-                        {remaining > 0 && (
-                          <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
-                        )}
-                      </div>
+                      <>
+                        {/* Mobile: dots only */}
+                        <div className="flex flex-wrap gap-0.5 mt-1 md:hidden">
+                          {summary.slice(0, 5).map((item, idx) => (
+                            <span key={idx} className={`w-1.5 h-1.5 rounded-full ${typeColor[item.type]}`} />
+                          ))}
+                          {summary.length > 5 && <span className="text-[8px] text-muted-foreground">+{summary.length - 5}</span>}
+                        </div>
+                        {/* Desktop: full text */}
+                        <div className="hidden md:flex flex-col gap-0.5 mt-1">
+                          {visible.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-1 min-w-0">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeColor[item.type]}`} />
+                              <span className="text-[10px] text-foreground truncate leading-tight">{item.name}</span>
+                              <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{item.count}</span>
+                            </div>
+                          ))}
+                          {remaining > 0 && (
+                            <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 );
@@ -616,7 +626,7 @@ export default function CalendarView() {
             </div>
 
             {/* Legend */}
-            <div className="flex gap-5 mt-4 px-3 py-2 rounded-md bg-muted/40 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-3 md:gap-5 mt-4 px-3 py-2 rounded-md bg-muted/40 text-[10px] md:text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
