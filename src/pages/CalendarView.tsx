@@ -626,7 +626,7 @@ export default function CalendarView() {
             </div>
 
             {/* Legend */}
-            <div className="flex gap-5 mt-4 px-3 py-2 rounded-md bg-muted/40 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-3 md:gap-5 mt-4 px-3 py-2 rounded-md bg-muted/40 text-[10px] md:text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
