@@ -601,7 +601,7 @@ export default function CalendarView() {
                         {/* Mobile: dots only */}
                         <div className="flex flex-wrap gap-0.5 mt-1 md:hidden">
                           {summary.slice(0, 5).map((item, idx) => (
-                            <span key={idx} className={`w-1.5 h-1.5 rounded-full ${typeColor[item.type]}`} />
+                            <span key={idx} className={`w-1 h-1 rounded-full ${typeColor[item.type]}`} />
                           ))}
                           {summary.length > 5 && <span className="text-[8px] text-muted-foreground">+{summary.length - 5}</span>}
                         </div>
