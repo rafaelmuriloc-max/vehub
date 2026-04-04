@@ -568,7 +568,7 @@ export default function CalendarView() {
           <CardContent>
             <div className="grid grid-cols-7 gap-1">
               {weekdays.map(d => (
-                <div key={d} className="p-2 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">{d}</div>
+                <div key={d} className="p-1 md:p-2 text-center text-[10px] md:text-xs font-semibold text-muted-foreground uppercase md:tracking-wider">{d}</div>
               ))}
               {days.map((day, i) => {
                 if (!day) return <div key={i} className="min-h-[100px] p-1" />;
