@@ -1,18 +1,36 @@
 
 
-# A refatoração já foi aplicada no código
+# Adicionar botão de menu (SidebarTrigger) no mobile
 
-Analisei o arquivo `src/pages/Obligations.tsx` e **o código já contém toda a refatoração visual** descrita no plano anterior:
+## Problema
+O `SidebarTrigger` está importado mas **nunca é renderizado** no `AppLayout`. No desktop a sidebar fica visível por padrão, mas no mobile ela fica oculta (offcanvas) e sem nenhum botão para abri-la, tornando a navegação impossível.
 
-- **Barra de filtros** com input de busca, divider vertical e selects estilizados (linhas 451-489)
-- **Headers de departamento** com barra colorida 3px, nome uppercase e pill de contagem (linhas 500-503)
-- **Cards de seção** com `border-left: 3px solid [cor]`, `border-radius: 14px`, sombra sutil (linha 506)
-- **Linhas de obrigação** com chevron animado, icon box 34×34, badges de frequência/imposto/clientes/prazo (linhas 515-596)
-- **Botões de ação** com `opacity-0 group-hover:opacity-100` (linha 572)
-- **Accordion expandido** com fundo gradiente e grid 3 colunas (linha 600)
-- **Estados locais** `searchTerm`, `filterDept`, `filterFreq` para filtragem visual (linhas 84-86)
+## Solução
+Adicionar um header fixo no topo da área de conteúdo que exibe o `SidebarTrigger` (ícone hambúrguer). Esse header ficará visível em todas as telas, mas é especialmente crítico no mobile.
 
-O screenshot que você enviou **já mostra o novo design** — os chevrons, icon boxes, badges coloridos de prazo (D10, D15, D20), pills "Imposto - Federal" e botões de ação são todos elementos do layout refatorado.
+## Alteração
 
-**Ação sugerida**: Recarregue a página (Ctrl+Shift+R / Cmd+Shift+R) para garantir que a versão mais recente está sendo exibida. Se o visual ainda parecer diferente do esperado, me envie um screenshot com indicações do que gostaria de ajustar.
+### `src/components/AppLayout.tsx`
+Adicionar um `<header>` entre o `<AppSidebar />` e o `<main>`, dentro do flex container:
+
+```tsx
+<main className="flex-1 overflow-auto">
+  <header className="sticky top-0 z-10 flex h-12 items-center gap-2 border-b bg-background px-4 md:hidden">
+    <SidebarTrigger />
+    <span className="text-sm font-medium">{pageTitle}</span>
+  </header>
+  <div className="p-6">
+    <Outlet />
+  </div>
+</main>
+```
+
+- `md:hidden` — o header com trigger só aparece em telas < 768px (mobile/tablet)
+- `sticky top-0 z-10` — fica fixo no topo ao rolar
+- Exibe o título da página atual ao lado do ícone
+
+Nenhuma lógica alterada — apenas um elemento visual adicionado.
+
+## Arquivo
+- `src/components/AppLayout.tsx` (~4 linhas adicionadas)
 
