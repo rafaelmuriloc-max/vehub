@@ -592,7 +592,7 @@ export default function CalendarView() {
                           : 'border border-border hover:bg-muted/60 hover:shadow-sm'
                       }`}
                   >
-                    <span className={`inline-flex items-center justify-center text-xs font-semibold w-6 h-6 rounded-full
+                    <span className={`inline-flex items-center justify-center text-[10px] md:text-xs font-semibold w-5 h-5 md:w-6 md:h-6 rounded-full
                       ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
                       {day}
                     </span>
