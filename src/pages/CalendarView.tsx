@@ -597,18 +597,28 @@ export default function CalendarView() {
                       {day}
                     </span>
                     {visible.length > 0 && (
-                      <div className="flex flex-col gap-0.5 mt-1">
-                        {visible.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-1 min-w-0">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeColor[item.type]}`} />
-                            <span className="text-[10px] text-foreground truncate leading-tight">{item.name}</span>
-                            <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{item.count}</span>
-                          </div>
-                        ))}
-                        {remaining > 0 && (
-                          <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
-                        )}
-                      </div>
+                      <>
+                        {/* Mobile: dots only */}
+                        <div className="flex flex-wrap gap-0.5 mt-1 md:hidden">
+                          {summary.slice(0, 5).map((item, idx) => (
+                            <span key={idx} className={`w-1.5 h-1.5 rounded-full ${typeColor[item.type]}`} />
+                          ))}
+                          {summary.length > 5 && <span className="text-[8px] text-muted-foreground">+{summary.length - 5}</span>}
+                        </div>
+                        {/* Desktop: full text */}
+                        <div className="hidden md:flex flex-col gap-0.5 mt-1">
+                          {visible.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-1 min-w-0">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeColor[item.type]}`} />
+                              <span className="text-[10px] text-foreground truncate leading-tight">{item.name}</span>
+                              <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{item.count}</span>
+                            </div>
+                          ))}
+                          {remaining > 0 && (
+                            <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 );
