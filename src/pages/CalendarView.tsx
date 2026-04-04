@@ -56,37 +56,36 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
   const end = Math.min(page * perPage, total);
 
   const getVisiblePages = () => {
-    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    // Mobile: show only current page and adjacent; Desktop: full range
+    if (totalPages <= 3) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | 'ellipsis-start' | 'ellipsis-end')[] = [];
-    pages.push(1);
-    if (page > 3) pages.push('ellipsis-start');
-    const rangeStart = Math.max(2, page - 1);
-    const rangeEnd = Math.min(totalPages - 1, page + 1);
+    const rangeStart = Math.max(1, page - 1);
+    const rangeEnd = Math.min(totalPages, page + 1);
+    if (rangeStart > 1) pages.push('ellipsis-start');
     for (let i = rangeStart; i <= rangeEnd; i++) pages.push(i);
-    if (page < totalPages - 2) pages.push('ellipsis-end');
-    pages.push(totalPages);
+    if (rangeEnd < totalPages) pages.push('ellipsis-end');
     return pages;
   };
 
   return (
-    <div className="flex items-center justify-between mt-4">
-      <span className="text-xs text-muted-foreground">Mostrando {start}-{end} de {total}</span>
+    <div className="flex flex-col items-center gap-2 md:flex-row md:justify-between mt-4">
+      <span className="text-[10px] md:text-xs text-muted-foreground">Mostrando {start}-{end} de {total}</span>
       <Pagination className="mx-0 w-auto">
-        <PaginationContent>
+        <PaginationContent className="gap-0.5 md:gap-1">
           <PaginationItem>
-            <PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) onPageChange(page - 1); }} />
+            <PaginationPrevious href="#" onClick={e => { e.preventDefault(); if (page > 1) onPageChange(page - 1); }} className="gap-0 md:gap-1 px-2 md:pl-2.5 [&>span]:hidden md:[&>span]:inline" />
           </PaginationItem>
-          {getVisiblePages().map((p, idx) =>
+          {getVisiblePages().map((p) =>
             typeof p === 'string' ? (
-              <PaginationItem key={p}><PaginationEllipsis /></PaginationItem>
+              <PaginationItem key={p}><PaginationEllipsis className="w-6 md:w-9" /></PaginationItem>
             ) : (
               <PaginationItem key={p}>
-                <PaginationLink href="#" isActive={p === page} onClick={e => { e.preventDefault(); onPageChange(p); }}>{p}</PaginationLink>
+                <PaginationLink href="#" isActive={p === page} onClick={e => { e.preventDefault(); onPageChange(p); }} className="h-8 w-8 md:h-9 md:w-9 text-xs">{p}</PaginationLink>
               </PaginationItem>
             )
           )}
           <PaginationItem>
-            <PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < totalPages) onPageChange(page + 1); }} />
+            <PaginationNext href="#" onClick={e => { e.preventDefault(); if (page < totalPages) onPageChange(page + 1); }} className="gap-0 md:gap-1 px-2 md:pr-2.5 [&>span]:hidden md:[&>span]:inline" />
           </PaginationItem>
         </PaginationContent>
       </Pagination>
