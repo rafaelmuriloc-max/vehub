@@ -571,7 +571,7 @@ export default function CalendarView() {
                 <div key={d} className="p-1 md:p-2 text-center text-[10px] md:text-xs font-semibold text-muted-foreground uppercase md:tracking-wider">{d}</div>
               ))}
               {days.map((day, i) => {
-                if (!day) return <div key={i} className="min-h-[100px] p-1" />;
+                if (!day) return <div key={i} className="min-h-[48px] md:min-h-[100px] p-1" />;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
