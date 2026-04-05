@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
+import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
@@ -151,6 +152,9 @@ export default function CalendarView() {
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const deptMap = useMemo(() => new Map(departments.map(d => [d.id, d])), [departments]);
 
+  const holidays = useMemo(() => getHolidays(currentDate.getFullYear()), [currentDate]);
+  const holidayMap = useMemo(() => getHolidayMap(currentDate.getFullYear()), [currentDate]);
+
   const events = useMemo(() => {
     const result: CalendarEvent[] = [];
     for (const inst of instances) {
@@ -169,7 +173,8 @@ export default function CalendarView() {
       const m = refDate.getMonth();
       const makeDate = (day: number | null) => {
         if (!day) return null;
-        return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const raw = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        return previousBusinessDay(raw, holidays);
       };
 
       // Calcular competência
@@ -188,7 +193,7 @@ export default function CalendarView() {
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
     }
     return result;
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, holidays]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -574,6 +579,8 @@ export default function CalendarView() {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
+                const isHoliday = holidayMap.has(dateStr);
+                const holidayName = holidayMap.get(dateStr);
                 const summary = getDayObligationSummary(day);
                 const maxVisible = 3;
                 const visible = summary.slice(0, maxVisible);
@@ -583,18 +590,24 @@ export default function CalendarView() {
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
+                    title={isHoliday ? holidayName : undefined}
                     className={`min-h-[32px] md:min-h-[100px] rounded-lg p-0.5 md:p-1.5 cursor-pointer transition-all duration-200
                       ${isSelected
                         ? 'bg-primary/15 border-2 border-primary shadow-md'
                         : isToday
                           ? 'bg-blue-50 border border-blue-400 dark:bg-blue-950 dark:border-blue-500'
-                          : 'border border-border hover:bg-muted/60 hover:shadow-sm'
+                          : isHoliday
+                            ? 'bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600'
+                            : 'border border-border hover:bg-muted/60 hover:shadow-sm'
                       }`}
                   >
                     <span className={`inline-flex items-center justify-center text-[10px] md:text-xs font-semibold w-5 h-5 md:w-6 md:h-6 rounded-full
                       ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
                       {day}
                     </span>
+                    {isHoliday && (
+                      <span className="hidden md:block text-[9px] text-muted-foreground truncate leading-tight mt-0.5">{holidayName}</span>
+                    )}
                     {visible.length > 0 && (
                       <>
                         {/* Mobile: dots only */}
