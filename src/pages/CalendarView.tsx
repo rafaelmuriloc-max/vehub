@@ -152,6 +152,9 @@ export default function CalendarView() {
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const deptMap = useMemo(() => new Map(departments.map(d => [d.id, d])), [departments]);
 
+  const holidays = useMemo(() => getHolidays(currentDate.getFullYear()), [currentDate]);
+  const holidayMap = useMemo(() => getHolidayMap(currentDate.getFullYear()), [currentDate]);
+
   const events = useMemo(() => {
     const result: CalendarEvent[] = [];
     for (const inst of instances) {
@@ -170,7 +173,8 @@ export default function CalendarView() {
       const m = refDate.getMonth();
       const makeDate = (day: number | null) => {
         if (!day) return null;
-        return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const raw = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        return previousBusinessDay(raw, holidays);
       };
 
       // Calcular competência
@@ -189,7 +193,7 @@ export default function CalendarView() {
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
     }
     return result;
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, holidays]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
