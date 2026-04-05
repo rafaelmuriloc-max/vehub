@@ -579,6 +579,8 @@ export default function CalendarView() {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
+                const isHoliday = holidayMap.has(dateStr);
+                const holidayName = holidayMap.get(dateStr);
                 const summary = getDayObligationSummary(day);
                 const maxVisible = 3;
                 const visible = summary.slice(0, maxVisible);
@@ -588,12 +590,15 @@ export default function CalendarView() {
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
+                    title={isHoliday ? holidayName : undefined}
                     className={`min-h-[32px] md:min-h-[100px] rounded-lg p-0.5 md:p-1.5 cursor-pointer transition-all duration-200
                       ${isSelected
                         ? 'bg-primary/15 border-2 border-primary shadow-md'
                         : isToday
                           ? 'bg-blue-50 border border-blue-400 dark:bg-blue-950 dark:border-blue-500'
-                          : 'border border-border hover:bg-muted/60 hover:shadow-sm'
+                          : isHoliday
+                            ? 'bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600'
+                            : 'border border-border hover:bg-muted/60 hover:shadow-sm'
                       }`}
                   >
                     <span className={`inline-flex items-center justify-center text-[10px] md:text-xs font-semibold w-5 h-5 md:w-6 md:h-6 rounded-full
