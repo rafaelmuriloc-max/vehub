@@ -298,7 +298,8 @@ export default function Obligations() {
 
       for (const month of monthsToGenerate) {
         const refDate = `${year}-${String(month).padStart(2, '0')}-01`;
-        const dueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+        const rawDueDate = ob?.due_day ? `${year}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+        const dueDate = rawDueDate ? previousBusinessDay(rawDueDate, getHolidays(year)) : null;
 
         for (const clientId of clientIds) {
           const key = `${clientId}_${refDate}`;
