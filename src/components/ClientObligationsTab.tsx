@@ -108,26 +108,28 @@ export default function ClientObligationsTab({ clientId }: Props) {
 
     setGenerating(true);
     try {
-      const toInsert: { obligation_id: string; client_id: string; reference_month: string }[] = [];
+      const toInsert: { obligation_id: string; client_id: string; reference_month: string; due_date?: string | null }[] = [];
 
       for (const { obligation } of linkedObligations) {
         if (obligation.recurrence === 'anual' && obligation.annual_month) {
-          // For annual: generate for current calendar year
-          // If competence_rule is 'previous', instance goes in next year's annual_month
           const instanceYear = obligation.competence_rule === 'previous' ? currentYear + 1 : currentYear;
           const month = obligation.annual_month;
           const refDate = `${instanceYear}-${String(month).padStart(2, '0')}-01`;
           const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === refDate);
           if (!exists) {
-            toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: refDate });
+            const rawDue = obligation.due_day ? `${instanceYear}-${String(month).padStart(2, '0')}-${String(Math.min(obligation.due_day, 28)).padStart(2, '0')}` : null;
+            const dueDate = rawDue ? previousBusinessDay(rawDue, getHolidays(instanceYear)) : null;
+            toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: refDate, due_date: dueDate });
           }
         } else {
-          // Monthly: generate from current month to December
           for (const monthIdx of months) {
             const key = monthKey(monthIdx);
             const exists = instances.find(i => i.obligation_id === obligation.id && i.reference_month === key);
             if (!exists) {
-              toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: key });
+              const m = monthIdx + 1;
+              const rawDue = obligation.due_day ? `${currentYear}-${String(m).padStart(2, '0')}-${String(Math.min(obligation.due_day, 28)).padStart(2, '0')}` : null;
+              const dueDate = rawDue ? previousBusinessDay(rawDue, getHolidays(currentYear)) : null;
+              toInsert.push({ obligation_id: obligation.id, client_id: clientId, reference_month: key, due_date: dueDate });
             }
           }
         }
