@@ -276,7 +276,8 @@ export default function Obligations() {
       const instanceYear = ob.competence_rule === 'previous' ? calendarYear + 1 : calendarYear;
       const month = ob.annual_month;
       const refDate = `${instanceYear}-${String(month).padStart(2, '0')}-01`;
-      const dueDate = ob.due_day ? `${instanceYear}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+      const rawDueDate = ob.due_day ? `${instanceYear}-${String(month).padStart(2, '0')}-${String(Math.min(ob.due_day, 28)).padStart(2, '0')}` : null;
+      const dueDate = rawDueDate ? previousBusinessDay(rawDueDate, getHolidays(instanceYear)) : null;
 
       for (const clientId of clientIds) {
         const key = `${clientId}_${refDate}`;
