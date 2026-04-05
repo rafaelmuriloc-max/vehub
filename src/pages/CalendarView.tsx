@@ -605,6 +605,9 @@ export default function CalendarView() {
                       ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
                       {day}
                     </span>
+                    {isHoliday && (
+                      <span className="hidden md:block text-[9px] text-muted-foreground truncate leading-tight mt-0.5">{holidayName}</span>
+                    )}
                     {visible.length > 0 && (
                       <>
                         {/* Mobile: dots only */}
