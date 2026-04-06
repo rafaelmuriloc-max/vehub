@@ -1,37 +1,40 @@
 
 
-# Enviar alerta de certificados para grupo de WhatsApp
+# Cards de controle de obrigações no Calendário
 
-## Como funciona
-A Evolution API aceita envio para grupos usando o `remoteJid` do grupo (formato `120363xxxxx@g.us`). O mesmo endpoint `/message/sendText` funciona — basta trocar o campo `number` pelo ID do grupo.
+## O que será feito
+Adicionar uma seção com 5 cards de métricas entre os filtros e o calendário, mostrando o total de obrigações do mês por status:
 
-## Alterações propostas
+1. **A Fazer** — instâncias pendentes (não concluídas), antes da data de alerta
+2. **Após Início** — pendentes que já passaram da data de alerta (alert_day)
+3. **Após Meta** — pendentes que já passaram da data meta (target_day)
+4. **Atrasadas** — pendentes que já passaram do vencimento (due_day)
+5. **Concluídas** — separadas em "No Prazo" (concluídas até o due_day) e "Fora do Prazo"
 
-### 1. Novo campo na seção de certificados (Clients.tsx)
-Adicionar um campo "Grupo WhatsApp" ao lado dos campos de responsável, com um botão para buscar os grupos disponíveis na instância Evolution API. O usuário seleciona o grupo desejado de uma lista.
+## Alterações em `src/pages/CalendarView.tsx`
 
-### 2. Migração de banco
-Adicionar coluna `cert_whatsapp_group_id` (text, nullable) em `company_settings` para armazenar o ID do grupo selecionado.
+### 1. Computar métricas via `useMemo`
+Iterar sobre as `instances` do mês, verificar se cada instância está concluída (todas as atividades completas), e classificar com base na data atual vs alert/target/due (usando `previousBusinessDay` para dias úteis):
 
-### 3. Edge Function para listar grupos
-Criar `supabase/functions/evolution-list-groups/index.ts` que chama `GET ${EVOLUTION_API_URL}/group/fetchAllGroups/${EVOLUTION_INSTANCE_NAME}` e retorna a lista de grupos (id + nome).
+- `todo`: pendente, hoje < alertDate
+- `afterAlert`: pendente, hoje >= alertDate e hoje < targetDate
+- `afterTarget`: pendente, hoje >= targetDate e hoje < dueDate
+- `overdue`: pendente, hoje >= dueDate
+- `doneOnTime`: concluída, última completion_at <= dueDate
+- `doneLate`: concluída, última completion_at > dueDate
 
-### 4. Atualizar cert-expiry-alert
-Na Edge Function `cert-expiry-alert`, verificar se `cert_whatsapp_group_id` está preenchido:
-- Se sim, enviar para o grupo (usando o ID do grupo como `number`)
-- Se não, enviar para o telefone do responsável (comportamento atual)
-- Opcionalmente enviar para ambos se ambos estiverem configurados
+### 2. Renderizar cards
+Inserir 5 cards em grid `grid-cols-2 md:grid-cols-5` entre o bloco de filtros (linha ~580) e o calendário (linha ~582). Cada card com ícone, título, total e cor temática:
 
-### Estrutura na UI
-```text
-Responsável: [___Nome___]  Telefone: [___Tel___]  
-Grupo WhatsApp: [___Selecionar grupo▼___] [🔄 Buscar grupos]  [Salvar]
-```
+- A Fazer: azul (ListChecks)
+- Após Início: amarelo (Clock)
+- Após Meta: laranja (AlertTriangle)
+- Atrasadas: vermelho (AlertTriangle)
+- Concluídas: verde (CheckSquare) com subtexto "X no prazo / Y fora"
 
-## Arquivos
-- Migração SQL — 1 coluna em `company_settings`
-- `supabase/functions/evolution-list-groups/index.ts` — nova Edge Function
-- `supabase/functions/cert-expiry-alert/index.ts` — lógica condicional grupo vs telefone
-- `src/pages/Clients.tsx` — campo de seleção de grupo + botão buscar
-- `supabase/config.toml` — registrar nova função
+### 3. Imports
+Adicionar `AlertTriangle` ao import do lucide-react (já existe `Clock`, `CheckSquare`, `ListChecks`).
+
+## Arquivo
+- `src/pages/CalendarView.tsx` — ~50 linhas adicionadas (useMemo + cards)
 
