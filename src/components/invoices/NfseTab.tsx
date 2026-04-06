@@ -413,11 +413,11 @@ export default function NfseTab() {
       {/* Filter + Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center flex-wrap gap-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
             <CardTitle className="text-lg">Notas Fiscais</CardTitle>
-            <div className="flex items-center gap-2 flex-wrap ml-auto">
+            <div className="flex items-center gap-2 flex-wrap md:ml-auto">
               <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full md:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -452,7 +452,7 @@ export default function NfseTab() {
                 </>
               )}
               <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full md:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -462,7 +462,7 @@ export default function NfseTab() {
                 </SelectContent>
               </Select>
               <Select value={filterClient} onValueChange={setFilterClient}>
-                <SelectTrigger className="w-[220px]">
+                <SelectTrigger className="w-full md:w-[220px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -475,6 +475,7 @@ export default function NfseTab() {
               <Button
                 variant="outline"
                 size="sm"
+                className="w-full md:w-auto"
                 disabled={exporting || filteredInvoices.filter(i => i.access_key).length === 0}
                 onClick={handleBatchExportXml}
               >
