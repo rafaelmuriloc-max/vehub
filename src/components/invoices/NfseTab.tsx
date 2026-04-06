@@ -31,7 +31,44 @@ type Invoice = {
   issuer_cnpj: string | null;
   taker_cnpj: string | null;
   created_at: string;
+  raw_data: { xml?: string } | null;
 };
+
+type Retentions = {
+  iss: number;
+  irrf: number;
+  pis: number;
+  cofins: number;
+  csll: number;
+  inss: number;
+  cp: number;
+  total: number;
+};
+
+function extractXmlValue(xml: string, tag: string): number {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`));
+  return match ? parseFloat(match[1]) || 0 : 0;
+}
+
+function parseRetentions(inv: Invoice): Retentions {
+  const xml = inv.raw_data?.xml || '';
+  if (!xml) return { iss: 0, irrf: 0, pis: 0, cofins: 0, csll: 0, inss: 0, cp: 0, total: 0 };
+
+  const irrf = extractXmlValue(xml, 'vRetIRRF');
+  const pis = extractXmlValue(xml, 'vRetPIS');
+  const cofins = extractXmlValue(xml, 'vRetCOFINS');
+  const csll = extractXmlValue(xml, 'vRetCSLL');
+  const inss = extractXmlValue(xml, 'vRetINSS');
+  const cp = extractXmlValue(xml, 'vRetCP');
+  const vTotalRet = extractXmlValue(xml, 'vTotalRet');
+  const tpRetISSQN = extractXmlValue(xml, 'tpRetISSQN');
+
+  const federalTotal = irrf + pis + cofins + csll + inss + cp;
+  const iss = tpRetISSQN === 2 ? Math.max(vTotalRet - federalTotal, 0) : 0;
+  const total = iss + federalTotal;
+
+  return { iss, irrf, pis, cofins, csll, inss, cp, total };
+}
 
 export default function NfseTab() {
   const navigate = useNavigate();
@@ -336,6 +373,27 @@ export default function NfseTab() {
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
+
+  // Retention totals from tomadas invoices
+  const tomadosInvoices = filteredInvoices.filter(i => getInvoiceType(i) === 'tomado');
+  const retentionTotals = tomadosInvoices.reduce<Retentions>(
+    (acc, inv) => {
+      const r = parseRetentions(inv);
+      return {
+        iss: acc.iss + r.iss,
+        irrf: acc.irrf + r.irrf,
+        pis: acc.pis + r.pis,
+        cofins: acc.cofins + r.cofins,
+        csll: acc.csll + r.csll,
+        inss: acc.inss + r.inss,
+        cp: acc.cp + r.cp,
+        total: acc.total + r.total,
+      };
+    },
+    { iss: 0, irrf: 0, pis: 0, cofins: 0, csll: 0, inss: 0, cp: 0, total: 0 }
+  );
+  const hasRetentions = retentionTotals.total > 0;
+
   const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -417,7 +475,77 @@ export default function NfseTab() {
         </Card>
       </div>
 
-      {/* Filter + Table */}
+      {/* Retention Cards */}
+      {(filterType === 'tomados' || filterType === 'all') && hasRetentions && (
+        <div>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">Impostos Retidos (Serviços Tomados)</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 col-span-2 md:col-span-1">
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Total Retido</p>
+                <p className="text-lg font-bold text-orange-700 dark:text-orange-300">{formatCurrency(retentionTotals.total)}</p>
+              </CardContent>
+            </Card>
+            {retentionTotals.iss > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">ISS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.iss)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.irrf > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">IRRF</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.irrf)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.pis > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">PIS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.pis)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.cofins > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">COFINS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.cofins)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.csll > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">CSLL</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.csll)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.inss > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">INSS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.inss)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.cp > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">CP</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.cp)}</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center gap-4">
