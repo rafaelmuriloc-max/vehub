@@ -120,6 +120,18 @@ export default function CalendarView() {
   const [emailRecipient, setEmailRecipient] = useState('');
   const [emailAttachments, setEmailAttachments] = useState<{ fileUrl: string; fileName: string }[]>([]);
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const toggleSelection = (id: string) => {
+    setSelectedInstanceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedInstanceIds(new Set());
 
   const loadData = useCallback(async () => {
     const y = currentDate.getFullYear();
@@ -236,8 +248,8 @@ export default function CalendarView() {
     return events.filter(e => e.date.startsWith(prefix) && e.type === 'target').sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
-  useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); }, [selectedDay]);
-  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); }, [year, month, filterDept, filterClient]);
+  useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
+  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient]);
 
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
@@ -434,6 +446,19 @@ export default function CalendarView() {
     toast({ title: 'Obrigação excluída com sucesso' });
     setDeleteInstanceId(null);
     if (detailInstanceId === deleteInstanceId) setDetailInstanceId(null);
+    await loadData();
+  }
+
+  async function deleteSelectedInstances() {
+    const ids = Array.from(selectedInstanceIds);
+    for (const id of ids) {
+      await supabase.from('obligation_activity_completions').delete().eq('instance_id', id);
+      await supabase.from('obligation_instances').delete().eq('id', id);
+    }
+    toast({ title: `${ids.length} obrigação(ões) excluída(s) com sucesso` });
+    clearSelection();
+    setShowBulkDeleteConfirm(false);
+    if (detailInstanceId && ids.includes(detailInstanceId)) setDetailInstanceId(null);
     await loadData();
   }
 
@@ -692,9 +717,12 @@ export default function CalendarView() {
                   </TabsTrigger>
                 </TabsList>
                 {[
-                  { key: 'pending', items: paginatedDayPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
-                  { key: 'completed', items: paginatedDayCompleted, page: dayCompletedPage, totalPages: dayCompletedTotalPages, total: dayEventsCompleted.length, setPage: setDayCompletedPage },
-                ].map(tab => (
+                  { key: 'pending', items: paginatedDayPending, allItems: dayEventsPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
+                  { key: 'completed', items: paginatedDayCompleted, allItems: dayEventsCompleted, page: dayCompletedPage, totalPages: dayCompletedTotalPages, total: dayEventsCompleted.length, setPage: setDayCompletedPage },
+                ].map(tab => {
+                  const allIds = tab.allItems.map(e => e.instanceId);
+                  const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                  return (
                   <TabsContent key={tab.key} value={tab.key}>
                     {tab.items.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-6 text-center">
@@ -702,26 +730,51 @@ export default function CalendarView() {
                       </div>
                     ) : (
                       <>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground" onClick={e => e.stopPropagation()}>
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
                         <div className="space-y-2">
                           {tab.items.map((ev, idx) => {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                            const isSelected = selectedInstanceIds.has(ev.instanceId);
                             return (
                               <div
                                 key={idx}
                                 onClick={() => setDetailInstanceId(ev.instanceId)}
                                 className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
+                                  ${isSelected ? 'ring-2 ring-primary/50' : ''}
                                   ${completed
                                     ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
                                     : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
-                                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                      <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
-                                    </p>
+                                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                      onClick={e => e.stopPropagation()}
+                                      className="mt-0.5 shrink-0"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                        <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                      </p>
+                                    </div>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
                                     <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
@@ -751,7 +804,8 @@ export default function CalendarView() {
                       </>
                     )}
                   </TabsContent>
-                ))}
+                  );
+                })}
               </Tabs>
             )}
           </CardContent>
@@ -798,16 +852,44 @@ export default function CalendarView() {
                   </div>
                 ) : (
                   <>
+                    {(() => {
+                      const allIds = monthEventsPending.map(e => e.instanceId);
+                      const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                      return (
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-2">
                       {paginatedMonthPending.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        const isSelected = selectedInstanceIds.has(ev.instanceId);
                         return (
                           <div
                             key={idx}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30"
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
                           >
                             <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
                               <div className="w-14 shrink-0 text-sm font-semibold text-primary">
                                 {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
@@ -854,16 +936,44 @@ export default function CalendarView() {
                   </div>
                 ) : (
                   <>
+                    {(() => {
+                      const allIds = monthEventsCompleted.map(e => e.instanceId);
+                      const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                      return (
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-2">
                       {paginatedMonthCompleted.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        const isSelected = selectedInstanceIds.has(ev.instanceId);
                         return (
                           <div
                             key={idx}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
                           >
                             <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
                               <div className="w-14 shrink-0 text-sm font-semibold text-primary">
                                 {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
@@ -934,7 +1044,6 @@ export default function CalendarView() {
               <Progress value={dialogProgress.percent} className="h-2" />
             </div>
           )}
-
           <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
             {detailActivities.length === 0 && (
               <div className="flex flex-col items-center justify-center py-6 text-center">
@@ -1071,6 +1180,39 @@ export default function CalendarView() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={deleteInstance} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Action Bar */}
+      {selectedInstanceIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-card border rounded-lg shadow-lg px-4 py-3 flex items-center gap-3">
+          <span className="text-sm font-medium">{selectedInstanceIds.size} selecionado(s)</span>
+          <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Excluir selecionados
+          </Button>
+          <Button variant="ghost" size="sm" onClick={clearSelection}>
+            <X className="h-3.5 w-3.5 mr-1" />
+            Limpar
+          </Button>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation */}
+      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selectedInstanceIds.size} obrigação(ões)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {selectedInstanceIds.size} obrigação(ões)? Todas as atividades e arquivos associados serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteSelectedInstances} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir {selectedInstanceIds.size}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
