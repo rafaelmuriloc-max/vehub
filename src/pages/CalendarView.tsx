@@ -852,16 +852,44 @@ export default function CalendarView() {
                   </div>
                 ) : (
                   <>
+                    {(() => {
+                      const allIds = monthEventsPending.map(e => e.instanceId);
+                      const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                      return (
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-2">
                       {paginatedMonthPending.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        const isSelected = selectedInstanceIds.has(ev.instanceId);
                         return (
                           <div
                             key={idx}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30"
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
                           >
                             <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
                               <div className="w-14 shrink-0 text-sm font-semibold text-primary">
                                 {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
@@ -908,16 +936,44 @@ export default function CalendarView() {
                   </div>
                 ) : (
                   <>
+                    {(() => {
+                      const allIds = monthEventsCompleted.map(e => e.instanceId);
+                      const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                      return (
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-2">
                       {paginatedMonthCompleted.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        const isSelected = selectedInstanceIds.has(ev.instanceId);
                         return (
                           <div
                             key={idx}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
                           >
                             <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
                               <div className="w-14 shrink-0 text-sm font-semibold text-primary">
                                 {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
