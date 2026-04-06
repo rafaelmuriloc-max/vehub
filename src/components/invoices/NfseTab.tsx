@@ -365,17 +365,19 @@ export default function NfseTab() {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
   }
 
-  let filteredInvoices = invoices;
-  if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
-  if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
-  if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
+  let baseFiltered = invoices;
+  if (filterClient !== 'all') baseFiltered = baseFiltered.filter(i => i.client_id === filterClient);
+  if (filterDateFrom) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
+  if (filterDateTo) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date <= filterDateTo);
+
+  let filteredInvoices = baseFiltered;
   if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(i => getInvoiceType(i) === (filterType === 'prestados' ? 'prestado' : 'tomado'));
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
 
-  // Retention totals from tomadas invoices
-  const tomadosInvoices = filteredInvoices.filter(i => getInvoiceType(i) === 'tomado');
+  // Retention totals from tomadas invoices (uses baseFiltered to ignore type filter)
+  const tomadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'tomado');
   const retentionTotals = tomadosInvoices.reduce<Retentions>(
     (acc, inv) => {
       const r = parseRetentions(inv);
