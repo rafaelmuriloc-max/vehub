@@ -117,31 +117,46 @@ Deno.serve(async (req) => {
       });
     }
 
-    const evoRes = await fetch(
-      `${evolutionUrl}/message/sendText/${evolutionInstance}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: evolutionApiKey,
-        },
-        body: JSON.stringify({
-          number: phone,
-          text: message,
-        }),
+    const sendMessage = async (recipient: string) => {
+      const res = await fetch(
+        `${evolutionUrl}/message/sendText/${evolutionInstance}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: evolutionApiKey,
+          },
+          body: JSON.stringify({
+            number: recipient,
+            text: message,
+          }),
+        }
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`Evolution API error for ${recipient}:`, res.status, errText);
       }
-    );
+      return res.ok;
+    };
 
-    if (!evoRes.ok) {
-      const errText = await evoRes.text();
-      console.error("Evolution API error:", evoRes.status, errText);
-      return new Response(JSON.stringify({ error: `Evolution API: ${evoRes.status}` }), {
+    let sentToGroup = false;
+    let sentToPhone = false;
+
+    if (groupId) {
+      sentToGroup = await sendMessage(groupId);
+    }
+    if (phone) {
+      sentToPhone = await sendMessage(phone);
+    }
+
+    if (!sentToGroup && !sentToPhone) {
+      return new Response(JSON.stringify({ error: "Failed to send to any recipient" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`Alert sent: ${expired.length} expired, ${expiringThisWeek.length} expiring this week`);
+    console.log(`Alert sent: ${expired.length} expired, ${expiringThisWeek.length} expiring this week (group: ${sentToGroup}, phone: ${sentToPhone})`);
 
     return new Response(JSON.stringify({
       ok: true,
