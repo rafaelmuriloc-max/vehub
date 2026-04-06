@@ -82,6 +82,8 @@ serve(async (req) => {
       };
     }
 
+    console.log("WhatsApp payload:", JSON.stringify(messagePayload));
+
     const metaResponse = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
       {
@@ -95,6 +97,7 @@ serve(async (req) => {
     );
 
     const metaData = await metaResponse.json();
+    console.log("Meta response status:", metaResponse.status, "body:", JSON.stringify(metaData));
 
     if (!metaResponse.ok) {
       console.error("Meta API error:", JSON.stringify(metaData));
