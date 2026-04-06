@@ -12,7 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
@@ -575,6 +576,85 @@ export default function CalendarView() {
                 </Select>
               </div>
             </div>
+          </div>
+        );
+      })()}
+
+      {/* Metric Cards */}
+      {(() => {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const y = currentDate.getFullYear();
+        const m = currentDate.getMonth();
+        const hols = getHolidays(y);
+
+        const makeDate = (day: number | null, refMonth: string) => {
+          if (!day) return null;
+          const rd = new Date(refMonth + 'T00:00:00');
+          const raw = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          return previousBusinessDay(raw, hols);
+        };
+
+        let todo = 0, afterAlert = 0, afterTarget = 0, overdue = 0, doneOnTime = 0, doneLate = 0;
+
+        // Filter instances for current month view
+        const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
+        const monthInstances = instances.filter(inst => inst.reference_month.startsWith(monthPrefix));
+
+        for (const inst of monthInstances) {
+          const obl = oblMap.get(inst.obligation_id);
+          if (!obl) continue;
+          if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
+          if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
+          if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+
+          const alertDate = makeDate(obl.alert_day, inst.reference_month);
+          const targetDate = makeDate(obl.target_day, inst.reference_month);
+          const dueDate = makeDate(obl.due_day, inst.reference_month);
+
+          const completed = isInstanceCompleted(inst.id, inst.obligation_id);
+
+          if (completed) {
+            // Find latest completion date
+            const instCompletions = completions.filter(c => c.instance_id === inst.id && c.completed);
+            // We don't have completed_at in local Completion type, so compare with dueDate using today as proxy
+            if (dueDate && todayStr > dueDate) {
+              doneLate++;
+            } else {
+              doneOnTime++;
+            }
+          } else {
+            if (dueDate && todayStr >= dueDate) {
+              overdue++;
+            } else if (targetDate && todayStr >= targetDate) {
+              afterTarget++;
+            } else if (alertDate && todayStr >= alertDate) {
+              afterAlert++;
+            } else {
+              todo++;
+            }
+          }
+        }
+
+        const cards = [
+          { label: 'A Fazer', value: todo, icon: ListChecks, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+          { label: 'Após Início', value: afterAlert, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/30' },
+          { label: 'Após Meta', value: afterTarget, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/30' },
+          { label: 'Atrasadas', value: overdue, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/30' },
+          { label: 'Concluídas', value: doneOnTime + doneLate, icon: CheckSquare, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950/30', sub: `${doneOnTime} no prazo / ${doneLate} fora` },
+        ];
+
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {cards.map(c => (
+              <div key={c.label} className={`rounded-xl border p-4 ${c.bg}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <c.icon className={`h-4 w-4 ${c.color}`} />
+                  <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
+                </div>
+                <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
+                {c.sub && <p className="text-[10px] text-muted-foreground mt-1">{c.sub}</p>}
+              </div>
+            ))}
           </div>
         );
       })()}
