@@ -1279,6 +1279,19 @@ export default function Clients() {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
+          <div className="flex items-end gap-3 mb-4 pb-4 border-b">
+            <div className="flex-1 max-w-xs">
+              <Label className="text-xs text-muted-foreground mb-1 block">Responsável</Label>
+              <Input placeholder="Nome do responsável" value={certResponsible.name} onChange={e => setCertResponsible(prev => ({ ...prev, name: e.target.value }))} className="h-8 text-sm" />
+            </div>
+            <div className="flex-1 max-w-[200px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Telefone</Label>
+              <Input placeholder="(00) 00000-0000" value={certResponsible.phone} onChange={e => setCertResponsible(prev => ({ ...prev, phone: e.target.value }))} className="h-8 text-sm" />
+            </div>
+            <Button size="sm" variant="outline" className="h-8" onClick={saveCertResponsible}>
+              <Save className="h-3.5 w-3.5 mr-1" /> Salvar
+            </Button>
+          </div>
           {certMonthData.clients.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum certificado vence neste mês</p>
           ) : (
