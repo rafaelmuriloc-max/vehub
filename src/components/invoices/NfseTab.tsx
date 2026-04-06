@@ -330,6 +330,7 @@ export default function NfseTab() {
   if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
   if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
   if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
+  if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(i => getInvoiceType(i) === (filterType === 'prestados' ? 'prestado' : 'tomado'));
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
