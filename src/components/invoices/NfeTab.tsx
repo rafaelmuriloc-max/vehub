@@ -471,6 +471,7 @@ export default function NfeTab() {
                 </div>
               </div>
             )}
+            </>
           )}
         </CardContent>
       </Card>

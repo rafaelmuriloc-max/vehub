@@ -501,6 +501,7 @@ export default function NfseTab() {
               Nenhuma nota fiscal encontrada. Use a consulta acima para buscar notas do Portal Nacional.
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table className="text-sm">
                 <TableHeader>
