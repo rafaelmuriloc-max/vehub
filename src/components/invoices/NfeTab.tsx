@@ -326,11 +326,11 @@ export default function NfeTab() {
       {/* Filter + Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center flex-wrap gap-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
             <CardTitle className="text-lg">NF-e Recebidas</CardTitle>
-            <div className="flex items-center gap-2 flex-wrap ml-auto">
+            <div className="flex items-center gap-2 flex-wrap md:ml-auto">
               <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full md:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -355,7 +355,7 @@ export default function NfeTab() {
                 </>
               )}
               <Select value={filterClient} onValueChange={setFilterClient}>
-                <SelectTrigger className="w-[220px]">
+                <SelectTrigger className="w-full md:w-[220px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
