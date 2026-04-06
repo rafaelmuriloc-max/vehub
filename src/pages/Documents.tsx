@@ -208,8 +208,34 @@ export default function Documents() {
       setUploadProgress({ current: i + 1, total: fileList.length });
 
       try {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+        // 1. Try region-based extraction first (no AI needed)
+        if (isPdf) {
+          const regionMatch = await tryExtractByRegions(file, documentTypes, matchClient);
+          if (regionMatch && regionMatch.clientId && regionMatch.docTypeId) {
+            const refMonth = regionMatch.referenceMonth || '';
+            if (refMonth) {
+              await importDocument(file, regionMatch.clientId, regionMatch.docTypeId, refMonth + '-01');
+              importedCount++;
+              continue;
+            } else {
+              // Got client + type but no month — send to review with partial data
+              pendingReview.push({
+                file,
+                extraction: { cnpj: '', company_name: '', reference_month: '', document_type_name: documentTypes.find(dt => dt.id === regionMatch.docTypeId)?.name || '' },
+                matchedClientId: regionMatch.clientId,
+                matchedDocTypeId: regionMatch.docTypeId,
+                referenceMonth: '',
+              });
+              continue;
+            }
+          }
+        }
+
+        // 2. Fallback: AI classification
         let text = '';
-        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        if (isPdf) {
           text = await extractPdfText(file);
         }
 
