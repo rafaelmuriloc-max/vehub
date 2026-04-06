@@ -1,46 +1,33 @@
 
 
-# Tornar tabelas de notas fiscais responsivas
+# Ajustar colunas das tabelas de notas fiscais para caber na tela
 
 ## Problema
-As tabelas de NF-e (7 colunas) e NFS-e (9 colunas) não cabem em telas mobile — ficam cortadas ou com scroll horizontal sem controle. Os filtros na barra superior também ocupam espaço excessivo.
-
-## Solução
-Aplicar o padrão responsivo do projeto: ocultar colunas secundárias no mobile e envolver as tabelas em scroll horizontal.
+Na tela atual (~1267px), todas as colunas são visíveis mas as últimas ("Status", "Ações") ficam cortadas à direita. Nomes longos de clientes e a coluna "Descrição" consomem espaço excessivo.
 
 ## Alterações
 
-### 1. `src/components/invoices/NfeTab.tsx`
+### 1. `src/components/invoices/NfseTab.tsx`
 
-**Tabela — ocultar colunas no mobile:**
-- Coluna "Destinatário": `hidden md:table-cell`
-- Coluna "Status": `hidden md:table-cell`
-- Coluna "Emitente" CNPJ sub-text: `hidden md:block`
+**Reduzir largura de colunas largas:**
+- Coluna "Cliente": adicionar `max-w-[150px] truncate` para limitar nomes longos
+- Coluna "Descrição": reduzir `max-w-[200px]` para `max-w-[150px]`, e esconder em telas menores que `lg` em vez de `md` (`hidden lg:table-cell`)
+- Coluna "Impostos": esconder abaixo de `lg` (`hidden lg:table-cell`)
+- Coluna "Status": manter `hidden md:table-cell`
 
-**Filtros — empilhar no mobile:**
-- Selects de filtro: largura `w-full md:w-[180px]` / `w-full md:w-[220px]`
-- Container de filtros: `flex-col md:flex-row`
+**Reduzir padding da tabela:**
+- Adicionar `text-sm` ao `<Table>` para texto mais compacto
 
-**Scroll horizontal:**
-- Envolver `<Table>` em `<div className="overflow-x-auto">`
+### 2. `src/components/invoices/NfeTab.tsx`
 
-### 2. `src/components/invoices/NfseTab.tsx`
+**Mesmos ajustes de breakpoint:**
+- Colunas secundárias ("Destinatário", "Status"): usar `hidden lg:table-cell` em vez de `hidden md:table-cell` para esconder em telas intermediárias
+- Coluna "Emitente": `max-w-[150px] truncate`
 
-**Tabela — ocultar colunas no mobile:**
-- Coluna "Descrição": `hidden md:table-cell`
-- Coluna "Impostos": `hidden md:table-cell`
-- Coluna "Status": `hidden md:table-cell`
-- Coluna "Tipo" badge: manter visível (é informação essencial)
-
-**Filtros — empilhar no mobile:**
-- Selects: `w-full md:w-[180px]` / `w-full md:w-[220px]`
-- Container: `flex-col md:flex-row`
-- Botão "Exportar XMLs": `w-full md:w-auto`
-
-**Scroll horizontal:**
-- Envolver `<Table>` em `<div className="overflow-x-auto">`
+## Resultado
+Em ~1267px: colunas essenciais (Número, Tipo, Cliente, Data, Valor, Ações) sempre visíveis. Descrição e Impostos aparecem apenas em telas `lg` (1024px+). Status aparece a partir de `md` (768px+).
 
 ## Arquivos
-- `src/components/invoices/NfeTab.tsx` — classes CSS em ~10 linhas
-- `src/components/invoices/NfseTab.tsx` — classes CSS em ~12 linhas
+- `src/components/invoices/NfseTab.tsx` — ~8 linhas de classes CSS
+- `src/components/invoices/NfeTab.tsx` — ~6 linhas de classes CSS
 
