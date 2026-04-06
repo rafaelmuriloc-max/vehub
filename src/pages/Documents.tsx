@@ -19,7 +19,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
-type DocumentType = { id: string; name: string; description: string | null };
+type FieldRegion = { page: number; x: number; y: number; width: number; height: number };
+type ExtractionConfig = {
+  cnpj_region?: FieldRegion | null;
+  company_name_region?: FieldRegion | null;
+  reference_month_region?: FieldRegion | null;
+  obligation_type_region?: FieldRegion | null;
+};
+type DocumentType = { id: string; name: string; description: string | null; extraction_config: ExtractionConfig | null };
 type Client = { id: string; company_name: string; document: string | null };
 type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string; linked_obligation_id: string | null };
 type Obligation = { id: string; name: string };
