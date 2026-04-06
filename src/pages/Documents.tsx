@@ -157,7 +157,7 @@ export default function Documents() {
 
   async function loadAll() {
     const [dtRes, clRes, docRes, oblRes] = await Promise.all([
-      supabase.from('document_types').select('id, name, description').order('name'),
+      supabase.from('document_types').select('id, name, description, extraction_config').order('name'),
       supabase.from('clients').select('id, company_name, document').eq('status', 'active').order('company_name'),
       supabase.from('documents').select('*').order('created_at', { ascending: false }),
       supabase.from('obligations').select('id, name'),
