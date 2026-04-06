@@ -804,7 +804,8 @@ export default function CalendarView() {
                       </>
                     )}
                   </TabsContent>
-                )}
+                  );
+                })}
               </Tabs>
             )}
           </CardContent>
