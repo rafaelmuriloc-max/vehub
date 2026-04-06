@@ -476,7 +476,7 @@ export default function NfseTab() {
       </div>
 
       {/* Retention Cards */}
-      {(filterType === 'tomados' || filterType === 'all') && hasRetentions && (
+      {hasRetentions && (
         <div>
           <h3 className="text-sm font-semibold text-muted-foreground mb-3">Impostos Retidos (Serviços Tomados)</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
