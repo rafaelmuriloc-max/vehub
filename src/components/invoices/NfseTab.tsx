@@ -729,6 +729,65 @@ export default function NfseTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Retention Detail Dialog */}
+      <Dialog open={!!retentionDetail} onOpenChange={(open) => !open && setRetentionDetail(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {retentionDetail?.taxKey === 'total' ? 'Total Retido' : retentionDetail?.taxKey.toUpperCase()} — Serviços {retentionDetail?.type === 'prestado' ? 'Prestados' : 'Tomados'}
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            if (!retentionDetail) return null;
+            const sourceInvoices = retentionDetail.type === 'prestado' ? prestadosInvoices : tomadosInvoices;
+            const taxKey = retentionDetail.taxKey;
+            const detailed = sourceInvoices
+              .map(inv => {
+                const r = parseRetentions(inv);
+                const retValue = taxKey === 'total' ? r.total : r[taxKey];
+                return { inv, retValue };
+              })
+              .filter(d => d.retValue > 0)
+              .sort((a, b) => b.retValue - a.retValue);
+            const totalValue = detailed.reduce((s, d) => s + d.retValue, 0);
+
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Total: <span className="font-semibold text-foreground">{formatCurrency(totalValue)}</span> — {detailed.length} nota(s)
+                </p>
+                {detailed.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">Nenhuma nota com retenção para este imposto.</p>
+                ) : (
+                  <Table className="text-sm">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Número</TableHead>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Data Emissão</TableHead>
+                        <TableHead className="text-right">Valor Bruto</TableHead>
+                        <TableHead className="text-right">Valor Retido</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detailed.map(({ inv, retValue }) => (
+                        <TableRow key={inv.id}>
+                          <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
+                          <TableCell className="max-w-[180px] truncate">{getClientName(inv.client_id)}</TableCell>
+                          <TableCell>{formatDate(inv.issue_date)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(inv.gross_value)}</TableCell>
+                          <TableCell className="text-right font-semibold">{formatCurrency(retValue)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
