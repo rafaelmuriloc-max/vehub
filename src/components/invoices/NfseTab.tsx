@@ -451,6 +451,16 @@ export default function NfseTab() {
                   </div>
                 </>
               )}
+              <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os tipos</SelectItem>
+                  <SelectItem value="prestados">Serviços Prestados</SelectItem>
+                  <SelectItem value="tomados">Serviços Tomados</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={filterClient} onValueChange={setFilterClient}>
                 <SelectTrigger className="w-[220px]">
                   <SelectValue />
