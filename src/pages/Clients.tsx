@@ -842,7 +842,7 @@ export default function Clients() {
   });
 
   const filtered = clients.filter(c => {
-    const matchSearch = c.company_name.toLowerCase().includes(search.toLowerCase()) || c.document?.includes(search);
+    const matchSearch = c.company_name.toLowerCase().includes(search.toLowerCase()) || c.document?.includes(search) || c.sci_code?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || c.status === filterStatus;
     return matchSearch && matchStatus;
   });
