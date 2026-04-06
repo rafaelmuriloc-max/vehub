@@ -163,23 +163,39 @@ export default function Clients() {
   const [societyDocs, setSocietyDocs] = useState<{ id: string; document_label: string; file_name: string; file_url: string }[]>([]);
   const [societyUploading, setSocietyUploading] = useState<Record<string, boolean>>({});
    const [certMonth, setCertMonth] = useState(() => new Date());
-   const [certResponsible, setCertResponsible] = useState({ name: '', phone: '' });
+   const [certResponsible, setCertResponsible] = useState({ name: '', phone: '', groupId: '' });
    const [certResponsibleLoaded, setCertResponsibleLoaded] = useState(false);
+   const [whatsappGroups, setWhatsappGroups] = useState<{ id: string; name: string }[]>([]);
+   const [loadingGroups, setLoadingGroups] = useState(false);
 
    useEffect(() => {
      (async () => {
-       const { data } = await supabase.from('company_settings').select('cert_responsible_name, cert_responsible_phone').limit(1).maybeSingle();
+       const { data } = await supabase.from('company_settings').select('cert_responsible_name, cert_responsible_phone, cert_whatsapp_group_id').limit(1).maybeSingle();
        if (data) {
-         setCertResponsible({ name: (data as any).cert_responsible_name || '', phone: (data as any).cert_responsible_phone || '' });
+         setCertResponsible({ name: (data as any).cert_responsible_name || '', phone: (data as any).cert_responsible_phone || '', groupId: (data as any).cert_whatsapp_group_id || '' });
        }
        setCertResponsibleLoaded(true);
      })();
    }, []);
 
+   const fetchWhatsappGroups = async () => {
+     setLoadingGroups(true);
+     try {
+       const { data, error } = await supabase.functions.invoke('evolution-list-groups');
+       if (error) throw error;
+       setWhatsappGroups(data || []);
+     } catch (e) {
+       console.error('Error fetching groups:', e);
+       toast({ title: 'Erro ao buscar grupos', variant: 'destructive' });
+     } finally {
+       setLoadingGroups(false);
+     }
+   };
+
    const saveCertResponsible = async () => {
      const { data: existing } = await supabase.from('company_settings').select('id').limit(1).maybeSingle();
      if (existing) {
-       await supabase.from('company_settings').update({ cert_responsible_name: certResponsible.name || null, cert_responsible_phone: certResponsible.phone || null } as any).eq('id', existing.id);
+       await supabase.from('company_settings').update({ cert_responsible_name: certResponsible.name || null, cert_responsible_phone: certResponsible.phone || null, cert_whatsapp_group_id: certResponsible.groupId || null } as any).eq('id', existing.id);
      }
      toast({ title: 'Responsável salvo com sucesso' });
    };
