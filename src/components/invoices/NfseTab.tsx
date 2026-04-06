@@ -31,7 +31,44 @@ type Invoice = {
   issuer_cnpj: string | null;
   taker_cnpj: string | null;
   created_at: string;
+  raw_data: { xml?: string } | null;
 };
+
+type Retentions = {
+  iss: number;
+  irrf: number;
+  pis: number;
+  cofins: number;
+  csll: number;
+  inss: number;
+  cp: number;
+  total: number;
+};
+
+function extractXmlValue(xml: string, tag: string): number {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`));
+  return match ? parseFloat(match[1]) || 0 : 0;
+}
+
+function parseRetentions(inv: Invoice): Retentions {
+  const xml = inv.raw_data?.xml || '';
+  if (!xml) return { iss: 0, irrf: 0, pis: 0, cofins: 0, csll: 0, inss: 0, cp: 0, total: 0 };
+
+  const irrf = extractXmlValue(xml, 'vRetIRRF');
+  const pis = extractXmlValue(xml, 'vRetPIS');
+  const cofins = extractXmlValue(xml, 'vRetCOFINS');
+  const csll = extractXmlValue(xml, 'vRetCSLL');
+  const inss = extractXmlValue(xml, 'vRetINSS');
+  const cp = extractXmlValue(xml, 'vRetCP');
+  const vTotalRet = extractXmlValue(xml, 'vTotalRet');
+  const tpRetISSQN = extractXmlValue(xml, 'tpRetISSQN');
+
+  const federalTotal = irrf + pis + cofins + csll + inss + cp;
+  const iss = tpRetISSQN === 2 ? Math.max(vTotalRet - federalTotal, 0) : 0;
+  const total = iss + federalTotal;
+
+  return { iss, irrf, pis, cofins, csll, inss, cp, total };
+}
 
 export default function NfseTab() {
   const navigate = useNavigate();
