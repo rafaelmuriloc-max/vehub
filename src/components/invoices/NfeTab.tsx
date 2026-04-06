@@ -377,15 +377,15 @@ export default function NfeTab() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="text-sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
-                    <TableHead>Emitente</TableHead>
-                    <TableHead className="hidden md:table-cell">Destinatário</TableHead>
+                    <TableHead className="max-w-[150px]">Emitente</TableHead>
+                    <TableHead className="hidden lg:table-cell">Destinatário</TableHead>
                     <TableHead>Data Emissão</TableHead>
                     <TableHead className="text-right">Valor Total</TableHead>
-                    <TableHead className="hidden md:table-cell">Status</TableHead>
+                    <TableHead className="hidden lg:table-cell">Status</TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
