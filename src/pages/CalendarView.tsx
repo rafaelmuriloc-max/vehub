@@ -986,7 +986,8 @@ export default function CalendarView() {
               </div>
               <Progress value={dialogProgress.percent} className="h-2" />
             </div>
-          )}
+                );
+                })}
 
           <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
             {detailActivities.length === 0 && (
