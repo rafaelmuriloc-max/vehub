@@ -205,7 +205,16 @@ export default function CalendarView() {
       if (targetDate) result.push({ ...base, type: 'target', date: targetDate });
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
     }
-    return result;
+    const priority: Record<string, number> = { due: 3, target: 2, alert: 1 };
+    const deduped = new Map<string, CalendarEvent>();
+    for (const ev of result) {
+      const key = `${ev.instanceId}-${ev.date}`;
+      const existing = deduped.get(key);
+      if (!existing || (priority[ev.type] ?? 0) > (priority[existing.type] ?? 0)) {
+        deduped.set(key, ev);
+      }
+    }
+    return Array.from(deduped.values());
   }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, holidays]);
 
   const year = currentDate.getFullYear();
