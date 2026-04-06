@@ -31,6 +31,20 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     return { success: false, error: 'Atividade de WhatsApp sem configuração completa' };
   }
 
+  // Prevent duplicate sends for the same instance + activity
+  const { data: alreadySent } = await supabase
+    .from('whatsapp_logs')
+    .select('id')
+    .eq('instance_id', instanceId)
+    .eq('template_name', activity.whatsapp_template_name || '')
+    .eq('status', 'sent')
+    .limit(1);
+
+  if (alreadySent && alreadySent.length > 0) {
+    console.log(`WhatsApp already sent for instance ${instanceId}, activity ${activity.id}, skipping`);
+    return { success: true };
+  }
+
   // Fetch client info
   const { data: client } = await supabase.from('clients').select('company_name, contact_phone, contact_name').eq('id', clientId).single();
 
