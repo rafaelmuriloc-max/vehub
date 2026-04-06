@@ -384,6 +384,7 @@ export default function NfeTab() {
               Nenhuma NF-e encontrada. Use a consulta acima para buscar NF-e no Ambiente Nacional.
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table className="text-sm">
                 <TableHeader>
