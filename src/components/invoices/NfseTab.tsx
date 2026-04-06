@@ -475,7 +475,77 @@ export default function NfseTab() {
         </Card>
       </div>
 
-      {/* Filter + Table */}
+      {/* Retention Cards */}
+      {(filterType === 'tomados' || filterType === 'all') && hasRetentions && (
+        <div>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">Impostos Retidos (Serviços Tomados)</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 col-span-2 md:col-span-1">
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Total Retido</p>
+                <p className="text-lg font-bold text-orange-700 dark:text-orange-300">{formatCurrency(retentionTotals.total)}</p>
+              </CardContent>
+            </Card>
+            {retentionTotals.iss > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">ISS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.iss)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.irrf > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">IRRF</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.irrf)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.pis > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">PIS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.pis)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.cofins > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">COFINS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.cofins)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.csll > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">CSLL</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.csll)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.inss > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">INSS</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.inss)}</p>
+                </CardContent>
+              </Card>
+            )}
+            {retentionTotals.cp > 0 && (
+              <Card>
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-muted-foreground font-medium">CP</p>
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.cp)}</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center gap-4">
