@@ -161,7 +161,27 @@ export default function Clients() {
   const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
   const [societyDocs, setSocietyDocs] = useState<{ id: string; document_label: string; file_name: string; file_url: string }[]>([]);
   const [societyUploading, setSocietyUploading] = useState<Record<string, boolean>>({});
-  const [certMonth, setCertMonth] = useState(() => new Date());
+   const [certMonth, setCertMonth] = useState(() => new Date());
+   const [certResponsible, setCertResponsible] = useState({ name: '', phone: '' });
+   const [certResponsibleLoaded, setCertResponsibleLoaded] = useState(false);
+
+   useEffect(() => {
+     (async () => {
+       const { data } = await supabase.from('company_settings').select('cert_responsible_name, cert_responsible_phone').limit(1).maybeSingle();
+       if (data) {
+         setCertResponsible({ name: (data as any).cert_responsible_name || '', phone: (data as any).cert_responsible_phone || '' });
+       }
+       setCertResponsibleLoaded(true);
+     })();
+   }, []);
+
+   const saveCertResponsible = async () => {
+     const { data: existing } = await supabase.from('company_settings').select('id').limit(1).maybeSingle();
+     if (existing) {
+       await supabase.from('company_settings').update({ cert_responsible_name: certResponsible.name || null, cert_responsible_phone: certResponsible.phone || null } as any).eq('id', existing.id);
+     }
+     toast.success('Responsável salvo com sucesso');
+   };
 
   const certMonthData = useMemo(() => {
     const year = certMonth.getFullYear();
