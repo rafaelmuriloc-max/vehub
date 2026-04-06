@@ -422,6 +422,7 @@ export type Database = {
           address: string | null
           cert_responsible_name: string | null
           cert_responsible_phone: string | null
+          cert_whatsapp_group_id: string | null
           cnpj: string | null
           company_name: string | null
           created_at: string
@@ -443,6 +444,7 @@ export type Database = {
           address?: string | null
           cert_responsible_name?: string | null
           cert_responsible_phone?: string | null
+          cert_whatsapp_group_id?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string
@@ -464,6 +466,7 @@ export type Database = {
           address?: string | null
           cert_responsible_name?: string | null
           cert_responsible_phone?: string | null
+          cert_whatsapp_group_id?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string

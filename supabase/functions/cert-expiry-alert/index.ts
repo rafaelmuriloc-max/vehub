@@ -15,24 +15,26 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1. Get responsible contact
+    // 1. Get responsible contact and group config
     const { data: settings } = await supabase
       .from("company_settings")
-      .select("cert_responsible_phone, cert_responsible_name")
+      .select("cert_responsible_phone, cert_responsible_name, cert_whatsapp_group_id")
       .limit(1)
       .maybeSingle();
 
     const rawPhone = settings?.cert_responsible_phone;
-    if (!rawPhone) {
-      console.log("No cert_responsible_phone configured, skipping alert.");
-      return new Response(JSON.stringify({ skipped: true, reason: "no phone" }), {
+    const groupId = settings?.cert_whatsapp_group_id;
+
+    if (!rawPhone && !groupId) {
+      console.log("No cert_responsible_phone or group configured, skipping alert.");
+      return new Response(JSON.stringify({ skipped: true, reason: "no recipient" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Normalize phone: add country code if missing
-    let phone = rawPhone.replace(/\D/g, '');
-    if (!phone.startsWith('55')) {
+    let phone = rawPhone ? rawPhone.replace(/\D/g, '') : null;
+    if (phone && !phone.startsWith('55')) {
       phone = '55' + phone;
     }
 
@@ -115,31 +117,46 @@ Deno.serve(async (req) => {
       });
     }
 
-    const evoRes = await fetch(
-      `${evolutionUrl}/message/sendText/${evolutionInstance}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: evolutionApiKey,
-        },
-        body: JSON.stringify({
-          number: phone,
-          text: message,
-        }),
+    const sendMessage = async (recipient: string) => {
+      const res = await fetch(
+        `${evolutionUrl}/message/sendText/${evolutionInstance}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: evolutionApiKey,
+          },
+          body: JSON.stringify({
+            number: recipient,
+            text: message,
+          }),
+        }
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`Evolution API error for ${recipient}:`, res.status, errText);
       }
-    );
+      return res.ok;
+    };
 
-    if (!evoRes.ok) {
-      const errText = await evoRes.text();
-      console.error("Evolution API error:", evoRes.status, errText);
-      return new Response(JSON.stringify({ error: `Evolution API: ${evoRes.status}` }), {
+    let sentToGroup = false;
+    let sentToPhone = false;
+
+    if (groupId) {
+      sentToGroup = await sendMessage(groupId);
+    }
+    if (phone) {
+      sentToPhone = await sendMessage(phone);
+    }
+
+    if (!sentToGroup && !sentToPhone) {
+      return new Response(JSON.stringify({ error: "Failed to send to any recipient" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`Alert sent: ${expired.length} expired, ${expiringThisWeek.length} expiring this week`);
+    console.log(`Alert sent: ${expired.length} expired, ${expiringThisWeek.length} expiring this week (group: ${sentToGroup}, phone: ${sentToPhone})`);
 
     return new Response(JSON.stringify({
       ok: true,

@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.cert-expiry-alert]
 verify_jwt = false
+
+[functions.evolution-list-groups]
+verify_jwt = false
