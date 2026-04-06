@@ -1184,6 +1184,39 @@ export default function CalendarView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Action Bar */}
+      {selectedInstanceIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-card border rounded-lg shadow-lg px-4 py-3 flex items-center gap-3">
+          <span className="text-sm font-medium">{selectedInstanceIds.size} selecionado(s)</span>
+          <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Excluir selecionados
+          </Button>
+          <Button variant="ghost" size="sm" onClick={clearSelection}>
+            <X className="h-3.5 w-3.5 mr-1" />
+            Limpar
+          </Button>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation */}
+      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selectedInstanceIds.size} obrigação(ões)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {selectedInstanceIds.size} obrigação(ões)? Todas as atividades e arquivos associados serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteSelectedInstances} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir {selectedInstanceIds.size}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
