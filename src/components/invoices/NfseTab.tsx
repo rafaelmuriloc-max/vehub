@@ -300,6 +300,19 @@ export default function NfseTab() {
     }
   }
 
+  function cleanCnpj(doc: string | null) {
+    return doc?.replace(/\D/g, '') || '';
+  }
+
+  function getClientCnpj(clientId: string) {
+    return cleanCnpj(clients.find(c => c.id === clientId)?.document || null);
+  }
+
+  function getInvoiceType(inv: Invoice): 'prestado' | 'tomado' {
+    const clientCnpj = getClientCnpj(inv.client_id);
+    return cleanCnpj(inv.issuer_cnpj) === clientCnpj ? 'prestado' : 'tomado';
+  }
+
   function getClientName(clientId: string) {
     return clients.find(c => c.id === clientId)?.company_name || '—';
   }
