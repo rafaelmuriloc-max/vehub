@@ -493,73 +493,75 @@ export default function NfseTab() {
               Nenhuma nota fiscal encontrada. Use a consulta acima para buscar notas do Portal Nacional.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Data Emissão</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Valor Bruto</TableHead>
-                  <TableHead className="text-right">Impostos</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredInvoices.map(inv => {
-                  const xmlLoading = downloadingMap[`${inv.id}-xml`];
-                  const pdfLoading = downloadingMap[`${inv.id}-pdf`];
-                  return (
-                    <TableRow key={inv.id}>
-                      <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant={getInvoiceType(inv) === 'prestado' ? 'default' : 'outline'} className={getInvoiceType(inv) === 'prestado' ? 'bg-blue-500 hover:bg-blue-600' : 'border-orange-400 text-orange-600'}>
-                          {getInvoiceType(inv) === 'prestado' ? 'Prestado' : 'Tomado'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{getClientName(inv.client_id)}</TableCell>
-                      <TableCell>{formatDate(inv.issue_date)}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{inv.service_description || '—'}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(inv.gross_value)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(inv.tax_value)}</TableCell>
-                      <TableCell>
-                        <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
-                          {inv.status || 'normal'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          {inv.access_key && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={xmlLoading}
-                                onClick={() => handleDownload(inv.id, 'xml', inv.xml_url)}
-                                title="Baixar XML"
-                              >
-                                {xmlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode className="h-4 w-4" />}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={pdfLoading}
-                                onClick={() => handleDownload(inv.id, 'pdf', inv.pdf_url)}
-                                title="Baixar PDF"
-                              >
-                                {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Data Emissão</TableHead>
+                    <TableHead className="hidden md:table-cell">Descrição</TableHead>
+                    <TableHead className="text-right">Valor Bruto</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">Impostos</TableHead>
+                    <TableHead className="hidden md:table-cell">Status</TableHead>
+                    <TableHead>Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInvoices.map(inv => {
+                    const xmlLoading = downloadingMap[`${inv.id}-xml`];
+                    const pdfLoading = downloadingMap[`${inv.id}-pdf`];
+                    return (
+                      <TableRow key={inv.id}>
+                        <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant={getInvoiceType(inv) === 'prestado' ? 'default' : 'outline'} className={getInvoiceType(inv) === 'prestado' ? 'bg-blue-500 hover:bg-blue-600' : 'border-orange-400 text-orange-600'}>
+                            {getInvoiceType(inv) === 'prestado' ? 'Prestado' : 'Tomado'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getClientName(inv.client_id)}</TableCell>
+                        <TableCell>{formatDate(inv.issue_date)}</TableCell>
+                        <TableCell className="max-w-[200px] truncate hidden md:table-cell">{inv.service_description || '—'}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(inv.gross_value)}</TableCell>
+                        <TableCell className="text-right hidden md:table-cell">{formatCurrency(inv.tax_value)}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
+                            {inv.status || 'normal'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {inv.access_key && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={xmlLoading}
+                                  onClick={() => handleDownload(inv.id, 'xml', inv.xml_url)}
+                                  title="Baixar XML"
+                                >
+                                  {xmlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode className="h-4 w-4" />}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={pdfLoading}
+                                  onClick={() => handleDownload(inv.id, 'pdf', inv.pdf_url)}
+                                  title="Baixar PDF"
+                                >
+                                  {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

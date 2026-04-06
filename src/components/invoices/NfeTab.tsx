@@ -376,75 +376,77 @@ export default function NfeTab() {
               Nenhuma NF-e encontrada. Use a consulta acima para buscar NF-e no Ambiente Nacional.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Emitente</TableHead>
-                  <TableHead>Destinatário</TableHead>
-                  <TableHead>Data Emissão</TableHead>
-                  <TableHead className="text-right">Valor Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredInvoices.map(inv => {
-                  const xmlLoading = downloadingMap[`${inv.id}-xml`];
-                  const pdfLoading = downloadingMap[`${inv.id}-pdf`];
-                  return (
-                    <TableRow key={inv.id}>
-                      <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-sm">{inv.emitter_name || getClientName(inv.client_id)}</p>
-                          {inv.emitter_cnpj && <p className="text-xs text-muted-foreground">{inv.emitter_cnpj}</p>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-sm">{inv.recipient_name || '—'}</p>
-                          {inv.recipient_cnpj && <p className="text-xs text-muted-foreground">{inv.recipient_cnpj}</p>}
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatDate(inv.issue_date)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(inv.total_value)}</TableCell>
-                      <TableCell>
-                        <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
-                          {inv.status || 'autorizada'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {inv.access_key && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={xmlLoading}
-                                onClick={() => handleDownloadXml(inv)}
-                                title="Baixar XML completo"
-                              >
-                                {xmlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode className="h-4 w-4" />}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={pdfLoading}
-                                onClick={() => handleDownloadPdf(inv)}
-                                title="Baixar DANFE em PDF"
-                              >
-                                {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número</TableHead>
+                    <TableHead>Emitente</TableHead>
+                    <TableHead className="hidden md:table-cell">Destinatário</TableHead>
+                    <TableHead>Data Emissão</TableHead>
+                    <TableHead className="text-right">Valor Total</TableHead>
+                    <TableHead className="hidden md:table-cell">Status</TableHead>
+                    <TableHead>Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInvoices.map(inv => {
+                    const xmlLoading = downloadingMap[`${inv.id}-xml`];
+                    const pdfLoading = downloadingMap[`${inv.id}-pdf`];
+                    return (
+                      <TableRow key={inv.id}>
+                        <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm">{inv.emitter_name || getClientName(inv.client_id)}</p>
+                            {inv.emitter_cnpj && <p className="text-xs text-muted-foreground hidden md:block">{inv.emitter_cnpj}</p>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div>
+                            <p className="text-sm">{inv.recipient_name || '—'}</p>
+                            {inv.recipient_cnpj && <p className="text-xs text-muted-foreground">{inv.recipient_cnpj}</p>}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatDate(inv.issue_date)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(inv.total_value)}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
+                            {inv.status || 'autorizada'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {inv.access_key && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={xmlLoading}
+                                  onClick={() => handleDownloadXml(inv)}
+                                  title="Baixar XML completo"
+                                >
+                                  {xmlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode className="h-4 w-4" />}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={pdfLoading}
+                                  onClick={() => handleDownloadPdf(inv)}
+                                  title="Baixar DANFE em PDF"
+                                >
+                                  {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
