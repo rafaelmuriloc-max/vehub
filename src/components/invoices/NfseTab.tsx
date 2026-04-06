@@ -534,25 +534,23 @@ export default function NfseTab() {
           </Card>
         </div>
         {showTomadosRetentions && (
-          <div>
-            <p className="text-xs font-medium text-orange-600 dark:text-orange-400 mb-2">Impostos Retidos</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-              <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 col-span-2 md:col-span-1">
-                <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Total Retido</p>
-                  <p className="text-lg font-bold text-orange-700 dark:text-orange-300">{formatCurrency(tomadosRetentionTotals.total)}</p>
-                </CardContent>
-              </Card>
-              {(['iss','irrf','pis','cofins','csll','inss','cp'] as const).map(key =>
-                tomadosRetentionTotals[key] > 0 && (
-                  <Card key={key}>
-                    <CardContent className="pt-4 pb-3 px-4">
-                      <p className="text-xs text-muted-foreground font-medium">{key.toUpperCase()}</p>
-                      <p className="text-lg font-bold text-foreground">{formatCurrency(tomadosRetentionTotals[key])}</p>
-                    </CardContent>
-                  </Card>
-                )
-              )}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Impostos Retidos</p>
+            <Card className="border-l-[3px] border-l-orange-500 border-orange-200 bg-orange-50/80 dark:bg-orange-950/30 dark:border-orange-800">
+              <CardContent className="pt-5 pb-4 px-5">
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wide">Total Retido</p>
+                <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(tomadosRetentionTotals.total)}</p>
+              </CardContent>
+            </Card>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {(['iss','irrf','pis','cofins','csll','inss','cp'] as const).map(key => (
+                <Card key={key} className="border-orange-100 dark:border-orange-900/50">
+                  <CardContent className="pt-5 pb-4 px-5">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{key.toUpperCase()}</p>
+                    <p className="text-xl font-bold text-foreground">{formatCurrency(tomadosRetentionTotals[key])}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         )}
