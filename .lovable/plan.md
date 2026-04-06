@@ -1,31 +1,30 @@
 
 
-# Adicionar paginação nas tabelas de NF-e e NFS-e
+# Remover limite de 200 notas na carga de dados
 
 ## Problema
-Atualmente as tabelas renderizam todas as notas filtradas de uma vez, sem limite. Com muitas notas, a página fica longa e lenta.
+O `loadInvoices()` em ambos os componentes usa `.limit(200)`, impedindo que notas além das 200 mais recentes sejam exibidas. Com a paginação client-side já implementada, esse limite é desnecessariamente restritivo.
 
-## Solução
-Adicionar paginação client-side em ambos os componentes, reutilizando o mesmo padrão visual já usado na página de E-mail (botões Previous/Next + indicador de página).
+## Opções
+
+### Opção A — Remover o limite (simples)
+- Remover `.limit(200)` de ambos os componentes
+- Funciona bem para até ~2.000-3.000 notas
+- Pode ficar lento se o cliente tiver dezenas de milhares
+
+### Opção B — Aumentar para 1000 (compromisso)
+- Trocar `.limit(200)` por `.limit(1000)`
+- Cobre a maioria dos casos sem risco de performance
+
+### Opção C — Paginação server-side (ideal para escala)
+- Carregar apenas a página atual do Supabase usando `.range(from, to)`
+- Requer refatorar o filtro para ser feito via query SQL, não client-side
+- Mais complexo, mas escala para qualquer volume
+
+## Recomendação
+**Opção A** — remover o limite. Para um escritório contábil, o volume típico por consulta (filtrado por mês/cliente) raramente ultrapassa alguns milhares. Se no futuro o volume crescer, migra-se para paginação server-side.
 
 ## Alterações
-
-### 1. `src/components/invoices/NfseTab.tsx`
-- Adicionar state `page` (default 0) e constante `PAGE_SIZE = 20`
-- Resetar `page` para 0 quando filtros mudarem (`filterClient`, `filterType`, `datePeriod`)
-- Calcular `paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)`
-- Usar `paginatedInvoices` no `.map()` da tabela (em vez de `filteredInvoices`)
-- Manter os cards de resumo usando `filteredInvoices` (totais completos)
-- Adicionar bloco de paginação após a tabela: "Página X de Y" + botões Anterior/Próxima com `ChevronLeft`/`ChevronRight`
-
-### 2. `src/components/invoices/NfeTab.tsx`
-- Mesma lógica: state `page`, `PAGE_SIZE = 20`, slice, botões de paginação
-- Resetar página quando filtros mudarem
-
-### Importações adicionais
-- `ChevronLeft`, `ChevronRight` do lucide-react em ambos os arquivos
-
-## Arquivos
-- `src/components/invoices/NfseTab.tsx` — ~20 linhas adicionadas
-- `src/components/invoices/NfeTab.tsx` — ~20 linhas adicionadas
+- `src/components/invoices/NfseTab.tsx` — remover `.limit(200)` (linha 111)
+- `src/components/invoices/NfeTab.tsx` — remover `.limit(200)` (linha 103)
 
