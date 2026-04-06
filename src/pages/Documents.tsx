@@ -325,8 +325,15 @@ export default function Documents() {
     }
   }
 
+  function sanitizeFileName(name: string): string {
+    return name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '_');
+  }
+
   async function importDocument(file: File, clientId: string, docTypeId: string, refMonth: string) {
-    const path = `${clientId}/${refMonth}/${docTypeId}/${file.name}`;
+    const path = `${clientId}/${refMonth}/${docTypeId}/${sanitizeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
     if (uploadError) throw uploadError;
 
