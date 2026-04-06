@@ -400,6 +400,7 @@ export default function NfseTab() {
     { iss: 0, irrf: 0, pis: 0, cofins: 0, csll: 0, inss: 0, cp: 0, total: 0 }
   );
   const hasRetentions = retentionTotals.total > 0;
+  const showRetentionCards = filterClient !== 'all' || hasRetentions;
 
   const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
