@@ -19,7 +19,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
-type DocumentType = { id: string; name: string; description: string | null };
+type FieldRegion = { page: number; x: number; y: number; width: number; height: number };
+type ExtractionConfig = {
+  cnpj_region?: FieldRegion | null;
+  company_name_region?: FieldRegion | null;
+  reference_month_region?: FieldRegion | null;
+  obligation_type_region?: FieldRegion | null;
+};
+type DocumentType = { id: string; name: string; description: string | null; extraction_config: ExtractionConfig | null };
 type Client = { id: string; company_name: string; document: string | null };
 type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string; linked_obligation_id: string | null };
 type Obligation = { id: string; name: string };
@@ -38,6 +45,97 @@ async function extractPdfText(file: File): Promise<string> {
     pages.push(content.items.map((it: any) => it.str).join(' '));
   }
   return pages.join('\n');
+}
+
+async function extractTextFromRegion(file: File, region: FieldRegion): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+  if (region.page > pdf.numPages) return '';
+  const page = await pdf.getPage(region.page);
+  const viewport = page.getViewport({ scale: 1 });
+  const content = await page.getTextContent();
+
+  // Convert percentage-based region to absolute coordinates
+  const absX = (region.x / 100) * viewport.width;
+  const absY = (region.y / 100) * viewport.height;
+  const absW = (region.width / 100) * viewport.width;
+  const absH = (region.height / 100) * viewport.height;
+
+  const texts: { x: number; str: string }[] = [];
+  for (const item of content.items as any[]) {
+    if (!item.str) continue;
+    // pdfjs uses bottom-left origin; transform to top-left
+    const tx = item.transform[4];
+    const ty = viewport.height - item.transform[5];
+    // Check if the text item overlaps with the region
+    if (tx + item.width >= absX && tx <= absX + absW && ty + item.height >= absY && ty <= absY + absH) {
+      texts.push({ x: tx, str: item.str });
+    }
+  }
+  texts.sort((a, b) => a.x - b.x);
+  return texts.map(t => t.str).join(' ').trim();
+}
+
+function extractCnpjFromText(text: string): string {
+  // Match formatted (XX.XXX.XXX/XXXX-XX) or raw 14 digits
+  const formatted = text.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+  if (formatted) return formatted[0].replace(/\D/g, '');
+  const raw = text.replace(/\D/g, '');
+  if (raw.length >= 14) return raw.substring(0, 14);
+  return '';
+}
+
+function extractRefMonthFromText(text: string): string {
+  // Try YYYY-MM
+  const iso = text.match(/(\d{4})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}`;
+  // Try MM/YYYY or MM.YYYY
+  const brDate = text.match(/(\d{2})[\/\.](\d{4})/);
+  if (brDate) return `${brDate[2]}-${brDate[1]}`;
+  // Try month names (Portuguese)
+  const months: Record<string, string> = {
+    janeiro: '01', fevereiro: '02', 'março': '03', marco: '03', abril: '04',
+    maio: '05', junho: '06', julho: '07', agosto: '08', setembro: '09',
+    outubro: '10', novembro: '11', dezembro: '12',
+  };
+  const monthName = text.match(new RegExp(`(${Object.keys(months).join('|')})[\\s\\/]*(?:de\\s*)?(\\d{4})`, 'i'));
+  if (monthName) return `${monthName[2]}-${months[monthName[1].toLowerCase()]}`;
+  return '';
+}
+
+async function tryExtractByRegions(
+  file: File,
+  documentTypes: DocumentType[],
+  matchClientFn: (cnpj: string) => string,
+): Promise<{ docTypeId: string; clientId: string; referenceMonth: string } | null> {
+  const typesWithConfig = documentTypes.filter(dt => {
+    const cfg = dt.extraction_config;
+    return cfg && (cfg.cnpj_region || cfg.reference_month_region);
+  });
+  if (typesWithConfig.length === 0) return null;
+
+  for (const dt of typesWithConfig) {
+    const cfg = dt.extraction_config!;
+    let cnpj = '';
+    let refMonth = '';
+
+    if (cfg.cnpj_region) {
+      const cnpjText = await extractTextFromRegion(file, cfg.cnpj_region);
+      cnpj = extractCnpjFromText(cnpjText);
+    }
+    if (cfg.reference_month_region) {
+      const refText = await extractTextFromRegion(file, cfg.reference_month_region);
+      refMonth = extractRefMonthFromText(refText);
+    }
+
+    if (cnpj) {
+      const clientId = matchClientFn(cnpj);
+      if (clientId) {
+        return { docTypeId: dt.id, clientId, referenceMonth: refMonth };
+      }
+    }
+  }
+  return null;
 }
 
 export default function Documents() {
@@ -59,7 +157,7 @@ export default function Documents() {
 
   async function loadAll() {
     const [dtRes, clRes, docRes, oblRes] = await Promise.all([
-      supabase.from('document_types').select('id, name, description').order('name'),
+      supabase.from('document_types').select('id, name, description, extraction_config').order('name'),
       supabase.from('clients').select('id, company_name, document').eq('status', 'active').order('company_name'),
       supabase.from('documents').select('*').order('created_at', { ascending: false }),
       supabase.from('obligations').select('id, name'),
@@ -110,8 +208,34 @@ export default function Documents() {
       setUploadProgress({ current: i + 1, total: fileList.length });
 
       try {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+        // 1. Try region-based extraction first (no AI needed)
+        if (isPdf) {
+          const regionMatch = await tryExtractByRegions(file, documentTypes, matchClient);
+          if (regionMatch && regionMatch.clientId && regionMatch.docTypeId) {
+            const refMonth = regionMatch.referenceMonth || '';
+            if (refMonth) {
+              await importDocument(file, regionMatch.clientId, regionMatch.docTypeId, refMonth + '-01');
+              importedCount++;
+              continue;
+            } else {
+              // Got client + type but no month — send to review with partial data
+              pendingReview.push({
+                file,
+                extraction: { cnpj: '', company_name: '', reference_month: '', document_type_name: documentTypes.find(dt => dt.id === regionMatch.docTypeId)?.name || '' },
+                matchedClientId: regionMatch.clientId,
+                matchedDocTypeId: regionMatch.docTypeId,
+                referenceMonth: '',
+              });
+              continue;
+            }
+          }
+        }
+
+        // 2. Fallback: AI classification
         let text = '';
-        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        if (isPdf) {
           text = await extractPdfText(file);
         }
 
@@ -501,7 +625,7 @@ export default function Documents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Documentos</h1>
-          <p className="text-muted-foreground">Importação inteligente com classificação automática por IA</p>
+          <p className="text-muted-foreground">Importação inteligente com extração por modelo e IA como fallback</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={relinkDocuments} disabled={relinking}>
