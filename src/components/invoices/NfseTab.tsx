@@ -337,6 +337,11 @@ export default function NfseTab() {
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
+  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
+  const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [filterClient, filterType, datePeriod, filterDateFrom, filterDateTo]);
 
   return (
     <div className="space-y-6">

@@ -273,6 +273,11 @@ export default function NfeTab() {
   if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
   const totalValue = filteredInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
+  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
+  const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [filterClient, datePeriod, filterDateFrom, filterDateTo]);
 
   return (
     <div className="space-y-6">
