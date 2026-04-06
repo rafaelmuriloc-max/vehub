@@ -1,41 +1,31 @@
 
 
-# Cards de impostos retidos em notas de serviços tomados
+# Manter cards de impostos retidos visíveis ao selecionar cliente
 
-## O que será feito
+## Problema
+Os cards de impostos retidos só aparecem quando o filtro de tipo é "Todos" ou "Tomados". Quando um cliente específico é selecionado, se o filtro de tipo estiver em "Prestados", os cards desaparecem. O usuário quer que os cards de retenção sempre apareçam quando um cliente estiver selecionado, mostrando os valores daquele cliente.
 
-Adicionar uma seção de cards resumo que aparece quando o filtro de tipo está em "Tomados" (ou "Todos"), mostrando os impostos retidos nas NFS-e tomadas. Os valores serão extraídos do XML armazenado em `raw_data.xml`.
+## Alteração em `src/components/invoices/NfseTab.tsx`
 
-## Dados disponíveis no XML
+### Linha 479 — Ajustar condição de exibição
 
-A estrutura XML das NFS-e contém:
-- `tpRetISSQN`: 1 = sem retenção ISS, 2 = com retenção ISS
-- `vTotalRet`: valor total retido
-- `vRetIRRF`: IRRF retido (tribFed)
-- `vRetPIS`, `vRetCOFINS`, `vRetCSLL`, `vRetINSS`, `vRetCP`: demais retenções federais
+Mudar de:
+```typescript
+{(filterType === 'tomados' || filterType === 'all') && hasRetentions && (
+```
 
-## Alterações em `src/components/invoices/NfseTab.tsx`
+Para:
+```typescript
+{hasRetentions && (
+```
 
-### 1. Expandir o tipo `Invoice`
-- Adicionar `raw_data: { xml?: string } | null` ao tipo
+Isso faz os cards de retenção aparecerem sempre que houver notas tomadas com retenções nos resultados filtrados, independentemente do filtro de tipo selecionado. Como o cálculo de `retentionTotals` já filtra apenas notas tomadas (`tomadosInvoices`), os valores sempre refletem corretamente o cliente selecionado.
 
-### 2. Função `parseRetentions(inv: Invoice)`
-Extrair do XML via regex:
-- `vTotalRet`, `tpRetISSQN`, `vRetIRRF`, `vRetPIS`, `vRetCOFINS`, `vRetCSLL`, `vRetINSS`, `vRetCP`
-- Calcular ISS retido: se `tpRetISSQN === '2'`, o ISS retido = `vTotalRet` menos as retenções federais (ou `vTotalRet` se não houver federais)
-
-### 3. Calcular totais de retenção
-- Filtrar apenas notas tomadas (`getInvoiceType === 'tomado'`)
-- Somar cada tipo de retenção: ISS, IRRF, PIS, COFINS, CSLL, INSS, CP
-- Total geral retido
-
-### 4. Cards de retenção (nova seção)
-- Exibidos abaixo dos cards de resumo existentes, apenas quando há notas tomadas nos filtros
-- Grid responsivo com cards para cada imposto que tenha valor > 0
-- Card principal "Total Retido" em destaque
-- Cards individuais: ISS, IRRF, PIS, COFINS, CSLL, INSS, CP — apenas os que tiverem valor
-- Cores diferenciadas (ex: vermelho/laranja para retenções)
+**Alternativa**: Se o desejo for mostrar os cards mesmo quando `hasRetentions` é false (valores zerados) quando um cliente está selecionado, a condição seria:
+```typescript
+{(hasRetentions || filterClient !== 'all') && (
+```
 
 ## Arquivo
-- `src/components/invoices/NfseTab.tsx` — ~50 linhas adicionadas
+- `src/components/invoices/NfseTab.tsx` — 1 linha alterada
 
