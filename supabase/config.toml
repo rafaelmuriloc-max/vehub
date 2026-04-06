@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-text]
 verify_jwt = false
+
+[functions.cert-expiry-alert]
+verify_jwt = false
