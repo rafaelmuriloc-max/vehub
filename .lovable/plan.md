@@ -1,51 +1,34 @@
 
-# Seção de controle de vencimento de certificados digitais
+
+# Adicionar campos de Responsável na seção de Certificados
 
 ## O que será feito
-Adicionar uma nova seção na página de Clientes, entre os gráficos e a tabela de clientes, com uma lista de empresas agrupadas pelo mês de vencimento do certificado digital. A seção terá navegação por mês (anterior/próximo) e abrirá no mês atual.
+Adicionar dois campos editáveis (Nome e Telefone do responsável pela emissão dos certificados) na seção de vencimento de certificados da página de Clientes. Os dados serão persistidos na tabela `company_settings`.
 
-## Alterações em `src/pages/Clients.tsx`
+## 1. Migração de banco de dados
+Adicionar duas colunas à tabela `company_settings`:
+- `cert_responsible_name` (text, nullable)
+- `cert_responsible_phone` (text, nullable)
 
-### 1. Estado para o mês selecionado
-Adicionar estado `certMonth` inicializado com `new Date()` (ano e mês atual).
+## 2. Alterações em `src/pages/Clients.tsx`
 
-### 2. Dados filtrados por mês
-Usar `useMemo` para filtrar `clients` (apenas ativos com `digital_certificate_expiry`) cujo vencimento caia no mês selecionado. Ordenar por data de vencimento crescente.
+### Estado e carregamento
+- Adicionar estado `certResponsible` com `name` e `phone`
+- Carregar os valores de `company_settings` no `useEffect` de inicialização (já existe query similar no projeto)
+- Função `saveCertResponsible` para atualizar os campos via `supabase.from('company_settings').update(...)`
 
-### 3. Contadores auxiliares
-Calcular no mesmo `useMemo`:
-- Total de certificados vencendo no mês
-- Quantos já estão vencidos (data < hoje)
-- Quantos vencem nos próximos 15 dias
-
-### 4. UI da seção
-Inserir após os gráficos (linha ~1204) e antes do filtro de busca (linha ~1206):
+### UI
+Inserir entre o header (badges de resumo) e a tabela de certificados, dois campos inline:
 
 ```text
-┌──────────────────────────────────────────────────────┐
-│ 🔒 Vencimento de Certificados                       │
-│  ◀  Abril 2026  ▶                                   │
-│                                                      │
-│  [Vencidos: 2]  [Próx. 15 dias: 3]  [Total: 8]     │
-│                                                      │
-│  Empresa          | CNPJ       | Vencimento | Status │
-│  Acme Ltda        | 12.345...  | 05/04/2026 | 🔴    │
-│  Beta Corp        | 98.765...  | 18/04/2026 | 🟡    │
-│  ...              |            |            |        │
-│                                                      │
-│  (ou "Nenhum certificado vence neste mês")           │
-└──────────────────────────────────────────────────────┘
+Responsável: [___Nome___]  Telefone: [___Telefone___]  [Salvar]
 ```
 
-- Header com botões `ChevronLeft`/`ChevronRight` para navegar entre meses
-- Nome do mês em português + ano centralizado
-- 3 mini-badges de resumo (vencidos, próximos 15 dias, total do mês)
-- Tabela compacta: Empresa, CNPJ, Data de Vencimento, Status (badge colorido: vermelho=vencido, amarelo=≤30 dias, verde=>30 dias)
-- Clique na linha abre o cadastro do cliente (reutiliza `openView`)
-- Se não houver certificados no mês, mostra mensagem vazia
+- Dois `Input` em linha (flex row) com labels compactos
+- Botão "Salvar" que persiste os dados
+- Toast de confirmação ao salvar
 
-### 5. Ícone/import
-Adicionar `ShieldAlert` ao import do lucide-react (já tem `ShieldCheck`).
+## Arquivos alterados
+- Migração SQL — 2 colunas em `company_settings`
+- `src/pages/Clients.tsx` — ~20 linhas adicionadas
 
-## Arquivo
-- `src/pages/Clients.tsx` — ~60 linhas adicionadas
