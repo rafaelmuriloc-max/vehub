@@ -381,26 +381,23 @@ export default function NfseTab() {
   const tomadosTotalGross = baseFiltered.filter(i => getInvoiceType(i) === 'tomado').reduce((s, i) => s + (i.gross_value || 0), 0);
   const tomadosTotalTax = baseFiltered.filter(i => getInvoiceType(i) === 'tomado').reduce((s, i) => s + (i.tax_value || 0), 0);
 
-  // Retention totals from tomadas invoices (uses baseFiltered to ignore type filter)
+  // Retention totals (uses baseFiltered to ignore type filter)
   const tomadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'tomado');
-  const retentionTotals = tomadosInvoices.reduce<Retentions>(
+  const calcRetentions = (invs: typeof invoices) => invs.reduce<Retentions>(
     (acc, inv) => {
       const r = parseRetentions(inv);
       return {
-        iss: acc.iss + r.iss,
-        irrf: acc.irrf + r.irrf,
-        pis: acc.pis + r.pis,
-        cofins: acc.cofins + r.cofins,
-        csll: acc.csll + r.csll,
-        inss: acc.inss + r.inss,
-        cp: acc.cp + r.cp,
-        total: acc.total + r.total,
+        iss: acc.iss + r.iss, irrf: acc.irrf + r.irrf, pis: acc.pis + r.pis,
+        cofins: acc.cofins + r.cofins, csll: acc.csll + r.csll, inss: acc.inss + r.inss,
+        cp: acc.cp + r.cp, total: acc.total + r.total,
       };
     },
     { iss: 0, irrf: 0, pis: 0, cofins: 0, csll: 0, inss: 0, cp: 0, total: 0 }
   );
-  const hasRetentions = retentionTotals.total > 0;
-  const showRetentionCards = filterClient !== 'all' || hasRetentions;
+  const prestadosRetentionTotals = calcRetentions(prestadosInvoices);
+  const tomadosRetentionTotals = calcRetentions(tomadosInvoices);
+  const showPrestadosRetentions = filterClient !== 'all' || prestadosRetentionTotals.total > 0;
+  const showTomadosRetentions = filterClient !== 'all' || tomadosRetentionTotals.total > 0;
 
   const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
