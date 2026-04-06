@@ -489,7 +489,7 @@ export default function NfseTab() {
         {showPrestadosRetentions && (
           <div className="space-y-3">
             <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Impostos Retidos</p>
-            <Card className="border-l-[3px] border-l-blue-500 border-blue-200 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-800">
+            <Card className="border-l-[3px] border-l-blue-500 border-blue-200 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-800 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setRetentionDetail({ type: 'prestado', taxKey: 'total' })}>
               <CardContent className="pt-5 pb-4 px-5">
                 <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wide">Total Retido</p>
                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(prestadosRetentionTotals.total)}</p>
@@ -497,7 +497,7 @@ export default function NfseTab() {
             </Card>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {(['iss','irrf','pis','cofins','csll','inss','cp'] as const).map(key => (
-                <Card key={key} className="border-blue-100 dark:border-blue-900/50">
+                <Card key={key} className="border-blue-100 dark:border-blue-900/50 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setRetentionDetail({ type: 'prestado', taxKey: key })}>
                   <CardContent className="pt-5 pb-4 px-5">
                     <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{key.toUpperCase()}</p>
                     <p className="text-xl font-bold text-foreground">{formatCurrency(prestadosRetentionTotals[key])}</p>
