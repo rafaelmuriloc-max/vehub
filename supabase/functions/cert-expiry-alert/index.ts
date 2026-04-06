@@ -22,12 +22,18 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    const phone = settings?.cert_responsible_phone;
-    if (!phone) {
+    const rawPhone = settings?.cert_responsible_phone;
+    if (!rawPhone) {
       console.log("No cert_responsible_phone configured, skipping alert.");
       return new Response(JSON.stringify({ skipped: true, reason: "no phone" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Normalize phone: add country code if missing
+    let phone = rawPhone.replace(/\D/g, '');
+    if (!phone.startsWith('55')) {
+      phone = '55' + phone;
     }
 
     // 2. Get active clients with certificate expiry
