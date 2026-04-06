@@ -46,6 +46,7 @@ export default function NfseTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
+  const [filterType, setFilterType] = useState<'all' | 'prestados' | 'tomados'>('all');
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -299,6 +300,19 @@ export default function NfseTab() {
     }
   }
 
+  function cleanCnpj(doc: string | null) {
+    return doc?.replace(/\D/g, '') || '';
+  }
+
+  function getClientCnpj(clientId: string) {
+    return cleanCnpj(clients.find(c => c.id === clientId)?.document || null);
+  }
+
+  function getInvoiceType(inv: Invoice): 'prestado' | 'tomado' {
+    const clientCnpj = getClientCnpj(inv.client_id);
+    return cleanCnpj(inv.issuer_cnpj) === clientCnpj ? 'prestado' : 'tomado';
+  }
+
   function getClientName(clientId: string) {
     return clients.find(c => c.id === clientId)?.company_name || '—';
   }
@@ -316,6 +330,7 @@ export default function NfseTab() {
   if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
   if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
   if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
+  if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(i => getInvoiceType(i) === (filterType === 'prestados' ? 'prestado' : 'tomado'));
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
@@ -436,6 +451,16 @@ export default function NfseTab() {
                   </div>
                 </>
               )}
+              <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os tipos</SelectItem>
+                  <SelectItem value="prestados">Serviços Prestados</SelectItem>
+                  <SelectItem value="tomados">Serviços Tomados</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={filterClient} onValueChange={setFilterClient}>
                 <SelectTrigger className="w-[220px]">
                   <SelectValue />
@@ -471,6 +496,7 @@ export default function NfseTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Número</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Data Emissão</TableHead>
                   <TableHead>Descrição</TableHead>
@@ -487,6 +513,11 @@ export default function NfseTab() {
                   return (
                     <TableRow key={inv.id}>
                       <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant={getInvoiceType(inv) === 'prestado' ? 'default' : 'outline'} className={getInvoiceType(inv) === 'prestado' ? 'bg-blue-500 hover:bg-blue-600' : 'border-orange-400 text-orange-600'}>
+                          {getInvoiceType(inv) === 'prestado' ? 'Prestado' : 'Tomado'}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{getClientName(inv.client_id)}</TableCell>
                       <TableCell>{formatDate(inv.issue_date)}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{inv.service_description || '—'}</TableCell>
