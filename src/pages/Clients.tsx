@@ -140,7 +140,7 @@ export default function Clients() {
   const [editing, setEditing] = useState<Client | null>(null);
   const [viewOnly, setViewOnly] = useState(false);
   const { isAdmin, user } = useAuth();
-  
+  const { toast } = useToast();
   const [form, setForm] = useState({ ...emptyForm });
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [classifyingSegment, setClassifyingSegment] = useState(false);
