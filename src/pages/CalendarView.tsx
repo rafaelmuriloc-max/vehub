@@ -449,6 +449,19 @@ export default function CalendarView() {
     await loadData();
   }
 
+  async function deleteSelectedInstances() {
+    const ids = Array.from(selectedInstanceIds);
+    for (const id of ids) {
+      await supabase.from('obligation_activity_completions').delete().eq('instance_id', id);
+      await supabase.from('obligation_instances').delete().eq('id', id);
+    }
+    toast({ title: `${ids.length} obrigação(ões) excluída(s) com sucesso` });
+    clearSelection();
+    setShowBulkDeleteConfirm(false);
+    if (detailInstanceId && ids.includes(detailInstanceId)) setDetailInstanceId(null);
+    await loadData();
+  }
+
   const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
   const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
   const dayPendingTotalPages = Math.ceil(dayEventsPending.length / DAY_ITEMS_PER_PAGE);
