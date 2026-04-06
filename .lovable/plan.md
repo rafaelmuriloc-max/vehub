@@ -1,32 +1,39 @@
 
 
-# Corrigir contagem de concluídas na lista do mês
+# Diagnóstico: documento do FGTS não chega via WhatsApp
 
-## Problema
-A lista de obrigações do mês (`monthEvents`, linha 258) filtra apenas eventos com `type === 'target'`. Após a correção de deduplicação, quando a data da meta e do vencimento caem no mesmo dia, o evento é mantido como `type: 'due'` (maior prioridade). Esses eventos são excluídos da lista do mês, causando divergência entre o número nos cards (que conta corretamente a partir das instâncias) e a lista exibida.
+## Situação atual
 
-## Solução
-Alterar o filtro de `monthEvents` para não restringir por tipo. Como a deduplicação já garante um único evento por instância por dia, basta agrupar por `instanceId` e manter um evento por instância (o de maior prioridade):
+Analisei exaustivamente os dados e o código. A configuração do FGTS é **idêntica** à da Folha de Pagamento:
+- Mesmo template `envio_doc`
+- Mesmo `whatsapp_has_document_header = true`
+- Mesmo código `sendActivityWhatsApp.ts`
+- Mesma Edge Function `whatsapp-send`
 
-```typescript
-const monthEvents = useMemo(() => {
-  const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-  const monthFiltered = events.filter(e => e.date.startsWith(prefix));
-  // Keep one event per instance (highest priority already from dedup)
-  const byInstance = new Map<string, CalendarEvent>();
-  const priority: Record<string, number> = { due: 3, target: 2, alert: 1 };
-  for (const ev of monthFiltered) {
-    const existing = byInstance.get(ev.instanceId);
-    if (!existing || (priority[ev.type] ?? 0) > (priority[existing.type] ?? 0)) {
-      byInstance.set(ev.instanceId, ev);
-    }
-  }
-  return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
-}, [events, year, month]);
-```
+A Meta API **aceita** ambos os envios e retorna `wamid` de confirmação. A diferença é que a Folha entrega e o FGTS não.
 
-Isso garante que cada instância aparece exatamente uma vez na lista do mês, independente do tipo do evento, alinhando a contagem da lista com os cards de métricas.
+## Problemas identificados
 
-## Arquivo
-- `src/pages/CalendarView.tsx` — ~10 linhas alteradas no `useMemo` de `monthEvents`
+### 1. Envio triplo do FGTS para o mesmo número
+O FGTS para RMC GESTAO foi enviado **3 vezes** (22:44, 22:49, 22:52) para o mesmo número. Isso indica que a cadeia `auto_start` está sendo acionada múltiplas vezes. Enviar muitos templates em sequência para o mesmo número pode causar bloqueio de entrega na Meta (rate limiting silencioso — a API aceita mas não entrega).
+
+### 2. Sem logging detalhado
+A Edge Function `whatsapp-send` não registra o payload enviado nem o response body completo da Meta. Sem isso, não é possível identificar se a Meta está retornando warnings de delivery ou detalhes de falha.
+
+## Plano de ação
+
+### Etapa 1 — Adicionar logging detalhado na Edge Function `whatsapp-send`
+Registrar:
+- O `messagePayload` completo enviado à Meta
+- O response body completo da Meta (não apenas o wamid)
+- O status HTTP da resposta
+
+Isso permitirá ver exatamente o que a Meta está respondendo para os envios de FGTS vs Folha.
+
+### Etapa 2 — Evitar envio duplicado
+Adicionar verificação no `sendActivityWhatsApp.ts` para checar se já existe um `whatsapp_logs` com `status = 'sent'` para a mesma `instance_id` e `activity_id` antes de enviar. Isso previne o envio triplo.
+
+## Arquivos alterados
+- `supabase/functions/whatsapp-send/index.ts` — ~4 linhas de logging
+- `src/lib/sendActivityWhatsApp.ts` — ~8 linhas de verificação de duplicidade
 
