@@ -625,7 +625,7 @@ export default function Documents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Documentos</h1>
-          <p className="text-muted-foreground">Importação inteligente com classificação automática por IA</p>
+          <p className="text-muted-foreground">Importação inteligente com extração por modelo e IA como fallback</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={relinkDocuments} disabled={relinking}>
