@@ -1,41 +1,41 @@
 
 
-# Separar retenções entre Prestados e Tomados
+# Melhorar layout dos cards de retenções
 
-## O que será feito
-Mover os cards de impostos retidos para ficarem logo abaixo dos cards totais de cada tipo (Prestados e Tomados), calculando retenções independentemente para cada grupo.
+## Problema atual
+Os cards de retenção usam um grid `grid-cols-2 md:grid-cols-4 lg:grid-cols-8` que fica apertado, com cards pequenos e texto truncado (como visível na screenshot). O card "Total Retido" tem destaque mas compete visualmente com os demais no mesmo grid.
 
-## Alterações em `src/components/invoices/NfseTab.tsx`
+## Novo layout proposto
 
-### 1. Calcular retenções para Prestados
-Adicionar cálculo de `prestadosRetentionTotals` usando `parseRetentions` sobre `prestadosInvoices`, da mesma forma que já é feito para `tomadosInvoices` (linhas 386-401).
+Inspirado na screenshot do usuário, reorganizar os cards de retenção com mais espaço e hierarquia visual:
 
-### 2. Reorganizar o layout
+### Estrutura para cada seção (Prestados e Tomados)
 
-**Seção Serviços Prestados** (linhas 464-490):
-- Manter os 3 cards totais (azul)
-- Adicionar logo abaixo os cards de retenção dos prestados (tema azul), com a mesma estrutura visual dos atuais mas usando `prestadosRetentionTotals`
-- Exibir quando houver retenções ou quando um cliente estiver selecionado
+1. **Card "Total Retido"** — destaque maior, ocupa largura cheia ou metade, com background colorido mais pronunciado e valor em tamanho maior
+2. **Cards individuais de impostos** — grid `grid-cols-2 md:grid-cols-3 lg:grid-cols-4` com cards maiores, mais padding, texto legível
+3. Mostrar todos os impostos com valor > 0 sem compressão excessiva
+4. Remover `col-span-2 md:col-span-1` do "Total Retido" — dar uma linha separada ou posição de destaque
 
-**Seção Serviços Tomados** (linhas 492-518):
-- Manter os 3 cards totais (laranja)
-- Mover os cards de retenção atuais (linhas 520-589) para dentro desta seção, logo abaixo dos totais
-- Manter tema laranja
+### Detalhes visuais
 
-### 3. Remover seção separada de retenções
-Remover o bloco atual de "Impostos Retidos (Serviços Tomados)" (linhas 520-589) que hoje fica isolado após ambas as seções.
+**Card "Total Retido":**
+- Background mais forte (blue-100/orange-100)
+- Badge colorido com label "Total Retido"
+- Valor em `text-2xl font-bold`
+- Borda left 3px colorida (como padrão do projeto em obligations)
 
-### Estrutura final
-```text
-Serviços Prestados (azul)
-├── Cards: Total Notas | Valor Bruto | Impostos
-└── Retenções: Total Retido | ISS | IRRF | PIS | COFINS | CSLL | INSS | CP
+**Cards de impostos individuais:**
+- Grid `grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6` — mais flexível
+- Padding `pt-5 pb-4 px-5`
+- Label em `text-xs uppercase tracking-wide`
+- Valor em `text-xl font-bold`
+- Borda sutil colorida (blue/orange 200)
 
-Serviços Tomados (laranja)
-├── Cards: Total Notas | Valor Bruto | Impostos
-└── Retenções: Total Retido | ISS | IRRF | PIS | COFINS | CSLL | INSS | CP
-```
+**Layout geral da seção de retenção:**
+- Flex row: "Total Retido" card à esquerda + grid de impostos à direita
+- Ou: "Total Retido" em linha separada acima + grid de impostos abaixo
+- Separação visual com `mt-2` e label "Impostos Retidos" mais destacado
 
-## Arquivo
-- `src/components/invoices/NfseTab.tsx` — ~40 linhas alteradas/adicionadas
+## Alterações
+- `src/components/invoices/NfseTab.tsx` — linhas 487-509 (prestados) e 538-560 (tomados): redesenhar o bloco de retenções com novo grid e hierarquia visual
 
