@@ -496,6 +496,7 @@ export default function NfseTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Número</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Data Emissão</TableHead>
                   <TableHead>Descrição</TableHead>
