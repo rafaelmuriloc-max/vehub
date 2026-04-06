@@ -1,34 +1,55 @@
 
+# Manter cards de retenção visíveis ao filtrar por cliente
 
-# Separar cards de resumo por Prestados e Tomados
+## Problema identificado
+Hoje a seção de retenções só renderiza quando `hasRetentions` é `true`:
 
-## O que será feito
-Substituir os 3 cards de resumo atuais (Total de Notas, Valor Bruto Total, Total de Impostos) por uma versão que mostra os valores separados por tipo: Prestados e Tomados, semelhante ao layout da imagem de referência.
+```tsx
+{hasRetentions && (
+```
 
-## Alterações em `src/components/invoices/NfseTab.tsx`
+Como `hasRetentions` depende de `retentionTotals.total > 0`, ao selecionar um cliente a seção some sempre que:
+- aquele cliente não tiver retenções no conjunto filtrado, ou
+- o XML da nota não trouxer os campos usados em `parseRetentions()`.
 
-### 1. Calcular totais separados
-Após `baseFiltered`, calcular:
-- `prestadosInvoices` = notas com `getInvoiceType === 'prestado'` (de `baseFiltered`)
-- `tomadosInvoices` já existe
-- Totais de quantidade, valor bruto e impostos para cada grupo
+Isso faz o bloco desaparecer, em vez de continuar visível no contexto do cliente selecionado.
 
-### 2. Redesenhar os cards de resumo (linhas 458-478)
-Substituir o grid atual por duas seções:
+## Ajuste proposto
+No `src/components/invoices/NfseTab.tsx`:
 
-**Serviços Prestados** (azul):
-- 3 cards: Total de Notas, Valor Bruto Total, Total de Impostos — com valores dos prestados
+1. Alterar a condição de exibição da seção de retenções para:
+   - aparecer sempre quando houver um cliente selecionado, mesmo com total zerado
+   - continuar aparecendo normalmente quando houver retenções reais
 
-**Serviços Tomados** (laranja):
-- 3 cards: Total de Notas, Valor Bruto Total, Total de Impostos — com valores dos tomados
+   Exemplo:
+   ```tsx
+   const showRetentionCards = filterClient !== 'all' || hasRetentions;
+   ```
 
-Cada seção terá um título/label com cor diferenciada (azul para prestados, laranja para tomados) e os cards organizados em grid `grid-cols-1 md:grid-cols-3`.
+2. Usar essa flag no render:
+   ```tsx
+   {showRetentionCards && (
+   ```
 
-Quando o filtro de tipo estiver ativo, ambas as seções ainda aparecem mas refletem os dados filtrados por cliente/data (usando `baseFiltered`).
+3. Manter o cálculo de `retentionTotals` baseado em `tomadosInvoices` derivados de `baseFiltered`, para que os valores continuem refletindo o cliente/período selecionado e não o filtro visual de tipo.
 
-### 3. Manter cards de retenção
-Os cards de impostos retidos (já existentes) continuam abaixo, sem alteração.
+4. Ajustar o conteúdo dos cards para dois cenários:
+   - **com retenção**: exibir os cards atuais normalmente
+   - **sem retenção para o cliente selecionado**: exibir o card “Total Retido” com `R$ 0,00` e os demais cards zerados ou uma mensagem curta como “Sem retenções identificadas nas notas tomadas deste cliente”
+
+## Resultado esperado
+Ao selecionar um cliente:
+- os cards de retenção não somem
+- os valores exibidos passam a refletir apenas esse cliente
+- se não houver retenções, a interface continua mostrando a seção, deixando claro que o valor é zero em vez de desaparecer
 
 ## Arquivo
-- `src/components/invoices/NfseTab.tsx` — ~30 linhas alteradas/adicionadas
+- `src/components/invoices/NfseTab.tsx`
 
+## Detalhe técnico
+A filtragem já está correta:
+- `baseFiltered` aplica cliente + período
+- `filteredInvoices` aplica o filtro de tipo apenas na tabela
+- `tomadosInvoices` usa `baseFiltered`
+
+Então o ajuste principal é de **renderização/estado vazio** da seção de retenções, não de consulta.
