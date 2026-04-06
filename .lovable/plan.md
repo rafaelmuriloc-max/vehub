@@ -1,28 +1,46 @@
 
 
-# Filtrar NFS-e por Serviços Prestados e Tomados
+# Tornar tabelas de notas fiscais responsivas
 
-## Situação atual
-O backend (nfse-query) já captura **ambos** os tipos de notas — prestadas e tomadas — pois o ADN retorna todos os documentos vinculados ao CNPJ do cliente. Os campos `issuer_cnpj` e `taker_cnpj` já são preenchidos corretamente no banco. O que falta é a **distinção na interface**.
+## Problema
+As tabelas de NF-e (7 colunas) e NFS-e (9 colunas) não cabem em telas mobile — ficam cortadas ou com scroll horizontal sem controle. Os filtros na barra superior também ocupam espaço excessivo.
 
-## Alterações em `src/components/invoices/NfseTab.tsx`
+## Solução
+Aplicar o padrão responsivo do projeto: ocultar colunas secundárias no mobile e envolver as tabelas em scroll horizontal.
 
-### 1. Novo filtro de tipo (Prestados / Tomados / Todos)
-- Adicionar state `filterType: 'all' | 'prestados' | 'tomados'` (default: `'all'`)
-- Adicionar um `Select` na barra de filtros com as opções: "Todos", "Serviços Prestados", "Serviços Tomados"
-- Na filtragem, comparar o CNPJ do cliente selecionado com `issuer_cnpj` (prestados) ou `taker_cnpj` (tomados)
+## Alterações
 
-### 2. Lógica de filtragem
-Para determinar se uma nota é prestada ou tomada, comparar o CNPJ do cliente (`clients.document` limpo) com o `issuer_cnpj` da nota:
-- **Prestados**: `issuer_cnpj` corresponde ao CNPJ do cliente vinculado (`client_id`)
-- **Tomados**: `issuer_cnpj` NÃO corresponde ao CNPJ do cliente (ou `taker_cnpj` corresponde)
+### 1. `src/components/invoices/NfeTab.tsx`
 
-### 3. Indicação visual na tabela
-- Adicionar uma coluna "Tipo" com badge: `Prestado` (azul) ou `Tomado` (laranja), determinado pela comparação do CNPJ do prestador com o do cliente
+**Tabela — ocultar colunas no mobile:**
+- Coluna "Destinatário": `hidden md:table-cell`
+- Coluna "Status": `hidden md:table-cell`
+- Coluna "Emitente" CNPJ sub-text: `hidden md:block`
 
-### 4. Cards de resumo
-- Atualizar os totais para refletir o filtro de tipo ativo
+**Filtros — empilhar no mobile:**
+- Selects de filtro: largura `w-full md:w-[180px]` / `w-full md:w-[220px]`
+- Container de filtros: `flex-col md:flex-row`
 
-## Arquivo
-- `src/components/invoices/NfseTab.tsx` — ~20 linhas adicionadas/alteradas
+**Scroll horizontal:**
+- Envolver `<Table>` em `<div className="overflow-x-auto">`
+
+### 2. `src/components/invoices/NfseTab.tsx`
+
+**Tabela — ocultar colunas no mobile:**
+- Coluna "Descrição": `hidden md:table-cell`
+- Coluna "Impostos": `hidden md:table-cell`
+- Coluna "Status": `hidden md:table-cell`
+- Coluna "Tipo" badge: manter visível (é informação essencial)
+
+**Filtros — empilhar no mobile:**
+- Selects: `w-full md:w-[180px]` / `w-full md:w-[220px]`
+- Container: `flex-col md:flex-row`
+- Botão "Exportar XMLs": `w-full md:w-auto`
+
+**Scroll horizontal:**
+- Envolver `<Table>` em `<div className="overflow-x-auto">`
+
+## Arquivos
+- `src/components/invoices/NfeTab.tsx` — classes CSS em ~10 linhas
+- `src/components/invoices/NfseTab.tsx` — classes CSS em ~12 linhas
 
