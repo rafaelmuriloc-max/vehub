@@ -517,7 +517,7 @@ export default function NfseTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInvoices.map(inv => {
+                  {paginatedInvoices.map(inv => {
                     const xmlLoading = downloadingMap[`${inv.id}-xml`];
                     const pdfLoading = downloadingMap[`${inv.id}-pdf`];
                     return (
