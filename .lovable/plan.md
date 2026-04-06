@@ -1,41 +1,41 @@
 
 
-# Melhorar layout dos cards de retenções
+# Listar notas ao clicar nos cards de retenção
 
-## Problema atual
-Os cards de retenção usam um grid `grid-cols-2 md:grid-cols-4 lg:grid-cols-8` que fica apertado, com cards pequenos e texto truncado (como visível na screenshot). O card "Total Retido" tem destaque mas compete visualmente com os demais no mesmo grid.
+## O que será feito
+Ao clicar em qualquer card de retenção (Total Retido ou imposto individual), abrir um Dialog/modal listando as notas fiscais que contribuíram para aquele valor, com o valor retido de cada nota.
 
-## Novo layout proposto
+## Alterações em `src/components/invoices/NfseTab.tsx`
 
-Inspirado na screenshot do usuário, reorganizar os cards de retenção com mais espaço e hierarquia visual:
+### 1. Estado para controlar o modal
+Adicionar estado `retentionDetail` com tipo `{ type: 'prestado' | 'tomado', taxKey: keyof Retentions | 'total' } | null`.
 
-### Estrutura para cada seção (Prestados e Tomados)
+### 2. Lógica de filtragem das notas
+Quando o modal abre, filtrar as notas (`prestadosInvoices` ou `tomadosInvoices` conforme `type`) onde `parseRetentions(inv)[taxKey] > 0`. Calcular o valor retido individual de cada nota para exibição.
 
-1. **Card "Total Retido"** — destaque maior, ocupa largura cheia ou metade, com background colorido mais pronunciado e valor em tamanho maior
-2. **Cards individuais de impostos** — grid `grid-cols-2 md:grid-cols-3 lg:grid-cols-4` com cards maiores, mais padding, texto legível
-3. Mostrar todos os impostos com valor > 0 sem compressão excessiva
-4. Remover `col-span-2 md:col-span-1` do "Total Retido" — dar uma linha separada ou posição de destaque
+### 3. Modal com tabela de notas
+- Usar componente `Dialog` existente
+- Header: nome do imposto selecionado + total
+- Tabela com colunas: Numero, Cliente, Data Emissao, Valor Bruto, Valor Retido (do imposto clicado)
+- Ordenar por valor retido decrescente
 
-### Detalhes visuais
+### 4. Tornar cards clicáveis
+- Adicionar `cursor-pointer hover:shadow-md transition-shadow` aos cards de retenção (tanto Prestados quanto Tomados)
+- onClick: `setRetentionDetail({ type, taxKey })`
+- Aplicar ao card "Total Retido" e aos 7 cards individuais de ambas as seções
 
-**Card "Total Retido":**
-- Background mais forte (blue-100/orange-100)
-- Badge colorido com label "Total Retido"
-- Valor em `text-2xl font-bold`
-- Borda left 3px colorida (como padrão do projeto em obligations)
+### Estrutura do Dialog
+```text
+┌─────────────────────────────────────────────┐
+│  ISS Retido - Serviços Tomados              │
+│  Total: R$ 1.234,56                         │
+├─────────────────────────────────────────────┤
+│  Número | Cliente | Data | Bruto | Retido   │
+│  001    | Acme    | ...  | 5000  | 500      │
+│  002    | Beta    | ...  | 3000  | 300      │
+└─────────────────────────────────────────────┘
+```
 
-**Cards de impostos individuais:**
-- Grid `grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6` — mais flexível
-- Padding `pt-5 pb-4 px-5`
-- Label em `text-xs uppercase tracking-wide`
-- Valor em `text-xl font-bold`
-- Borda sutil colorida (blue/orange 200)
-
-**Layout geral da seção de retenção:**
-- Flex row: "Total Retido" card à esquerda + grid de impostos à direita
-- Ou: "Total Retido" em linha separada acima + grid de impostos abaixo
-- Separação visual com `mt-2` e label "Impostos Retidos" mais destacado
-
-## Alterações
-- `src/components/invoices/NfseTab.tsx` — linhas 487-509 (prestados) e 538-560 (tomados): redesenhar o bloco de retenções com novo grid e hierarquia visual
+## Arquivo
+- `src/components/invoices/NfseTab.tsx` — ~60 linhas adicionadas
 
