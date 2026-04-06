@@ -586,6 +586,7 @@ export default function NfseTab() {
                 </div>
               </div>
             )}
+            </>
           )}
         </CardContent>
       </Card>
