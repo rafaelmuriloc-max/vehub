@@ -410,7 +410,7 @@ export default function NfeTab() {
                         </TableCell>
                         <TableCell>{formatDate(inv.issue_date)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(inv.total_value)}</TableCell>
-                        <TableCell className="hidden md:table-cell">
+                        <TableCell className="hidden lg:table-cell">
                           <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
                             {inv.status || 'autorizada'}
                           </Badge>
