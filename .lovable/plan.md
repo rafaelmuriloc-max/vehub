@@ -1,33 +1,31 @@
 
 
-# Ajustar colunas das tabelas de notas fiscais para caber na tela
+# Adicionar paginação nas tabelas de NF-e e NFS-e
 
 ## Problema
-Na tela atual (~1267px), todas as colunas são visíveis mas as últimas ("Status", "Ações") ficam cortadas à direita. Nomes longos de clientes e a coluna "Descrição" consomem espaço excessivo.
+Atualmente as tabelas renderizam todas as notas filtradas de uma vez, sem limite. Com muitas notas, a página fica longa e lenta.
+
+## Solução
+Adicionar paginação client-side em ambos os componentes, reutilizando o mesmo padrão visual já usado na página de E-mail (botões Previous/Next + indicador de página).
 
 ## Alterações
 
 ### 1. `src/components/invoices/NfseTab.tsx`
-
-**Reduzir largura de colunas largas:**
-- Coluna "Cliente": adicionar `max-w-[150px] truncate` para limitar nomes longos
-- Coluna "Descrição": reduzir `max-w-[200px]` para `max-w-[150px]`, e esconder em telas menores que `lg` em vez de `md` (`hidden lg:table-cell`)
-- Coluna "Impostos": esconder abaixo de `lg` (`hidden lg:table-cell`)
-- Coluna "Status": manter `hidden md:table-cell`
-
-**Reduzir padding da tabela:**
-- Adicionar `text-sm` ao `<Table>` para texto mais compacto
+- Adicionar state `page` (default 0) e constante `PAGE_SIZE = 20`
+- Resetar `page` para 0 quando filtros mudarem (`filterClient`, `filterType`, `datePeriod`)
+- Calcular `paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)`
+- Usar `paginatedInvoices` no `.map()` da tabela (em vez de `filteredInvoices`)
+- Manter os cards de resumo usando `filteredInvoices` (totais completos)
+- Adicionar bloco de paginação após a tabela: "Página X de Y" + botões Anterior/Próxima com `ChevronLeft`/`ChevronRight`
 
 ### 2. `src/components/invoices/NfeTab.tsx`
+- Mesma lógica: state `page`, `PAGE_SIZE = 20`, slice, botões de paginação
+- Resetar página quando filtros mudarem
 
-**Mesmos ajustes de breakpoint:**
-- Colunas secundárias ("Destinatário", "Status"): usar `hidden lg:table-cell` em vez de `hidden md:table-cell` para esconder em telas intermediárias
-- Coluna "Emitente": `max-w-[150px] truncate`
-
-## Resultado
-Em ~1267px: colunas essenciais (Número, Tipo, Cliente, Data, Valor, Ações) sempre visíveis. Descrição e Impostos aparecem apenas em telas `lg` (1024px+). Status aparece a partir de `md` (768px+).
+### Importações adicionais
+- `ChevronLeft`, `ChevronRight` do lucide-react em ambos os arquivos
 
 ## Arquivos
-- `src/components/invoices/NfseTab.tsx` — ~8 linhas de classes CSS
-- `src/components/invoices/NfeTab.tsx` — ~6 linhas de classes CSS
+- `src/components/invoices/NfseTab.tsx` — ~20 linhas adicionadas
+- `src/components/invoices/NfeTab.tsx` — ~20 linhas adicionadas
 
