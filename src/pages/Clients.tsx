@@ -181,7 +181,7 @@ export default function Clients() {
      if (existing) {
        await supabase.from('company_settings').update({ cert_responsible_name: certResponsible.name || null, cert_responsible_phone: certResponsible.phone || null } as any).eq('id', existing.id);
      }
-     toast.success('Responsável salvo com sucesso');
+     toast({ title: 'Responsável salvo com sucesso' });
    };
 
   const certMonthData = useMemo(() => {
