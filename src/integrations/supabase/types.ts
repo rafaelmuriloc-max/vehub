@@ -420,6 +420,8 @@ export type Database = {
           accountant_certificate_url: string | null
           accountant_cpf: string | null
           address: string | null
+          cert_responsible_name: string | null
+          cert_responsible_phone: string | null
           cnpj: string | null
           company_name: string | null
           created_at: string
@@ -439,6 +441,8 @@ export type Database = {
           accountant_certificate_url?: string | null
           accountant_cpf?: string | null
           address?: string | null
+          cert_responsible_name?: string | null
+          cert_responsible_phone?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string
@@ -458,6 +462,8 @@ export type Database = {
           accountant_certificate_url?: string | null
           accountant_cpf?: string | null
           address?: string | null
+          cert_responsible_name?: string | null
+          cert_responsible_phone?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string

@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, ShieldAlert, Building2, Briefcase, FileText } from 'lucide-react';
+
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, ShieldAlert, Building2, Briefcase, FileText, Save } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
@@ -161,7 +162,27 @@ export default function Clients() {
   const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
   const [societyDocs, setSocietyDocs] = useState<{ id: string; document_label: string; file_name: string; file_url: string }[]>([]);
   const [societyUploading, setSocietyUploading] = useState<Record<string, boolean>>({});
-  const [certMonth, setCertMonth] = useState(() => new Date());
+   const [certMonth, setCertMonth] = useState(() => new Date());
+   const [certResponsible, setCertResponsible] = useState({ name: '', phone: '' });
+   const [certResponsibleLoaded, setCertResponsibleLoaded] = useState(false);
+
+   useEffect(() => {
+     (async () => {
+       const { data } = await supabase.from('company_settings').select('cert_responsible_name, cert_responsible_phone').limit(1).maybeSingle();
+       if (data) {
+         setCertResponsible({ name: (data as any).cert_responsible_name || '', phone: (data as any).cert_responsible_phone || '' });
+       }
+       setCertResponsibleLoaded(true);
+     })();
+   }, []);
+
+   const saveCertResponsible = async () => {
+     const { data: existing } = await supabase.from('company_settings').select('id').limit(1).maybeSingle();
+     if (existing) {
+       await supabase.from('company_settings').update({ cert_responsible_name: certResponsible.name || null, cert_responsible_phone: certResponsible.phone || null } as any).eq('id', existing.id);
+     }
+     toast({ title: 'Responsável salvo com sucesso' });
+   };
 
   const certMonthData = useMemo(() => {
     const year = certMonth.getFullYear();
@@ -1259,6 +1280,19 @@ export default function Clients() {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
+          <div className="flex items-end gap-3 mb-4 pb-4 border-b">
+            <div className="flex-1 max-w-xs">
+              <Label className="text-xs text-muted-foreground mb-1 block">Responsável</Label>
+              <Input placeholder="Nome do responsável" value={certResponsible.name} onChange={e => setCertResponsible(prev => ({ ...prev, name: e.target.value }))} className="h-8 text-sm" />
+            </div>
+            <div className="flex-1 max-w-[200px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Telefone</Label>
+              <Input placeholder="(00) 00000-0000" value={certResponsible.phone} onChange={e => setCertResponsible(prev => ({ ...prev, phone: e.target.value }))} className="h-8 text-sm" />
+            </div>
+            <Button size="sm" variant="outline" className="h-8" onClick={saveCertResponsible}>
+              <Save className="h-3.5 w-3.5 mr-1" /> Salvar
+            </Button>
+          </div>
           {certMonthData.clients.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum certificado vence neste mês</p>
           ) : (
