@@ -161,6 +161,37 @@ export default function Clients() {
   const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
   const [societyDocs, setSocietyDocs] = useState<{ id: string; document_label: string; file_name: string; file_url: string }[]>([]);
   const [societyUploading, setSocietyUploading] = useState<Record<string, boolean>>({});
+  const [certMonth, setCertMonth] = useState(() => new Date());
+
+  const certMonthData = useMemo(() => {
+    const year = certMonth.getFullYear();
+    const month = certMonth.getMonth();
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
+    const now = new Date();
+    const in15 = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+
+    const filtered = clients
+      .filter(c => {
+        if (!c.digital_certificate_expiry) return false;
+        const exp = new Date(c.digital_certificate_expiry + 'T00:00:00');
+        return exp >= monthStart && exp <= monthEnd;
+      })
+      .sort((a, b) => new Date(a.digital_certificate_expiry! + 'T00:00:00').getTime() - new Date(b.digital_certificate_expiry! + 'T00:00:00').getTime());
+
+    let expired = 0, soon = 0;
+    filtered.forEach(c => {
+      const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
+      if (exp < now) expired++;
+      else if (exp <= in15) soon++;
+    });
+
+    return { clients: filtered, total: filtered.length, expired, soon };
+  }, [clients, certMonth]);
+
+  const certMonthLabel = useMemo(() => {
+    return certMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, l => l.toUpperCase());
+  }, [certMonth]);
 
   async function loadSocietyDocs(clientId: string) {
     const { data } = await supabase.from('client_society_documents' as any).select('id, document_label, file_name, file_url').eq('client_id', clientId);
