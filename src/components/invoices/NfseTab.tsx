@@ -381,26 +381,23 @@ export default function NfseTab() {
   const tomadosTotalGross = baseFiltered.filter(i => getInvoiceType(i) === 'tomado').reduce((s, i) => s + (i.gross_value || 0), 0);
   const tomadosTotalTax = baseFiltered.filter(i => getInvoiceType(i) === 'tomado').reduce((s, i) => s + (i.tax_value || 0), 0);
 
-  // Retention totals from tomadas invoices (uses baseFiltered to ignore type filter)
+  // Retention totals (uses baseFiltered to ignore type filter)
   const tomadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'tomado');
-  const retentionTotals = tomadosInvoices.reduce<Retentions>(
+  const calcRetentions = (invs: typeof invoices) => invs.reduce<Retentions>(
     (acc, inv) => {
       const r = parseRetentions(inv);
       return {
-        iss: acc.iss + r.iss,
-        irrf: acc.irrf + r.irrf,
-        pis: acc.pis + r.pis,
-        cofins: acc.cofins + r.cofins,
-        csll: acc.csll + r.csll,
-        inss: acc.inss + r.inss,
-        cp: acc.cp + r.cp,
-        total: acc.total + r.total,
+        iss: acc.iss + r.iss, irrf: acc.irrf + r.irrf, pis: acc.pis + r.pis,
+        cofins: acc.cofins + r.cofins, csll: acc.csll + r.csll, inss: acc.inss + r.inss,
+        cp: acc.cp + r.cp, total: acc.total + r.total,
       };
     },
     { iss: 0, irrf: 0, pis: 0, cofins: 0, csll: 0, inss: 0, cp: 0, total: 0 }
   );
-  const hasRetentions = retentionTotals.total > 0;
-  const showRetentionCards = filterClient !== 'all' || hasRetentions;
+  const prestadosRetentionTotals = calcRetentions(prestadosInvoices);
+  const tomadosRetentionTotals = calcRetentions(tomadosInvoices);
+  const showPrestadosRetentions = filterClient !== 'all' || prestadosRetentionTotals.total > 0;
+  const showTomadosRetentions = filterClient !== 'all' || tomadosRetentionTotals.total > 0;
 
   const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -462,8 +459,8 @@ export default function NfseTab() {
       )}
 
       {/* Serviços Prestados */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
           <span className="w-3 h-3 rounded-full bg-blue-500" />
           Serviços Prestados
         </h3>
@@ -487,11 +484,34 @@ export default function NfseTab() {
             </CardContent>
           </Card>
         </div>
+        {showPrestadosRetentions && (
+          <div>
+            <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Impostos Retidos</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 col-span-2 md:col-span-1">
+                <CardContent className="pt-4 pb-3 px-4">
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total Retido</p>
+                  <p className="text-lg font-bold text-blue-700 dark:text-blue-300">{formatCurrency(prestadosRetentionTotals.total)}</p>
+                </CardContent>
+              </Card>
+              {(['iss','irrf','pis','cofins','csll','inss','cp'] as const).map(key =>
+                prestadosRetentionTotals[key] > 0 && (
+                  <Card key={key}>
+                    <CardContent className="pt-4 pb-3 px-4">
+                      <p className="text-xs text-muted-foreground font-medium">{key.toUpperCase()}</p>
+                      <p className="text-lg font-bold text-foreground">{formatCurrency(prestadosRetentionTotals[key])}</p>
+                    </CardContent>
+                  </Card>
+                )
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Serviços Tomados */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
           <span className="w-3 h-3 rounded-full bg-orange-500" />
           Serviços Tomados
         </h3>
@@ -515,78 +535,30 @@ export default function NfseTab() {
             </CardContent>
           </Card>
         </div>
-      </div>
-
-      {/* Retention Cards */}
-      {showRetentionCards && (
-        <div>
-          <h3 className="text-sm font-semibold text-muted-foreground mb-3">Impostos Retidos (Serviços Tomados)</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 col-span-2 md:col-span-1">
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Total Retido</p>
-                <p className="text-lg font-bold text-orange-700 dark:text-orange-300">{formatCurrency(retentionTotals.total)}</p>
-              </CardContent>
-            </Card>
-            {retentionTotals.iss > 0 && (
-              <Card>
+        {showTomadosRetentions && (
+          <div>
+            <p className="text-xs font-medium text-orange-600 dark:text-orange-400 mb-2">Impostos Retidos</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 col-span-2 md:col-span-1">
                 <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-muted-foreground font-medium">ISS</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.iss)}</p>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Total Retido</p>
+                  <p className="text-lg font-bold text-orange-700 dark:text-orange-300">{formatCurrency(tomadosRetentionTotals.total)}</p>
                 </CardContent>
               </Card>
-            )}
-            {retentionTotals.irrf > 0 && (
-              <Card>
-                <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-muted-foreground font-medium">IRRF</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.irrf)}</p>
-                </CardContent>
-              </Card>
-            )}
-            {retentionTotals.pis > 0 && (
-              <Card>
-                <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-muted-foreground font-medium">PIS</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.pis)}</p>
-                </CardContent>
-              </Card>
-            )}
-            {retentionTotals.cofins > 0 && (
-              <Card>
-                <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-muted-foreground font-medium">COFINS</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.cofins)}</p>
-                </CardContent>
-              </Card>
-            )}
-            {retentionTotals.csll > 0 && (
-              <Card>
-                <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-muted-foreground font-medium">CSLL</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.csll)}</p>
-                </CardContent>
-              </Card>
-            )}
-            {retentionTotals.inss > 0 && (
-              <Card>
-                <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-muted-foreground font-medium">INSS</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.inss)}</p>
-                </CardContent>
-              </Card>
-            )}
-            {retentionTotals.cp > 0 && (
-              <Card>
-                <CardContent className="pt-4 pb-3 px-4">
-                  <p className="text-xs text-muted-foreground font-medium">CP</p>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(retentionTotals.cp)}</p>
-                </CardContent>
-              </Card>
-            )}
+              {(['iss','irrf','pis','cofins','csll','inss','cp'] as const).map(key =>
+                tomadosRetentionTotals[key] > 0 && (
+                  <Card key={key}>
+                    <CardContent className="pt-4 pb-3 px-4">
+                      <p className="text-xs text-muted-foreground font-medium">{key.toUpperCase()}</p>
+                      <p className="text-lg font-bold text-foreground">{formatCurrency(tomadosRetentionTotals[key])}</p>
+                    </CardContent>
+                  </Card>
+                )
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <Card>
         <CardHeader>
