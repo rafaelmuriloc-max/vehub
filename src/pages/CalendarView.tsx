@@ -986,9 +986,7 @@ export default function CalendarView() {
               </div>
               <Progress value={dialogProgress.percent} className="h-2" />
             </div>
-                );
-                })}
-
+          )}
           <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
             {detailActivities.length === 0 && (
               <div className="flex flex-col items-center justify-center py-6 text-center">
