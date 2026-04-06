@@ -1,39 +1,34 @@
 
 
-# Diagnóstico: documento do FGTS não chega via WhatsApp
+# Corrigir bloqueio de envio de WhatsApp pela trava de duplicidade
 
-## Situação atual
+## Problema
+A trava de duplicidade adicionada na última alteração está **bloqueando todos os envios** de WhatsApp. O código verifica se já existe um registro em `whatsapp_logs` com `instance_id + template_name + status='sent'` e, se existir, retorna silenciosamente `{ success: true }` sem enviar nada.
 
-Analisei exaustivamente os dados e o código. A configuração do FGTS é **idêntica** à da Folha de Pagamento:
-- Mesmo template `envio_doc`
-- Mesmo `whatsapp_has_document_header = true`
-- Mesmo código `sendActivityWhatsApp.ts`
-- Mesma Edge Function `whatsapp-send`
+Como a instância do FGTS para RMC GESTAO já tem 6 registros anteriores com `status=sent`, a trava impede qualquer novo envio — tanto automático (auto_start) quanto manual.
 
-A Meta API **aceita** ambos os envios e retorna `wamid` de confirmação. A diferença é que a Folha entrega e o FGTS não.
+## Solução
+Substituir a trava absoluta por uma trava temporal: só bloquear se já existe um envio com `status=sent` nos últimos 2 minutos para a mesma `instance_id + template_name`. Isso previne disparos rápidos duplicados (o problema original) mas permite reenvios legítimos.
 
-## Problemas identificados
+## Alteração técnica
 
-### 1. Envio triplo do FGTS para o mesmo número
-O FGTS para RMC GESTAO foi enviado **3 vezes** (22:44, 22:49, 22:52) para o mesmo número. Isso indica que a cadeia `auto_start` está sendo acionada múltiplas vezes. Enviar muitos templates em sequência para o mesmo número pode causar bloqueio de entrega na Meta (rate limiting silencioso — a API aceita mas não entrega).
+### Arquivo: `src/lib/sendActivityWhatsApp.ts`
+Alterar a query de verificação (linhas 35-46) para incluir um filtro temporal:
 
-### 2. Sem logging detalhado
-A Edge Function `whatsapp-send` não registra o payload enviado nem o response body completo da Meta. Sem isso, não é possível identificar se a Meta está retornando warnings de delivery ou detalhes de falha.
+```typescript
+const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+const { data: alreadySent } = await supabase
+  .from('whatsapp_logs')
+  .select('id')
+  .eq('instance_id', instanceId)
+  .eq('template_name', activity.whatsapp_template_name || '')
+  .eq('status', 'sent')
+  .gte('created_at', twoMinutesAgo)
+  .limit(1);
+```
 
-## Plano de ação
+Isso mantém a proteção contra envios duplicados rápidos mas permite reenvios após 2 minutos.
 
-### Etapa 1 — Adicionar logging detalhado na Edge Function `whatsapp-send`
-Registrar:
-- O `messagePayload` completo enviado à Meta
-- O response body completo da Meta (não apenas o wamid)
-- O status HTTP da resposta
-
-Isso permitirá ver exatamente o que a Meta está respondendo para os envios de FGTS vs Folha.
-
-### Etapa 2 — Evitar envio duplicado
-Adicionar verificação no `sendActivityWhatsApp.ts` para checar se já existe um `whatsapp_logs` com `status = 'sent'` para a mesma `instance_id` e `activity_id` antes de enviar. Isso previne o envio triplo.
-
-## Arquivos alterados
-- `supabase/functions/whatsapp-send/index.ts` — ~4 linhas de logging
-- `src/lib/sendActivityWhatsApp.ts` — ~8 linhas de verificação de duplicidade
+## Arquivo alterado
+- `src/lib/sendActivityWhatsApp.ts` — ~2 linhas alteradas
 
