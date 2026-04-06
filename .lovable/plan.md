@@ -1,34 +1,45 @@
 
 
-# Corrigir bloqueio de envio de WhatsApp pela trava de duplicidade
+# Corrigir erro "Invalid key" no upload de documentos
 
 ## Problema
-A trava de duplicidade adicionada na última alteração está **bloqueando todos os envios** de WhatsApp. O código verifica se já existe um registro em `whatsapp_logs` com `instance_id + template_name + status='sent'` e, se existir, retorna silenciosamente `{ success: true }` sem enviar nada.
+O upload falha quando o nome do arquivo contém caracteres acentuados (ex: `Recibo de salário.pdf`). O Supabase Storage não aceita caracteres especiais como `á`, `é`, `ç` etc. no path do arquivo.
 
-Como a instância do FGTS para RMC GESTAO já tem 6 registros anteriores com `status=sent`, a trava impede qualquer novo envio — tanto automático (auto_start) quanto manual.
+## Causa
+Na função `importDocument` (Documents.tsx, linha 329), o `file.name` é usado diretamente no path de upload sem sanitização:
+```typescript
+const path = `${clientId}/${refMonth}/${docTypeId}/${file.name}`;
+```
 
 ## Solução
-Substituir a trava absoluta por uma trava temporal: só bloquear se já existe um envio com `status=sent` nos últimos 2 minutos para a mesma `instance_id + template_name`. Isso previne disparos rápidos duplicados (o problema original) mas permite reenvios legítimos.
+Sanitizar o nome do arquivo antes de usá-lo no path, removendo acentos (via `normalize('NFD')` + regex) e substituindo caracteres especiais por underscore. O nome original é preservado no campo `file_name` do banco de dados para exibição.
 
 ## Alteração técnica
 
-### Arquivo: `src/lib/sendActivityWhatsApp.ts`
-Alterar a query de verificação (linhas 35-46) para incluir um filtro temporal:
+### Arquivo: `src/pages/Documents.tsx`
+
+Adicionar função de sanitização e aplicá-la no path de upload:
 
 ```typescript
-const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-const { data: alreadySent } = await supabase
-  .from('whatsapp_logs')
-  .select('id')
-  .eq('instance_id', instanceId)
-  .eq('template_name', activity.whatsapp_template_name || '')
-  .eq('status', 'sent')
-  .gte('created_at', twoMinutesAgo)
-  .limit(1);
+function sanitizeFileName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^a-zA-Z0-9._-]/g, '_'); // substitui caracteres especiais
+}
 ```
 
-Isso mantém a proteção contra envios duplicados rápidos mas permite reenvios após 2 minutos.
+Na linha 329, trocar:
+```typescript
+const path = `${clientId}/${refMonth}/${docTypeId}/${file.name}`;
+```
+por:
+```typescript
+const path = `${clientId}/${refMonth}/${docTypeId}/${sanitizeFileName(file.name)}`;
+```
+
+O `file_name` no banco (linha 338) continua usando `file.name` original para exibição correta ao usuário.
 
 ## Arquivo alterado
-- `src/lib/sendActivityWhatsApp.ts` — ~2 linhas alteradas
+- `src/pages/Documents.tsx` — ~6 linhas adicionadas/alteradas
 
