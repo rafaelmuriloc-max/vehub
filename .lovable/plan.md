@@ -1,47 +1,36 @@
 
 
-# Feriados nacionais no calendário + antecipação de datas para dia útil
+# Exclusão em lote de obrigações no calendário
 
 ## O que será feito
 
-1. **Criar utilitário de feriados nacionais brasileiros** (`src/lib/holidays.ts`)
-   - Função `getHolidays(year: number): Set<string>` que retorna todas as datas no formato `YYYY-MM-DD`
-   - Incluir feriados fixos (Ano Novo, Tiradentes, Trabalho, Independência, N.S. Aparecida, Finados, Proclamação da República, Natal) e móveis (Carnaval, Sexta-feira Santa, Corpus Christi — calculados via Páscoa/algoritmo de Gauss)
-   - Função `isBusinessDay(dateStr: string, holidays: Set<string>): boolean` — retorna false se for sábado, domingo ou feriado
-   - Função `previousBusinessDay(dateStr: string, holidays: Set<string>): string` — recua até encontrar dia útil
+Adicionar checkboxes em cada item das listas de obrigações (tanto na lista do dia selecionado quanto na lista mensal), com uma barra de ações flutuante que aparece quando há itens selecionados, permitindo excluir todos de uma vez.
 
-2. **Marcar feriados no calendário** (`CalendarView.tsx`)
-   - Computar `holidays` via `useMemo` para o ano/mês atual
-   - Na renderização de cada célula, se o dia for feriado, aplicar fundo cinza (`bg-gray-100 dark:bg-gray-800`) e opcionalmente mostrar o nome do feriado no tooltip/desktop
+## Alterações em `src/pages/CalendarView.tsx`
 
-3. **Antecipar datas de vencimento e meta para dia útil anterior** (`CalendarView.tsx`)
-   - No `useMemo` de `events`, ao calcular `alertDate`, `targetDate` e `dueDate` via `makeDate()`, aplicar `previousBusinessDay()` quando o dia cair em feriado ou fim de semana
-   - Isso afeta apenas a **visualização no calendário** — os dados no banco permanecem inalterados
+### 1. Novo estado de seleção
+- `selectedInstanceIds: Set<string>` — IDs das instâncias selecionadas
+- `showBulkDeleteConfirm: boolean` — controla o AlertDialog de confirmação em lote
+- Limpar seleção ao mudar de mês, dia ou aba
 
-4. **Antecipar na geração de instâncias** (`Obligations.tsx` e `ClientObligationsTab.tsx`)
-   - Ao construir `dueDate` durante a geração de instâncias, aplicar `previousBusinessDay()` para que o dado gravado já reflita o dia útil correto
+### 2. Checkbox em cada item da lista
+- Adicionar um `Checkbox` à esquerda de cada card (listas do dia e do mês, abas pending e completed)
+- Click no checkbox alterna o item na seleção (com `stopPropagation` para não abrir o detalhe)
+- Botão "Selecionar todos" no header de cada aba para marcar/desmarcar todos os itens visíveis
 
-## Detalhes técnicos
+### 3. Barra de ações em lote
+- Quando `selectedInstanceIds.size > 0`, exibir uma barra fixa no rodapé do card com:
+  - Texto "{N} selecionado(s)"
+  - Botão "Excluir selecionados" (variante destructive)
+  - Botão "Limpar seleção"
 
-### Feriados nacionais incluídos
-- Fixos: 01/01, 21/04, 01/05, 07/09, 12/10, 02/11, 15/11, 25/12
-- Móveis (baseados na Páscoa): Carnaval (Páscoa - 47 dias), Sexta-feira Santa (Páscoa - 2), Corpus Christi (Páscoa + 60)
+### 4. Função `deleteSelectedInstances`
+- Reutiliza a mesma lógica do `deleteInstance` existente, iterando sobre os IDs selecionados
+- Deleta completions e depois instances para cada ID
+- Exibe toast de sucesso e recarrega dados
 
-### Cálculo da Páscoa
-Algoritmo de Meeus/Jones/Butcher para calcular a data da Páscoa de qualquer ano.
+### 5. AlertDialog de confirmação em lote
+- Similar ao existente, mas com mensagem "Tem certeza que deseja excluir {N} obrigações?"
 
-### Estilização dos feriados no grid
-```
-// Célula com feriado
-bg-gray-100 dark:bg-gray-800 border-gray-300
-```
-
-### Antecipação
-A função `previousBusinessDay` recua dia a dia enquanto `!isBusinessDay`, garantindo que sextas-feiras antes de feriados na segunda também sejam tratadas.
-
-## Arquivos
-- **Novo**: `src/lib/holidays.ts` (~60 linhas)
-- **Editado**: `src/pages/CalendarView.tsx` (import + ~10 linhas no useMemo de events + ~3 linhas na célula do grid)
-- **Editado**: `src/pages/Obligations.tsx` (import + ~4 linhas na geração de dueDate)
-- **Editado**: `src/components/ClientObligationsTab.tsx` (mesmo ajuste)
+Nenhuma alteração em tabelas, RLS ou outros arquivos.
 
