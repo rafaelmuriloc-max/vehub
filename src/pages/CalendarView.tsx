@@ -717,9 +717,12 @@ export default function CalendarView() {
                   </TabsTrigger>
                 </TabsList>
                 {[
-                  { key: 'pending', items: paginatedDayPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
-                  { key: 'completed', items: paginatedDayCompleted, page: dayCompletedPage, totalPages: dayCompletedTotalPages, total: dayEventsCompleted.length, setPage: setDayCompletedPage },
-                ].map(tab => (
+                  { key: 'pending', items: paginatedDayPending, allItems: dayEventsPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
+                  { key: 'completed', items: paginatedDayCompleted, allItems: dayEventsCompleted, page: dayCompletedPage, totalPages: dayCompletedTotalPages, total: dayEventsCompleted.length, setPage: setDayCompletedPage },
+                ].map(tab => {
+                  const allIds = tab.allItems.map(e => e.instanceId);
+                  const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                  return (
                   <TabsContent key={tab.key} value={tab.key}>
                     {tab.items.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-6 text-center">
@@ -727,26 +730,51 @@ export default function CalendarView() {
                       </div>
                     ) : (
                       <>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground" onClick={e => e.stopPropagation()}>
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
                         <div className="space-y-2">
                           {tab.items.map((ev, idx) => {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                            const isSelected = selectedInstanceIds.has(ev.instanceId);
                             return (
                               <div
                                 key={idx}
                                 onClick={() => setDetailInstanceId(ev.instanceId)}
                                 className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
+                                  ${isSelected ? 'ring-2 ring-primary/50' : ''}
                                   ${completed
                                     ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
                                     : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
-                                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                      <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
-                                    </p>
+                                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                      onClick={e => e.stopPropagation()}
+                                      className="mt-0.5 shrink-0"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                        <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                      </p>
+                                    </div>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
                                     <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
@@ -776,7 +804,7 @@ export default function CalendarView() {
                       </>
                     )}
                   </TabsContent>
-                ))}
+                );})
               </Tabs>
             )}
           </CardContent>
