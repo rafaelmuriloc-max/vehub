@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 20;
 
 type Client = { id: string; company_name: string; document: string | null; digital_certificate_url: string | null; digital_certificate_expiry: string | null };
 type Invoice = {
@@ -50,6 +52,7 @@ export default function NfseTab() {
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  const [page, setPage] = useState(0);
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
@@ -334,6 +337,11 @@ export default function NfseTab() {
 
   const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
   const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
+  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
+  const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [filterClient, filterType, datePeriod, filterDateFrom, filterDateTo]);
 
   return (
     <div className="space-y-6">
@@ -493,6 +501,7 @@ export default function NfseTab() {
               Nenhuma nota fiscal encontrada. Use a consulta acima para buscar notas do Portal Nacional.
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table className="text-sm">
                 <TableHeader>
@@ -509,7 +518,7 @@ export default function NfseTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInvoices.map(inv => {
+                  {paginatedInvoices.map(inv => {
                     const xmlLoading = downloadingMap[`${inv.id}-xml`];
                     const pdfLoading = downloadingMap[`${inv.id}-pdf`];
                     return (
@@ -562,6 +571,22 @@ export default function NfseTab() {
                 </TableBody>
               </Table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Página {page + 1} de {totalPages} ({filteredInvoices.length} notas)
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </CardContent>
       </Card>

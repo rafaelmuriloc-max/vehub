@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, RefreshCw, FileCode, FileText, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 20;
 
 type Client = {
   id: string;
@@ -63,6 +65,7 @@ export default function NfeTab() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(0);
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
@@ -270,6 +273,11 @@ export default function NfeTab() {
   if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
   const totalValue = filteredInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
+  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
+  const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [filterClient, datePeriod, filterDateFrom, filterDateTo]);
 
   return (
     <div className="space-y-6">
@@ -376,6 +384,7 @@ export default function NfeTab() {
               Nenhuma NF-e encontrada. Use a consulta acima para buscar NF-e no Ambiente Nacional.
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table className="text-sm">
                 <TableHeader>
@@ -390,7 +399,7 @@ export default function NfeTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInvoices.map(inv => {
+                  {paginatedInvoices.map(inv => {
                     const xmlLoading = downloadingMap[`${inv.id}-xml`];
                     const pdfLoading = downloadingMap[`${inv.id}-pdf`];
                     return (
@@ -447,6 +456,22 @@ export default function NfeTab() {
                 </TableBody>
               </Table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Página {page + 1} de {totalPages} ({filteredInvoices.length} notas)
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </CardContent>
       </Card>
