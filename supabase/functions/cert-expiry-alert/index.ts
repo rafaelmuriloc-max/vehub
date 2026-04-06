@@ -35,7 +35,6 @@ Deno.serve(async (req) => {
     if (!phone.startsWith('55')) {
       phone = '55' + phone;
     }
-    }
 
     // 2. Get active clients with certificate expiry
     const { data: clients, error: clientsErr } = await supabase
