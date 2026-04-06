@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, Building2, Briefcase, FileText } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, ShieldAlert, Building2, Briefcase, FileText } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
@@ -161,6 +161,37 @@ export default function Clients() {
   const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
   const [societyDocs, setSocietyDocs] = useState<{ id: string; document_label: string; file_name: string; file_url: string }[]>([]);
   const [societyUploading, setSocietyUploading] = useState<Record<string, boolean>>({});
+  const [certMonth, setCertMonth] = useState(() => new Date());
+
+  const certMonthData = useMemo(() => {
+    const year = certMonth.getFullYear();
+    const month = certMonth.getMonth();
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
+    const now = new Date();
+    const in15 = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+
+    const filtered = clients
+      .filter(c => {
+        if (!c.digital_certificate_expiry) return false;
+        const exp = new Date(c.digital_certificate_expiry + 'T00:00:00');
+        return exp >= monthStart && exp <= monthEnd;
+      })
+      .sort((a, b) => new Date(a.digital_certificate_expiry! + 'T00:00:00').getTime() - new Date(b.digital_certificate_expiry! + 'T00:00:00').getTime());
+
+    let expired = 0, soon = 0;
+    filtered.forEach(c => {
+      const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
+      if (exp < now) expired++;
+      else if (exp <= in15) soon++;
+    });
+
+    return { clients: filtered, total: filtered.length, expired, soon };
+  }, [clients, certMonth]);
+
+  const certMonthLabel = useMemo(() => {
+    return certMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, l => l.toUpperCase());
+  }, [certMonth]);
 
   async function loadSocietyDocs(clientId: string) {
     const { data } = await supabase.from('client_society_documents' as any).select('id, document_label, file_name, file_url').eq('client_id', clientId);
@@ -1202,6 +1233,68 @@ export default function Clients() {
           </div>
         );
       })()}
+
+      {/* Seção Vencimento de Certificados */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              <CardTitle className="text-lg">Vencimento de Certificados</CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={() => setCertMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium min-w-[140px] text-center">{certMonthLabel}</span>
+              <Button variant="ghost" size="icon" onClick={() => setCertMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <Badge variant="destructive" className="text-xs">Vencidos: {certMonthData.expired}</Badge>
+            <Badge className="bg-amber-100 text-amber-800 text-xs border-amber-200">Próx. 15 dias: {certMonthData.soon}</Badge>
+            <Badge variant="secondary" className="text-xs">Total: {certMonthData.total}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {certMonthData.clients.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum certificado vence neste mês</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Empresa</TableHead>
+                  <TableHead>CNPJ</TableHead>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {certMonthData.clients.map(c => {
+                  const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
+                  const now = new Date();
+                  const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  let statusBadge: React.ReactNode;
+                  if (diffDays < 0) statusBadge = <Badge variant="destructive" className="text-xs">Vencido</Badge>;
+                  else if (diffDays <= 30) statusBadge = <Badge className="bg-amber-100 text-amber-800 text-xs border-amber-200">{diffDays}d restantes</Badge>;
+                  else statusBadge = <Badge className="bg-emerald-100 text-emerald-800 text-xs border-emerald-200">{diffDays}d restantes</Badge>;
+
+                  return (
+                    <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditing(c); setViewOnly(true); setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(c).map(([k,v]) => [k, v ?? ''])) } as any); setDialogOpen(true); }}>
+                      <TableCell className="font-medium text-sm">{c.company_name}</TableCell>
+                      <TableCell className="text-sm">{c.document || '-'}</TableCell>
+                      <TableCell className="text-sm">{exp.toLocaleDateString('pt-BR')}</TableCell>
+                      <TableCell>{statusBadge}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex gap-4">
         <div className="relative flex-1">
