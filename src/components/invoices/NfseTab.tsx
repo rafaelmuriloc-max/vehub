@@ -125,6 +125,7 @@ export default function NfseTab() {
   }
   const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
   const [exporting, setExporting] = useState(false);
+  const [retentionDetail, setRetentionDetail] = useState<{ type: 'prestado' | 'tomado'; taxKey: keyof Retentions } | null>(null);
 
   useEffect(() => {
     loadClients();
