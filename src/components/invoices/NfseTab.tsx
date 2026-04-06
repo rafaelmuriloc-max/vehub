@@ -494,16 +494,16 @@ export default function NfseTab() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="text-sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Cliente</TableHead>
+                    <TableHead className="max-w-[150px]">Cliente</TableHead>
                     <TableHead>Data Emissão</TableHead>
-                    <TableHead className="hidden md:table-cell">Descrição</TableHead>
+                    <TableHead className="hidden lg:table-cell">Descrição</TableHead>
                     <TableHead className="text-right">Valor Bruto</TableHead>
-                    <TableHead className="text-right hidden md:table-cell">Impostos</TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">Impostos</TableHead>
                     <TableHead className="hidden md:table-cell">Status</TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
