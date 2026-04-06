@@ -460,26 +460,60 @@ export default function NfseTab() {
         </Card>
       )}
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total de Notas</p>
-            <p className="text-2xl font-bold text-foreground">{filteredInvoices.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Valor Bruto Total</p>
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(totalGross)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total de Impostos</p>
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(totalTax)}</p>
-          </CardContent>
-        </Card>
+      {/* Serviços Prestados */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-blue-500" />
+          Serviços Prestados
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="border-blue-200 dark:border-blue-800">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Total de Notas</p>
+              <p className="text-2xl font-bold text-foreground">{prestadosInvoices.length}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-blue-200 dark:border-blue-800">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Valor Bruto Total</p>
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(prestadosTotalGross)}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-blue-200 dark:border-blue-800">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Total de Impostos</p>
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(prestadosTotalTax)}</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Serviços Tomados */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-orange-500" />
+          Serviços Tomados
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="border-orange-200 dark:border-orange-800">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Total de Notas</p>
+              <p className="text-2xl font-bold text-foreground">{tomadosInvoices.length}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-orange-200 dark:border-orange-800">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Valor Bruto Total</p>
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(tomadosTotalGross)}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-orange-200 dark:border-orange-800">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Total de Impostos</p>
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(tomadosTotalTax)}</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Retention Cards */}
