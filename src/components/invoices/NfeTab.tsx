@@ -99,8 +99,7 @@ export default function NfeTab() {
     const { data } = await supabase
       .from('nfe_invoices')
       .select('*')
-      .order('issue_date', { ascending: false })
-      .limit(200);
+      .order('issue_date', { ascending: false });
     if (data) setInvoices(data as NfeInvoice[]);
     setLoading(false);
   }
