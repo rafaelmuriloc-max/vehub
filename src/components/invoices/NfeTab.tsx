@@ -396,13 +396,13 @@ export default function NfeTab() {
                     return (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                        <TableCell>
+                        <TableCell className="max-w-[150px] truncate">
                           <div>
-                            <p className="text-sm">{inv.emitter_name || getClientName(inv.client_id)}</p>
-                            {inv.emitter_cnpj && <p className="text-xs text-muted-foreground hidden md:block">{inv.emitter_cnpj}</p>}
+                            <p className="truncate">{inv.emitter_name || getClientName(inv.client_id)}</p>
+                            {inv.emitter_cnpj && <p className="text-xs text-muted-foreground hidden lg:block">{inv.emitter_cnpj}</p>}
                           </div>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell">
+                        <TableCell className="hidden lg:table-cell">
                           <div>
                             <p className="text-sm">{inv.recipient_name || '—'}</p>
                             {inv.recipient_cnpj && <p className="text-xs text-muted-foreground">{inv.recipient_cnpj}</p>}
