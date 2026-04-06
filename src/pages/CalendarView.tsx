@@ -120,6 +120,18 @@ export default function CalendarView() {
   const [emailRecipient, setEmailRecipient] = useState('');
   const [emailAttachments, setEmailAttachments] = useState<{ fileUrl: string; fileName: string }[]>([]);
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const toggleSelection = (id: string) => {
+    setSelectedInstanceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedInstanceIds(new Set());
 
   const loadData = useCallback(async () => {
     const y = currentDate.getFullYear();
