@@ -1,30 +1,41 @@
 
 
-# Remover limite de 200 notas na carga de dados
+# Cards de impostos retidos em notas de serviços tomados
 
-## Problema
-O `loadInvoices()` em ambos os componentes usa `.limit(200)`, impedindo que notas além das 200 mais recentes sejam exibidas. Com a paginação client-side já implementada, esse limite é desnecessariamente restritivo.
+## O que será feito
 
-## Opções
+Adicionar uma seção de cards resumo que aparece quando o filtro de tipo está em "Tomados" (ou "Todos"), mostrando os impostos retidos nas NFS-e tomadas. Os valores serão extraídos do XML armazenado em `raw_data.xml`.
 
-### Opção A — Remover o limite (simples)
-- Remover `.limit(200)` de ambos os componentes
-- Funciona bem para até ~2.000-3.000 notas
-- Pode ficar lento se o cliente tiver dezenas de milhares
+## Dados disponíveis no XML
 
-### Opção B — Aumentar para 1000 (compromisso)
-- Trocar `.limit(200)` por `.limit(1000)`
-- Cobre a maioria dos casos sem risco de performance
+A estrutura XML das NFS-e contém:
+- `tpRetISSQN`: 1 = sem retenção ISS, 2 = com retenção ISS
+- `vTotalRet`: valor total retido
+- `vRetIRRF`: IRRF retido (tribFed)
+- `vRetPIS`, `vRetCOFINS`, `vRetCSLL`, `vRetINSS`, `vRetCP`: demais retenções federais
 
-### Opção C — Paginação server-side (ideal para escala)
-- Carregar apenas a página atual do Supabase usando `.range(from, to)`
-- Requer refatorar o filtro para ser feito via query SQL, não client-side
-- Mais complexo, mas escala para qualquer volume
+## Alterações em `src/components/invoices/NfseTab.tsx`
 
-## Recomendação
-**Opção A** — remover o limite. Para um escritório contábil, o volume típico por consulta (filtrado por mês/cliente) raramente ultrapassa alguns milhares. Se no futuro o volume crescer, migra-se para paginação server-side.
+### 1. Expandir o tipo `Invoice`
+- Adicionar `raw_data: { xml?: string } | null` ao tipo
 
-## Alterações
-- `src/components/invoices/NfseTab.tsx` — remover `.limit(200)` (linha 111)
-- `src/components/invoices/NfeTab.tsx` — remover `.limit(200)` (linha 103)
+### 2. Função `parseRetentions(inv: Invoice)`
+Extrair do XML via regex:
+- `vTotalRet`, `tpRetISSQN`, `vRetIRRF`, `vRetPIS`, `vRetCOFINS`, `vRetCSLL`, `vRetINSS`, `vRetCP`
+- Calcular ISS retido: se `tpRetISSQN === '2'`, o ISS retido = `vTotalRet` menos as retenções federais (ou `vTotalRet` se não houver federais)
+
+### 3. Calcular totais de retenção
+- Filtrar apenas notas tomadas (`getInvoiceType === 'tomado'`)
+- Somar cada tipo de retenção: ISS, IRRF, PIS, COFINS, CSLL, INSS, CP
+- Total geral retido
+
+### 4. Cards de retenção (nova seção)
+- Exibidos abaixo dos cards de resumo existentes, apenas quando há notas tomadas nos filtros
+- Grid responsivo com cards para cada imposto que tenha valor > 0
+- Card principal "Total Retido" em destaque
+- Cards individuais: ISS, IRRF, PIS, COFINS, CSLL, INSS, CP — apenas os que tiverem valor
+- Cores diferenciadas (ex: vermelho/laranja para retenções)
+
+## Arquivo
+- `src/components/invoices/NfseTab.tsx` — ~50 linhas adicionadas
 
