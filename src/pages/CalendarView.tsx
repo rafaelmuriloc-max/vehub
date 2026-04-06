@@ -255,7 +255,16 @@ export default function CalendarView() {
 
   const monthEvents = useMemo(() => {
     const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-    return events.filter(e => e.date.startsWith(prefix) && e.type === 'target').sort((a, b) => a.date.localeCompare(b.date));
+    const monthFiltered = events.filter(e => e.date.startsWith(prefix));
+    const byInstance = new Map<string, CalendarEvent>();
+    const prio: Record<string, number> = { due: 3, target: 2, alert: 1 };
+    for (const ev of monthFiltered) {
+      const existing = byInstance.get(ev.instanceId);
+      if (!existing || (prio[ev.type] ?? 0) > (prio[existing.type] ?? 0)) {
+        byInstance.set(ev.instanceId, ev);
+      }
+    }
+    return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
