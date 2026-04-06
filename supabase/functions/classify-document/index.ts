@@ -43,8 +43,12 @@ Para o tipo de documento, use exatamente o nome de um dos tipos cadastrados acim
 Para o CNPJ, retorne apenas os 14 dígitos numéricos sem formatação.
 Para a competência, interprete datas como "03/2026", "março 2026", "competência março/2026" etc. e retorne no formato YYYY-MM.`;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
@@ -53,7 +57,7 @@ Para a competência, interprete datas como "03/2026", "março 2026", "competênc
         model: "google/gemini-2.5-flash-lite",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Analise este documento e extraia as informações:\n\n${text.substring(0, 8000)}` },
+          { role: "user", content: `Analise este documento e extraia as informações:\n\n${text.substring(0, 4000)}` },
         ],
         tools: [
           {
@@ -64,22 +68,10 @@ Para a competência, interprete datas como "03/2026", "março 2026", "competênc
               parameters: {
                 type: "object",
                 properties: {
-                  cnpj: {
-                    type: "string",
-                    description: "CNPJ da empresa (14 dígitos numéricos, sem formatação)",
-                  },
-                  company_name: {
-                    type: "string",
-                    description: "Nome ou Razão Social da empresa",
-                  },
-                  reference_month: {
-                    type: "string",
-                    description: "Mês de competência no formato YYYY-MM",
-                  },
-                  document_type_name: {
-                    type: "string",
-                    description: "Nome do tipo de documento (deve corresponder a um dos tipos cadastrados)",
-                  },
+                  cnpj: { type: "string", description: "CNPJ 14 dígitos" },
+                  company_name: { type: "string", description: "Razão Social" },
+                  reference_month: { type: "string", description: "YYYY-MM" },
+                  document_type_name: { type: "string", description: "Tipo de documento cadastrado" },
                 },
                 required: ["cnpj", "company_name", "reference_month", "document_type_name"],
                 additionalProperties: false,
@@ -90,6 +82,8 @@ Para a competência, interprete datas como "03/2026", "março 2026", "competênc
         tool_choice: { type: "function", function: { name: "classify_document" } },
       }),
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       if (response.status === 429) {
