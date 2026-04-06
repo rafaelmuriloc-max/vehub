@@ -30,6 +30,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Normalize phone: add country code if missing
+    let phone = rawPhone.replace(/\D/g, '');
+    if (!phone.startsWith('55')) {
+      phone = '55' + phone;
+    }
+    }
+
     // 2. Get active clients with certificate expiry
     const { data: clients, error: clientsErr } = await supabase
       .from("clients")
