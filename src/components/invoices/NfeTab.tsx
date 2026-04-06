@@ -65,6 +65,7 @@ export default function NfeTab() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(0);
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);

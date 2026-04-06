@@ -52,6 +52,7 @@ export default function NfseTab() {
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  const [page, setPage] = useState(0);
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
