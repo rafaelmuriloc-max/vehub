@@ -31,13 +31,15 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     return { success: false, error: 'Atividade de WhatsApp sem configuração completa' };
   }
 
-  // Prevent duplicate sends for the same instance + activity
+  // Prevent duplicate sends within a short window (2 min)
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
   const { data: alreadySent } = await supabase
     .from('whatsapp_logs')
     .select('id')
     .eq('instance_id', instanceId)
     .eq('template_name', activity.whatsapp_template_name || '')
     .eq('status', 'sent')
+    .gte('created_at', twoMinutesAgo)
     .limit(1);
 
   if (alreadySent && alreadySent.length > 0) {
