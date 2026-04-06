@@ -373,8 +373,13 @@ export default function NfseTab() {
   let filteredInvoices = baseFiltered;
   if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(i => getInvoiceType(i) === (filterType === 'prestados' ? 'prestado' : 'tomado'));
 
-  const totalGross = filteredInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
-  const totalTax = filteredInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
+  const prestadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'prestado');
+
+  const prestadosTotalGross = prestadosInvoices.reduce((s, i) => s + (i.gross_value || 0), 0);
+  const prestadosTotalTax = prestadosInvoices.reduce((s, i) => s + (i.tax_value || 0), 0);
+
+  const tomadosTotalGross = baseFiltered.filter(i => getInvoiceType(i) === 'tomado').reduce((s, i) => s + (i.gross_value || 0), 0);
+  const tomadosTotalTax = baseFiltered.filter(i => getInvoiceType(i) === 'tomado').reduce((s, i) => s + (i.tax_value || 0), 0);
 
   // Retention totals from tomadas invoices (uses baseFiltered to ignore type filter)
   const tomadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'tomado');
