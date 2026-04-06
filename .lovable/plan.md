@@ -1,31 +1,46 @@
 
 
-# Manter cards de impostos retidos visíveis ao selecionar cliente
+# Corrigir cards de retenção ao selecionar cliente
 
 ## Problema
-Os cards de impostos retidos só aparecem quando o filtro de tipo é "Todos" ou "Tomados". Quando um cliente específico é selecionado, se o filtro de tipo estiver em "Prestados", os cards desaparecem. O usuário quer que os cards de retenção sempre apareçam quando um cliente estiver selecionado, mostrando os valores daquele cliente.
+A variável `tomadosInvoices` (linha 378) é derivada de `filteredInvoices`, que na linha 372 já foi filtrada por `filterType`. Quando o tipo é "Prestados", todas as notas tomadas são removidas antes do cálculo de retenções, fazendo os cards sumirem.
 
-## Alteração em `src/components/invoices/NfseTab.tsx`
+## Solução
 
-### Linha 479 — Ajustar condição de exibição
+No arquivo `src/components/invoices/NfseTab.tsx`, separar a filtragem em duas etapas:
 
-Mudar de:
+1. Criar `baseFilteredInvoices` filtrado apenas por cliente e data (linhas 368-371)
+2. Aplicar filtro de tipo apenas para a tabela/paginação (`filteredInvoices`)
+3. Calcular `tomadosInvoices` e `retentionTotals` a partir de `baseFilteredInvoices` em vez de `filteredInvoices`
+
+### Alteração (linhas 368-378)
+
+De:
 ```typescript
-{(filterType === 'tomados' || filterType === 'all') && hasRetentions && (
+let filteredInvoices = invoices;
+if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(...);
+if (filterDateFrom) filteredInvoices = filteredInvoices.filter(...);
+if (filterDateTo) filteredInvoices = filteredInvoices.filter(...);
+if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(...);
+// ...
+const tomadosInvoices = filteredInvoices.filter(i => getInvoiceType(i) === 'tomado');
 ```
 
 Para:
 ```typescript
-{hasRetentions && (
+let baseFiltered = invoices;
+if (filterClient !== 'all') baseFiltered = baseFiltered.filter(...);
+if (filterDateFrom) baseFiltered = baseFiltered.filter(...);
+if (filterDateTo) baseFiltered = baseFiltered.filter(...);
+
+let filteredInvoices = baseFiltered;
+if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(...);
+// ...
+const tomadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'tomado');
 ```
 
-Isso faz os cards de retenção aparecerem sempre que houver notas tomadas com retenções nos resultados filtrados, independentemente do filtro de tipo selecionado. Como o cálculo de `retentionTotals` já filtra apenas notas tomadas (`tomadosInvoices`), os valores sempre refletem corretamente o cliente selecionado.
-
-**Alternativa**: Se o desejo for mostrar os cards mesmo quando `hasRetentions` é false (valores zerados) quando um cliente está selecionado, a condição seria:
-```typescript
-{(hasRetentions || filterClient !== 'all') && (
-```
+Isso garante que os cards de retenção sempre refletem as notas tomadas do cliente/período selecionado, independentemente do filtro de tipo.
 
 ## Arquivo
-- `src/components/invoices/NfseTab.tsx` — 1 linha alterada
+- `src/components/invoices/NfseTab.tsx` — ~5 linhas alteradas
 
