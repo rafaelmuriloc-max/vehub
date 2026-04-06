@@ -842,7 +842,7 @@ export default function Clients() {
   });
 
   const filtered = clients.filter(c => {
-    const matchSearch = c.company_name.toLowerCase().includes(search.toLowerCase()) || c.document?.includes(search);
+    const matchSearch = c.company_name.toLowerCase().includes(search.toLowerCase()) || c.document?.includes(search) || c.sci_code?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || c.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -1206,7 +1206,7 @@ export default function Clients() {
       <div className="flex gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome ou documento..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input placeholder="Buscar por nome, documento ou código SCI..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
