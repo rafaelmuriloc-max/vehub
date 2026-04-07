@@ -151,16 +151,20 @@ async function obtainProcuradorToken(
 ): Promise<string | null> {
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
-  // 1. Generate XML
-  const xml = generateAuthorizationXml(contratanteCnpj, contratanteNome, clientCnpj, clientNome);
+  // 1. Generate XML with new structure
+  const xml = generateSerproProcuradorXML({
+    contratanteCnpj,
+    autorPedidoCnpj: clientCnpj,
+    contribuinteCnpj: clientCnpj,
+  });
+  console.log(`[procurador] XML gerado (${xml.length} chars): ${xml.substring(0, 500)}`);
 
   // 2. Sign XML with client's certificate
   const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
   // 3. Convert to base64
-  const xmlBytes = new TextEncoder().encode(signedXml);
-  const xmlBase64 = btoa(String.fromCharCode(...xmlBytes));
+  const xmlBase64 = toBase64(signedXml);
 
   // 4. Build request body for AUTENTICAPROCURADOR
   const requestBody = {
