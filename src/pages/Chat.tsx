@@ -472,6 +472,7 @@ export default function Chat() {
             activeTab={activeTab}
             onTabChange={handleTabChange}
             totalUnread={conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
+            onNavigateBack={() => navigate('/')}
           />
         </div>
       )}
