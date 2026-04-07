@@ -31,6 +31,7 @@ interface ConversationListProps {
   activeTab: ChatTab;
   onTabChange: (tab: ChatTab) => void;
   totalUnread?: number;
+  onNavigateBack?: () => void;
 }
 
 function formatTime(dateStr: string) {
