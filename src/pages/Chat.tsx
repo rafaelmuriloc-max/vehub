@@ -17,6 +17,7 @@ export type ChatTab = 'mine' | 'closed' | 'all';
 export default function Chat() {
   const { user, profile } = useAuth();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
