@@ -1,36 +1,52 @@
 
 
-# Corrigir assinatura XML do Procurador (Integra Contador)
+# Refatorar geração do XML do Termo de Autorização (Integra Contador)
 
-## Problema
-O SERPRO retorna `403 AcessoNegado-AUTENTICAPROCURADOR-013: XML assinado inválido`. Os logs confirmam que o XML está sendo enviado com a assinatura, mas a verificação falha.
+## Contexto
+O SERPRO continua retornando `403 XML assinado inválido` mesmo após a correção das tags auto-fechantes no corpo do XML. Analisando os logs, identifico **dois problemas adicionais na assinatura**:
 
-**Causa raiz**: O XML do Termo de Autorização usa tags auto-fechantes (`<sistema id="..." />`), mas a canonicalização C14N (aplicada pelo SERPRO ao verificar o digest) converte todas para formato expandido (`<sistema id="..."></sistema>`). Como o digest é computado sobre o XML com tags auto-fechantes, os hashes não batem.
+1. **SignedInfo com tags auto-fechantes**: As tags `<CanonicalizationMethod ... />`, `<SignatureMethod ... />`, `<DigestMethod ... />` e `<Transform ... />` dentro do `<SignedInfo>` usam formato auto-fechante. Quando o SERPRO canonicaliza o SignedInfo para verificar a assinatura RSA, essas tags são expandidas, mudando os bytes — a assinatura não bate.
 
-Tags afetadas (todas em `generateAuthorizationXml`):
-```text
-<sistema id="..." />        → <sistema id="..."></sistema>
-<termo texto="..." />       → <termo texto="..."></termo>
-<avisoLegal texto="..." />  → <avisoLegal texto="..."></avisoLegal>
-<finalidade texto="..." />  → <finalidade texto="..."></finalidade>
-<dataAssinatura data="..." /> → <dataAssinatura data="..."></dataAssinatura>
-<vigencia data="..." />     → <vigencia data="..."></vigencia>
-<destinatario ... />        → <destinatario ...></destinatario>
-<assinadoPor ... />         → <assinadoPor ...></assinadoPor>
-```
+2. **Estrutura do XML**: O usuário quer adotar uma estrutura mais limpa e padronizada com `<TermoAutorizacao Id="...">` e atributo `Id` para referência da assinatura XMLDSig.
 
-O erro `400 Campo xml nulo` que o usuário viu é um efeito secundário: quando o procurador falha, a requisição principal prossegue sem o token, e o SERPRO rejeita porque os `dados` do usuário não contêm o campo `xml`.
-
-## Solução
+## Alterações
 
 ### `supabase/functions/integra-contador/index.ts`
 
-1. **`generateAuthorizationXml`** (linhas 38-59): Trocar todas as tags auto-fechantes (`/>`) por tags com fechamento explícito (`></tag>`), para que o XML já esteja em forma canônica C14N.
+**1. Nova função `generateSerproProcuradorXML`** (substitui `generateAuthorizationXml`):
+- Estrutura simplificada com `<TermoAutorizacao Id="TERMO_xxx">` como raiz
+- Elementos filhos: `<Contratante>`, `<AutorPedido>`, `<Contribuinte>`, `<DataHora>`
+- Id único baseado em timestamp para referência da assinatura
+- Data/hora no formato ISO 8601 com timezone Brasil (`-03:00`)
+- XML declaration `<?xml version="1.0" encoding="UTF-8"?>`
+- Sem tags auto-fechantes em nenhum lugar
 
-2. **`signXmlWithCertificate`** (linha 67): Adicionalmente, garantir que o digest é computado sobre o XML canonicalizado (sem tags auto-fechantes). Com a correção no ponto 1, isso já fica resolvido.
+**2. Nova função `toBase64`**:
+- Recebe string XML, codifica em UTF-8 e retorna base64
+- Pronta para uso no payload `{ "dados": "{\"xml\":\"BASE64\"}" }`
 
-3. **Segurança extra**: Adicionar um log do digest computado para facilitar debugging futuro.
+**3. Corrigir `signXmlWithCertificate`**:
+- Expandir TODAS as tags auto-fechantes no SignedInfo: `<CanonicalizationMethod>`, `<SignatureMethod>`, `<DigestMethod>`, `<Transform>` — todas devem ter fechamento explícito
+- Usar `Reference URI="#ID_DO_TERMO"` em vez de `URI=""` para referenciar o Id do TermoAutorizacao
+- Manter o restante da lógica de assinatura (SHA-256, RSASSA-PKCS1-v1_5)
+
+**4. Atualizar `obtainProcuradorToken`**:
+- Usar `generateSerproProcuradorXML` em vez de `generateAuthorizationXml`
+- Usar `toBase64` para a conversão
+- Adicionar log do XML gerado (primeiros 500 chars) para debug
+
+## Estrutura final do XML gerado
+
+```text
+<?xml version="1.0" encoding="UTF-8"?>
+<TermoAutorizacao Id="TERMO_1712451600000">
+  <Contratante>59400171000150</Contratante>
+  <AutorPedido>39427518000141</AutorPedido>
+  <Contribuinte>39427518000141</Contribuinte>
+  <DataHora>2026-04-07T00:00:00-03:00</DataHora>
+</TermoAutorizacao>
+```
 
 ## Arquivo alterado
-- `supabase/functions/integra-contador/index.ts` — ~8 tags corrigidas na função `generateAuthorizationXml`
+- `supabase/functions/integra-contador/index.ts` — funções `generateSerproProcuradorXML`, `toBase64`, `signXmlWithCertificate` corrigida, `obtainProcuradorToken` atualizada
 
