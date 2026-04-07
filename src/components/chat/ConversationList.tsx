@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MessageSquarePlus } from 'lucide-react';
+import { Search, MessageSquarePlus, ArrowLeft } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
