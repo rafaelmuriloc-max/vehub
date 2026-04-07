@@ -271,7 +271,7 @@ Deno.serve(async (req) => {
         conversationId = existingConv[0].id;
         await supabase
           .from("chat_conversations")
-          .update({ whatsapp_phone: phoneRaw })
+          .update({ whatsapp_phone: canonicalPhone })
           .eq("id", conversationId);
       }
     }
