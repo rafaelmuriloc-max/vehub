@@ -110,6 +110,12 @@ function extractRefMonthFromText(text: string): string {
   return '';
 }
 
+function isValidRefMonth(m: string): boolean {
+  if (!/^\d{4}-\d{2}$/.test(m)) return false;
+  const [y, mo] = m.split('-').map(Number);
+  return y >= 2000 && y <= 2099 && mo >= 1 && mo <= 12;
+}
+
 async function tryExtractByRegions(
   file: File,
   documentTypes: DocumentType[],
@@ -222,7 +228,7 @@ export default function Documents() {
           const regionMatch = await tryExtractByRegions(file, documentTypes, matchClient);
           if (regionMatch && regionMatch.clientId && regionMatch.docTypeId) {
             const refMonth = regionMatch.referenceMonth || '';
-            if (refMonth) {
+            if (isValidRefMonth(refMonth)) {
               await importDocument(file, regionMatch.clientId, regionMatch.docTypeId, refMonth + '-01');
               importedCount++;
               continue;
@@ -277,7 +283,7 @@ export default function Documents() {
         const matchedDocTypeId = matchDocType(extraction.document_type_name);
         const referenceMonth = extraction.reference_month || '';
 
-        if (matchedClientId && matchedDocTypeId && referenceMonth) {
+        if (matchedClientId && matchedDocTypeId && isValidRefMonth(referenceMonth)) {
           await importDocument(file, matchedClientId, matchedDocTypeId, referenceMonth + '-01');
           importedCount++;
         } else {
@@ -304,6 +310,10 @@ export default function Documents() {
   }, [clients, documentTypes]);
 
   async function handleReviewConfirm({ file, clientId, docTypeId, referenceMonth }: { file: File; clientId: string; docTypeId: string; referenceMonth: string }) {
+    if (!isValidRefMonth(referenceMonth)) {
+      toast({ title: 'Mês de referência inválido', description: 'Use o formato AAAA-MM com ano/mês válidos.', variant: 'destructive' });
+      return;
+    }
     setConfirming(true);
     try {
       await importDocument(file, clientId, docTypeId, referenceMonth + '-01');
