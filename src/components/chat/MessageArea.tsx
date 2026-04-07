@@ -83,6 +83,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
+        <Popover>
           <PopoverTrigger asChild>
             <button type="button" className="focus:outline-none rounded-full">
               <Avatar className="h-10 w-10 cursor-pointer">
@@ -108,27 +109,27 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             )}
           </div>
           {companyNames && companyNames.length > 0 && (
-            <p className="text-xs text-muted-foreground truncate max-w-[400px]">
+            <p className="text-xs text-muted-foreground truncate max-w-[200px] md:max-w-[400px]">
               {companyNames.join(' | ')}
             </p>
           )}
         </div>
         {!isClosed && onTransferTicket && (
-          <Button variant="outline" size="sm" onClick={onTransferTicket} className="shrink-0 gap-1.5">
+          <Button variant="outline" size="icon" onClick={onTransferTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <UserRoundPlus className="h-4 w-4" />
-            Transferir
+            <span className="hidden md:inline text-sm">Transferir</span>
           </Button>
         )}
         {!isClosed && onCloseTicket && (
-          <Button variant="outline" size="sm" onClick={onCloseTicket} className="shrink-0 gap-1.5">
+          <Button variant="outline" size="icon" onClick={onCloseTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <CheckCircle2 className="h-4 w-4" />
-            Fechar Chamado
+            <span className="hidden md:inline text-sm">Fechar Chamado</span>
           </Button>
         )}
         {isClosed && onReopenTicket && (
-          <Button variant="outline" size="sm" onClick={onReopenTicket} className="shrink-0 gap-1.5">
+          <Button variant="outline" size="icon" onClick={onReopenTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <MessageCircle className="h-4 w-4" />
-            Reabrir Chamado
+            <span className="hidden md:inline text-sm">Reabrir Chamado</span>
           </Button>
         )}
       </div>
