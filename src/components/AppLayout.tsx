@@ -42,9 +42,6 @@ export function AppLayout() {
             <span className="text-sm font-medium text-foreground">{pageTitle}</span>
           </header>
           )}
-            <SidebarTrigger />
-            <span className="text-sm font-medium text-foreground">{pageTitle}</span>
-          </header>
           <div className={location.pathname === '/chat' ? 'h-full' : 'p-6'}>
             <Outlet />
           </div>
