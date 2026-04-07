@@ -1,5 +1,31 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Normalize Brazilian phone: ensure 13 digits (55 + 2-digit DDD + 9 + 8 digits)
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  // 12 digits: 55 + DD + 8 digits → insert 9 after DDD if local part starts with [6-9]
+  if (digits.length === 12 && digits.startsWith("55")) {
+    const localFirst = digits[4];
+    if (["6","7","8","9"].includes(localFirst)) {
+      return digits.slice(0, 4) + "9" + digits.slice(4);
+    }
+  }
+  return digits;
+}
+
+function getPhoneVariants(phone: string): string[] {
+  const digits = phone.replace(/\D/g, "");
+  const normalized = normalizePhone(digits);
+  const variants = new Set<string>();
+  variants.add(digits);
+  variants.add(normalized);
+  // Also add 12-digit variant (without the 9)
+  if (normalized.length === 13 && normalized.startsWith("55") && normalized[4] === "9") {
+    variants.add(normalized.slice(0, 4) + normalized.slice(5));
+  }
+  return [...variants];
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -206,21 +232,30 @@ Deno.serve(async (req) => {
     // === Find existing conversation by whatsapp_phone FIRST ===
     let conversationId: string | null = null;
 
+    const phoneVariants = getPhoneVariants(phoneRaw);
+    const canonicalPhone = normalizePhone(phoneRaw);
+
     const { data: convByPhone } = await supabase
       .from("chat_conversations")
-      .select("id, client_id, status")
-      .eq("whatsapp_phone", phoneRaw)
+      .select("id, client_id, status, whatsapp_phone")
+      .in("whatsapp_phone", phoneVariants)
       .order("status", { ascending: true })
       .order("updated_at", { ascending: false })
       .limit(1);
 
     if (convByPhone && convByPhone.length > 0) {
       conversationId = convByPhone[0].id;
+      const updates: Record<string, unknown> = {};
       if (clientId && !convByPhone[0].client_id) {
-        await supabase
-          .from("chat_conversations")
-          .update({ client_id: clientId, name: clientName })
-          .eq("id", conversationId);
+        updates.client_id = clientId;
+        updates.name = clientName;
+      }
+      // Upgrade phone to canonical format
+      if (convByPhone[0].whatsapp_phone !== canonicalPhone) {
+        updates.whatsapp_phone = canonicalPhone;
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("chat_conversations").update(updates).eq("id", conversationId);
       }
     }
 
@@ -236,7 +271,7 @@ Deno.serve(async (req) => {
         conversationId = existingConv[0].id;
         await supabase
           .from("chat_conversations")
-          .update({ whatsapp_phone: phoneRaw })
+          .update({ whatsapp_phone: canonicalPhone })
           .eq("id", conversationId);
       }
     }
@@ -288,7 +323,7 @@ Deno.serve(async (req) => {
           created_by: systemUserId,
           client_id: clientId,
           avatar_url: avatarUrl,
-          whatsapp_phone: phoneRaw,
+          whatsapp_phone: canonicalPhone,
         })
         .select("id")
         .single();

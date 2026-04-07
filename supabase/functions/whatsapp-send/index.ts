@@ -1,6 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("55")) {
+    const localFirst = digits[4];
+    if (["6","7","8","9"].includes(localFirst)) {
+      return digits.slice(0, 4) + "9" + digits.slice(4);
+    }
+  }
+  return digits;
+}
+
+function getPhoneVariants(phone: string): string[] {
+  const digits = phone.replace(/\D/g, "");
+  const normalized = normalizePhone(digits);
+  const variants = new Set<string>();
+  variants.add(digits);
+  variants.add(normalized);
+  if (normalized.length === 13 && normalized.startsWith("55") && normalized[4] === "9") {
+    variants.add(normalized.slice(0, 4) + normalized.slice(5));
+  }
+  return [...variants];
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -132,11 +155,14 @@ serve(async (req) => {
 
     try {
       if (clientId) {
+        const phoneVariants = getPhoneVariants(cleanPhone);
+        const canonicalPhone = normalizePhone(cleanPhone);
+
         // 1. Try by whatsapp_phone first (avoids duplicates for same phone across clients)
         const { data: convByPhone } = await supabaseService
           .from("chat_conversations")
-          .select("id, client_id")
-          .eq("whatsapp_phone", cleanPhone)
+          .select("id, client_id, whatsapp_phone")
+          .in("whatsapp_phone", phoneVariants)
           .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -144,6 +170,10 @@ serve(async (req) => {
         let conversationId: string;
 
         if (convByPhone) {
+          // Upgrade phone to canonical format if needed
+          if (convByPhone.whatsapp_phone !== canonicalPhone) {
+            await supabaseService.from("chat_conversations").update({ whatsapp_phone: canonicalPhone }).eq("id", convByPhone.id);
+          }
           conversationId = convByPhone.id;
         } else {
           // 2. Fallback: by client_id
@@ -173,7 +203,7 @@ serve(async (req) => {
                 is_group: false,
                 created_by: userId,
                 client_id: clientId,
-                whatsapp_phone: cleanPhone,
+                whatsapp_phone: canonicalPhone,
               })
               .select("id")
               .single();
