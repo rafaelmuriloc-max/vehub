@@ -1,33 +1,30 @@
 
-
-# Corrigir ordenação cronológica das conversas
+# Corrigir posicionamento de mensagens enviadas no chat
 
 ## Problema
-A migração de consolidação de duplicatas atualizou o `updated_at` de todas as conversas para timestamps sequenciais em `2026-04-07 02:33:xx`, quebrando a ordenação. Por exemplo, JORGE LUIZ aparece primeiro (última msg em 02/04), enquanto WILLIAN PALMEIRA (última msg em 06/04 22:38) aparece muito abaixo.
+Mensagens enviadas (tipo `whatsapp_outgoing` e `whatsapp`) estão aparecendo no lado esquerdo (brancas, como recebidas) em vez de no lado direito (verdes, como enviadas).
 
-## Solução em 2 partes
+**Causa raiz**: O webhook salva TODAS as mensagens com `sender_id = systemUserId` (primeiro admin). Se o usuário logado não for esse admin específico, `isMine` é `false` e a mensagem aparece como recebida. Além disso, mensagens enviadas via `whatsapp-send` (automáticas) também usam o sender_id do token, que pode não coincidir.
 
-### 1. Migração — Corrigir `updated_at` com base na última mensagem real
-```sql
-UPDATE chat_conversations c
-SET updated_at = COALESCE(
-  (SELECT MAX(created_at) FROM chat_messages WHERE conversation_id = c.id),
-  c.created_at
-);
-```
+## Solução
 
-### 2. Ordenação no cliente — Usar `lastMessageAt` como fallback
-Em `src/pages/Chat.tsx`, após montar o array `items`, ordenar pelo timestamp da última mensagem (que já é calculado a partir de `chat_messages`):
+### `src/components/chat/MessageBubble.tsx`
+Alterar a lógica de posicionamento para considerar o `message_type` como indicador definitivo de direção:
 
+- Se `messageType` é `whatsapp_outgoing` ou `whatsapp` → tratar como mensagem enviada (lado direito, verde), independentemente do `sender_id`
+- Se `messageType` é `whatsapp_incoming`, `whatsapp_image`, `whatsapp_video`, `whatsapp_audio`, `whatsapp_document` → tratar como mensagem recebida (lado esquerdo, branca)
+- Para mensagens internas (`text`), manter a lógica atual baseada em `sender_id === currentUserId`
+
+Lógica simplificada:
 ```typescript
-items.sort((a, b) => 
-  new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-);
+const isOutgoing = messageType === 'whatsapp_outgoing' || messageType === 'whatsapp';
+const isIncoming = messageType === 'whatsapp_incoming' || messageType === 'whatsapp_image' || ...;
+
+// Para posicionamento:
+const showAsRight = isOutgoing || (isMine && !isIncoming);
 ```
 
-Isso garante que mesmo se `updated_at` ficar desatualizado no futuro, a lista sempre reflete a ordem real das mensagens.
+Isso resolve tanto mensagens enviadas pelo app quanto as enviadas pelo celular (capturadas pelo webhook como `fromMe`).
 
-## Arquivos alterados
-- Nova migração SQL — corrige `updated_at` existentes
-- `src/pages/Chat.tsx` — 3 linhas adicionadas (sort client-side)
-
+## Arquivo alterado
+- `src/components/chat/MessageBubble.tsx` — ~3 linhas alteradas
