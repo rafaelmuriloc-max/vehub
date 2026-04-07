@@ -499,6 +499,7 @@ export default function Chat() {
             onCloseTicket={closeTicket}
             onReopenTicket={reopenTicket}
             onTransferTicket={openTransferDialog}
+            whatsappPhone={activeConv?.whatsappPhone}
           />
         </div>
       )}
