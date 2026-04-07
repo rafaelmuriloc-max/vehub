@@ -99,8 +99,8 @@ Deno.serve(async (req) => {
         if (type === "document" && fileName) {
           payload[type].filename = fileName;
         }
-        if (type === "image" && senderName) {
-          payload[type].caption = `*${senderName}*`;
+        if (type === "image") {
+          payload[type].caption = senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER;
         }
 
         const metaRes = await fetch(
