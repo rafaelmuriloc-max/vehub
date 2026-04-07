@@ -157,29 +157,30 @@ serve(async (req) => {
           if (existingConv) {
             conversationId = existingConv.id;
           } else {
-          const { data: client } = await supabaseService
-            .from("clients")
-            .select("company_name, contact_name")
-            .eq("id", clientId)
-            .single();
+            const { data: client } = await supabaseService
+              .from("clients")
+              .select("company_name, contact_name")
+              .eq("id", clientId)
+              .single();
 
-          const displayName = client?.contact_name || client?.company_name;
-          const convName = displayName || "WhatsApp";
+            const displayName = client?.contact_name || client?.company_name;
+            const convName = displayName || "WhatsApp";
 
-          const { data: newConv } = await supabaseService
-            .from("chat_conversations")
-            .insert({
-              name: convName,
-              is_group: false,
-              created_by: userId,
-              client_id: clientId,
-              whatsapp_phone: cleanPhone,
-            })
-            .select("id")
-            .single();
+            const { data: newConv } = await supabaseService
+              .from("chat_conversations")
+              .insert({
+                name: convName,
+                is_group: false,
+                created_by: userId,
+                client_id: clientId,
+                whatsapp_phone: cleanPhone,
+              })
+              .select("id")
+              .single();
 
-          if (!newConv) throw new Error("Failed to create conversation");
-          conversationId = newConv.id;
+            if (!newConv) throw new Error("Failed to create conversation");
+            conversationId = newConv.id;
+          }
         }
 
         // Add ALL admins as participants
