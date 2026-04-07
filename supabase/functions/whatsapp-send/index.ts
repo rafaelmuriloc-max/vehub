@@ -203,7 +203,7 @@ serve(async (req) => {
                 is_group: false,
                 created_by: userId,
                 client_id: clientId,
-                whatsapp_phone: cleanPhone,
+                whatsapp_phone: canonicalPhone,
               })
               .select("id")
               .single();

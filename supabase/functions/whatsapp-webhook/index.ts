@@ -323,7 +323,7 @@ Deno.serve(async (req) => {
           created_by: systemUserId,
           client_id: clientId,
           avatar_url: avatarUrl,
-          whatsapp_phone: phoneRaw,
+          whatsapp_phone: canonicalPhone,
         })
         .select("id")
         .single();
