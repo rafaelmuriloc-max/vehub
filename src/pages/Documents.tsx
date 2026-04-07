@@ -401,6 +401,20 @@ export default function Documents() {
       .replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 
+  async function isInstanceFullyCompleted(instanceId: string, obligationId: string): Promise<boolean> {
+    const { data: acts } = await supabase
+      .from('obligation_activities')
+      .select('id')
+      .eq('obligation_id', obligationId);
+    if (!acts || acts.length === 0) return false;
+    const { data: completions } = await supabase
+      .from('obligation_activity_completions')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('completed', true);
+    return (completions?.length || 0) >= acts.length;
+  }
+
   async function importDocument(file: File, clientId: string, docTypeId: string, refMonth: string) {
     const path = `${clientId}/${refMonth}/${docTypeId}/${sanitizeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
@@ -475,6 +489,7 @@ export default function Documents() {
       }
 
       for (const inst of allInstances) {
+        if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;
         if (!linkedObligationId) linkedObligationId = inst.obligation_id;
         const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
         for (const act of relatedActivities) {
@@ -637,6 +652,7 @@ export default function Documents() {
 
         let linkedObligationId: string | null = null;
         for (const inst of allInstances) {
+          if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;
           if (!linkedObligationId) linkedObligationId = inst.obligation_id;
           const relatedActs = matchingActs.filter(a => a.obligation_id === inst.obligation_id);
           for (const act of relatedActs) {
