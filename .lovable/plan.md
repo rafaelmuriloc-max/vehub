@@ -1,25 +1,43 @@
 
 
-# Corrigir sobreposição do cabeçalho da página com o cabeçalho da conversa
+# Marcador oculto para evitar duplicação de mensagens enviadas
 
 ## Problema
-No mobile, o header fixo do `AppLayout` (com SidebarTrigger + título da página, `h-12`, `sticky top-0 z-10`) fica visível sobre o cabeçalho da conversa aberta. Isso causa sobreposição e esconde parte do header do chat (avatar, nome do contato, botões).
+Quando o sistema envia uma mensagem via `whatsapp-send-text` ou `whatsapp-send-media`, o WhatsApp ecoa essa mensagem de volta ao webhook (`fromMe: true`). A deduplicação atual falha porque o conteúdo assinado (`*Nome:*\nTexto`) não bate com o conteúdo salvo (`Texto`).
 
 ## Solução
+Adicionar um marcador invisível (caractere Unicode zero-width space `\u200B`) ao final do texto enviado. O webhook detecta esse marcador e ignora a mensagem imediatamente.
 
-### `src/components/AppLayout.tsx`
-Ocultar o header mobile quando a rota for `/chat`. O chat já possui seu próprio header com botão de voltar, avatar e ações — o header genérico do layout é redundante nesta tela.
-
-Alterar a linha 39 para adicionar uma condição:
-```tsx
-{location.pathname !== '/chat' && (
-  <header className="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-border bg-background px-4 md:hidden">
-    <SidebarTrigger />
-    <span className="text-sm font-medium text-foreground">{pageTitle}</span>
-  </header>
-)}
+### 1. `supabase/functions/whatsapp-send-text/index.ts`
+Adicionar o marcador ao texto enviado ao WhatsApp (não ao salvo no banco):
+```typescript
+const VHUB_MARKER = "\u200B\u200B\u200B"; // 3 zero-width spaces
+const signedText = senderName ? `*${senderName}:*\n${text}${VHUB_MARKER}` : `${text}${VHUB_MARKER}`;
 ```
+O `text` salvo no banco continua sem o marcador.
 
-## Arquivo alterado
-- `src/components/AppLayout.tsx` — 1 condição adicionada
+### 2. `supabase/functions/whatsapp-send-media/index.ts`
+Mesmo marcador para captions de mídia enviadas via Meta API e Evolution API (nos payloads de envio). Adicionar `VHUB_MARKER` ao caption quando houver texto.
+
+### 3. `supabase/functions/whatsapp-webhook/index.ts`
+Logo após extrair o `text` da mensagem (linha ~88), verificar se contém o marcador:
+```typescript
+const VHUB_MARKER = "\u200B\u200B\u200B";
+if (isFromMe && text && text.includes(VHUB_MARKER)) {
+  console.log("Skipping vhub-originated message (marker detected)");
+  return new Response(JSON.stringify({ ok: true, skipped: "vhub_origin" }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+```
+Isso substitui a deduplicação atual baseada em conteúdo (linhas 400-418), que pode ser removida.
+
+### 4. `supabase/functions/whatsapp-send/index.ts`
+Adicionar o mesmo marcador ao texto/template enviado pela função de envio automático de obrigações, para consistência.
+
+## Arquivos alterados
+- `supabase/functions/whatsapp-send-text/index.ts` — marcador no texto enviado (~1 linha)
+- `supabase/functions/whatsapp-send-media/index.ts` — marcador em captions (~2 linhas)
+- `supabase/functions/whatsapp-webhook/index.ts` — detecção do marcador e skip (~8 linhas)
+- `supabase/functions/whatsapp-send/index.ts` — marcador no texto enviado (~1 linha)
 
