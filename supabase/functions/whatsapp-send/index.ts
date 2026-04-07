@@ -132,19 +132,31 @@ serve(async (req) => {
 
     try {
       if (clientId) {
-        // Find existing conversation for this client
-        const { data: existingConv } = await supabaseService
+        // 1. Try by whatsapp_phone first (avoids duplicates for same phone across clients)
+        const { data: convByPhone } = await supabaseService
           .from("chat_conversations")
-          .select("id")
-          .eq("client_id", clientId)
+          .select("id, client_id")
+          .eq("whatsapp_phone", cleanPhone)
+          .order("updated_at", { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         let conversationId: string;
 
-        if (existingConv) {
-          conversationId = existingConv.id;
+        if (convByPhone) {
+          conversationId = convByPhone.id;
         } else {
+          // 2. Fallback: by client_id
+          const { data: existingConv } = await supabaseService
+            .from("chat_conversations")
+            .select("id")
+            .eq("client_id", clientId)
+            .limit(1)
+            .maybeSingle();
+
+          if (existingConv) {
+            conversationId = existingConv.id;
+          } else {
           const { data: client } = await supabaseService
             .from("clients")
             .select("company_name, contact_name")
