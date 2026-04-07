@@ -82,6 +82,13 @@ function extractCnpjFromText(text: string): string {
   if (formatted) return formatted[0].replace(/\D/g, '');
   const raw = text.replace(/\D/g, '');
   if (raw.length >= 14) return raw.substring(0, 14);
+  // Fallback: CNPJ raiz (8 dígitos) para guias como FGTS
+  const rootFormatted = text.match(/\d{2}\.?\d{3}\.?\d{3}/);
+  if (rootFormatted) {
+    const digits = rootFormatted[0].replace(/\D/g, '');
+    if (digits.length === 8) return digits;
+  }
+  if (raw.length >= 8) return raw.substring(0, 8);
   return '';
 }
 
