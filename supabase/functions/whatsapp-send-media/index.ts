@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
     let messageMediaUrl = mediaUrl || null;
 
     // Build content text with sender signature
+    const VHUB_MARKER = "\u200B\u200B\u200B";
     const signPrefix = senderName ? `*${senderName}:*\n` : "";
 
     if (type === "image" || type === "video" || type === "document") {
