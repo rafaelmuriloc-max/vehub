@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { ConversationList, ConversationItem } from '@/components/chat/ConversationList';
@@ -16,6 +17,7 @@ export type ChatTab = 'mine' | 'closed' | 'all';
 export default function Chat() {
   const { user, profile } = useAuth();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -470,6 +472,7 @@ export default function Chat() {
             activeTab={activeTab}
             onTabChange={handleTabChange}
             totalUnread={conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
+            onNavigateBack={() => navigate('/')}
           />
         </div>
       )}
