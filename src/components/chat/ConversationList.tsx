@@ -56,7 +56,7 @@ function ConversationSkeleton() {
   );
 }
 
-export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange, totalUnread }: ConversationListProps) {
+export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange, totalUnread, onNavigateBack }: ConversationListProps) {
   const [search, setSearch] = useState('');
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
@@ -65,10 +65,17 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
   );
 
   return (
-    <div className="flex flex-col h-full border-r bg-white dark:bg-zinc-900">
+    <div className="flex flex-col h-full border-r bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-[#F0F2F5] dark:bg-zinc-800 border-b">
-        <h2 className="text-base font-semibold text-foreground">Conversas</h2>
+      <div className="flex items-center justify-between p-3 bg-muted border-b">
+        <div className="flex items-center gap-1">
+          {onNavigateBack && (
+            <Button variant="ghost" size="icon" onClick={onNavigateBack} className="h-8 w-8 md:hidden">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <h2 className="text-base font-semibold text-foreground">Conversas</h2>
+        </div>
         <Button variant="ghost" size="icon" onClick={() => setNewDialogOpen(true)}>
           <MessageSquarePlus className="h-5 w-5" />
         </Button>
