@@ -1,5 +1,31 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Normalize Brazilian phone: ensure 13 digits (55 + 2-digit DDD + 9 + 8 digits)
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  // 12 digits: 55 + DD + 8 digits → insert 9 after DDD if local part starts with [6-9]
+  if (digits.length === 12 && digits.startsWith("55")) {
+    const localFirst = digits[4];
+    if (["6","7","8","9"].includes(localFirst)) {
+      return digits.slice(0, 4) + "9" + digits.slice(4);
+    }
+  }
+  return digits;
+}
+
+function getPhoneVariants(phone: string): string[] {
+  const digits = phone.replace(/\D/g, "");
+  const normalized = normalizePhone(digits);
+  const variants = new Set<string>();
+  variants.add(digits);
+  variants.add(normalized);
+  // Also add 12-digit variant (without the 9)
+  if (normalized.length === 13 && normalized.startsWith("55") && normalized[4] === "9") {
+    variants.add(normalized.slice(0, 4) + normalized.slice(5));
+  }
+  return [...variants];
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
