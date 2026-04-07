@@ -111,6 +111,15 @@ Deno.serve(async (req) => {
       mediaKey = "stickerMessage";
     }
 
+    // Skip messages originated from vhub (contain invisible marker)
+    const VHUB_MARKER = "\u200B\u200B\u200B";
+    if (isFromMe && text !== null && text.includes(VHUB_MARKER)) {
+      console.log("Skipping vhub-originated message (marker detected)");
+      return new Response(JSON.stringify({ ok: true, skipped: "vhub_origin" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // If no recognizable content at all, skip
     if (text === null) {
       console.log("No recognizable message content, skipping");

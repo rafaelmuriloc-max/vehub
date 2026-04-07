@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
     let messageMediaUrl = mediaUrl || null;
 
     // Build content text with sender signature
+    const VHUB_MARKER = "\u200B\u200B\u200B";
     const signPrefix = senderName ? `*${senderName}:*\n` : "";
 
     if (type === "image" || type === "video" || type === "document") {
@@ -98,8 +99,8 @@ Deno.serve(async (req) => {
         if (type === "document" && fileName) {
           payload[type].filename = fileName;
         }
-        if (type === "image" && senderName) {
-          payload[type].caption = `*${senderName}*`;
+        if (type === "image") {
+          payload[type].caption = senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER;
         }
 
         const metaRes = await fetch(
@@ -133,7 +134,7 @@ Deno.serve(async (req) => {
               mediatype: type === "document" ? "document" : type,
               media: mediaUrl,
               fileName: fileName || undefined,
-              caption: senderName ? `*${senderName}*` : undefined,
+              caption: senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER,
             }),
           }
         );
