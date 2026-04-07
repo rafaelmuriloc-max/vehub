@@ -155,11 +155,14 @@ serve(async (req) => {
 
     try {
       if (clientId) {
+        const phoneVariants = getPhoneVariants(cleanPhone);
+        const canonicalPhone = normalizePhone(cleanPhone);
+
         // 1. Try by whatsapp_phone first (avoids duplicates for same phone across clients)
         const { data: convByPhone } = await supabaseService
           .from("chat_conversations")
-          .select("id, client_id")
-          .eq("whatsapp_phone", cleanPhone)
+          .select("id, client_id, whatsapp_phone")
+          .in("whatsapp_phone", phoneVariants)
           .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -167,6 +170,10 @@ serve(async (req) => {
         let conversationId: string;
 
         if (convByPhone) {
+          // Upgrade phone to canonical format if needed
+          if (convByPhone.whatsapp_phone !== canonicalPhone) {
+            await supabaseService.from("chat_conversations").update({ whatsapp_phone: canonicalPhone }).eq("id", convByPhone.id);
+          }
           conversationId = convByPhone.id;
         } else {
           // 2. Fallback: by client_id
