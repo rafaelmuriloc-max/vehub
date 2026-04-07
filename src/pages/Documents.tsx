@@ -47,15 +47,30 @@ async function extractPdfText(file: File): Promise<string> {
   return pages.join('\n');
 }
 
-async function extractTextFromRegion(file: File, region: FieldRegion): Promise<string> {
+// Cached PDF data to avoid re-parsing per template
+interface CachedPdfPage {
+  page: any;
+  viewport: any;
+  content: any;
+}
+
+async function loadPdfPages(file: File, maxPages = 5): Promise<{ pages: CachedPdfPage[]; fullText: string }> {
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: buffer }).promise;
-  if (region.page > pdf.numPages) return '';
-  const page = await pdf.getPage(region.page);
-  const viewport = page.getViewport({ scale: 1 });
-  const content = await page.getTextContent();
+  const pages: CachedPdfPage[] = [];
+  const textParts: string[] = [];
+  for (let i = 1; i <= Math.min(pdf.numPages, maxPages); i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    pages.push({ page, viewport, content });
+    textParts.push(content.items.map((it: any) => it.str).join(' '));
+  }
+  return { pages, fullText: textParts.join('\n') };
+}
 
-  // Convert percentage-based region to absolute coordinates
+function extractTextFromCachedRegion(cached: CachedPdfPage, region: FieldRegion): string {
+  const { viewport, content } = cached;
   const absX = (region.x / 100) * viewport.width;
   const absY = (region.y / 100) * viewport.height;
   const absW = (region.width / 100) * viewport.width;
@@ -64,11 +79,11 @@ async function extractTextFromRegion(file: File, region: FieldRegion): Promise<s
   const texts: { x: number; str: string }[] = [];
   for (const item of content.items as any[]) {
     if (!item.str) continue;
-    // pdfjs uses bottom-left origin; transform to top-left
     const tx = item.transform[4];
     const ty = viewport.height - item.transform[5];
-    // Check if the text item overlaps with the region
-    if (tx + item.width >= absX && tx <= absX + absW && ty + item.height >= absY && ty <= absY + absH) {
+    const itemH = item.height || 0;
+    const itemW = item.width || 0;
+    if (tx + itemW >= absX && tx <= absX + absW && ty + itemH >= absY && ty <= absY + absH) {
       texts.push({ x: tx, str: item.str });
     }
   }
@@ -76,13 +91,18 @@ async function extractTextFromRegion(file: File, region: FieldRegion): Promise<s
   return texts.map(t => t.str).join(' ').trim();
 }
 
+// Legacy wrapper kept for compatibility
+async function extractTextFromRegion(file: File, region: FieldRegion): Promise<string> {
+  const { pages } = await loadPdfPages(file, region.page);
+  if (region.page > pages.length) return '';
+  return extractTextFromCachedRegion(pages[region.page - 1], region);
+}
+
 function extractCnpjFromText(text: string): string {
-  // Match formatted (XX.XXX.XXX/XXXX-XX) or raw 14 digits
   const formatted = text.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
   if (formatted) return formatted[0].replace(/\D/g, '');
   const raw = text.replace(/\D/g, '');
   if (raw.length >= 14) return raw.substring(0, 14);
-  // Fallback: CNPJ raiz (8 dígitos) para guias como FGTS
   const rootFormatted = text.match(/\d{2}\.?\d{3}\.?\d{3}/);
   if (rootFormatted) {
     const digits = rootFormatted[0].replace(/\D/g, '');
@@ -93,13 +113,10 @@ function extractCnpjFromText(text: string): string {
 }
 
 function extractRefMonthFromText(text: string): string {
-  // Try YYYY-MM
   const iso = text.match(/(\d{4})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}`;
-  // Try MM/YYYY or MM.YYYY
   const brDate = text.match(/(\d{2})[\/\.](\d{4})/);
   if (brDate) return `${brDate[2]}-${brDate[1]}`;
-  // Try month names (Portuguese)
   const months: Record<string, string> = {
     janeiro: '01', fevereiro: '02', 'março': '03', marco: '03', abril: '04',
     maio: '05', junho: '06', julho: '07', agosto: '08', setembro: '09',
@@ -123,31 +140,73 @@ async function tryExtractByRegions(
 ): Promise<{ docTypeId: string; clientId: string; referenceMonth: string } | null> {
   const typesWithConfig = documentTypes.filter(dt => {
     const cfg = dt.extraction_config;
-    return cfg && (cfg.cnpj_region || cfg.reference_month_region);
+    return cfg && (cfg.cnpj_region || cfg.reference_month_region || cfg.obligation_type_region);
   });
-  if (typesWithConfig.length === 0) return null;
 
-  for (const dt of typesWithConfig) {
-    const cfg = dt.extraction_config!;
-    let cnpj = '';
-    let refMonth = '';
+  // Load PDF once and reuse for all templates
+  const { pages: cachedPages, fullText } = await loadPdfPages(file);
 
-    if (cfg.cnpj_region) {
-      const cnpjText = await extractTextFromRegion(file, cfg.cnpj_region);
-      cnpj = extractCnpjFromText(cnpjText);
+  // --- Phase 1: Score each template using configured regions ---
+  if (typesWithConfig.length > 0) {
+    const scored: { dt: DocumentType; score: number; clientId: string; refMonth: string }[] = [];
+
+    for (const dt of typesWithConfig) {
+      const cfg = dt.extraction_config!;
+      let score = 0;
+      let cnpj = '';
+      let refMonth = '';
+      let clientId = '';
+
+      // Check obligation_type_region — does extracted text match this template's name?
+      if (cfg.obligation_type_region && cfg.obligation_type_region.page <= cachedPages.length) {
+        const typeText = extractTextFromCachedRegion(cachedPages[cfg.obligation_type_region.page - 1], cfg.obligation_type_region);
+        if (typeText && dt.name.toLowerCase().split(/\s+/).some(word => word.length > 2 && typeText.toLowerCase().includes(word))) {
+          score += 2;
+        }
+      }
+
+      // Extract CNPJ from region
+      if (cfg.cnpj_region && cfg.cnpj_region.page <= cachedPages.length) {
+        const cnpjText = extractTextFromCachedRegion(cachedPages[cfg.cnpj_region.page - 1], cfg.cnpj_region);
+        cnpj = extractCnpjFromText(cnpjText);
+        clientId = matchClientFn(cnpj);
+        if (clientId) score += 1;
+      }
+
+      // Extract reference month from region
+      if (cfg.reference_month_region && cfg.reference_month_region.page <= cachedPages.length) {
+        const refText = extractTextFromCachedRegion(cachedPages[cfg.reference_month_region.page - 1], cfg.reference_month_region);
+        refMonth = extractRefMonthFromText(refText);
+        if (isValidRefMonth(refMonth)) score += 1;
+      }
+
+      if (score >= 2) {
+        scored.push({ dt, score, clientId, refMonth });
+      }
     }
-    if (cfg.reference_month_region) {
-      const refText = await extractTextFromRegion(file, cfg.reference_month_region);
-      refMonth = extractRefMonthFromText(refText);
-    }
 
-    if (cnpj) {
+    if (scored.length > 0) {
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      return { docTypeId: best.dt.id, clientId: best.clientId, referenceMonth: best.refMonth };
+    }
+  }
+
+  // --- Phase 2: Fallback — search full text for document type names ---
+  const fullTextLower = fullText.toLowerCase();
+  for (const dt of documentTypes) {
+    const nameWords = dt.name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const matched = nameWords.every(word => fullTextLower.includes(word));
+    if (matched && nameWords.length > 0) {
+      const cnpj = extractCnpjFromText(fullText);
       const clientId = matchClientFn(cnpj);
+      const refMonth = extractRefMonthFromText(fullText);
       if (clientId) {
         return { docTypeId: dt.id, clientId, referenceMonth: refMonth };
       }
     }
   }
+
   return null;
 }
 
