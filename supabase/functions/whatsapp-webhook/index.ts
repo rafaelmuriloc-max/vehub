@@ -245,11 +245,17 @@ Deno.serve(async (req) => {
 
     if (convByPhone && convByPhone.length > 0) {
       conversationId = convByPhone[0].id;
+      const updates: Record<string, unknown> = {};
       if (clientId && !convByPhone[0].client_id) {
-        await supabase
-          .from("chat_conversations")
-          .update({ client_id: clientId, name: clientName })
-          .eq("id", conversationId);
+        updates.client_id = clientId;
+        updates.name = clientName;
+      }
+      // Upgrade phone to canonical format
+      if (convByPhone[0].whatsapp_phone !== canonicalPhone) {
+        updates.whatsapp_phone = canonicalPhone;
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("chat_conversations").update(updates).eq("id", conversationId);
       }
     }
 
