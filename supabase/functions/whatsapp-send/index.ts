@@ -196,6 +196,30 @@ serve(async (req) => {
             const displayName = client?.contact_name || client?.company_name;
             const convName = displayName || "WhatsApp";
 
+            // Fetch avatar from EvolutionAPI before creating conversation
+            let avatarUrl: string | null = null;
+            try {
+              const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+              const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
+              const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
+              if (evolutionUrl && evolutionKey && evolutionInstance) {
+                const profileRes = await fetch(
+                  `${evolutionUrl}/chat/fetchProfilePictureUrl/${evolutionInstance}`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", apikey: evolutionKey },
+                    body: JSON.stringify({ number: canonicalPhone }),
+                  }
+                );
+                if (profileRes.ok) {
+                  const profileData = await profileRes.json();
+                  avatarUrl = profileData?.profilePictureUrl || null;
+                }
+              }
+            } catch (e) {
+              console.log("Failed to fetch profile picture:", e);
+            }
+
             const { data: newConv } = await supabaseService
               .from("chat_conversations")
               .insert({
@@ -204,6 +228,7 @@ serve(async (req) => {
                 created_by: userId,
                 client_id: clientId,
                 whatsapp_phone: canonicalPhone,
+                avatar_url: avatarUrl,
               })
               .select("id")
               .single();

@@ -337,18 +337,46 @@ Deno.serve(async (req) => {
       }
 
       conversationId = newConv.id;
-    } else if (clientId) {
+    } else {
+      // Existing conversation — check if avatar or name needs updating
       const { data: existingConvData } = await supabase
         .from("chat_conversations")
-        .select("name")
+        .select("name, avatar_url")
         .eq("id", conversationId)
         .single();
 
-      if (existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
-        await supabase
-          .from("chat_conversations")
-          .update({ name: clientName })
-          .eq("id", conversationId);
+      // Fetch avatar if missing
+      if (existingConvData && !existingConvData.avatar_url) {
+        try {
+          const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+          const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
+          const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
+          if (evolutionUrl && evolutionKey && evolutionInstance) {
+            const profileRes = await fetch(
+              `${evolutionUrl}/chat/fetchProfilePictureUrl/${evolutionInstance}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json", apikey: evolutionKey },
+                body: JSON.stringify({ number: phoneRaw }),
+              }
+            );
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              const avatarUrl = profileData?.profilePictureUrl || null;
+              if (avatarUrl) {
+                await supabase.from("chat_conversations").update({ avatar_url: avatarUrl }).eq("id", conversationId);
+                console.log("Updated avatar for existing conversation:", conversationId);
+              }
+            }
+          }
+        } catch (e) {
+          console.log("Failed to fetch profile picture for existing conv:", e);
+        }
+      }
+
+      // Update generic name with client name
+      if (clientId && existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
+        await supabase.from("chat_conversations").update({ name: clientName }).eq("id", conversationId);
       }
     }
 
