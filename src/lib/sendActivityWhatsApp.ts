@@ -106,14 +106,14 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
   // Variables for {{mustache}} replacement (template params)
   const templateVars: Record<string, string> = {
-    'tratamento_contato': contactName,
-    'nome_contabilidade': companySettings?.company_name || '',
-    'cliente': client?.company_name || '',
-    'nome_tipo_tarefa': obligationName,
-    'nome_da_obrigacao': obligationName,
-    'titulo_doc_anexo': obligationName,
-    'competencia': competencia,
-    'vencimento': vencimento,
+    'tratamento_contato': contactName || client?.company_name || 'Prezado(a)',
+    'nome_contabilidade': companySettings?.company_name || 'Contabilidade',
+    'cliente': client?.company_name || 'Cliente',
+    'nome_tipo_tarefa': obligationName || 'Obrigação',
+    'nome_da_obrigacao': obligationName || 'Obrigação',
+    'titulo_doc_anexo': obligationName || 'Documento',
+    'competencia': competencia || '-',
+    'vencimento': vencimento || '-',
   };
 
 
