@@ -16,6 +16,8 @@ interface MessageBubbleProps {
 export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
   const isIncoming = messageType === 'whatsapp_incoming' || messageType === 'whatsapp_image' || messageType === 'whatsapp_video' || messageType === 'whatsapp_audio' || messageType === 'whatsapp_document';
+  const isOutgoing = messageType === 'whatsapp_outgoing' || messageType === 'whatsapp';
+  const showOnRight = isOutgoing || (isMine && !isIncoming);
 
   const renderMedia = () => {
     if (messageType === 'whatsapp_location') {
