@@ -35,6 +35,7 @@ interface MessageAreaProps {
   onCloseTicket?: () => void;
   onReopenTicket?: () => void;
   onTransferTicket?: () => void;
+  whatsappPhone?: string;
 }
 
 function formatDateLabel(dateStr: string) {
