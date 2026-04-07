@@ -44,7 +44,7 @@ Para o CNPJ, retorne apenas os 14 dígitos numéricos sem formatação.
 Para a competência, interprete datas como "03/2026", "março 2026", "competência março/2026" etc. e retorne no formato YYYY-MM.`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 55000);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
