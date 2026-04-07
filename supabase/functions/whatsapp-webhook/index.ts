@@ -208,8 +208,10 @@ Deno.serve(async (req) => {
 
     const { data: convByPhone } = await supabase
       .from("chat_conversations")
-      .select("id, client_id")
+      .select("id, client_id, status")
       .eq("whatsapp_phone", phoneRaw)
+      .order("status", { ascending: true })
+      .order("updated_at", { ascending: false })
       .limit(1);
 
     if (convByPhone && convByPhone.length > 0) {

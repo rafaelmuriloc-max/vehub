@@ -132,42 +132,55 @@ serve(async (req) => {
 
     try {
       if (clientId) {
-        // Find existing conversation for this client
-        const { data: existingConv } = await supabaseService
+        // 1. Try by whatsapp_phone first (avoids duplicates for same phone across clients)
+        const { data: convByPhone } = await supabaseService
           .from("chat_conversations")
-          .select("id")
-          .eq("client_id", clientId)
+          .select("id, client_id")
+          .eq("whatsapp_phone", cleanPhone)
+          .order("updated_at", { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         let conversationId: string;
 
-        if (existingConv) {
-          conversationId = existingConv.id;
+        if (convByPhone) {
+          conversationId = convByPhone.id;
         } else {
-          const { data: client } = await supabaseService
-            .from("clients")
-            .select("company_name, contact_name")
-            .eq("id", clientId)
-            .single();
-
-          const displayName = client?.contact_name || client?.company_name;
-          const convName = displayName || "WhatsApp";
-
-          const { data: newConv } = await supabaseService
+          // 2. Fallback: by client_id
+          const { data: existingConv } = await supabaseService
             .from("chat_conversations")
-            .insert({
-              name: convName,
-              is_group: false,
-              created_by: userId,
-              client_id: clientId,
-              whatsapp_phone: cleanPhone,
-            })
             .select("id")
-            .single();
+            .eq("client_id", clientId)
+            .limit(1)
+            .maybeSingle();
 
-          if (!newConv) throw new Error("Failed to create conversation");
-          conversationId = newConv.id;
+          if (existingConv) {
+            conversationId = existingConv.id;
+          } else {
+            const { data: client } = await supabaseService
+              .from("clients")
+              .select("company_name, contact_name")
+              .eq("id", clientId)
+              .single();
+
+            const displayName = client?.contact_name || client?.company_name;
+            const convName = displayName || "WhatsApp";
+
+            const { data: newConv } = await supabaseService
+              .from("chat_conversations")
+              .insert({
+                name: convName,
+                is_group: false,
+                created_by: userId,
+                client_id: clientId,
+                whatsapp_phone: cleanPhone,
+              })
+              .select("id")
+              .single();
+
+            if (!newConv) throw new Error("Failed to create conversation");
+            conversationId = newConv.id;
+          }
         }
 
         // Add ALL admins as participants
