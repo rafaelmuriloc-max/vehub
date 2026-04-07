@@ -6,6 +6,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const emptyExtraction = {
+  cnpj: "",
+  company_name: "",
+  reference_month: "",
+  document_type_name: "",
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -46,44 +53,55 @@ Para a competência, interprete datas como "03/2026", "março 2026", "competênc
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 55000);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Analise este documento e extraia as informações:\n\n${text.substring(0, 4000)}` },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "classify_document",
-              description: "Retorna os dados extraídos do documento fiscal/contábil",
-              parameters: {
-                type: "object",
-                properties: {
-                  cnpj: { type: "string", description: "CNPJ 14 dígitos" },
-                  company_name: { type: "string", description: "Razão Social" },
-                  reference_month: { type: "string", description: "YYYY-MM" },
-                  document_type_name: { type: "string", description: "Tipo de documento cadastrado" },
+    let response: Response;
+    try {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Analise este documento e extraia as informações:\n\n${text.substring(0, 4000)}` },
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "classify_document",
+                description: "Retorna os dados extraídos do documento fiscal/contábil",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    cnpj: { type: "string", description: "CNPJ 14 dígitos" },
+                    company_name: { type: "string", description: "Razão Social" },
+                    reference_month: { type: "string", description: "YYYY-MM" },
+                    document_type_name: { type: "string", description: "Tipo de documento cadastrado" },
+                  },
+                  required: ["cnpj", "company_name", "reference_month", "document_type_name"],
+                  additionalProperties: false,
                 },
-                required: ["cnpj", "company_name", "reference_month", "document_type_name"],
-                additionalProperties: false,
               },
             },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "classify_document" } },
-      }),
-    });
-
-    clearTimeout(timeout);
+          ],
+          tool_choice: { type: "function", function: { name: "classify_document" } },
+        }),
+      });
+    } catch (fetchError) {
+      if (fetchError instanceof DOMException && fetchError.name === "AbortError") {
+        console.warn("classify-document timeout after 55s, returning empty extraction");
+        return new Response(JSON.stringify(emptyExtraction), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw fetchError;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -113,10 +131,9 @@ Para a competência, interprete datas como "03/2026", "março 2026", "competênc
       });
     }
 
-    return new Response(
-      JSON.stringify({ cnpj: "", company_name: "", reference_month: "", document_type_name: "" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify(emptyExtraction), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error("classify-document error:", err);
     return new Response(
