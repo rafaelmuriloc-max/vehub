@@ -1,34 +1,33 @@
 
 
-# Buscar foto e nome do WhatsApp para contatos
+# Corrigir ordenação cronológica das conversas
 
 ## Problema
-A maioria das conversas (20+) não tem foto de perfil do WhatsApp. Isso acontece porque:
-- A função `whatsapp-send` cria conversas **sem buscar a foto** na EvolutionAPI
-- A função `whatsapp-webhook` só busca a foto ao criar conversa **nova**, mas não atualiza conversas existentes que não têm foto
+A migração de consolidação de duplicatas atualizou o `updated_at` de todas as conversas para timestamps sequenciais em `2026-04-07 02:33:xx`, quebrando a ordenação. Por exemplo, JORGE LUIZ aparece primeiro (última msg em 02/04), enquanto WILLIAN PALMEIRA (última msg em 06/04 22:38) aparece muito abaixo.
 
-## Solução
+## Solução em 2 partes
 
-### Etapa 1 — Atualizar `whatsapp-webhook` para preencher foto faltante
-Quando o webhook recebe uma mensagem e encontra uma conversa existente **sem `avatar_url`**, buscar a foto do perfil via EvolutionAPI e atualizar a conversa. Também atualizar o `name` com o `pushName` do WhatsApp se o nome atual for genérico (nome da empresa do banco).
-
-Trecho a adicionar após encontrar a conversa existente (~linha 340):
-```typescript
-// Se a conversa existe mas não tem avatar, buscar agora
-if (conversationId && !existingAvatarUrl) {
-  // fetch profile picture via EvolutionAPI
-  // update chat_conversations.avatar_url
-}
+### 1. Migração — Corrigir `updated_at` com base na última mensagem real
+```sql
+UPDATE chat_conversations c
+SET updated_at = COALESCE(
+  (SELECT MAX(created_at) FROM chat_messages WHERE conversation_id = c.id),
+  c.created_at
+);
 ```
 
-### Etapa 2 — Preencher fotos das conversas existentes (one-time)
-Criar um script que percorre todas as conversas com `whatsapp_phone` e `avatar_url IS NULL`, chama a EvolutionAPI para buscar a foto de cada uma, e atualiza no banco. Isso será executado via Edge Function temporária ou diretamente.
+### 2. Ordenação no cliente — Usar `lastMessageAt` como fallback
+Em `src/pages/Chat.tsx`, após montar o array `items`, ordenar pelo timestamp da última mensagem (que já é calculado a partir de `chat_messages`):
 
-### Etapa 3 — Atualizar `whatsapp-send` para buscar foto ao criar conversa nova
-Quando `whatsapp-send` cria uma conversa nova, buscar a foto de perfil via EvolutionAPI antes de inserir, igual ao webhook faz.
+```typescript
+items.sort((a, b) => 
+  new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+);
+```
+
+Isso garante que mesmo se `updated_at` ficar desatualizado no futuro, a lista sempre reflete a ordem real das mensagens.
 
 ## Arquivos alterados
-- `supabase/functions/whatsapp-webhook/index.ts` — buscar avatar para conversas existentes sem foto (~10 linhas)
-- `supabase/functions/whatsapp-send/index.ts` — buscar avatar ao criar conversa nova (~15 linhas)
-- Execução única de script para atualizar avatares existentes
+- Nova migração SQL — corrige `updated_at` existentes
+- `src/pages/Chat.tsx` — 3 linhas adicionadas (sort client-side)
 
