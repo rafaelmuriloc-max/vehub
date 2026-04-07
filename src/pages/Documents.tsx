@@ -36,15 +36,8 @@ function cleanCnpj(raw: string | null | undefined): string {
 }
 
 async function extractPdfText(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
-  const pages: string[] = [];
-  for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    pages.push(content.items.map((it: any) => it.str).join(' '));
-  }
-  return pages.join('\n');
+  const { fullText } = await loadPdfPages(file);
+  return fullText;
 }
 
 // Cached PDF data to avoid re-parsing per template
