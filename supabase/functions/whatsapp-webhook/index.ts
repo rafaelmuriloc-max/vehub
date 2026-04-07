@@ -232,10 +232,13 @@ Deno.serve(async (req) => {
     // === Find existing conversation by whatsapp_phone FIRST ===
     let conversationId: string | null = null;
 
+    const phoneVariants = getPhoneVariants(phoneRaw);
+    const canonicalPhone = normalizePhone(phoneRaw);
+
     const { data: convByPhone } = await supabase
       .from("chat_conversations")
-      .select("id, client_id, status")
-      .eq("whatsapp_phone", phoneRaw)
+      .select("id, client_id, status, whatsapp_phone")
+      .in("whatsapp_phone", phoneVariants)
       .order("status", { ascending: true })
       .order("updated_at", { ascending: false })
       .limit(1);
