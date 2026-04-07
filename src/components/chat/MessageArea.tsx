@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageCircle, CheckCircle2, UserRoundPlus } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { MessageCircle, CheckCircle2, UserRoundPlus, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
@@ -34,6 +35,7 @@ interface MessageAreaProps {
   onCloseTicket?: () => void;
   onReopenTicket?: () => void;
   onTransferTicket?: () => void;
+  whatsappPhone?: string;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -43,7 +45,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,12 +77,24 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-[#F0F2F5] dark:bg-zinc-800 border-b">
-        <Avatar className="h-10 w-10">
-          {avatarUrl && <AvatarImage src={avatarUrl} alt={conversationName || ''} />}
-          <AvatarFallback className="bg-primary/20 text-primary font-semibold">
-            {conversationName.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" className="focus:outline-none rounded-full">
+              <Avatar className="h-10 w-10 cursor-pointer">
+                {avatarUrl && <AvatarImage src={avatarUrl} alt={conversationName || ''} />}
+                <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                  {conversationName.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="start" className="w-auto p-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              <span>{whatsappPhone || 'Sem telefone'}</span>
+            </div>
+          </PopoverContent>
+        </Popover>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold truncate">{conversationName}</p>
