@@ -75,9 +75,9 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 md:px-4 py-3 bg-[#F0F2F5] dark:bg-zinc-800 border-b">
+      <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#F0F2F5] dark:bg-zinc-800 border-b shrink-0">
         {onBack && (
           <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-8 w-8">
             <ArrowLeft className="h-4 w-4" />
