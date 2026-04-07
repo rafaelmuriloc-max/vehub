@@ -37,7 +37,7 @@ serve(async (req) => {
 
     const systemPrompt = `Você é um assistente especializado em documentos fiscais e contábeis brasileiros.
 Analise o texto extraído de um documento PDF e identifique:
-1. CNPJ da empresa (apenas números, 14 dígitos)
+1. CNPJ da empresa (apenas números). Retorne os 14 dígitos completos se disponível; se o documento contiver apenas o CNPJ básico/raiz (8 dígitos, como em guias FGTS), retorne os 8 dígitos
 2. Nome/Razão Social da empresa
 3. Mês de competência/referência (formato YYYY-MM)
 4. Tipo de documento
@@ -47,7 +47,7 @@ ${typesList}
 
 Se não encontrar alguma informação, retorne string vazia para aquele campo.
 Para o tipo de documento, use exatamente o nome de um dos tipos cadastrados acima. Se nenhum corresponder, retorne string vazia.
-Para o CNPJ, retorne apenas os 14 dígitos numéricos sem formatação.
+Para o CNPJ, retorne apenas os dígitos numéricos sem formatação (14 dígitos completos ou 8 dígitos da raiz se apenas o CNPJ básico estiver disponível).
 Para a competência, interprete datas como "03/2026", "março 2026", "competência março/2026" etc. e retorne no formato YYYY-MM.`;
 
     const controller = new AbortController();
