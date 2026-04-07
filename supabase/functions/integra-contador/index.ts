@@ -35,27 +35,29 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 // ============= Termo de Autorização (Autentica Procurador) =============
 
-function generateAuthorizationXml(
-  contratanteCnpj: string,
-  contratanteNome: string,
-  clientCnpj: string,
-  clientNome: string,
-): string {
+function generateSerproProcuradorXML(params: {
+  contratanteCnpj: string;
+  autorPedidoCnpj: string;
+  contribuinteCnpj: string;
+}): string {
   const now = new Date();
-  const dataAssinatura = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const vigencia = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-  const dataVigencia = vigencia.toISOString().slice(0, 10).replace(/-/g, "");
+  // ISO 8601 with Brazil timezone (-03:00)
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dataHora = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}-03:00`;
+  const termoId = `TERMO_${Date.now()}`;
 
-  return `<termoDeAutorizacao><dados>` +
-    `<sistema id="API Integra Contador"></sistema>` +
-    `<termo texto="Autorizo a empresa CONTRATANTE, identificada neste termo de autorização como DESTINATÁRIO, a executar as requisições dos serviços web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisição do serviço web. Esse termo de autorização está assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsável, identificado como AUTOR DO PEDIDO DE DADOS."></termo>` +
-    `<avisoLegal texto="O acesso a estas informações foi autorizado pelo próprio PROCURADOR ou OUTORGADO DO CONTRIBUINTE, responsável pela informação, via assinatura digital. É dever do destinatário da autorização e consumidor deste acesso observar a adoção de base legal para o tratamento dos dados recebidos conforme artigos 7º ou 11º da LGPD (Lei n.º 13.709, de 14 de agosto de 2018), aos direitos do titular dos dados (art. 9º, 17 e 18, da LGPD) e aos princípios que norteiam todos os tratamentos de dados no Brasil (art. 6º, da LGPD)."></avisoLegal>` +
-    `<finalidade texto="A finalidade única e exclusiva desse TERMO DE AUTORIZAÇÃO, é garantir que o CONTRATANTE apresente a API INTEGRA CONTADOR esse consentimento do PROCURADOR ou OUTORGADO DO CONTRIBUINTE assinado digitalmente, para que possa realizar as requisições dos serviços web da API INTEGRA CONTADOR em nome do AUTOR PEDIDO DE DADOS (PROCURADOR ou OUTORGADO DO CONTRIBUINTE)."></finalidade>` +
-    `<dataAssinatura data="${dataAssinatura}"></dataAssinatura>` +
-    `<vigencia data="${dataVigencia}"></vigencia>` +
-    `<destinatario numero="${contratanteCnpj}" nome="${contratanteNome}" tipo="PJ" papel="contratante"></destinatario>` +
-    `<assinadoPor numero="${clientCnpj}" nome="${clientNome}" tipo="PJ" papel="autor pedido de dados"></assinadoPor>` +
-    `</dados></termoDeAutorizacao>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<TermoAutorizacao Id="${termoId}">` +
+    `<Contratante>${params.contratanteCnpj}</Contratante>` +
+    `<AutorPedido>${params.autorPedidoCnpj}</AutorPedido>` +
+    `<Contribuinte>${params.contribuinteCnpj}</Contribuinte>` +
+    `<DataHora>${dataHora}</DataHora>` +
+    `</TermoAutorizacao>`;
+}
+
+function toBase64(xml: string): string {
+  const bytes = new TextEncoder().encode(xml);
+  return btoa(String.fromCharCode(...bytes));
 }
 
 async function signXmlWithCertificate(
@@ -63,22 +65,31 @@ async function signXmlWithCertificate(
   privateKey: forge.pki.PrivateKey,
   certificate: forge.pki.Certificate,
 ): Promise<string> {
-  // Compute SHA-256 digest of the full XML (Reference URI="" with enveloped-signature transform)
-  const xmlBytes = new TextEncoder().encode(xml);
+  // Extract the Id from the root element for Reference URI
+  const idMatch = xml.match(/Id="([^"]+)"/);
+  const referenceUri = idMatch ? `#${idMatch[1]}` : "";
+
+  // For digest: remove XML declaration, compute on the content that will be canonicalized
+  // The enveloped-signature transform removes the Signature element, then C14N is applied
+  // Since there's no Signature yet, the digest is over the XML content without the declaration
+  const xmlWithoutDecl = xml.replace(/<\?xml[^?]*\?>/, "");
+  const xmlBytes = new TextEncoder().encode(xmlWithoutDecl);
   const digestBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", xmlBytes));
   const digestValue = btoa(String.fromCharCode(...digestBytes));
 
-  // Build SignedInfo (C14N)
+  console.log(`[sign] Reference URI: ${referenceUri}, Digest: ${digestValue}`);
+
+  // Build SignedInfo — ALL tags must have explicit closing (no self-closing) for C14N compatibility
   const signedInfo =
-    `<SignedInfo>` +
-    `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" />` +
-    `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" />` +
-    `<Reference URI="">` +
+    `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+    `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
+    `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"></SignatureMethod>` +
+    `<Reference URI="${referenceUri}">` +
     `<Transforms>` +
-    `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />` +
-    `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" />` +
+    `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform>` +
+    `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></Transform>` +
     `</Transforms>` +
-    `<DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256" />` +
+    `<DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></DigestMethod>` +
     `<DigestValue>${digestValue}</DigestValue>` +
     `</Reference>` +
     `</SignedInfo>`;
@@ -111,7 +122,7 @@ async function signXmlWithCertificate(
   // Build the Signature element
   const signatureElement =
     `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
-    signedInfo +
+    signedInfo.replace(` xmlns="http://www.w3.org/2000/09/xmldsig#"`, "") +
     `<SignatureValue>${signatureValue}</SignatureValue>` +
     `<KeyInfo>` +
     `<X509Data>` +
@@ -120,8 +131,8 @@ async function signXmlWithCertificate(
     `</KeyInfo>` +
     `</Signature>`;
 
-  // Insert Signature before </termoDeAutorizacao>
-  return xml.replace("</termoDeAutorizacao>", signatureElement + "</termoDeAutorizacao>");
+  // Insert Signature before closing tag of root element
+  return xml.replace("</TermoAutorizacao>", signatureElement + "</TermoAutorizacao>");
 }
 
 async function obtainProcuradorToken(
