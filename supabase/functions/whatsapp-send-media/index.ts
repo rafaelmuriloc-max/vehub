@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
               mediatype: type === "document" ? "document" : type,
               media: mediaUrl,
               fileName: fileName || undefined,
-              caption: senderName ? `*${senderName}*` : undefined,
+              caption: senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER,
             }),
           }
         );

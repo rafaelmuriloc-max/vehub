@@ -97,11 +97,12 @@ serve(async (req) => {
         },
       };
     } else {
+      const VHUB_MARKER = "\u200B\u200B\u200B";
       messagePayload = {
         messaging_product: "whatsapp",
         to: cleanPhone,
         type: "text",
-        text: { body: text || "" },
+        text: { body: (text || "") + VHUB_MARKER },
       };
     }
 

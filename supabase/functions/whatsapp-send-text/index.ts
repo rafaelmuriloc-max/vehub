@@ -15,8 +15,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const VHUB_MARKER = "\u200B\u200B\u200B";
     const { conversationId, text, senderName } = await req.json();
-    const signedText = senderName ? `*${senderName}:*\n${text}` : text;
+    const signedText = senderName ? `*${senderName}:*\n${text}${VHUB_MARKER}` : `${text}${VHUB_MARKER}`;
 
     if (!conversationId || !text) {
       return new Response(JSON.stringify({ error: "conversationId and text are required" }), {
