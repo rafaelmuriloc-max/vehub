@@ -1,6 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("55")) {
+    const localFirst = digits[4];
+    if (["6","7","8","9"].includes(localFirst)) {
+      return digits.slice(0, 4) + "9" + digits.slice(4);
+    }
+  }
+  return digits;
+}
+
+function getPhoneVariants(phone: string): string[] {
+  const digits = phone.replace(/\D/g, "");
+  const normalized = normalizePhone(digits);
+  const variants = new Set<string>();
+  variants.add(digits);
+  variants.add(normalized);
+  if (normalized.length === 13 && normalized.startsWith("55") && normalized[4] === "9") {
+    variants.add(normalized.slice(0, 4) + normalized.slice(5));
+  }
+  return [...variants];
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
