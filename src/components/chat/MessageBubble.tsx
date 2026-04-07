@@ -16,6 +16,8 @@ interface MessageBubbleProps {
 export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
   const isIncoming = messageType === 'whatsapp_incoming' || messageType === 'whatsapp_image' || messageType === 'whatsapp_video' || messageType === 'whatsapp_audio' || messageType === 'whatsapp_document';
+  const isOutgoing = messageType === 'whatsapp_outgoing' || messageType === 'whatsapp';
+  const showOnRight = isOutgoing || (isMine && !isIncoming);
 
   const renderMedia = () => {
     if (messageType === 'whatsapp_location') {
@@ -124,18 +126,18 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   const hideTextContent = messageType === 'whatsapp_location' || messageType === 'whatsapp_contact';
 
   return (
-    <div className={`flex ${isMine && !isIncoming ? 'justify-end' : 'justify-start'} mb-1`}>
+    <div className={`flex ${showOnRight ? 'justify-end' : 'justify-start'} mb-1`}>
       <div
         className={`relative max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm ${
-          isMine && !isIncoming
+          showOnRight
             ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none'
             : 'bg-white dark:bg-zinc-700 text-foreground rounded-tl-none'
         }`}
       >
-        {!isIncoming && senderName && (
+        {!showOnRight && senderName && (
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">{senderName}</p>
         )}
-        {isWhatsApp && !isIncoming && (
+        {isWhatsApp && isOutgoing && (
           <div className="flex items-center gap-1 mb-0.5">
             <Phone className="h-3 w-3 text-green-600 fill-green-600" />
             <span className="text-[10px] font-medium text-green-600">WhatsApp</span>
