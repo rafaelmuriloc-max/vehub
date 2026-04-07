@@ -1,25 +1,22 @@
 
 
-# Corrigir header fixo e espaço excessivo no input do chat mobile
+# Adicionar botão "Voltar" na tela do Chat
 
-## Problemas
-1. **Header não fica fixo**: Ao rolar as mensagens, o cabeçalho da conversa (nome, avatar, botões) sobe junto com o scroll, sumindo da tela. Deveria ficar fixo no topo como no WhatsApp.
-2. **Espaço grande entre teclado e input**: O `pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]` adiciona padding excessivo. Comparando com o WhatsApp (IMG_7201), o input fica colado ao teclado.
+## Problema
+Na tela do chat, não há como voltar para o restante do sistema (dashboard, clientes, etc.) — especialmente no mobile, onde o header global do AppLayout foi ocultado na rota `/chat`.
 
 ## Solução
+Adicionar um botão de voltar no header da lista de conversas (`ConversationList`), que navega para a página anterior ou para o dashboard (`/`).
 
-### 1. `src/components/chat/MessageArea.tsx`
-- Tornar o header fixo com `shrink-0` (já é flex column, basta garantir que o header não encolha e a área de mensagens tenha `overflow-y-auto` corretamente)
-- O header na linha 80 já está correto estruturalmente — o problema é que o container pai precisa ter `overflow: hidden` e o scroll só na área de mensagens. Verificar que `h-full` + `flex flex-col` + `flex-1 overflow-y-auto` estão corretos (já estão no código atual, mas o container pai pode estar permitindo scroll geral).
+### `src/components/chat/ConversationList.tsx`
+- Aceitar nova prop `onNavigateBack?: () => void`
+- No header (linha 69), adicionar um botão com ícone `ArrowLeft` antes do título "Conversas"
 
-### 2. `src/components/chat/ChatInput.tsx`
-- Reduzir o padding bottom: trocar `pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]` por `pb-[env(safe-area-inset-bottom,0px)]` — o `p-3` já dá padding suficiente, o pb extra é redundante e cria o espaço excessivo.
-
-### 3. `src/pages/Chat.tsx`
-- Garantir que o container do chat em mobile use `100dvh` (dynamic viewport height) em vez de `100vh`, para que o teclado virtual seja considerado: `h-[calc(100dvh-3rem)]`
+### `src/pages/Chat.tsx`
+- Passar `onNavigateBack={() => navigate('/')}` para o `ConversationList`
+- Importar `useNavigate` de `react-router-dom`
 
 ## Arquivos alterados
-- `src/components/chat/ChatInput.tsx` — reduzir padding bottom (~1 linha)
-- `src/pages/Chat.tsx` — usar `dvh` no height (~1 linha)
-- `src/components/chat/MessageArea.tsx` — garantir header com `shrink-0` (~1 classe adicionada)
+- `src/components/chat/ConversationList.tsx` — prop + botão voltar no header
+- `src/pages/Chat.tsx` — passar callback de navegação
 
