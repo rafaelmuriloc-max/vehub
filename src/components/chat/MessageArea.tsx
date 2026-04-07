@@ -3,7 +3,7 @@ import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { MessageCircle, CheckCircle2, UserRoundPlus, Phone } from 'lucide-react';
+import { MessageCircle, CheckCircle2, UserRoundPlus, Phone, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
@@ -36,6 +36,7 @@ interface MessageAreaProps {
   onReopenTicket?: () => void;
   onTransferTicket?: () => void;
   whatsappPhone?: string;
+  onBack?: () => void;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -45,7 +46,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,7 +77,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#F0F2F5] dark:bg-zinc-800 border-b">
+      <div className="flex items-center gap-2 px-3 md:px-4 py-3 bg-[#F0F2F5] dark:bg-zinc-800 border-b">
+        {onBack && (
+          <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-8 w-8">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
         <Popover>
           <PopoverTrigger asChild>
             <button type="button" className="focus:outline-none rounded-full">
@@ -103,27 +109,27 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             )}
           </div>
           {companyNames && companyNames.length > 0 && (
-            <p className="text-xs text-muted-foreground truncate max-w-[400px]">
+            <p className="text-xs text-muted-foreground truncate max-w-[200px] md:max-w-[400px]">
               {companyNames.join(' | ')}
             </p>
           )}
         </div>
         {!isClosed && onTransferTicket && (
-          <Button variant="outline" size="sm" onClick={onTransferTicket} className="shrink-0 gap-1.5">
+          <Button variant="outline" size="icon" onClick={onTransferTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <UserRoundPlus className="h-4 w-4" />
-            Transferir
+            <span className="hidden md:inline text-sm">Transferir</span>
           </Button>
         )}
         {!isClosed && onCloseTicket && (
-          <Button variant="outline" size="sm" onClick={onCloseTicket} className="shrink-0 gap-1.5">
+          <Button variant="outline" size="icon" onClick={onCloseTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <CheckCircle2 className="h-4 w-4" />
-            Fechar Chamado
+            <span className="hidden md:inline text-sm">Fechar Chamado</span>
           </Button>
         )}
         {isClosed && onReopenTicket && (
-          <Button variant="outline" size="sm" onClick={onReopenTicket} className="shrink-0 gap-1.5">
+          <Button variant="outline" size="icon" onClick={onReopenTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <MessageCircle className="h-4 w-4" />
-            Reabrir Chamado
+            <span className="hidden md:inline text-sm">Reabrir Chamado</span>
           </Button>
         )}
       </div>

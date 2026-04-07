@@ -86,7 +86,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFileSelect(e, 'video')} />
       <input ref={fileInputRef} type="file" accept="*" className="hidden" onChange={(e) => handleFileSelect(e, 'document')} />
 
-      <div className="flex items-end gap-2 p-3 bg-[#F0F0F0] dark:bg-zinc-800 border-t">
+      <div className="flex items-end gap-2 p-3 bg-[#F0F0F0] dark:bg-zinc-800 border-t pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
             <Button

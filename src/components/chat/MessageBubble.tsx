@@ -128,7 +128,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   return (
     <div className={`flex ${showOnRight ? 'justify-end' : 'justify-start'} mb-1`}>
       <div
-        className={`relative max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm ${
+        className={`relative max-w-[80%] sm:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm ${
           showOnRight
             ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none'
             : 'bg-white dark:bg-zinc-700 text-foreground rounded-tl-none'

@@ -458,7 +458,7 @@ export default function Chat() {
   const showMessages = isMobile ? !!activeConvId : true;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-lg border bg-background shadow-sm">
+    <div className="flex h-[calc(100vh-3rem)] md:h-[calc(100vh-0px)] overflow-hidden md:rounded-lg md:border bg-background md:shadow-sm">
       {showList && (
         <div className={`${isMobile ? 'w-full' : 'w-[350px] shrink-0'}`}>
           <ConversationList
@@ -475,16 +475,6 @@ export default function Chat() {
       )}
       {showMessages && (
         <div className="flex-1 flex flex-col min-w-0">
-          {isMobile && activeConvId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute top-2 left-2 z-10"
-              onClick={() => setActiveConvId(null)}
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-            </Button>
-          )}
           <MessageArea
             conversationName={activeConvName}
             messages={messages}
@@ -501,6 +491,7 @@ export default function Chat() {
             onReopenTicket={reopenTicket}
             onTransferTicket={openTransferDialog}
             whatsappPhone={activeConv?.whatsappPhone}
+            onBack={isMobile ? () => setActiveConvId(null) : undefined}
           />
         </div>
       )}
