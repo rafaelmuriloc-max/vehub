@@ -1,22 +1,24 @@
 
 
-# Adicionar botão "Voltar" na tela do Chat
+# Remover rodapé/espaço extra no chat
 
 ## Problema
-Na tela do chat, não há como voltar para o restante do sistema (dashboard, clientes, etc.) — especialmente no mobile, onde o header global do AppLayout foi ocultado na rota `/chat`.
+O container do chat usa `h-[calc(100dvh-3rem)]` no mobile, subtraindo 3rem para compensar um header. Porém, o header do AppLayout já é ocultado na rota `/chat`, então essa subtração cria um espaço vazio (rodapé) de 3rem na parte inferior.
 
 ## Solução
-Adicionar um botão de voltar no header da lista de conversas (`ConversationList`), que navega para a página anterior ou para o dashboard (`/`).
 
-### `src/components/chat/ConversationList.tsx`
-- Aceitar nova prop `onNavigateBack?: () => void`
-- No header (linha 69), adicionar um botão com ícone `ArrowLeft` antes do título "Conversas"
+### `src/pages/Chat.tsx` (linha 463)
+Alterar a altura do container de:
+```
+h-[calc(100dvh-3rem)]
+```
+para:
+```
+h-[100dvh]
+```
 
-### `src/pages/Chat.tsx`
-- Passar `onNavigateBack={() => navigate('/')}` para o `ConversationList`
-- Importar `useNavigate` de `react-router-dom`
+Isso faz o chat ocupar 100% da viewport no mobile, sem espaço sobrando embaixo.
 
-## Arquivos alterados
-- `src/components/chat/ConversationList.tsx` — prop + botão voltar no header
-- `src/pages/Chat.tsx` — passar callback de navegação
+## Arquivo alterado
+- `src/pages/Chat.tsx` — 1 classe CSS ajustada
 
