@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
       // Parse client's PFX to get the certificate object and private key for signing
       const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
 
-      procuradorToken = await obtainProcuradorToken(
+      const procuradorResult = await obtainProcuradorToken(
         contratanteCnpj,
         contratanteNome,
         autorPedidoCpfCnpj,
@@ -472,10 +472,38 @@ Deno.serve(async (req) => {
         jwtToken,
       );
 
-      if (!procuradorToken) {
-        console.warn("[integra-contador] Não foi possível obter o token de procurador. Tentando a requisição sem ele...");
+      // Check if result is an error object or a valid token string
+      if (typeof procuradorResult === "object" && procuradorResult !== null && (procuradorResult as any).error) {
+        const errInfo = procuradorResult as any;
+        console.error(`[integra-contador] Falha obrigatória na etapa de procurador. Abortando.`);
+
+        let serproDetails: unknown;
+        try { serproDetails = JSON.parse(errInfo.body); } catch { serproDetails = errInfo.body; }
+
+        return jsonResponse({
+          success: false,
+          stage: "autentica_procurador",
+          error: "Não foi possível obter autorização de procurador junto ao SERPRO. A consulta não pode prosseguir.",
+          reason: errInfo.reason || "serpro_rejected",
+          serpro_status: errInfo.status,
+          serpro_response: serproDetails,
+          client_name: client.company_name,
+          service: { idSistema, idServico, tipo },
+        });
+      }
+
+      if (typeof procuradorResult === "string" && procuradorResult.length > 0) {
+        procuradorToken = procuradorResult;
+        console.log(`[integra-contador] Token de procurador obtido com sucesso (${procuradorToken.length} chars)`);
       } else {
-        console.log(`[integra-contador] Token de procurador obtido com sucesso`);
+        console.error(`[integra-contador] Resultado inesperado do obtainProcuradorToken: ${JSON.stringify(procuradorResult)}`);
+        return jsonResponse({
+          success: false,
+          stage: "autentica_procurador",
+          error: "Token de procurador não retornado pelo SERPRO. A consulta não pode prosseguir sem autorização.",
+          client_name: client.company_name,
+          service: { idSistema, idServico, tipo },
+        });
       }
     }
 
