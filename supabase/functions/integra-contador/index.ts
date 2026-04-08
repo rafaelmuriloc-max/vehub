@@ -45,11 +45,13 @@ function generateSerproProcuradorXML(params: {
   contratanteNome: string;
   autorPedidoCnpj: string;
   autorPedidoNome: string;
-}): string {
+}): { xml: string; termoId: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const dataAssinatura = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
   const vigencia = `${now.getFullYear()}1231`;
+
+  const termoId = `TERMO-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
   // Textos EXATOS conforme documentação oficial SERPRO — incluindo acentos e caracteres especiais
   const termoTexto = `Autorizo a empresa CONTRATANTE, identificada neste termo de autorização como DESTINATÁRIO, a executar as requisições dos serviços web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisição do serviço web. Esse termo de autorização está assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsável, identificado como AUTOR DO PEDIDO DE DADOS.`;
@@ -59,8 +61,8 @@ function generateSerproProcuradorXML(params: {
   const nomeContratante = xmlAttrEscape(params.contratanteNome);
   const nomeAutor = xmlAttrEscape(params.autorPedidoNome);
 
-  // Use self-closing tags to match SERPRO reference format exactly
-  return `<termoDeAutorizacao><dados>` +
+  // Root element has Id attribute; Reference URI will point to "#TERMO-..."
+  const xml = `<termoDeAutorizacao Id="${termoId}"><dados>` +
     `<sistema id="API Integra Contador" />` +
     `<termo texto="${xmlAttrEscape(termoTexto)}" />` +
     `<avisoLegal texto="${xmlAttrEscape(avisoTexto)}" />` +
@@ -70,6 +72,8 @@ function generateSerproProcuradorXML(params: {
     `<destinatario numero="${params.contratanteCnpj}" nome="${nomeContratante}" tipo="PJ" papel="contratante" />` +
     `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${nomeAutor}" tipo="PJ" papel="autor pedido de dados" />` +
     `</dados></termoDeAutorizacao>`;
+
+  return { xml, termoId };
 }
 
 function toBase64(xml: string): string {
@@ -96,6 +100,7 @@ async function signXmlWithCertificate(
   xml: string,
   privateKey: forge.pki.PrivateKey,
   certificate: forge.pki.Certificate,
+  referenceId: string = "",
 ): Promise<string> {
   // ===== STEP 1: Enveloped-signature transform =====
   // The XML doesn't have <Signature> yet, so this is naturally satisfied.
@@ -118,7 +123,7 @@ async function signXmlWithCertificate(
     `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
     `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"></SignatureMethod>` +
-    `<Reference URI="">` +
+    `<Reference URI="${referenceId ? '#' + referenceId : ''}">` +
     `<Transforms>` +
     `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform>` +
     `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></Transform>` +
@@ -253,16 +258,17 @@ async function obtainProcuradorToken(
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
   // 1. Generate XML
-  const xml = generateSerproProcuradorXML({
+  const { xml, termoId } = generateSerproProcuradorXML({
     contratanteCnpj,
     contratanteNome,
     autorPedidoCnpj: clientCnpj,
     autorPedidoNome: clientNome,
   });
-  console.log(`[procurador] XML gerado (${xml.length} chars): ${xml.substring(0, 500)}`);
+  console.log(`[procurador] XML gerado (${xml.length} chars, Id=${termoId}): ${xml.substring(0, 500)}`);
 
   // 2. Sign XML with CLIENT's certificate (not office certificate)
-  const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
+  // Reference URI points to "#TERMO-..." as required by SERPRO
+  const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj, termoId);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
   // 3. Convert to base64 and verify round-trip integrity
