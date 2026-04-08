@@ -146,6 +146,7 @@ export default function Clients() {
   const [form, setForm] = useState({ ...emptyForm });
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [classifyingSegment, setClassifyingSegment] = useState(false);
+  const [classifyingAnexo, setClassifyingAnexo] = useState(false);
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
