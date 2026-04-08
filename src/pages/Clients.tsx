@@ -104,6 +104,7 @@ type Client = {
   destination_office_name: string | null; exit_reason_notes: string | null;
   business_classification: string | null;
   trade_name: string | null;
+  simples_anexo: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -124,6 +125,7 @@ const emptyForm = {
   destination_office_name: '', exit_reason_notes: '',
   business_classification: '',
   trade_name: '',
+  simples_anexo: '',
 };
 
 type Department = { id: string; name: string };
@@ -690,6 +692,7 @@ export default function Clients() {
       destination_office_name: (c as any).destination_office_name || '', exit_reason_notes: (c as any).exit_reason_notes || '',
       business_classification: (c as any).business_classification || '',
       trade_name: (c as any).trade_name || '',
+      simples_anexo: (c as any).simples_anexo || '',
     });
   }
 
@@ -829,6 +832,7 @@ export default function Clients() {
       destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
       business_classification: form.business_classification || null,
       trade_name: form.trade_name || null,
+      simples_anexo: form.tax_regime === 'simples_nacional' ? (form.simples_anexo || null) : null,
     };
     let error;
     let clientId = editing?.id;
@@ -1654,6 +1658,24 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {form.tax_regime === 'simples_nacional' && (
+                    <div className="col-span-2 space-y-2">
+                      <Label className="flex items-center gap-2">
+                        Anexo do Simples Nacional
+                        {classifyingAnexo && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                      </Label>
+                      <Select value={form.simples_anexo} onValueChange={v => setForm({ ...form, simples_anexo: v })} disabled={viewOnly || classifyingAnexo}>
+                        <SelectTrigger><SelectValue placeholder={classifyingAnexo ? "Classificando..." : "Selecione o Anexo..."} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="I">Anexo I (Comércio)</SelectItem>
+                          <SelectItem value="II">Anexo II (Indústria)</SelectItem>
+                          <SelectItem value="III">Anexo III (Serviços)</SelectItem>
+                          <SelectItem value="IV">Anexo IV (Serviços)</SelectItem>
+                          <SelectItem value="V">Anexo V (Serviços)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="col-span-2 space-y-2">
                     <Label className="flex items-center gap-2">
                       Segmento
