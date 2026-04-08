@@ -35,6 +35,10 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 // ============= Termo de Autorização (Autentica Procurador) =============
 
+function xmlAttrEscape(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function generateSerproProcuradorXML(params: {
   contratanteCnpj: string;
   contratanteNome: string;
@@ -46,20 +50,24 @@ function generateSerproProcuradorXML(params: {
   const dataAssinatura = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
   const vigencia = `${now.getFullYear()}1231`;
 
-  const termoTexto = `Autorizo a empresa CONTRATANTE, identificada neste termo de autorizacao como DESTINATARIO, a executar as requisicoes dos servicos web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisicao do servico web. Esse termo de autorizacao esta assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsavel, identificado como AUTOR DO PEDIDO DE DADOS.`;
-  const avisoTexto = `O acesso a estas informacoes foi autorizado pelo proprio PROCURADOR ou OUTORGADO DO CONTRIBUINTE, responsavel pela informacao, via assinatura digital. E dever do destinatario da autorizacao e consumidor deste acesso observar a adocao de base legal para o tratamento dos dados recebidos conforme artigos 7o ou 11o da LGPD (Lei n. 13.709, de 14 de agosto de 2018), aos direitos do titular dos dados (art. 9o, 17 e 18, da LGPD) e aos principios que norteiam todos os tratamentos de dados no Brasil (art. 6o, da LGPD).`;
-  const finalidadeTexto = `A finalidade unica e exclusiva desse TERMO DE AUTORIZACAO, e garantir que o CONTRATANTE apresente a API INTEGRA CONTADOR esse consentimento do PROCURADOR ou OUTORGADO DO CONTRIBUINTE assinado digitalmente, para que possa realizar as requisicoes dos servicos web da API INTEGRA CONTADOR em nome do AUTOR PEDIDO DE DADOS (PROCURADOR ou OUTORGADO DO CONTRIBUINTE).`;
+  // Textos EXATOS conforme documentação oficial SERPRO — incluindo acentos e caracteres especiais
+  const termoTexto = `Autorizo a empresa CONTRATANTE, identificada neste termo de autorização como DESTINATÁRIO, a executar as requisições dos serviços web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisição do serviço web. Esse termo de autorização está assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsável, identificado como AUTOR DO PEDIDO DE DADOS.`;
+  const avisoTexto = `O acesso a estas informações foi autorizado pelo próprio PROCURADOR ou OUTORGADO DO CONTRIBUINTE, responsável pela informação, via assinatura digital. É dever do destinatário da autorização e consumidor deste acesso observar a adoção de base legal para o tratamento dos dados recebidos conforme artigos 7º ou 11º da LGPD (Lei n.º 13.709, de 14 de agosto de 2018), aos direitos do titular dos dados (art. 9º, 17 e 18, da LGPD) e aos princípios que norteiam todos os tratamentos de dados no Brasil (art. 6º, da LGPD).`;
+  const finalidadeTexto = `A finalidade única e exclusiva desse TERMO DE AUTORIZAÇÃO, é garantir que o CONTRATANTE apresente a API INTEGRA CONTADOR esse consentimento do PROCURADOR ou OUTORGADO DO CONTRIBUINTE assinado digitalmente, para que possa realizar as requisições dos serviços web da API INTEGRA CONTADOR em nome do AUTOR PEDIDO DE DADOS (PROCURADOR ou OUTORGADO DO CONTRIBUINTE).`;
 
-  return `<termoDeAutorizacao>` +
+  const nomeContratante = xmlAttrEscape(params.contratanteNome);
+  const nomeAutor = xmlAttrEscape(params.autorPedidoNome);
+
+  return `<termoDeAutorizacao Id="termo-autorizacao">` +
     `<dados>` +
-    `<sistema id="API Integra Contador" />` +
-    `<termo texto="${termoTexto}" />` +
-    `<avisoLegal texto="${avisoTexto}" />` +
-    `<finalidade texto="${finalidadeTexto}" />` +
-    `<dataAssinatura data="${dataAssinatura}" />` +
-    `<vigencia data="${vigencia}" />` +
-    `<destinatario numero="${params.contratanteCnpj}" nome="${params.contratanteNome}" tipo="PJ" papel="contratante" />` +
-    `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${params.autorPedidoNome}" tipo="PJ" papel="autor pedido de dados" />` +
+    `<sistema id="API Integra Contador"></sistema>` +
+    `<termo texto="${xmlAttrEscape(termoTexto)}"></termo>` +
+    `<avisoLegal texto="${xmlAttrEscape(avisoTexto)}"></avisoLegal>` +
+    `<finalidade texto="${xmlAttrEscape(finalidadeTexto)}"></finalidade>` +
+    `<dataAssinatura data="${dataAssinatura}"></dataAssinatura>` +
+    `<vigencia data="${vigencia}"></vigencia>` +
+    `<destinatario numero="${params.contratanteCnpj}" nome="${nomeContratante}" tipo="PJ" papel="contratante"></destinatario>` +
+    `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${nomeAutor}" tipo="PJ" papel="autor pedido de dados"></assinadoPor>` +
     `</dados>` +
     `</termoDeAutorizacao>`;
 }
