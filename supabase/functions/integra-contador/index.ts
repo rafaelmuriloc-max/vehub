@@ -248,7 +248,7 @@ async function obtainProcuradorToken(
   officeCertPem: string,
   officeKeyPem: string,
   bearerToken: string,
-  _jwtToken: string | undefined,
+  jwtToken: string | undefined,
 ): Promise<string | null> {
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
@@ -265,8 +265,13 @@ async function obtainProcuradorToken(
   const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
-  // 3. Convert to base64
+  // 3. Convert to base64 and verify round-trip integrity
   const xmlBase64 = toBase64(signedXml);
+  const roundTrip = new TextDecoder().decode(Uint8Array.from(atob(xmlBase64), c => c.charCodeAt(0)));
+  if (roundTrip !== signedXml) {
+    throw new Error("XML base64 round-trip mismatch — o XML assinado foi corrompido na conversão base64");
+  }
+  console.log(`[procurador] ✅ Base64 round-trip OK (${xmlBase64.length} chars)`);
 
   // 4. Build request body for AUTENTICAPROCURADOR
   const requestBody = {
@@ -282,17 +287,17 @@ async function obtainProcuradorToken(
   };
 
   // 5. Call /Apoiar using the OFFICE's mTLS certificate for transport
-  // IMPORTANT per SERPRO docs: jwt_token must be EMPTY for AUTENTICAPROCURADOR
+  // In production, jwt_token MUST be the real JWT from OAuth2 authentication
   const apiUrl = new URL(`${SERPRO_API_BASE}/Apoiar`);
   const apiHeaders: Record<string, string> = {
     "Authorization": `Bearer ${bearerToken}`,
     "Content-Type": "application/json",
     "Accept": "application/json",
-    "jwt_token": "",
+    "jwt_token": jwtToken || "",
     "autenticar_procurador_token": "",
   };
 
-  console.log(`[procurador] Chamando ${apiUrl.toString()} (sem jwt_token conforme docs SERPRO)...`);
+  console.log(`[procurador] Chamando ${apiUrl.toString()} (jwt_token: ${jwtToken ? jwtToken.substring(0, 30) + '...' : 'VAZIO'})...`);
   const response = await requestWithFetchHttp1(
     apiUrl,
     {
