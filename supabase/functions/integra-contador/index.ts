@@ -248,7 +248,7 @@ async function obtainProcuradorToken(
   officeCertPem: string,
   officeKeyPem: string,
   bearerToken: string,
-  _jwtToken: string | undefined,
+  jwtToken: string | undefined,
 ): Promise<string | null> {
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
@@ -265,8 +265,13 @@ async function obtainProcuradorToken(
   const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
-  // 3. Convert to base64
+  // 3. Convert to base64 and verify round-trip integrity
   const xmlBase64 = toBase64(signedXml);
+  const roundTrip = new TextDecoder().decode(Uint8Array.from(atob(xmlBase64), c => c.charCodeAt(0)));
+  if (roundTrip !== signedXml) {
+    throw new Error("XML base64 round-trip mismatch — o XML assinado foi corrompido na conversão base64");
+  }
+  console.log(`[procurador] ✅ Base64 round-trip OK (${xmlBase64.length} chars)`);
 
   // 4. Build request body for AUTENTICAPROCURADOR
   const requestBody = {
@@ -282,17 +287,17 @@ async function obtainProcuradorToken(
   };
 
   // 5. Call /Apoiar using the OFFICE's mTLS certificate for transport
-  // IMPORTANT per SERPRO docs: jwt_token must be EMPTY for AUTENTICAPROCURADOR
+  // In production, jwt_token MUST be the real JWT from OAuth2 authentication
   const apiUrl = new URL(`${SERPRO_API_BASE}/Apoiar`);
   const apiHeaders: Record<string, string> = {
     "Authorization": `Bearer ${bearerToken}`,
     "Content-Type": "application/json",
     "Accept": "application/json",
-    "jwt_token": "",
+    "jwt_token": jwtToken || "",
     "autenticar_procurador_token": "",
   };
 
-  console.log(`[procurador] Chamando ${apiUrl.toString()} (sem jwt_token conforme docs SERPRO)...`);
+  console.log(`[procurador] Chamando ${apiUrl.toString()} (jwt_token: ${jwtToken ? jwtToken.substring(0, 30) + '...' : 'VAZIO'})...`);
   const response = await requestWithFetchHttp1(
     apiUrl,
     {
@@ -472,50 +477,51 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Credenciais SERPRO não configuradas" }, 500);
     }
 
-    // OAuth2 authenticate via mTLS + Role-Type: TERCEIROS
-    console.log("Autenticando no SERPRO via OAuth2 (mTLS + Role-Type: TERCEIROS)...");
-    const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
+    // Reusable auth function with retry support
+    async function authenticateSerpro(): Promise<{ bearerToken: string; jwtToken: string | undefined }> {
+      console.log("Autenticando no SERPRO via OAuth2 (mTLS + Role-Type: TERCEIROS)...");
+      const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
 
-    const authResponse = await requestWithFetchHttp1(
-      new URL(SERPRO_AUTH_URL),
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${authCredentials}`,
-          "Role-Type": "TERCEIROS",
-          "Content-Type": "application/x-www-form-urlencoded",
+      const authResponse = await requestWithFetchHttp1(
+        new URL(SERPRO_AUTH_URL),
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Basic ${authCredentials}`,
+            "Role-Type": "TERCEIROS",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: "grant_type=client_credentials",
         },
-        body: "grant_type=client_credentials",
-      },
-      certPem,
-      keyPem,
-      "office-auth"
-    );
+        certPem,
+        keyPem,
+        "office-auth"
+      );
 
-    console.log(`Auth response status: ${authResponse.status}`);
+      console.log(`Auth response status: ${authResponse.status}`);
 
-    if (authResponse.status < 200 || authResponse.status >= 300) {
-      console.error("Auth error body:", authResponse.bodyText);
-      return jsonResponse({
-        error: "Falha na autenticação SERPRO",
-        details: authResponse.bodyText,
-        status: authResponse.status,
-      }, 401);
+      if (authResponse.status < 200 || authResponse.status >= 300) {
+        console.error("Auth error body:", authResponse.bodyText);
+        throw new Error(`Falha na autenticação SERPRO (status ${authResponse.status}): ${authResponse.bodyText.substring(0, 500)}`);
+      }
+
+      let authData: { access_token?: string; jwt_token?: string };
+      try {
+        authData = JSON.parse(authResponse.bodyText);
+      } catch {
+        throw new Error(`Resposta de autenticação inválida: ${authResponse.bodyText.substring(0, 300)}`);
+      }
+
+      if (!authData.access_token) {
+        throw new Error("Token de acesso não retornado pelo SERPRO");
+      }
+
+      console.log(`[auth] access_token obtido (${authData.access_token.length} chars), jwt_token: ${authData.jwt_token ? authData.jwt_token.substring(0, 30) + '...' : 'ausente'}`);
+      return { bearerToken: authData.access_token, jwtToken: authData.jwt_token };
     }
 
-    let authData: { access_token?: string; jwt_token?: string };
-    try {
-      authData = JSON.parse(authResponse.bodyText);
-    } catch {
-      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponse.bodyText }, 500);
-    }
-
-    const bearerToken = authData.access_token;
-    const jwtToken = authData.jwt_token;
-
-    if (!bearerToken) {
-      return jsonResponse({ error: "Token de acesso não retornado pelo SERPRO" }, 500);
-    }
+    // Initial authentication
+    let { bearerToken, jwtToken } = await authenticateSerpro();
 
     // ============= Autentica Procurador Flow =============
     // When autorPedidoDados (client) differs from contratante (office), we need the procurador token
@@ -548,7 +554,8 @@ Deno.serve(async (req) => {
       // Parse client's PFX to get the certificate object and private key for signing
       const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
 
-      const procuradorResult = await obtainProcuradorToken(
+      // Try obtainProcuradorToken, retry once on 401 (token expired)
+      let procuradorResult = await obtainProcuradorToken(
         contratanteCnpj,
         contratanteNome,
         autorPedidoCpfCnpj,
@@ -562,6 +569,29 @@ Deno.serve(async (req) => {
         bearerToken,
         jwtToken,
       );
+
+      // Retry on 401 (token expired) — re-authenticate and try again
+      if (typeof procuradorResult === "object" && procuradorResult !== null && (procuradorResult as any).error && (procuradorResult as any).status === 401) {
+        console.log(`[integra-contador] Token expirado (401), re-autenticando...`);
+        const newAuth = await authenticateSerpro();
+        bearerToken = newAuth.bearerToken;
+        jwtToken = newAuth.jwtToken;
+
+        procuradorResult = await obtainProcuradorToken(
+          contratanteCnpj,
+          contratanteNome,
+          autorPedidoCpfCnpj,
+          client.company_name || "Cliente",
+          clientCertPem,
+          clientKeyPem,
+          clientCertObj,
+          clientPrivateKey,
+          certPem,
+          keyPem,
+          bearerToken,
+          jwtToken,
+        );
+      }
 
       // Check if result is an error object or a valid token string
       if (typeof procuradorResult === "object" && procuradorResult !== null && (procuradorResult as any).error) {
@@ -611,38 +641,51 @@ Deno.serve(async (req) => {
       },
     };
 
-    // Call SERPRO API
-    const apiUrl = new URL(`${SERPRO_API_BASE}/${tipo}`);
-    console.log(`Chamando SERPRO API: ${apiUrl.toString()}`);
+    // Call SERPRO API (with retry on 401)
+    async function callSerproApi(bt: string, jt: string | undefined): Promise<MtlsTextResponse> {
+      const apiUrl = new URL(`${SERPRO_API_BASE}/${tipo}`);
+      console.log(`Chamando SERPRO API: ${apiUrl.toString()}`);
 
-    const apiHeaders: Record<string, string> = {
-      "Authorization": `Bearer ${bearerToken}`,
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    };
+      const apiHeaders: Record<string, string> = {
+        "Authorization": `Bearer ${bt}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      };
 
-    if (jwtToken) {
-      apiHeaders["jwt_token"] = jwtToken;
+      if (jt) {
+        apiHeaders["jwt_token"] = jt;
+      }
+
+      if (procuradorToken) {
+        apiHeaders["autenticar_procurador_token"] = procuradorToken;
+        console.log(`[integra-contador] Header autenticar_procurador_token incluído na requisição`);
+      }
+
+      return requestWithFetchHttp1(
+        apiUrl,
+        {
+          method: "POST",
+          headers: apiHeaders,
+          body: JSON.stringify(requestBody),
+        },
+        certPem,
+        keyPem,
+        "serpro-api"
+      );
     }
 
-    if (procuradorToken) {
-      apiHeaders["autenticar_procurador_token"] = procuradorToken;
-      console.log(`[integra-contador] Header autenticar_procurador_token incluído na requisição`);
-    }
-
-    const apiResponse = await requestWithFetchHttp1(
-      apiUrl,
-      {
-        method: "POST",
-        headers: apiHeaders,
-        body: JSON.stringify(requestBody),
-      },
-      certPem,
-      keyPem,
-      "serpro-api"
-    );
-
+    let apiResponse = await callSerproApi(bearerToken, jwtToken);
     console.log(`API response status: ${apiResponse.status}`);
+
+    // Retry on 401 (token expired)
+    if (apiResponse.status === 401) {
+      console.log(`[integra-contador] API retornou 401, re-autenticando...`);
+      const newAuth = await authenticateSerpro();
+      bearerToken = newAuth.bearerToken;
+      jwtToken = newAuth.jwtToken;
+      apiResponse = await callSerproApi(bearerToken, jwtToken);
+      console.log(`API response status (retry): ${apiResponse.status}`);
+    }
 
     let responseData: unknown;
     try {
