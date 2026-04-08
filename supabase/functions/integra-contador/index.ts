@@ -267,8 +267,8 @@ async function obtainProcuradorToken(
   console.log(`[procurador] XML gerado (${xml.length} chars, Id=${termoId}): ${xml.substring(0, 500)}`);
 
   // 2. Sign XML with CLIENT's certificate (not office certificate)
-  // Reference URI points to "#TERMO-..." as required by SERPRO
-  const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj, termoId);
+  // URI must be empty ("") so the signature covers the entire document — SERPRO requirement
+  const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
   // 3. Convert to base64 and verify round-trip integrity
