@@ -35,8 +35,9 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 // ============= Termo de Autorização (Autentica Procurador) =============
 
+/** Escape for XML attribute values per C14N spec (does NOT escape '>') */
 function xmlAttrEscape(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 function generateSerproProcuradorXML(params: {
@@ -58,23 +59,37 @@ function generateSerproProcuradorXML(params: {
   const nomeContratante = xmlAttrEscape(params.contratanteNome);
   const nomeAutor = xmlAttrEscape(params.autorPedidoNome);
 
-  return `<termoDeAutorizacao>` +
-    `<dados>` +
-    `<sistema id="API Integra Contador"></sistema>` +
-    `<termo texto="${xmlAttrEscape(termoTexto)}"></termo>` +
-    `<avisoLegal texto="${xmlAttrEscape(avisoTexto)}"></avisoLegal>` +
-    `<finalidade texto="${xmlAttrEscape(finalidadeTexto)}"></finalidade>` +
-    `<dataAssinatura data="${dataAssinatura}"></dataAssinatura>` +
-    `<vigencia data="${vigencia}"></vigencia>` +
-    `<destinatario numero="${params.contratanteCnpj}" nome="${nomeContratante}" tipo="PJ" papel="contratante"></destinatario>` +
-    `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${nomeAutor}" tipo="PJ" papel="autor pedido de dados"></assinadoPor>` +
-    `</dados>` +
-    `</termoDeAutorizacao>`;
+  // Use self-closing tags to match SERPRO reference format exactly
+  return `<termoDeAutorizacao><dados>` +
+    `<sistema id="API Integra Contador" />` +
+    `<termo texto="${xmlAttrEscape(termoTexto)}" />` +
+    `<avisoLegal texto="${xmlAttrEscape(avisoTexto)}" />` +
+    `<finalidade texto="${xmlAttrEscape(finalidadeTexto)}" />` +
+    `<dataAssinatura data="${dataAssinatura}" />` +
+    `<vigencia data="${vigencia}" />` +
+    `<destinatario numero="${params.contratanteCnpj}" nome="${nomeContratante}" tipo="PJ" papel="contratante" />` +
+    `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${nomeAutor}" tipo="PJ" papel="autor pedido de dados" />` +
+    `</dados></termoDeAutorizacao>`;
 }
 
 function toBase64(xml: string): string {
   const bytes = new TextEncoder().encode(xml);
-  return btoa(String.fromCharCode(...bytes));
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Minimal C14N for our use case: expands self-closing tags to explicit open+close.
+ * Our XML has no namespaces (except in Signature), no comments, no PIs, no CDATA.
+ * Per W3C Canonical XML 1.0: empty elements are represented as start-end tag pairs.
+ */
+function canonicalize(xml: string): string {
+  // Expand self-closing tags: <foo attr="val" /> → <foo attr="val"></foo>
+  return xml.replace(/<([a-zA-Z][a-zA-Z0-9]*)((?:\s+[a-zA-Z:_][a-zA-Z0-9:._-]*\s*=\s*"[^"]*")*)\s*\/>/g,
+    '<$1$2></$1>');
 }
 
 async function signXmlWithCertificate(
@@ -82,15 +97,24 @@ async function signXmlWithCertificate(
   privateKey: forge.pki.PrivateKey,
   certificate: forge.pki.Certificate,
 ): Promise<string> {
-  // Digest: compute SHA-256 over the full XML (enveloped-signature means no Signature yet)
-  const xmlBytes = new TextEncoder().encode(xml);
-  const digestBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", xmlBytes));
+  // ===== STEP 1: Enveloped-signature transform =====
+  // The XML doesn't have <Signature> yet, so this is naturally satisfied.
+
+  // ===== STEP 2: C14N of the document for digest =====
+  // Expand self-closing tags to canonical form, then hash
+  const canonicalDoc = canonicalize(xml);
+  const docBytes = new TextEncoder().encode(canonicalDoc);
+  const digestBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", docBytes));
   const digestValue = btoa(String.fromCharCode(...digestBytes));
 
-  console.log(`[sign] Reference URI="" (whole document), XML length: ${xml.length}, Digest: ${digestValue}`);
+  console.log(`[sign] Document length: raw=${xml.length}, canonical=${canonicalDoc.length}`);
+  console.log(`[sign] DigestValue: ${digestValue}`);
+  console.log(`[sign] Canonical doc (first 300): ${canonicalDoc.substring(0, 300)}`);
 
-  // Build SignedInfo with xmlns — this EXACT string will be both signed and inserted
-  const signedInfoWithNs =
+  // ===== STEP 3: Build SignedInfo in canonical form =====
+  // This EXACT string (with xmlns, explicit close tags) is what we sign.
+  // Per C14N, when extracted from <Signature xmlns="...">, SignedInfo inherits the namespace.
+  const signedInfoCanonical =
     `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
     `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"></SignatureMethod>` +
@@ -104,7 +128,9 @@ async function signXmlWithCertificate(
     `</Reference>` +
     `</SignedInfo>`;
 
-  // Sign the EXACT SignedInfo string (with xmlns, as per C14N — namespace is inherited in final XML)
+  console.log(`[sign] SignedInfo canonical (${signedInfoCanonical.length} chars)`);
+
+  // ===== STEP 4: Import private key and sign =====
   const rsaPrivateKeyAsn1 = forge.pki.privateKeyToAsn1(privateKey);
   const privateKeyInfo = forge.pki.wrapRsaPrivateKey(rsaPrivateKeyAsn1);
   const pkcs8Der = forge.asn1.toDer(privateKeyInfo).getBytes();
@@ -121,30 +147,93 @@ async function signXmlWithCertificate(
     ["sign"],
   );
 
-  // Sign the SignedInfo WITH the xmlns attribute (canonical form)
-  const signedInfoBytes = new TextEncoder().encode(signedInfoWithNs);
+  const signedInfoBytes = new TextEncoder().encode(signedInfoCanonical);
   const signatureBytes = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, signedInfoBytes));
   const signatureValue = btoa(String.fromCharCode(...signatureBytes));
 
-  // Get certificate as base64 DER
+  console.log(`[sign] SignatureValue length: ${signatureValue.length}`);
+
+  // ===== STEP 5: Certificate as base64 DER =====
   const certDer = forge.asn1.toDer(forge.pki.certificateToAsn1(certificate));
   const certBase64 = forge.util.encode64(certDer.getBytes());
 
-  // Build Signature element — SignedInfo inside inherits xmlns from <Signature>, so remove its own xmlns
-  const signedInfoInner = signedInfoWithNs.replace(` xmlns="http://www.w3.org/2000/09/xmldsig#"`, "");
+  // Log cert identity for debugging
+  const certSubject = certificate.subject.attributes.map((a: any) => `${a.shortName || a.name}=${a.value}`).join(', ');
+  console.log(`[sign] Signing certificate: ${certSubject}`);
+
+  // ===== STEP 6: Build final Signature element =====
+  // SignedInfo inside <Signature> inherits xmlns, so we remove the explicit xmlns
+  const signedInfoForXml = signedInfoCanonical.replace(` xmlns="http://www.w3.org/2000/09/xmldsig#"`, "");
   const signatureElement =
     `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
-    signedInfoInner +
+    signedInfoForXml +
     `<SignatureValue>${signatureValue}</SignatureValue>` +
-    `<KeyInfo>` +
-    `<X509Data>` +
-    `<X509Certificate>${certBase64}</X509Certificate>` +
-    `</X509Data>` +
-    `</KeyInfo>` +
+    `<KeyInfo><X509Data><X509Certificate>${certBase64}</X509Certificate></X509Data></KeyInfo>` +
     `</Signature>`;
 
-  // Insert Signature before closing tag of root element
-  return xml.replace("</termoDeAutorizacao>", signatureElement + "</termoDeAutorizacao>");
+  // Insert before closing root tag
+  const signedXml = xml.replace("</termoDeAutorizacao>", signatureElement + "</termoDeAutorizacao>");
+
+  // ===== STEP 7: Local verification =====
+  try {
+    await verifySignatureLocally(signedXml, canonicalDoc, signedInfoCanonical, digestValue, signatureValue, certificate);
+    console.log(`[sign] ✅ Local signature verification PASSED`);
+  } catch (verifyErr) {
+    console.error(`[sign] ❌ Local signature verification FAILED:`, (verifyErr as Error).message);
+    throw new Error(`Assinatura XML inválida localmente: ${(verifyErr as Error).message}. Abortando envio ao SERPRO.`);
+  }
+
+  return signedXml;
+}
+
+/**
+ * Verify the XMLDSig signature locally before sending to SERPRO.
+ * This prevents wasting API credits on invalid signatures.
+ */
+async function verifySignatureLocally(
+  signedXml: string,
+  originalCanonicalDoc: string,
+  signedInfoCanonical: string,
+  expectedDigest: string,
+  signatureValueB64: string,
+  certificate: forge.pki.Certificate,
+): Promise<void> {
+  // 1. Re-extract the document without <Signature>...</Signature>
+  const withoutSig = signedXml.replace(/<Signature xmlns="http:\/\/www\.w3\.org\/2000\/09\/xmldsig#">[\s\S]*?<\/Signature>/, "");
+  const canonicalWithoutSig = canonicalize(withoutSig);
+
+  // 2. Verify digest
+  const docBytes = new TextEncoder().encode(canonicalWithoutSig);
+  const digestBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", docBytes));
+  const recomputedDigest = btoa(String.fromCharCode(...digestBytes));
+
+  if (recomputedDigest !== expectedDigest) {
+    throw new Error(`DigestValue mismatch: expected=${expectedDigest}, recomputed=${recomputedDigest}`);
+  }
+
+  // 3. Verify signature using certificate's public key
+  const pubKeyAsn1 = forge.pki.publicKeyToAsn1(certificate.publicKey);
+  const pubKeyDer = forge.asn1.toDer(pubKeyAsn1).getBytes();
+  const pubKeyBytes = new Uint8Array(pubKeyDer.length);
+  for (let i = 0; i < pubKeyDer.length; i++) {
+    pubKeyBytes[i] = pubKeyDer.charCodeAt(i);
+  }
+
+  const verifyKey = await crypto.subtle.importKey(
+    "spki",
+    pubKeyBytes,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+
+  const sigBytes = Uint8Array.from(atob(signatureValueB64), c => c.charCodeAt(0));
+  const signedInfoBytes = new TextEncoder().encode(signedInfoCanonical);
+
+  const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", verifyKey, sigBytes, signedInfoBytes);
+  if (!valid) {
+    throw new Error("SignatureValue verification failed: RSA-SHA256 signature does not match SignedInfo");
+  }
 }
 
 async function obtainProcuradorToken(
@@ -159,20 +248,20 @@ async function obtainProcuradorToken(
   officeCertPem: string,
   officeKeyPem: string,
   bearerToken: string,
-  jwtToken: string | undefined,
+  _jwtToken: string | undefined,
 ): Promise<string | null> {
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
-  // 1. Generate XML with new structure
+  // 1. Generate XML
   const xml = generateSerproProcuradorXML({
     contratanteCnpj,
-    contratanteNome: contratanteNome,
+    contratanteNome,
     autorPedidoCnpj: clientCnpj,
     autorPedidoNome: clientNome,
   });
   console.log(`[procurador] XML gerado (${xml.length} chars): ${xml.substring(0, 500)}`);
 
-  // 2. Sign XML with client's certificate
+  // 2. Sign XML with CLIENT's certificate (not office certificate)
   const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
@@ -192,18 +281,17 @@ async function obtainProcuradorToken(
     },
   };
 
-  // 5. Call /Apoiar using the office's mTLS certificate
+  // 5. Call /Apoiar using the OFFICE's mTLS certificate for transport
+  // IMPORTANT per SERPRO docs: jwt_token must be EMPTY for AUTENTICAPROCURADOR
   const apiUrl = new URL(`${SERPRO_API_BASE}/Apoiar`);
   const apiHeaders: Record<string, string> = {
     "Authorization": `Bearer ${bearerToken}`,
     "Content-Type": "application/json",
     "Accept": "application/json",
   };
-  if (jwtToken) {
-    apiHeaders["jwt_token"] = jwtToken;
-  }
+  // DO NOT send jwt_token here — SERPRO docs say it must be empty for this call
 
-  console.log(`[procurador] Chamando ${apiUrl.toString()}...`);
+  console.log(`[procurador] Chamando ${apiUrl.toString()} (sem jwt_token conforme docs SERPRO)...`);
   const response = await requestWithFetchHttp1(
     apiUrl,
     {
