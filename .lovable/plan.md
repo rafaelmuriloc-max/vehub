@@ -1,37 +1,76 @@
 
+# Corrigir rejeição do `avisoLegal` no AUTENTICAPROCURADOR
 
-# Corrigir textos do XML do Termo de Autorização
+## Diagnóstico
+O erro atual não é mais de token nem de estrutura básica: o SERPRO está rejeitando o **conteúdo literal** do XML.
 
-## Problema
+Pelos logs e pelo código atual em `supabase/functions/integra-contador/index.ts`:
+- o XML está sendo gerado com textos em **ASCII simplificado** (`autorizacao`, `informacoes`, `7o`, `n.` etc.)
+- as tags estão em formato **self-closing** (`<avisoLegal ... />`)
+- a assinatura usa `Reference URI=""` porque o root não tem `Id`
 
-O SERPRO retorna: **"atributo texto da tag termo inválido"**. O XML atual usa textos personalizados escritos manualmente. A documentação oficial do SERPRO mostra que os textos devem ser **exatamente** os textos padronizados, sem alteração.
+O SERPRO já validou o `termo` antes e agora está barrando o `avisoLegal`, o que indica validação **campo a campo**, muito provavelmente por comparação estrita com o modelo oficial.
 
-## Textos oficiais (extraídos do PDF do SERPRO)
+## O que vou implementar
 
-**termo**: `"Autorizo a empresa CONTRATANTE, identificada neste termo de autorização como DESTINATÁRIO, a executar as requisições dos serviços web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisição do serviço web. Esse termo de autorização está assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsável, identificado como AUTOR DO PEDIDO DE DADOS."`
+### 1. Usar os textos oficiais exatamente como no modelo SERPRO
+Em `generateSerproProcuradorXML`:
+- trocar `termoTexto`, `avisoTexto` e `finalidadeTexto` pelas versões **literais**, com:
+  - acentos
+  - `7º`, `11º`
+  - `n.º 13.709`
+  - pontuação original
+  - maiúsculas/minúsculas do modelo
 
-**avisoLegal**: `"O acesso a estas informações foi autorizado pelo próprio PROCURADOR ou OUTORGADO DO CONTRIBUINTE, responsável pela informação, via assinatura digital. É dever do destinatário da autorização e consumidor deste acesso observar a adoção de base legal para o tratamento dos dados recebidos conforme artigos 7º ou 11º da LGPD (Lei n.º 13.709, de 14 de agosto de 2018), aos direitos do titular dos dados (art. 9º, 17 e 18, da LGPD) e aos princípios que norteiam todos os tratamentos de dados no Brasil (art. 6º, da LGPD)."`
+Isso é a correção principal do erro atual.
 
-**finalidade**: `"A finalidade única e exclusiva desse TERMO DE AUTORIZAÇÃO, é garantir que o CONTRATANTE apresente a API INTEGRA CONTADOR esse consentimento do PROCURADOR ou OUTORGADO DO CONTRIBUINTE assinado digitalmente, para que possa realizar as requisições dos serviços web da API INTEGRA CONTADOR em nome do AUTOR PEDIDO DE DADOS (PROCURADOR ou OUTORGADO DO CONTRIBUINTE)."`
+### 2. Escapar corretamente atributos XML
+Como esses textos terão aspas, acentos e caracteres especiais, vou prever escape seguro de atributos:
+- `&` → `&amp;`
+- `"` → `&quot;`
+- `<` → `&lt;`
 
-## Diferenças encontradas
+Também vou aplicar isso nos nomes do contratante e do cliente para evitar XML inválido com razão social contendo caracteres especiais.
 
-| Aspecto | Atual (errado) | Oficial (correto) |
-|---|---|---|
-| termo | Texto personalizado com nome da empresa | Texto fixo padronizado com "CONTRATANTE" |
-| avisoLegal | Texto genérico sobre sigilo fiscal | Texto sobre LGPD com artigos específicos |
-| finalidade | Texto curto sobre prestação de serviços | Texto sobre consentimento do PROCURADOR |
-| Formato tags | `<tag></tag>` | `<tag />` (self-closing) |
+### 3. Padronizar o XML para fechamento explícito
+Hoje o código gera self-closing tags, mas os próprios comentários e a memória do projeto apontam melhor compatibilidade com C14N usando fechamento explícito.
 
-## Solução
+Vou alinhar para:
+```xml
+<sistema ...></sistema>
+<termo ...></termo>
+<avisoLegal ...></avisoLegal>
+...
+```
 
-### `supabase/functions/integra-contador/index.ts`
+### 4. Adicionar `Id` no root e assinar com referência explícita
+Vou ajustar o root para algo como:
+```xml
+<termoDeAutorizacao Id="termo-autorizacao">
+```
+e fazer a assinatura referenciar:
+```xml
+<Reference URI="#termo-autorizacao">
+```
 
-1. **Substituir os 3 textos** na função `generateSerproProcuradorXML` pelos textos oficiais exatos do SERPRO
-2. **Usar tags self-closing** (`/>`) para sistema, termo, avisoLegal, finalidade, dataAssinatura, vigencia, destinatario, assinadoPor -- conforme o exemplo oficial
-3. **Não incluir** `<?xml version="1.0" encoding="UTF-8"?>` no XML pois o exemplo oficial não o inclui na raiz (verificar impacto no digest)
-4. **Ajustar `signXmlWithCertificate`** para inserir a assinatura antes de `</termoDeAutorizacao>` considerando que agora as tags filhas são self-closing
+Isso deixa o XMLDSig mais consistente e reduz risco de rejeição por assinatura/reference ambígua.
 
-## Arquivo alterado
-- `supabase/functions/integra-contador/index.ts` — substituir ~6 linhas de texto + ajuste de formato de tags
+### 5. Manter o fail-fast e melhorar a depuração
+Vou preservar o comportamento atual de abortar quando o procurador token não vier, mas melhorar a saída para facilitar novos testes:
+- informar que a rejeição veio da validação literal do XML
+- continuar retornando `stage: "autentica_procurador"`
+- manter `serpro_response` completo
 
+## Arquivo envolvido
+- `supabase/functions/integra-contador/index.ts`
+
+## Resultado esperado
+Após a correção:
+- o `avisoLegal` deve deixar de ser rejeitado por texto inválido
+- se houver novo bloqueio, ele deve avançar para o próximo campo de validação ou finalmente aceitar o termo
+- a assinatura XML ficará mais aderente ao padrão esperado pelo SERPRO
+
+## Detalhes técnicos
+- o problema visível agora é o uso de texto “normalizado” em ASCII, enquanto o SERPRO aparentemente exige o conteúdo oficial literal
+- como os textos ficam em atributos XML, o escape correto passa a ser obrigatório
+- usar `Id` no root melhora a robustez da assinatura digital e evita depender de `Reference URI=""`
