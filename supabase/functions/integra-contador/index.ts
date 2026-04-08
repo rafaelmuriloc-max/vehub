@@ -288,8 +288,9 @@ async function obtainProcuradorToken(
     "Authorization": `Bearer ${bearerToken}`,
     "Content-Type": "application/json",
     "Accept": "application/json",
+    "jwt_token": "",
+    "autenticar_procurador_token": "",
   };
-  // DO NOT send jwt_token here — SERPRO docs say it must be empty for this call
 
   console.log(`[procurador] Chamando ${apiUrl.toString()} (sem jwt_token conforme docs SERPRO)...`);
   const response = await requestWithFetchHttp1(
