@@ -311,6 +311,7 @@ export type Database = {
           previous_office_name: string | null
           sci_code: string | null
           secondary_activities: string | null
+          simples_anexo: string | null
           start_date: string | null
           state_registration: string | null
           status: Database["public"]["Enums"]["client_status"]
@@ -357,6 +358,7 @@ export type Database = {
           previous_office_name?: string | null
           sci_code?: string | null
           secondary_activities?: string | null
+          simples_anexo?: string | null
           start_date?: string | null
           state_registration?: string | null
           status?: Database["public"]["Enums"]["client_status"]
@@ -403,6 +405,7 @@ export type Database = {
           previous_office_name?: string | null
           sci_code?: string | null
           secondary_activities?: string | null
+          simples_anexo?: string | null
           start_date?: string | null
           state_registration?: string | null
           status?: Database["public"]["Enums"]["client_status"]
