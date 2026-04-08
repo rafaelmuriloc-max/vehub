@@ -37,22 +37,32 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 function generateSerproProcuradorXML(params: {
   contratanteCnpj: string;
+  contratanteNome: string;
   autorPedidoCnpj: string;
-  contribuinteCnpj: string;
+  autorPedidoNome: string;
 }): string {
   const now = new Date();
-  // ISO 8601 with Brazil timezone (-03:00)
   const pad = (n: number) => String(n).padStart(2, "0");
-  const dataHora = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}-03:00`;
-  const termoId = `TERMO_${Date.now()}`;
+  const dataAssinatura = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const vigencia = `${now.getFullYear()}1231`;
+
+  const termoTexto = `Autorizo a empresa ${params.contratanteNome}, inscrita no CNPJ sob o numero ${params.contratanteCnpj}, a acessar, em meu nome, os dados e informacoes fiscais e cadastrais junto a Receita Federal do Brasil, por meio da API Integra Contador, conforme legislacao vigente.`;
+  const avisoTexto = `O acesso a estas informacoes esta protegido pelo sigilo fiscal previsto no art. 198 do Codigo Tributario Nacional e pelo disposto na Lei Geral de Protecao de Dados (Lei 13.709/2018). O uso indevido das informacoes acessadas acarretara responsabilidade civil e penal.`;
+  const finalidadeTexto = `A finalidade unica e exclusiva do acesso aos dados e informacoes e a prestacao de servicos contabeis e fiscais ao contribuinte autorizado.`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<TermoAutorizacao Id="${termoId}">` +
-    `<Contratante>${params.contratanteCnpj}</Contratante>` +
-    `<AutorPedido>${params.autorPedidoCnpj}</AutorPedido>` +
-    `<Contribuinte>${params.contribuinteCnpj}</Contribuinte>` +
-    `<DataHora>${dataHora}</DataHora>` +
-    `</TermoAutorizacao>`;
+    `<termoDeAutorizacao>` +
+    `<dados>` +
+    `<sistema id="API Integra Contador"></sistema>` +
+    `<termo texto="${termoTexto}"></termo>` +
+    `<avisoLegal texto="${avisoTexto}"></avisoLegal>` +
+    `<finalidade texto="${finalidadeTexto}"></finalidade>` +
+    `<dataAssinatura data="${dataAssinatura}"></dataAssinatura>` +
+    `<vigencia data="${vigencia}"></vigencia>` +
+    `<destinatario numero="${params.contratanteCnpj}" nome="${params.contratanteNome}" tipo="PJ" papel="contratante"></destinatario>` +
+    `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${params.autorPedidoNome}" tipo="PJ" papel="autor pedido de dados"></assinadoPor>` +
+    `</dados>` +
+    `</termoDeAutorizacao>`;
 }
 
 function toBase64(xml: string): string {
@@ -132,7 +142,7 @@ async function signXmlWithCertificate(
     `</Signature>`;
 
   // Insert Signature before closing tag of root element
-  return xml.replace("</TermoAutorizacao>", signatureElement + "</TermoAutorizacao>");
+  return xml.replace("</termoDeAutorizacao>", signatureElement + "</termoDeAutorizacao>");
 }
 
 async function obtainProcuradorToken(
@@ -154,8 +164,9 @@ async function obtainProcuradorToken(
   // 1. Generate XML with new structure
   const xml = generateSerproProcuradorXML({
     contratanteCnpj,
+    contratanteNome: contratanteNome,
     autorPedidoCnpj: clientCnpj,
-    contribuinteCnpj: clientCnpj,
+    autorPedidoNome: clientNome,
   });
   console.log(`[procurador] XML gerado (${xml.length} chars): ${xml.substring(0, 500)}`);
 
