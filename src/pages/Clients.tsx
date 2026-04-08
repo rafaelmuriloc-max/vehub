@@ -86,6 +86,20 @@ async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<s
   }
 }
 
+async function classifyAnexoByAI(mainCnae: string): Promise<string> {
+  if (!mainCnae) return '';
+  try {
+    const { data, error } = await supabase.functions.invoke('classify-segment', {
+      body: { classify_anexo: true, main_activity: mainCnae },
+    });
+    if (error) throw error;
+    return data?.anexo || '';
+  } catch (e) {
+    console.error('AI anexo classification error:', e);
+    return '';
+  }
+}
+
 type Client = {
   id: string; company_name: string; sci_code: string | null; document: string | null; contact_name: string | null;
   contact_email: string | null; contact_phone: string | null; address: string | null;
@@ -104,6 +118,7 @@ type Client = {
   destination_office_name: string | null; exit_reason_notes: string | null;
   business_classification: string | null;
   trade_name: string | null;
+  simples_anexo: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -124,6 +139,7 @@ const emptyForm = {
   destination_office_name: '', exit_reason_notes: '',
   business_classification: '',
   trade_name: '',
+  simples_anexo: '',
 };
 
 type Department = { id: string; name: string };
@@ -144,6 +160,7 @@ export default function Clients() {
   const [form, setForm] = useState({ ...emptyForm });
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [classifyingSegment, setClassifyingSegment] = useState(false);
+  const [classifyingAnexo, setClassifyingAnexo] = useState(false);
   const [permits, setPermits] = useState<PermitItem[]>(defaultPermits.map(p => ({ ...p })));
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
@@ -690,6 +707,7 @@ export default function Clients() {
       destination_office_name: (c as any).destination_office_name || '', exit_reason_notes: (c as any).exit_reason_notes || '',
       business_classification: (c as any).business_classification || '',
       trade_name: (c as any).trade_name || '',
+      simples_anexo: (c as any).simples_anexo || '',
     });
   }
 
@@ -829,6 +847,7 @@ export default function Clients() {
       destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
       business_classification: form.business_classification || null,
       trade_name: form.trade_name || null,
+      simples_anexo: form.tax_regime === 'simples_nacional' ? (form.simples_anexo || null) : null,
     };
     let error;
     let clientId = editing?.id;
@@ -1644,7 +1663,16 @@ export default function Clients() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 space-y-2">
                     <Label>Regime Tributário</Label>
-                    <Select value={form.tax_regime} onValueChange={v => setForm({ ...form, tax_regime: v })} disabled={viewOnly}>
+                    <Select value={form.tax_regime} onValueChange={v => {
+                      setForm({ ...form, tax_regime: v });
+                      if (v === 'simples_nacional' && form.main_activity && !form.simples_anexo) {
+                        setClassifyingAnexo(true);
+                        classifyAnexoByAI(form.main_activity).then(a => {
+                          setForm(prev => ({ ...prev, simples_anexo: a }));
+                          setClassifyingAnexo(false);
+                        });
+                      }
+                    }} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="mei">MEI</SelectItem>
@@ -1654,6 +1682,24 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {form.tax_regime === 'simples_nacional' && (
+                    <div className="col-span-2 space-y-2">
+                      <Label className="flex items-center gap-2">
+                        Anexo do Simples Nacional
+                        {classifyingAnexo && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                      </Label>
+                      <Select value={form.simples_anexo} onValueChange={v => setForm({ ...form, simples_anexo: v })} disabled={viewOnly || classifyingAnexo}>
+                        <SelectTrigger><SelectValue placeholder={classifyingAnexo ? "Classificando..." : "Selecione o Anexo..."} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="I">Anexo I (Comércio)</SelectItem>
+                          <SelectItem value="II">Anexo II (Indústria)</SelectItem>
+                          <SelectItem value="III">Anexo III (Serviços)</SelectItem>
+                          <SelectItem value="IV">Anexo IV (Serviços)</SelectItem>
+                          <SelectItem value="V">Anexo V (Serviços)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="col-span-2 space-y-2">
                     <Label className="flex items-center gap-2">
                       Segmento
@@ -1678,6 +1724,13 @@ export default function Clients() {
                         setForm(prev => ({ ...prev, business_classification: c }));
                         setClassifyingSegment(false);
                       });
+                      if (form.tax_regime === 'simples_nacional') {
+                        setClassifyingAnexo(true);
+                        classifyAnexoByAI(v).then(a => {
+                          setForm(prev => ({ ...prev, simples_anexo: a }));
+                          setClassifyingAnexo(false);
+                        });
+                      }
                     }} />
                   </div>
                   <div className="col-span-2 space-y-2">
