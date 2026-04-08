@@ -78,11 +78,9 @@ async function signXmlWithCertificate(
   const idMatch = xml.match(/Id="([^"]+)"/);
   const referenceUri = idMatch ? `#${idMatch[1]}` : "";
 
-  // For digest: remove XML declaration, compute on the content that will be canonicalized
+  // For digest: compute on the full XML content (no XML declaration present)
   // The enveloped-signature transform removes the Signature element, then C14N is applied
-  // Since there's no Signature yet, the digest is over the XML content without the declaration
-  const xmlWithoutDecl = xml.replace(/<\?xml[^?]*\?>/, "");
-  const xmlBytes = new TextEncoder().encode(xmlWithoutDecl);
+  const xmlBytes = new TextEncoder().encode(xml);
   const digestBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", xmlBytes));
   const digestValue = btoa(String.fromCharCode(...digestBytes));
 
