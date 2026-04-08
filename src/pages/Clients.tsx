@@ -1663,7 +1663,16 @@ export default function Clients() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 space-y-2">
                     <Label>Regime Tributário</Label>
-                    <Select value={form.tax_regime} onValueChange={v => setForm({ ...form, tax_regime: v })} disabled={viewOnly}>
+                    <Select value={form.tax_regime} onValueChange={v => {
+                      setForm({ ...form, tax_regime: v });
+                      if (v === 'simples_nacional' && form.main_activity && !form.simples_anexo) {
+                        setClassifyingAnexo(true);
+                        classifyAnexoByAI(form.main_activity).then(a => {
+                          setForm(prev => ({ ...prev, simples_anexo: a }));
+                          setClassifyingAnexo(false);
+                        });
+                      }
+                    }} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="mei">MEI</SelectItem>
@@ -1715,6 +1724,13 @@ export default function Clients() {
                         setForm(prev => ({ ...prev, business_classification: c }));
                         setClassifyingSegment(false);
                       });
+                      if (form.tax_regime === 'simples_nacional') {
+                        setClassifyingAnexo(true);
+                        classifyAnexoByAI(v).then(a => {
+                          setForm(prev => ({ ...prev, simples_anexo: a }));
+                          setClassifyingAnexo(false);
+                        });
+                      }
                     }} />
                   </div>
                   <div className="col-span-2 space-y-2">
