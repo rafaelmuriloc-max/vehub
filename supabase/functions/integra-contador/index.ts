@@ -58,7 +58,7 @@ function generateSerproProcuradorXML(params: {
   const nomeContratante = xmlAttrEscape(params.contratanteNome);
   const nomeAutor = xmlAttrEscape(params.autorPedidoNome);
 
-  return `<termoDeAutorizacao Id="termo-autorizacao">` +
+  return `<termoDeAutorizacao>` +
     `<dados>` +
     `<sistema id="API Integra Contador"></sistema>` +
     `<termo texto="${xmlAttrEscape(termoTexto)}"></termo>` +
@@ -82,24 +82,19 @@ async function signXmlWithCertificate(
   privateKey: forge.pki.PrivateKey,
   certificate: forge.pki.Certificate,
 ): Promise<string> {
-  // Extract the Id from the root element for Reference URI
-  const idMatch = xml.match(/Id="([^"]+)"/);
-  const referenceUri = idMatch ? `#${idMatch[1]}` : "";
-
-  // For digest: compute on the full XML content (no XML declaration present)
-  // The enveloped-signature transform removes the Signature element, then C14N is applied
+  // Digest: compute SHA-256 over the full XML (enveloped-signature means no Signature yet)
   const xmlBytes = new TextEncoder().encode(xml);
   const digestBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", xmlBytes));
   const digestValue = btoa(String.fromCharCode(...digestBytes));
 
-  console.log(`[sign] Reference URI: ${referenceUri}, Digest: ${digestValue}`);
+  console.log(`[sign] Reference URI="" (whole document), XML length: ${xml.length}, Digest: ${digestValue}`);
 
-  // Build SignedInfo — ALL tags must have explicit closing (no self-closing) for C14N compatibility
-  const signedInfo =
+  // Build SignedInfo with xmlns — this EXACT string will be both signed and inserted
+  const signedInfoWithNs =
     `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
     `<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"></SignatureMethod>` +
-    `<Reference URI="${referenceUri}">` +
+    `<Reference URI="">` +
     `<Transforms>` +
     `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform>` +
     `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></Transform>` +
@@ -109,7 +104,7 @@ async function signXmlWithCertificate(
     `</Reference>` +
     `</SignedInfo>`;
 
-  // Convert forge private key to PKCS#8 DER for Web Crypto
+  // Sign the EXACT SignedInfo string (with xmlns, as per C14N — namespace is inherited in final XML)
   const rsaPrivateKeyAsn1 = forge.pki.privateKeyToAsn1(privateKey);
   const privateKeyInfo = forge.pki.wrapRsaPrivateKey(rsaPrivateKeyAsn1);
   const pkcs8Der = forge.asn1.toDer(privateKeyInfo).getBytes();
@@ -126,7 +121,8 @@ async function signXmlWithCertificate(
     ["sign"],
   );
 
-  const signedInfoBytes = new TextEncoder().encode(signedInfo);
+  // Sign the SignedInfo WITH the xmlns attribute (canonical form)
+  const signedInfoBytes = new TextEncoder().encode(signedInfoWithNs);
   const signatureBytes = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, signedInfoBytes));
   const signatureValue = btoa(String.fromCharCode(...signatureBytes));
 
@@ -134,10 +130,11 @@ async function signXmlWithCertificate(
   const certDer = forge.asn1.toDer(forge.pki.certificateToAsn1(certificate));
   const certBase64 = forge.util.encode64(certDer.getBytes());
 
-  // Build the Signature element
+  // Build Signature element — SignedInfo inside inherits xmlns from <Signature>, so remove its own xmlns
+  const signedInfoInner = signedInfoWithNs.replace(` xmlns="http://www.w3.org/2000/09/xmldsig#"`, "");
   const signatureElement =
     `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
-    signedInfo.replace(` xmlns="http://www.w3.org/2000/09/xmldsig#"`, "") +
+    signedInfoInner +
     `<SignatureValue>${signatureValue}</SignatureValue>` +
     `<KeyInfo>` +
     `<X509Data>` +
