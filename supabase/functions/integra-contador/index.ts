@@ -248,20 +248,20 @@ async function obtainProcuradorToken(
   officeCertPem: string,
   officeKeyPem: string,
   bearerToken: string,
-  jwtToken: string | undefined,
+  _jwtToken: string | undefined,
 ): Promise<string | null> {
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
-  // 1. Generate XML with new structure
+  // 1. Generate XML
   const xml = generateSerproProcuradorXML({
     contratanteCnpj,
-    contratanteNome: contratanteNome,
+    contratanteNome,
     autorPedidoCnpj: clientCnpj,
     autorPedidoNome: clientNome,
   });
   console.log(`[procurador] XML gerado (${xml.length} chars): ${xml.substring(0, 500)}`);
 
-  // 2. Sign XML with client's certificate
+  // 2. Sign XML with CLIENT's certificate (not office certificate)
   const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj);
   console.log(`[procurador] XML assinado (${signedXml.length} chars)`);
 
@@ -281,18 +281,17 @@ async function obtainProcuradorToken(
     },
   };
 
-  // 5. Call /Apoiar using the office's mTLS certificate
+  // 5. Call /Apoiar using the OFFICE's mTLS certificate for transport
+  // IMPORTANT per SERPRO docs: jwt_token must be EMPTY for AUTENTICAPROCURADOR
   const apiUrl = new URL(`${SERPRO_API_BASE}/Apoiar`);
   const apiHeaders: Record<string, string> = {
     "Authorization": `Bearer ${bearerToken}`,
     "Content-Type": "application/json",
     "Accept": "application/json",
   };
-  if (jwtToken) {
-    apiHeaders["jwt_token"] = jwtToken;
-  }
+  // DO NOT send jwt_token here — SERPRO docs say it must be empty for this call
 
-  console.log(`[procurador] Chamando ${apiUrl.toString()}...`);
+  console.log(`[procurador] Chamando ${apiUrl.toString()} (sem jwt_token conforme docs SERPRO)...`);
   const response = await requestWithFetchHttp1(
     apiUrl,
     {
