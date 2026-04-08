@@ -86,6 +86,20 @@ async function classifyByAI(mainCnae: string, secondaryCnaes: string): Promise<s
   }
 }
 
+async function classifyAnexoByAI(mainCnae: string): Promise<string> {
+  if (!mainCnae) return '';
+  try {
+    const { data, error } = await supabase.functions.invoke('classify-segment', {
+      body: { classify_anexo: true, main_activity: mainCnae },
+    });
+    if (error) throw error;
+    return data?.anexo || '';
+  } catch (e) {
+    console.error('AI anexo classification error:', e);
+    return '';
+  }
+}
+
 type Client = {
   id: string; company_name: string; sci_code: string | null; document: string | null; contact_name: string | null;
   contact_email: string | null; contact_phone: string | null; address: string | null;
