@@ -1,111 +1,37 @@
 
-# Corrigir fluxo do termo de autorização para realmente liberar a consulta
 
-## Diagnóstico
-O erro `AcessoNegado-ICGERENCIADOR-019` mostra que a consulta final ainda está chegando ao SERPRO sem uma autorização válida do procurador, mesmo com a etapa de XML já implementada.
+# Corrigir textos do XML do Termo de Autorização
 
-Pelo código atual em `supabase/functions/integra-contador/index.ts`, o fluxo já:
-1. detecta quando `autorPedidoDados != contratante`
-2. gera o XML
-3. assina com o certificado do cliente
-4. envia `AUTENTICAPROCURADOR / ENVIOXMLASSINADO81`
-5. tenta extrair `autenticar_procurador_token`
-6. só adiciona o header final se esse token for encontrado
+## Problema
 
-O ponto mais provável de falha é este:
-- a chamada de `Apoiar` está retornando algo diferente do formato esperado
-- o token não está sendo extraído
-- a função segue mesmo assim “tentando sem ele”
-- a consulta principal volta 403 exatamente como no retorno que você enviou
+O SERPRO retorna: **"atributo texto da tag termo inválido"**. O XML atual usa textos personalizados escritos manualmente. A documentação oficial do SERPRO mostra que os textos devem ser **exatamente** os textos padronizados, sem alteração.
 
-Ou seja: o problema agora não parece ser mais a tag raiz do XML, e sim a obtenção/uso do token de procurador.
+## Textos oficiais (extraídos do PDF do SERPRO)
 
-## O que vou implementar
+**termo**: `"Autorizo a empresa CONTRATANTE, identificada neste termo de autorização como DESTINATÁRIO, a executar as requisições dos serviços web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisição do serviço web. Esse termo de autorização está assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsável, identificado como AUTOR DO PEDIDO DE DADOS."`
 
-### 1. Tornar o fluxo de procurador obrigatório quando necessário
-Hoje, se `obtainProcuradorToken()` falha, a função apenas faz log e continua sem o header.
+**avisoLegal**: `"O acesso a estas informações foi autorizado pelo próprio PROCURADOR ou OUTORGADO DO CONTRIBUINTE, responsável pela informação, via assinatura digital. É dever do destinatário da autorização e consumidor deste acesso observar a adoção de base legal para o tratamento dos dados recebidos conforme artigos 7º ou 11º da LGPD (Lei n.º 13.709, de 14 de agosto de 2018), aos direitos do titular dos dados (art. 9º, 17 e 18, da LGPD) e aos princípios que norteiam todos os tratamentos de dados no Brasil (art. 6º, da LGPD)."`
 
-Vou trocar esse comportamento para:
-- se `autorPedidoDados !== contratanteCnpj`
-- e não for possível obter `autenticar_procurador_token`
-- a função deve retornar erro claro imediatamente
+**finalidade**: `"A finalidade única e exclusiva desse TERMO DE AUTORIZAÇÃO, é garantir que o CONTRATANTE apresente a API INTEGRA CONTADOR esse consentimento do PROCURADOR ou OUTORGADO DO CONTRIBUINTE assinado digitalmente, para que possa realizar as requisições dos serviços web da API INTEGRA CONTADOR em nome do AUTOR PEDIDO DE DADOS (PROCURADOR ou OUTORGADO DO CONTRIBUINTE)."`
 
-Assim evitamos consulta “sabidamente inválida” ao SERPRO e passamos a enxergar o erro real da etapa de autorização.
+## Diferenças encontradas
 
-### 2. Melhorar a leitura da resposta do `AUTENTICAPROCURADOR`
-Vou ajustar `obtainProcuradorToken()` para tentar extrair o token em mais formatos, por exemplo:
-- `data.autenticar_procurador_token`
-- `data.token`
-- `data.dados` como string JSON
-- `data.dados` como valor simples
-- headers com variações de nome/case
-- resposta texto puro
+| Aspecto | Atual (errado) | Oficial (correto) |
+|---|---|---|
+| termo | Texto personalizado com nome da empresa | Texto fixo padronizado com "CONTRATANTE" |
+| avisoLegal | Texto genérico sobre sigilo fiscal | Texto sobre LGPD com artigos específicos |
+| finalidade | Texto curto sobre prestação de serviços | Texto sobre consentimento do PROCURADOR |
+| Formato tags | `<tag></tag>` | `<tag />` (self-closing) |
 
-Isso é importante porque o PDF mostra a chamada, mas não garante que a resposta venha sempre no mesmo shape que o código atual assume.
+## Solução
 
-### 3. Logar a resposta estruturada da etapa de autorização
-Vou reforçar os logs do `AUTENTICAPROCURADOR` para registrar:
-- status HTTP
-- body completo truncado com segurança
-- headers relevantes
-- em qual campo o token foi encontrado, se encontrado
-- motivo exato quando não encontrado
+### `supabase/functions/integra-contador/index.ts`
 
-Assim fica possível validar se:
-- o XML foi aceito
-- o token foi devolvido em outro campo
-- ou a autorização em si ainda está sendo rejeitada
+1. **Substituir os 3 textos** na função `generateSerproProcuradorXML` pelos textos oficiais exatos do SERPRO
+2. **Usar tags self-closing** (`/>`) para sistema, termo, avisoLegal, finalidade, dataAssinatura, vigencia, destinatario, assinadoPor -- conforme o exemplo oficial
+3. **Não incluir** `<?xml version="1.0" encoding="UTF-8"?>` no XML pois o exemplo oficial não o inclui na raiz (verificar impacto no digest)
+4. **Ajustar `signXmlWithCertificate`** para inserir a assinatura antes de `</termoDeAutorizacao>` considerando que agora as tags filhas são self-closing
 
-### 4. Validar o payload enviado ao `AUTENTICAPROCURADOR`
-Vou revisar o body para garantir aderência estrita ao padrão esperado:
-- `contratante` = escritório
-- `autorPedidoDados` = cliente/procurador que assina
-- `contribuinte` = cliente
-- `pedidoDados.idSistema = AUTENTICAPROCURADOR`
-- `pedidoDados.idServico = ENVIOXMLASSINADO81`
-- `pedidoDados.dados = "{\"xml\":\"BASE64\"}"`
+## Arquivo alterado
+- `supabase/functions/integra-contador/index.ts` — substituir ~6 linhas de texto + ajuste de formato de tags
 
-Também vou conferir se o `xml` precisa seguir exatamente como base64 do documento UTF-8 assinado, sem transformação extra.
-
-### 5. Revisar o XML assinado para compatibilidade com o exemplo do SERPRO
-Embora a raiz já tenha sido corrigida, o PDF indica detalhes importantes. Vou alinhar:
-- textos legais ao modelo oficial
-- atributos e valores esperados
-- fechamento explícito das tags
-- inserção da assinatura dentro de `<termoDeAutorizacao>`
-- digest/reference coerentes com o documento efetivamente assinado
-
-Especial atenção para:
-- ausência de `Id` no root hoje faz `Reference URI=""`
-- isso pode ser aceito ou não pelo SERPRO; vou revisar a necessidade de identificar o documento explicitamente e manter consistência entre digest e `SignedInfo`
-
-### 6. Ajustar a resposta para o frontend
-Se a etapa de procurador falhar, a edge function deve retornar algo como:
-- `success: false`
-- `stage: "autentica_procurador"`
-- mensagem amigável explicando que a autorização não foi emitida
-- detalhes técnicos do SERPRO quando existirem
-
-Isso melhora muito a depuração na tela `/integra-contador`.
-
-## Arquivos envolvidos
-- `supabase/functions/integra-contador/index.ts`
-
-## Resultado esperado
-Após a correção:
-- quando o cliente for diferente do contratante, a função deve primeiro obter com sucesso o `autenticar_procurador_token`
-- só então enviar a consulta principal com esse header
-- se o token não vier, a função deve falhar explicitamente na etapa de autorização, sem seguir para a consulta
-- o erro 403 atual deve desaparecer quando o termo for aceito, ou então será substituído por uma mensagem mais precisa sobre o que ainda falta no XML/assinatura
-
-## Detalhes técnicos
-- Hoje o código já inclui o header `autenticar_procurador_token`, mas apenas se conseguir extrair o token
-- O principal bug funcional é que o fluxo continua mesmo quando essa etapa falha
-- A documentação enviada confirma que o objetivo do `ENVIOXMLASSINADO81` é justamente devolver esse token para uso nas requisições seguintes
-- O plano não exige mudança de banco nem nova tabela; é uma correção da edge function e da forma como ela trata a autorização
-
-<lov-actions>
-<lov-suggestion message="Test the Integra Contador procurador flow end-to-end with a client whose CNPJ is different from the office and verify whether the authorization token is now generated and used in the final request.">Verify that it works</lov-suggestion>
-<lov-suggestion message="Add a visible debug section in the Integra Contador page showing the authorization stage, whether the procurador token was obtained, and the exact SERPRO stage that failed.">Improve SERPRO debugging</lov-suggestion>
-<lov-suggestion message="Show the AUTENTICAPROCURADOR response details in the Integra Contador UI when authorization fails, including stage and SERPRO message codes.">Expose authorization errors in UI</lov-suggestion>
-</lov-actions>
