@@ -1,76 +1,106 @@
 
-# Corrigir rejeição do `avisoLegal` no AUTENTICAPROCURADOR
+# Corrigir a assinatura XML do AUTENTICAPROCURADOR
 
 ## Diagnóstico
-O erro atual não é mais de token nem de estrutura básica: o SERPRO está rejeitando o **conteúdo literal** do XML.
+O erro mudou e agora está objetivo:
 
-Pelos logs e pelo código atual em `supabase/functions/integra-contador/index.ts`:
-- o XML está sendo gerado com textos em **ASCII simplificado** (`autorizacao`, `informacoes`, `7o`, `n.` etc.)
-- as tags estão em formato **self-closing** (`<avisoLegal ... />`)
-- a assinatura usa `Reference URI=""` porque o root não tem `Id`
+`[AcessoNegado-AUTENTICAPROCURADOR-013] XML assinado inválido: A assinatura do evento deverá ser realizada sobre todo documento Xml (Atributo 'URI' dever ser vazio).`
 
-O SERPRO já validou o `termo` antes e agora está barrando o `avisoLegal`, o que indica validação **campo a campo**, muito provavelmente por comparação estrita com o modelo oficial.
+Pelo código atual em `supabase/functions/integra-contador/index.ts` e pela documentação enviada:
+- a documentação do SERPRO mostra `reference uri=""`
+- o código atual força `Reference URI="#termo-autorizacao"`
+- o código também adiciona `Id="termo-autorizacao"` na raiz
+- além disso, a assinatura hoje é montada de forma frágil: calcula digest do XML bruto e assina uma versão de `SignedInfo`, mas insere outra versão no XML final
 
-## O que vou implementar
+Ou seja: o problema agora não é mais o texto do termo, e sim a forma de assinatura XML.
 
-### 1. Usar os textos oficiais exatamente como no modelo SERPRO
-Em `generateSerproProcuradorXML`:
-- trocar `termoTexto`, `avisoTexto` e `finalidadeTexto` pelas versões **literais**, com:
-  - acentos
-  - `7º`, `11º`
-  - `n.º 13.709`
-  - pontuação original
-  - maiúsculas/minúsculas do modelo
+## O que vou ajustar
 
-Isso é a correção principal do erro atual.
+### 1. Assinar o documento inteiro com `URI=""`
+Vou remover a lógica que extrai `Id` da raiz e parar de usar `#termo-autorizacao`.
 
-### 2. Escapar corretamente atributos XML
-Como esses textos terão aspas, acentos e caracteres especiais, vou prever escape seguro de atributos:
-- `&` → `&amp;`
-- `"` → `&quot;`
-- `<` → `&lt;`
-
-Também vou aplicar isso nos nomes do contratante e do cliente para evitar XML inválido com razão social contendo caracteres especiais.
-
-### 3. Padronizar o XML para fechamento explícito
-Hoje o código gera self-closing tags, mas os próprios comentários e a memória do projeto apontam melhor compatibilidade com C14N usando fechamento explícito.
-
-Vou alinhar para:
+Ficará assim:
 ```xml
-<sistema ...></sistema>
-<termo ...></termo>
-<avisoLegal ...></avisoLegal>
-...
+<Reference URI="">
 ```
 
-### 4. Adicionar `Id` no root e assinar com referência explícita
-Vou ajustar o root para algo como:
+E a raiz voltará a não depender de `Id` para assinatura.
+
+### 2. Remover o `Id` da tag raiz
+Hoje o root está como:
 ```xml
 <termoDeAutorizacao Id="termo-autorizacao">
 ```
-e fazer a assinatura referenciar:
-```xml
-<Reference URI="#termo-autorizacao">
-```
 
-Isso deixa o XMLDSig mais consistente e reduz risco de rejeição por assinatura/reference ambígua.
+Vou alinhar ao modelo do SERPRO e remover esse atributo, já que a assinatura deve apontar para o documento inteiro, não para um fragmento.
 
-### 5. Manter o fail-fast e melhorar a depuração
-Vou preservar o comportamento atual de abortar quando o procurador token não vier, mas melhorar a saída para facilitar novos testes:
-- informar que a rejeição veio da validação literal do XML
-- continuar retornando `stage: "autentica_procurador"`
-- manter `serpro_response` completo
+### 3. Corrigir a montagem do `SignedInfo`
+Hoje o código:
+- monta um `SignedInfo`
+- assina esse texto
+- depois insere no XML uma versão alterada com `replace(...)`
+
+Isso é arriscado para validação criptográfica.
+
+Vou mudar para:
+- gerar uma única versão final de `SignedInfo`
+- assinar exatamente essa versão
+- inserir exatamente a mesma estrutura dentro de `<Signature>`
+
+### 4. Corrigir o digest para seguir o XMLDSig esperado
+Hoje o digest é feito sobre os bytes brutos do XML string.
+
+Vou ajustar para calcular o digest do documento da forma esperada pelo SERPRO/XMLDSig:
+- documento completo
+- sem depender de `Id`
+- respeitando a lógica de `enveloped-signature`
+- com canonicalização coerente antes do hash
+
+Isso evita rejeição mesmo depois de corrigir o `URI`.
+
+### 5. Manter os textos oficiais já corrigidos
+Os textos de:
+- `termo`
+- `avisoLegal`
+- `finalidade`
+
+devem permanecer exatamente como estão agora, porque os erros anteriores mostraram que o SERPRO valida isso literalmente.
+
+### 6. Melhorar logs da assinatura
+Vou incluir logs mais úteis para depuração:
+- `Reference URI` usado
+- tamanho do XML antes/depois da assinatura
+- digest gerado
+- trecho do `SignedInfo` final realmente assinado
+
+Assim, se houver nova rejeição, fica claro se o problema restante é de canonicalização ou de estrutura.
 
 ## Arquivo envolvido
 - `supabase/functions/integra-contador/index.ts`
 
 ## Resultado esperado
-Após a correção:
-- o `avisoLegal` deve deixar de ser rejeitado por texto inválido
-- se houver novo bloqueio, ele deve avançar para o próximo campo de validação ou finalmente aceitar o termo
-- a assinatura XML ficará mais aderente ao padrão esperado pelo SERPRO
+Após essa correção:
+- o erro sobre `URI` vazio deve desaparecer
+- o AUTENTICAPROCURADOR deve aceitar o XML assinado
+- a função poderá finalmente receber o `autenticar_procurador_token` e prosseguir com a consulta principal
 
 ## Detalhes técnicos
-- o problema visível agora é o uso de texto “normalizado” em ASCII, enquanto o SERPRO aparentemente exige o conteúdo oficial literal
-- como os textos ficam em atributos XML, o escape correto passa a ser obrigatório
-- usar `Id` no root melhora a robustez da assinatura digital e evita depender de `Reference URI=""`
+Principais diferenças entre o estado atual e o correto:
+
+```text
+Atual
+- Root com Id
+- Reference URI="#termo-autorizacao"
+- Digest do XML bruto
+- SignedInfo assinado != SignedInfo inserido
+
+Correto
+- Root sem dependência de Id
+- Reference URI=""
+- Assinatura sobre o documento inteiro
+- Digest/canonicalização coerentes
+- SignedInfo assinado = SignedInfo inserido
+```
+
+## Observação
+Não há necessidade de mudar banco, UI ou payload principal da consulta. A correção é toda na rotina de geração e assinatura do XML do termo.
