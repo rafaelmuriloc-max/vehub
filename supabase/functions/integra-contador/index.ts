@@ -26,6 +26,11 @@ type MtlsTextResponse = {
   url: string;
 };
 
+type ProcuradorResult =
+  | { ok: true; token: string }
+  | { ok: false; reason: "serpro_rejected"; serpro_status: number; serpro_response: unknown }
+  | { ok: false; reason: "parse_error"; message: string };
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -148,7 +153,7 @@ async function obtainProcuradorToken(
   officeKeyPem: string,
   bearerToken: string,
   jwtToken: string | undefined,
-): Promise<string | null> {
+): Promise<ProcuradorResult> {
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
   // 1. Generate XML with new structure
@@ -206,40 +211,45 @@ async function obtainProcuradorToken(
   console.log(`[procurador] Resposta status: ${response.status}`);
   console.log(`[procurador] Resposta body: ${response.bodyText.substring(0, 500)}`);
 
-  if (response.status < 200 || response.status >= 300) {
-    console.error(`[procurador] Erro ao obter token de procurador: ${response.bodyText}`);
-    return null;
+  // 6. Parse SERPRO response
+  let serpro_response: unknown;
+  try {
+    serpro_response = JSON.parse(response.bodyText);
+  } catch {
+    serpro_response = response.bodyText;
   }
 
-  // 6. Extract the autenticar_procurador_token from the response
+  if (response.status < 200 || response.status >= 300) {
+    console.error(`[procurador] SERPRO rejeitou XML (${response.status}): ${response.bodyText.substring(0, 500)}`);
+    return { ok: false, reason: "serpro_rejected", serpro_status: response.status, serpro_response };
+  }
+
+  // 7. Extract the autenticar_procurador_token from the response body or headers
   try {
-    const data = JSON.parse(response.bodyText);
-    // The token may come in the response body or in the dados field
+    const data = serpro_response as Record<string, unknown>;
     if (data.dados) {
       try {
-        const dadosParsed = typeof data.dados === "string" ? JSON.parse(data.dados) : data.dados;
-        if (dadosParsed.token || dadosParsed.autenticar_procurador_token) {
-          const token = dadosParsed.token || dadosParsed.autenticar_procurador_token;
-          console.log(`[procurador] Token obtido com sucesso (${token.length} chars)`);
-          return token;
+        const dadosParsed = typeof data.dados === "string" ? JSON.parse(data.dados as string) : data.dados as Record<string, unknown>;
+        const token = (dadosParsed as Record<string, unknown>).token || (dadosParsed as Record<string, unknown>).autenticar_procurador_token;
+        if (token && typeof token === "string") {
+          console.log(`[procurador] Token obtido do body (${token.length} chars)`);
+          return { ok: true, token };
         }
       } catch {
         // dados might not be JSON
       }
     }
-    // Try response headers
     const headerToken = response.headers.get("autenticar_procurador_token");
     if (headerToken) {
       console.log(`[procurador] Token obtido do header (${headerToken.length} chars)`);
-      return headerToken;
+      return { ok: true, token: headerToken };
     }
 
-    console.log(`[procurador] Token não encontrado na resposta. Dados completos: ${response.bodyText.substring(0, 1000)}`);
-    // Return the full response body text as a fallback — the API might return the token directly
-    return null;
-  } catch {
+    console.log(`[procurador] Token não encontrado. Resposta SERPRO: ${response.bodyText.substring(0, 1000)}`);
+    return { ok: false, reason: "parse_error", message: "Token não encontrado na resposta SERPRO" };
+  } catch (e) {
     console.error(`[procurador] Erro ao parsear resposta: ${response.bodyText}`);
-    return null;
+    return { ok: false, reason: "parse_error", message: (e as Error).message };
   }
 }
 
@@ -340,49 +350,80 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Credenciais SERPRO não configuradas" }, 500);
     }
 
-    // OAuth2 authenticate via mTLS + Role-Type: TERCEIROS
-    console.log("Autenticando no SERPRO via OAuth2 (mTLS + Role-Type: TERCEIROS)...");
-    const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
+    // ============= Bearer token: verificar cache antes de autenticar =============
+    let bearerToken: string | undefined;
+    let jwtToken: string | undefined;
 
-    const authResponse = await requestWithFetchHttp1(
-      new URL(SERPRO_AUTH_URL),
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${authCredentials}`,
-          "Role-Type": "TERCEIROS",
-          "Content-Type": "application/x-www-form-urlencoded",
+    const { data: cachedBearer } = await serviceClient
+      .from("serpro_tokens")
+      .select("access_token, jwt_token")
+      .is("client_id", null)
+      .eq("token_type", "bearer")
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    if (cachedBearer?.access_token) {
+      bearerToken = cachedBearer.access_token;
+      jwtToken = cachedBearer.jwt_token ?? undefined;
+      console.log("[integra-contador] Bearer token reutilizado do cache");
+    } else {
+      // OAuth2 authenticate via mTLS + Role-Type: TERCEIROS
+      console.log("Autenticando no SERPRO via OAuth2 (mTLS + Role-Type: TERCEIROS)...");
+      const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
+
+      const authResponse = await requestWithFetchHttp1(
+        new URL(SERPRO_AUTH_URL),
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Basic ${authCredentials}`,
+            "Role-Type": "TERCEIROS",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: "grant_type=client_credentials",
         },
-        body: "grant_type=client_credentials",
-      },
-      certPem,
-      keyPem,
-      "office-auth"
-    );
+        certPem,
+        keyPem,
+        "office-auth"
+      );
 
-    console.log(`Auth response status: ${authResponse.status}`);
+      console.log(`Auth response status: ${authResponse.status}`);
 
-    if (authResponse.status < 200 || authResponse.status >= 300) {
-      console.error("Auth error body:", authResponse.bodyText);
-      return jsonResponse({
-        error: "Falha na autenticação SERPRO",
-        details: authResponse.bodyText,
-        status: authResponse.status,
-      }, 401);
-    }
+      if (authResponse.status < 200 || authResponse.status >= 300) {
+        console.error("Auth error body:", authResponse.bodyText);
+        return jsonResponse({
+          error: "Falha na autenticação SERPRO",
+          details: authResponse.bodyText,
+          status: authResponse.status,
+        }, 401);
+      }
 
-    let authData: { access_token?: string; jwt_token?: string };
-    try {
-      authData = JSON.parse(authResponse.bodyText);
-    } catch {
-      return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponse.bodyText }, 500);
-    }
+      let authData: { access_token?: string; jwt_token?: string; expires_in?: number };
+      try {
+        authData = JSON.parse(authResponse.bodyText);
+      } catch {
+        return jsonResponse({ error: "Resposta de autenticação inválida", details: authResponse.bodyText }, 500);
+      }
 
-    const bearerToken = authData.access_token;
-    const jwtToken = authData.jwt_token;
+      bearerToken = authData.access_token;
+      jwtToken = authData.jwt_token;
 
-    if (!bearerToken) {
-      return jsonResponse({ error: "Token de acesso não retornado pelo SERPRO" }, 500);
+      if (!bearerToken) {
+        return jsonResponse({ error: "Token de acesso não retornado pelo SERPRO" }, 500);
+      }
+
+      // Salvar bearer token no cache (com 60s de margem)
+      const ttlSeconds = (authData.expires_in ?? 3600) - 60;
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      await serviceClient.from("serpro_tokens").delete().is("client_id", null).eq("token_type", "bearer");
+      await serviceClient.from("serpro_tokens").insert({
+        client_id: null,
+        token_type: "bearer",
+        access_token: bearerToken,
+        jwt_token: jwtToken ?? null,
+        expires_at: expiresAt,
+      });
+      console.log(`[integra-contador] Bearer token salvo no cache (expira em ${ttlSeconds}s)`);
     }
 
     // ============= Autentica Procurador Flow =============
@@ -390,51 +431,93 @@ Deno.serve(async (req) => {
     let procuradorToken: string | null = null;
 
     if (autorPedidoCpfCnpj !== contratanteCnpj) {
-      console.log(`[integra-contador] autorPedidoDados (${autorPedidoCpfCnpj}) != contratante (${contratanteCnpj}) — iniciando fluxo de procurador`);
+      console.log(`[integra-contador] autorPedidoDados (${autorPedidoCpfCnpj}) != contratante (${contratanteCnpj}) — verificando token de procurador`);
 
-      // Check if client has a certificate
-      if (!client.digital_certificate_url || !client.digital_certificate_password) {
-        return jsonResponse({
-          success: false,
-          error: "Certificado digital do cliente não encontrado. Para consultar dados de terceiros via Integra Contador, o cliente precisa ter um certificado digital (A1) cadastrado.",
-          hint: "Faça o upload do certificado digital do cliente na tela de Clientes > editar > aba Fiscal.",
-        });
-      }
+      // Verificar cache do token de procurador
+      const { data: cachedProcurador } = await serviceClient
+        .from("serpro_tokens")
+        .select("procurador_token")
+        .eq("client_id", client_id)
+        .eq("token_type", "procurador")
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
 
-      // Download client's certificate
-      const { data: clientCertFile, error: clientCertError } = await serviceClient.storage
-        .from("certificates")
-        .download(client.digital_certificate_url);
-
-      if (clientCertError || !clientCertFile) {
-        return jsonResponse({ error: `Erro ao baixar certificado do cliente: ${clientCertError?.message}` }, 500);
-      }
-
-      const clientPfxBytes = new Uint8Array(await clientCertFile.arrayBuffer());
-      const { certPem: clientCertPem, keyPem: clientKeyPem } = await parsePfx(clientPfxBytes, client.digital_certificate_password);
-
-      // Parse client's PFX to get the certificate object and private key for signing
-      const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
-
-      procuradorToken = await obtainProcuradorToken(
-        contratanteCnpj,
-        contratanteNome,
-        autorPedidoCpfCnpj,
-        client.company_name || "Cliente",
-        clientCertPem,
-        clientKeyPem,
-        clientCertObj,
-        clientPrivateKey,
-        certPem,
-        keyPem,
-        bearerToken,
-        jwtToken,
-      );
-
-      if (!procuradorToken) {
-        console.warn("[integra-contador] Não foi possível obter o token de procurador. Tentando a requisição sem ele...");
+      if (cachedProcurador?.procurador_token) {
+        procuradorToken = cachedProcurador.procurador_token;
+        console.log("[integra-contador] Token de procurador reutilizado do cache");
       } else {
+        console.log("[integra-contador] Token de procurador não encontrado no cache — iniciando fluxo de autorização");
+
+        // Check if client has a certificate
+        if (!client.digital_certificate_url || !client.digital_certificate_password) {
+          return jsonResponse({
+            success: false,
+            stage: "autentica_procurador",
+            error: "Certificado digital do cliente não encontrado. Para consultar dados de terceiros via Integra Contador, o cliente precisa ter um certificado digital (A1) cadastrado.",
+            reason: "missing_certificate",
+            hint: "Faça o upload do certificado digital do cliente na tela de Clientes > editar > aba Fiscal.",
+          });
+        }
+
+        // Download client's certificate
+        const { data: clientCertFile, error: clientCertError } = await serviceClient.storage
+          .from("certificates")
+          .download(client.digital_certificate_url);
+
+        if (clientCertError || !clientCertFile) {
+          return jsonResponse({ error: `Erro ao baixar certificado do cliente: ${clientCertError?.message}` }, 500);
+        }
+
+        const clientPfxBytes = new Uint8Array(await clientCertFile.arrayBuffer());
+        const { certPem: clientCertPem, keyPem: clientKeyPem } = await parsePfx(clientPfxBytes, client.digital_certificate_password);
+
+        // Parse client's PFX to get the certificate object and private key for signing
+        const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
+
+        const procuradorResult = await obtainProcuradorToken(
+          contratanteCnpj,
+          contratanteNome,
+          autorPedidoCpfCnpj,
+          client.company_name || "Cliente",
+          clientCertPem,
+          clientKeyPem,
+          clientCertObj,
+          clientPrivateKey,
+          certPem,
+          keyPem,
+          bearerToken,
+          jwtToken,
+        );
+
+        if (!procuradorResult.ok) {
+          console.error(`[integra-contador] Falha ao obter token de procurador: ${procuradorResult.reason}`);
+          return jsonResponse({
+            success: false,
+            stage: "autentica_procurador",
+            error: "Não foi possível obter autorização de procurador junto ao SERPRO. A consulta não pode prosseguir.",
+            reason: procuradorResult.reason,
+            ...(procuradorResult.reason === "serpro_rejected" ? {
+              serpro_status: procuradorResult.serpro_status,
+              serpro_response: procuradorResult.serpro_response,
+            } : { message: procuradorResult.message }),
+            client_name: client.company_name,
+            service: { idSistema, idServico, tipo },
+          });
+        }
+
+        procuradorToken = procuradorResult.token;
         console.log(`[integra-contador] Token de procurador obtido com sucesso`);
+
+        // Salvar token de procurador no cache (TTL fixo de 58 min — SERPRO não retorna expires_in)
+        const procuradorExpiresAt = new Date(Date.now() + 3500 * 1000).toISOString();
+        await serviceClient.from("serpro_tokens").delete().eq("client_id", client_id).eq("token_type", "procurador");
+        await serviceClient.from("serpro_tokens").insert({
+          client_id,
+          token_type: "procurador",
+          procurador_token: procuradorToken,
+          expires_at: procuradorExpiresAt,
+        });
+        console.log("[integra-contador] Token de procurador salvo no cache");
       }
     }
 
