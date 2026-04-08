@@ -215,42 +215,72 @@ async function obtainProcuradorToken(
   );
 
   console.log(`[procurador] Resposta status: ${response.status}`);
-  console.log(`[procurador] Resposta body: ${response.bodyText.substring(0, 500)}`);
+  console.log(`[procurador] Resposta body (truncado): ${response.bodyText.substring(0, 1000)}`);
 
-  if (response.status < 200 || response.status >= 300) {
-    console.error(`[procurador] Erro ao obter token de procurador: ${response.bodyText}`);
-    return null;
+  // Log response headers that might contain the token
+  const relevantHeaders: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    const lk = key.toLowerCase();
+    if (lk.includes("token") || lk.includes("autenticar") || lk.includes("procurador") || lk.includes("authorization")) {
+      relevantHeaders[key] = value.substring(0, 200);
+    }
+  });
+  if (Object.keys(relevantHeaders).length > 0) {
+    console.log(`[procurador] Headers relevantes: ${JSON.stringify(relevantHeaders)}`);
   }
 
-  // 6. Extract the autenticar_procurador_token from the response
+  if (response.status < 200 || response.status >= 300) {
+    console.error(`[procurador] SERPRO rejeitou o termo. Status: ${response.status}, Body: ${response.bodyText.substring(0, 1500)}`);
+    return { error: true, status: response.status, body: response.bodyText } as any;
+  }
+
+  // 6. Extract the autenticar_procurador_token from the response — try multiple formats
   try {
     const data = JSON.parse(response.bodyText);
-    // The token may come in the response body or in the dados field
-    if (data.dados) {
-      try {
-        const dadosParsed = typeof data.dados === "string" ? JSON.parse(data.dados) : data.dados;
-        if (dadosParsed.token || dadosParsed.autenticar_procurador_token) {
-          const token = dadosParsed.token || dadosParsed.autenticar_procurador_token;
-          console.log(`[procurador] Token obtido com sucesso (${token.length} chars)`);
-          return token;
-        }
-      } catch {
-        // dados might not be JSON
-      }
+
+    // Try top-level fields
+    if (data.autenticar_procurador_token) {
+      console.log(`[procurador] Token obtido de data.autenticar_procurador_token`);
+      return data.autenticar_procurador_token;
     }
-    // Try response headers
-    const headerToken = response.headers.get("autenticar_procurador_token");
-    if (headerToken) {
-      console.log(`[procurador] Token obtido do header (${headerToken.length} chars)`);
-      return headerToken;
+    if (data.token) {
+      console.log(`[procurador] Token obtido de data.token`);
+      return data.token;
     }
 
-    console.log(`[procurador] Token não encontrado na resposta. Dados completos: ${response.bodyText.substring(0, 1000)}`);
-    // Return the full response body text as a fallback — the API might return the token directly
-    return null;
+    // Try inside dados (string JSON or object)
+    if (data.dados != null) {
+      let dadosParsed = data.dados;
+      if (typeof dadosParsed === "string") {
+        try { dadosParsed = JSON.parse(dadosParsed); } catch { /* keep as string */ }
+      }
+      if (typeof dadosParsed === "object" && dadosParsed !== null) {
+        const tk = dadosParsed.autenticar_procurador_token || dadosParsed.token;
+        if (tk) {
+          console.log(`[procurador] Token obtido de data.dados`);
+          return tk;
+        }
+      }
+      // dados as plain string might be the token itself
+      if (typeof dadosParsed === "string" && dadosParsed.length > 20) {
+        console.log(`[procurador] Usando data.dados como token (string ${dadosParsed.length} chars)`);
+        return dadosParsed;
+      }
+    }
+
+    // Try response headers (case-insensitive search)
+    for (const [key, value] of response.headers.entries()) {
+      if (key.toLowerCase() === "autenticar_procurador_token") {
+        console.log(`[procurador] Token obtido do header ${key}`);
+        return value;
+      }
+    }
+
+    console.error(`[procurador] Token NÃO encontrado. Campos disponíveis: ${Object.keys(data).join(", ")}. Dados: ${response.bodyText.substring(0, 1500)}`);
+    return { error: true, status: response.status, body: response.bodyText, reason: "token_not_found" } as any;
   } catch {
-    console.error(`[procurador] Erro ao parsear resposta: ${response.bodyText}`);
-    return null;
+    console.error(`[procurador] Erro ao parsear resposta JSON: ${response.bodyText.substring(0, 500)}`);
+    return { error: true, status: response.status, body: response.bodyText, reason: "parse_error" } as any;
   }
 }
 
@@ -427,7 +457,7 @@ Deno.serve(async (req) => {
       // Parse client's PFX to get the certificate object and private key for signing
       const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
 
-      procuradorToken = await obtainProcuradorToken(
+      const procuradorResult = await obtainProcuradorToken(
         contratanteCnpj,
         contratanteNome,
         autorPedidoCpfCnpj,
@@ -442,10 +472,38 @@ Deno.serve(async (req) => {
         jwtToken,
       );
 
-      if (!procuradorToken) {
-        console.warn("[integra-contador] Não foi possível obter o token de procurador. Tentando a requisição sem ele...");
+      // Check if result is an error object or a valid token string
+      if (typeof procuradorResult === "object" && procuradorResult !== null && (procuradorResult as any).error) {
+        const errInfo = procuradorResult as any;
+        console.error(`[integra-contador] Falha obrigatória na etapa de procurador. Abortando.`);
+
+        let serproDetails: unknown;
+        try { serproDetails = JSON.parse(errInfo.body); } catch { serproDetails = errInfo.body; }
+
+        return jsonResponse({
+          success: false,
+          stage: "autentica_procurador",
+          error: "Não foi possível obter autorização de procurador junto ao SERPRO. A consulta não pode prosseguir.",
+          reason: errInfo.reason || "serpro_rejected",
+          serpro_status: errInfo.status,
+          serpro_response: serproDetails,
+          client_name: client.company_name,
+          service: { idSistema, idServico, tipo },
+        });
+      }
+
+      if (typeof procuradorResult === "string" && procuradorResult.length > 0) {
+        procuradorToken = procuradorResult;
+        console.log(`[integra-contador] Token de procurador obtido com sucesso (${procuradorToken.length} chars)`);
       } else {
-        console.log(`[integra-contador] Token de procurador obtido com sucesso`);
+        console.error(`[integra-contador] Resultado inesperado do obtainProcuradorToken: ${JSON.stringify(procuradorResult)}`);
+        return jsonResponse({
+          success: false,
+          stage: "autentica_procurador",
+          error: "Token de procurador não retornado pelo SERPRO. A consulta não pode prosseguir sem autorização.",
+          client_name: client.company_name,
+          service: { idSistema, idServico, tipo },
+        });
       }
     }
 
