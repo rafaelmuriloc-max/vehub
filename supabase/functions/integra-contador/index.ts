@@ -46,21 +46,20 @@ function generateSerproProcuradorXML(params: {
   const dataAssinatura = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
   const vigencia = `${now.getFullYear()}1231`;
 
-  const termoTexto = `Autorizo a empresa ${params.contratanteNome}, inscrita no CNPJ sob o numero ${params.contratanteCnpj}, a acessar, em meu nome, os dados e informacoes fiscais e cadastrais junto a Receita Federal do Brasil, por meio da API Integra Contador, conforme legislacao vigente.`;
-  const avisoTexto = `O acesso a estas informacoes esta protegido pelo sigilo fiscal previsto no art. 198 do Codigo Tributario Nacional e pelo disposto na Lei Geral de Protecao de Dados (Lei 13.709/2018). O uso indevido das informacoes acessadas acarretara responsabilidade civil e penal.`;
-  const finalidadeTexto = `A finalidade unica e exclusiva do acesso aos dados e informacoes e a prestacao de servicos contabeis e fiscais ao contribuinte autorizado.`;
+  const termoTexto = `Autorizo a empresa CONTRATANTE, identificada neste termo de autorizacao como DESTINATARIO, a executar as requisicoes dos servicos web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisicao do servico web. Esse termo de autorizacao esta assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsavel, identificado como AUTOR DO PEDIDO DE DADOS.`;
+  const avisoTexto = `O acesso a estas informacoes foi autorizado pelo proprio PROCURADOR ou OUTORGADO DO CONTRIBUINTE, responsavel pela informacao, via assinatura digital. E dever do destinatario da autorizacao e consumidor deste acesso observar a adocao de base legal para o tratamento dos dados recebidos conforme artigos 7o ou 11o da LGPD (Lei n. 13.709, de 14 de agosto de 2018), aos direitos do titular dos dados (art. 9o, 17 e 18, da LGPD) e aos principios que norteiam todos os tratamentos de dados no Brasil (art. 6o, da LGPD).`;
+  const finalidadeTexto = `A finalidade unica e exclusiva desse TERMO DE AUTORIZACAO, e garantir que o CONTRATANTE apresente a API INTEGRA CONTADOR esse consentimento do PROCURADOR ou OUTORGADO DO CONTRIBUINTE assinado digitalmente, para que possa realizar as requisicoes dos servicos web da API INTEGRA CONTADOR em nome do AUTOR PEDIDO DE DADOS (PROCURADOR ou OUTORGADO DO CONTRIBUINTE).`;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<termoDeAutorizacao>` +
+  return `<termoDeAutorizacao>` +
     `<dados>` +
-    `<sistema id="API Integra Contador"></sistema>` +
-    `<termo texto="${termoTexto}"></termo>` +
-    `<avisoLegal texto="${avisoTexto}"></avisoLegal>` +
-    `<finalidade texto="${finalidadeTexto}"></finalidade>` +
-    `<dataAssinatura data="${dataAssinatura}"></dataAssinatura>` +
-    `<vigencia data="${vigencia}"></vigencia>` +
-    `<destinatario numero="${params.contratanteCnpj}" nome="${params.contratanteNome}" tipo="PJ" papel="contratante"></destinatario>` +
-    `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${params.autorPedidoNome}" tipo="PJ" papel="autor pedido de dados"></assinadoPor>` +
+    `<sistema id="API Integra Contador" />` +
+    `<termo texto="${termoTexto}" />` +
+    `<avisoLegal texto="${avisoTexto}" />` +
+    `<finalidade texto="${finalidadeTexto}" />` +
+    `<dataAssinatura data="${dataAssinatura}" />` +
+    `<vigencia data="${vigencia}" />` +
+    `<destinatario numero="${params.contratanteCnpj}" nome="${params.contratanteNome}" tipo="PJ" papel="contratante" />` +
+    `<assinadoPor numero="${params.autorPedidoCnpj}" nome="${params.autorPedidoNome}" tipo="PJ" papel="autor pedido de dados" />` +
     `</dados>` +
     `</termoDeAutorizacao>`;
 }
