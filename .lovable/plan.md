@@ -1,37 +1,43 @@
 
-# Ignorar obrigações concluídas ao importar documentos
 
-## Problema
-Quando um documento é importado, o sistema vincula e marca atividades como concluídas em todas as instâncias encontradas, mesmo que a obrigação já esteja 100% concluída. Isso pode sobrescrever dados de conclusão existentes.
+# Adicionar campo "Anexo do Simples Nacional" na aba Fiscal
+
+## Contexto
+Quando o regime tributário do cliente é "Simples Nacional", é necessário informar em qual Anexo (I a V) a empresa se enquadra. Esse campo deve aparecer condicionalmente e ser preenchido automaticamente por IA com base no CNAE principal, além de permitir edição manual.
 
 ## Solução
 
-Antes de processar cada instância no loop de vinculação, verificar se todas as atividades daquela instância já estão concluídas. Se sim, pular a instância.
-
-### `src/pages/Documents.tsx` — 2 pontos de alteração
-
-**1. Função auxiliar `isInstanceFullyCompleted`** (~linha 403):
-```typescript
-async function isInstanceFullyCompleted(instanceId: string, obligationId: string): Promise<boolean> {
-  const { data: acts } = await supabase
-    .from('obligation_activities')
-    .select('id')
-    .eq('obligation_id', obligationId);
-  if (!acts || acts.length === 0) return false;
-  const { data: completions } = await supabase
-    .from('obligation_activity_completions')
-    .select('id')
-    .eq('instance_id', instanceId)
-    .eq('completed', true);
-  return (completions?.length || 0) >= acts.length;
-}
+### 1. Migração de banco de dados
+Adicionar coluna `simples_anexo` na tabela `clients`:
+```sql
+ALTER TABLE public.clients ADD COLUMN simples_anexo text;
 ```
 
-**2. Guard no `importDocument`** (linha ~477, loop `for (const inst of allInstances)`):
-- Adicionar `if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;`
+### 2. `src/pages/Clients.tsx`
 
-**3. Guard no `relinkDocuments`** (linha ~639, loop `for (const inst of allInstances)`):
-- Mesmo check: `if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;`
+**a) Form state** — Adicionar `simples_anexo: ''` ao `emptyForm` e ao tipo `Client`.
 
-## Arquivo alterado
-- `src/pages/Documents.tsx` — 1 função nova + 2 guards (~15 linhas)
+**b) Load/Save** — Incluir `simples_anexo` no payload de save e na leitura ao editar um cliente.
+
+**c) UI condicional** — Após o `Select` de Regime Tributário, renderizar condicionalmente (quando `form.tax_regime === 'simples_nacional'`) um `Select` com as opções:
+- Anexo I (Comércio)
+- Anexo II (Indústria)
+- Anexo III (Serviços)
+- Anexo IV (Serviços)
+- Anexo V (Serviços)
+
+**d) Auto-preenchimento por IA** — Criar função `classifyAnexoByAI(mainCnae)` que chama uma edge function para determinar o anexo correto com base no CNAE. Disparar quando:
+- O regime for alterado para `simples_nacional` e já houver CNAE preenchido
+- O CNAE principal for alterado e o regime já for `simples_nacional`
+
+### 3. `supabase/functions/classify-segment/index.ts`
+Adicionar suporte a um novo campo `classify_anexo: true` no body. Quando presente, o prompt da IA será:
+> "Com base no CNAE {cnae}, determine em qual Anexo do Simples Nacional (I, II, III, IV ou V) essa atividade se enquadra. Responda apenas com o número romano."
+
+Retornará `{ anexo: "III" }` (por exemplo).
+
+## Arquivos alterados
+- **Migração SQL** — 1 coluna nova em `clients`
+- **`src/pages/Clients.tsx`** — ~30 linhas (form state, UI condicional, auto-classificação)
+- **`supabase/functions/classify-segment/index.ts`** — ~15 linhas (novo modo `classify_anexo`)
+
