@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell, MailOpen, MailCheck, Eye, Download, FileDown } from 'lucide-react';
+import PgdasdDeclaracaoForm from '@/components/integra-contador/PgdasdDeclaracaoForm';
 
 type Client = {
   id: string;
