@@ -661,6 +661,7 @@ Deno.serve(async (req) => {
           keyPem,
           bearerToken,
           jwtToken,
+          serviceClient,
         );
       }
 
