@@ -401,13 +401,15 @@ export default function IntegraContador() {
     return entries;
   }
 
-  function openBase64Pdf(base64: string, _filename: string) {
-    const bytes = atob(base64);
-    const arr = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-    const blob = new Blob([arr], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+  function openBase64Pdf(base64: string, filename: string) {
+    // Safari/iOS não suporta window.open com blob URLs
+    // Usar data URL que funciona em todos os browsers
+    const dataUrl = `data:application/pdf;base64,${base64}`;
+    const newWindow = window.open(dataUrl, '_blank');
+    // Se bloqueado (iOS Safari), fazer download direto
+    if (!newWindow) {
+      downloadBase64Pdf(base64, filename);
+    }
   }
 
   function downloadBase64Pdf(base64: string, filename: string) {
