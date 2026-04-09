@@ -134,7 +134,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             : 'bg-white dark:bg-zinc-700 text-foreground rounded-tl-none'
         }`}
       >
-        {!showOnRight && senderName && (
+        {senderName && (
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">{senderName}</p>
         )}
         {isWhatsApp && isOutgoing && (

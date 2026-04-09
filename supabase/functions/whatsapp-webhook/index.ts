@@ -257,7 +257,10 @@ Deno.serve(async (req) => {
       const updates: Record<string, unknown> = {};
       if (clientId && !convByPhone[0].client_id) {
         updates.client_id = clientId;
-        updates.name = clientName;
+      }
+      // Always prefer pushName for conversation name
+      if (pushName) {
+        updates.name = pushName;
       }
       // Upgrade phone to canonical format
       if (convByPhone[0].whatsapp_phone !== canonicalPhone) {
@@ -327,7 +330,7 @@ Deno.serve(async (req) => {
       const { data: newConv, error: convErr } = await supabase
         .from("chat_conversations")
         .insert({
-          name: clientName,
+          name: pushName || clientName,
           is_group: false,
           created_by: systemUserId,
           client_id: clientId,
@@ -383,8 +386,10 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Update generic name with client name
-      if (clientId && existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
+      // Update name: prefer pushName, fallback to clientName for generic names
+      if (pushName && existingConvData?.name !== pushName) {
+        await supabase.from("chat_conversations").update({ name: pushName }).eq("id", conversationId);
+      } else if (clientId && existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
         await supabase.from("chat_conversations").update({ name: clientName }).eq("id", conversationId);
       }
     }
