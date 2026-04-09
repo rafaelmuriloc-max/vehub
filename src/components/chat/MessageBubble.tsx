@@ -137,12 +137,6 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         {senderName && (
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">{senderName}</p>
         )}
-        {isWhatsApp && isOutgoing && (
-          <div className="flex items-center gap-1 mb-0.5">
-            <Phone className="h-3 w-3 text-green-600 fill-green-600" />
-            <span className="text-[10px] font-medium text-green-600">WhatsApp</span>
-          </div>
-        )}
         {renderMedia()}
         {/* Show text content - skip for documents/location/contact */}
         {content && !hideTextContent && messageType !== 'whatsapp_document' && (

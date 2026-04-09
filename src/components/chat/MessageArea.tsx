@@ -30,6 +30,7 @@ interface MessageAreaProps {
   onSendContact?: (name: string, phone: string) => void;
   isGroup?: boolean;
   avatarUrl?: string;
+  currentUserName?: string;
   companyNames?: string[];
   isClosed?: boolean;
   onCloseTicket?: () => void;
@@ -46,7 +47,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -157,7 +158,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   timestamp={msg.created_at}
                   isMine={msg.sender_id === currentUserId}
                   isRead={!!msg.read_at}
-                  senderName={showOnRight && !isOutgoing ? msg.sender_name : undefined}
+                  senderName={showOnRight ? (isOutgoing ? currentUserName : msg.sender_name) : undefined}
                   isGroup={isGroup}
                   messageType={msg.message_type}
                   mediaUrl={msg.media_url}
