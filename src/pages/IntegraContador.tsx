@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell, MailOpen, MailCheck, Eye } from 'lucide-react';
+import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell, MailOpen, MailCheck, Eye, Download, FileDown } from 'lucide-react';
 
 type Client = {
   id: string;
@@ -361,6 +361,72 @@ export default function IntegraContador() {
     }
   }
 
+  // --- PDF extraction & download helpers ---
+  function extractFilesFromResponse(res: any): { name: string; base64: string }[] {
+    const files: { name: string; base64: string }[] = [];
+    try {
+      const dados = res?.data?.dados || res?.dados;
+      const parsed = typeof dados === 'string' ? JSON.parse(dados) : dados;
+      if (!parsed || typeof parsed !== 'object') return files;
+      const walk = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj.pdf && typeof obj.pdf === 'string' && obj.pdf.length > 100) {
+          files.push({ name: obj.nomeArquivo || 'documento.pdf', base64: obj.pdf });
+          return;
+        }
+        for (const v of Object.values(obj)) walk(v);
+      };
+      walk(parsed);
+    } catch { /* ignore */ }
+    return files;
+  }
+
+  function extractTextData(res: any): [string, string][] {
+    const entries: [string, string][] = [];
+    try {
+      const dados = res?.data?.dados || res?.dados;
+      const parsed = typeof dados === 'string' ? JSON.parse(dados) : dados;
+      if (!parsed || typeof parsed !== 'object') return entries;
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v === null || v === undefined) continue;
+        if (typeof v === 'object') continue; // skip nested (files)
+        entries.push([k, String(v)]);
+      }
+    } catch { /* ignore */ }
+    return entries;
+  }
+
+  function openBase64Pdf(base64: string, _filename: string) {
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  }
+
+  function downloadBase64Pdf(base64: string, filename: string) {
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function stripBase64FromResult(res: any): any {
+    try {
+      return JSON.parse(JSON.stringify(res, (key, value) => {
+        if (key === 'pdf' && typeof value === 'string' && value.length > 200) return '[BASE64_OMITIDO]';
+        return value;
+      }));
+    } catch { return res; }
+  }
+
   function renderCaixaPostalInbox(messages: any[]) {
     return (
       <div className="space-y-3">
@@ -588,11 +654,64 @@ export default function IntegraContador() {
                 <ScrollArea className="h-[500px]">
                   {isCaixaPostalList() && parseCaixaPostalMessages(result as any) ? (
                     renderCaixaPostalInbox(parseCaixaPostalMessages(result as any)!)
-                  ) : (
-                    <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
-                      {JSON.stringify(result, null, 2)}
-                    </pre>
-                  )}
+                  ) : (() => {
+                    const files = extractFilesFromResponse(result);
+                    if (files.length > 0) {
+                      const textData = extractTextData(result);
+                      return (
+                        <div className="space-y-4">
+                          {textData.length > 0 && (
+                            <div className="bg-muted rounded-md p-4 space-y-1">
+                              {textData.map(([k, v], i) => (
+                                <div key={i} className="text-sm flex gap-2">
+                                  <span className="font-medium text-foreground">{k}:</span>
+                                  <span className="text-muted-foreground">{String(v)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="grid gap-3">
+                            {files.map((f, i) => (
+                              <Card key={i} className="border-dashed">
+                                <CardContent className="flex items-center justify-between p-4">
+                                  <div className="flex items-center gap-3">
+                                    <FileDown className="h-8 w-8 text-primary" />
+                                    <div>
+                                      <p className="font-medium text-sm">{f.name}</p>
+                                      <p className="text-xs text-muted-foreground">PDF • {Math.round(f.base64.length * 0.75 / 1024)} KB</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button size="sm" variant="outline" onClick={() => openBase64Pdf(f.base64, f.name)}>
+                                      <Eye className="h-4 w-4 mr-1" /> Visualizar
+                                    </Button>
+                                    <Button size="sm" onClick={() => downloadBase64Pdf(f.base64, f.name)}>
+                                      <Download className="h-4 w-4 mr-1" /> Baixar
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                          <Accordion type="single" collapsible>
+                            <AccordionItem value="raw">
+                              <AccordionTrigger className="text-xs text-muted-foreground">Ver JSON completo</AccordionTrigger>
+                              <AccordionContent>
+                                <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                                  {JSON.stringify(stripBase64FromResult(result), null, 2)}
+                                </pre>
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        </div>
+                      );
+                    }
+                    return (
+                      <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                        {JSON.stringify(result, null, 2)}
+                      </pre>
+                    );
+                  })()}
                 </ScrollArea>
               ) : (
                 <div className="flex items-center justify-center h-48 text-muted-foreground">
