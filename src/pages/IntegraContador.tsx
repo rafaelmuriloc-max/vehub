@@ -71,7 +71,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <Scale className="h-4 w-4" />,
     services: [
       // PGDASD
-      { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal', description: 'Transmite declaração mensal do PGDAS-D', tipo: 'Declarar', fields: [F_PA] },
+      { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal', description: 'Transmite declaração mensal do PGDAS-D', tipo: 'Declarar', fields: [], customForm: 'pgdasd-declaracao' },
       { idSistema: 'PGDASD', idServico: 'GERARDAS12', label: 'Gerar DAS', description: 'Gera guia DAS do Simples Nacional', tipo: 'Emitir', fields: [F_PERIODO] },
       { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D', description: 'Consulta declarações transmitidas do PGDAS-D', tipo: 'Consultar', fields: [F_ANO] },
       { idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', label: 'Última Declaração/Recibo', description: 'Consulta última declaração e recibo do PGDAS-D', tipo: 'Consultar', fields: [F_PERIODO] },
