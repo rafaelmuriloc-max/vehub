@@ -353,27 +353,48 @@ async function obtainProcuradorToken(
     console.log(`[procurador] Headers relevantes: ${JSON.stringify(relevantHeaders)}`);
   }
 
+  // === Handle 304: authorization already exists, retrieve from cache ===
+  if (response.status === 304) {
+    console.log(`[procurador] SERPRO retornou 304 — autorização já concedida. Buscando token em cache...`);
+    try {
+      const { data: cached304 } = await supabaseAdmin
+        .from("procurador_tokens")
+        .select("token")
+        .eq("contratante_cnpj", contratanteCnpj)
+        .eq("client_cnpj", clientCnpj)
+        .single();
+
+      if (cached304?.token) {
+        console.log(`[procurador] ✅ Token recuperado do cache após 304`);
+        return cached304.token;
+      }
+    } catch { /* no cache */ }
+
+    console.error(`[procurador] 304 mas sem token em cache. Não é possível prosseguir.`);
+    return { error: true, status: 304, body: "Autorização já concedida (304) mas token não encontrado em cache. Solicite um novo token manualmente.", reason: "304_no_cache" } as any;
+  }
+
   if (response.status < 200 || response.status >= 300) {
     console.error(`[procurador] SERPRO rejeitou o termo. Status: ${response.status}, Body: ${response.bodyText.substring(0, 1500)}`);
     return { error: true, status: response.status, body: response.bodyText } as any;
   }
 
   // 6. Extract the autenticar_procurador_token from the response — try multiple formats
+  let extractedToken: string | null = null;
   try {
     const data = JSON.parse(response.bodyText);
 
     // Try top-level fields
     if (data.autenticar_procurador_token) {
+      extractedToken = data.autenticar_procurador_token;
       console.log(`[procurador] Token obtido de data.autenticar_procurador_token`);
-      return data.autenticar_procurador_token;
-    }
-    if (data.token) {
+    } else if (data.token) {
+      extractedToken = data.token;
       console.log(`[procurador] Token obtido de data.token`);
-      return data.token;
     }
 
     // Try inside dados (string JSON or object)
-    if (data.dados != null) {
+    if (!extractedToken && data.dados != null) {
       let dadosParsed = data.dados;
       if (typeof dadosParsed === "string") {
         try { dadosParsed = JSON.parse(dadosParsed); } catch { /* keep as string */ }
@@ -381,27 +402,48 @@ async function obtainProcuradorToken(
       if (typeof dadosParsed === "object" && dadosParsed !== null) {
         const tk = dadosParsed.autenticar_procurador_token || dadosParsed.token;
         if (tk) {
+          extractedToken = tk;
           console.log(`[procurador] Token obtido de data.dados`);
-          return tk;
         }
       }
       // dados as plain string might be the token itself
-      if (typeof dadosParsed === "string" && dadosParsed.length > 20) {
+      if (!extractedToken && typeof dadosParsed === "string" && dadosParsed.length > 20) {
+        extractedToken = dadosParsed;
         console.log(`[procurador] Usando data.dados como token (string ${dadosParsed.length} chars)`);
-        return dadosParsed;
       }
     }
 
     // Try response headers (case-insensitive search)
-    for (const [key, value] of response.headers.entries()) {
-      if (key.toLowerCase() === "autenticar_procurador_token") {
-        console.log(`[procurador] Token obtido do header ${key}`);
-        return value;
+    if (!extractedToken) {
+      for (const [key, value] of response.headers.entries()) {
+        if (key.toLowerCase() === "autenticar_procurador_token") {
+          extractedToken = value;
+          console.log(`[procurador] Token obtido do header ${key}`);
+          break;
+        }
       }
     }
 
-    console.error(`[procurador] Token NÃO encontrado. Campos disponíveis: ${Object.keys(data).join(", ")}. Dados: ${response.bodyText.substring(0, 1500)}`);
-    return { error: true, status: response.status, body: response.bodyText, reason: "token_not_found" } as any;
+    if (!extractedToken) {
+      console.error(`[procurador] Token NÃO encontrado. Campos disponíveis: ${Object.keys(data).join(", ")}. Dados: ${response.bodyText.substring(0, 1500)}`);
+      return { error: true, status: response.status, body: response.bodyText, reason: "token_not_found" } as any;
+    }
+
+    // === Save token to cache ===
+    try {
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h default
+      await supabaseAdmin.from("procurador_tokens").upsert({
+        contratante_cnpj: contratanteCnpj,
+        client_cnpj: clientCnpj,
+        token: extractedToken,
+        expires_at: expiresAt,
+      }, { onConflict: "contratante_cnpj,client_cnpj" });
+      console.log(`[procurador] ✅ Token salvo em cache (expira: ${expiresAt})`);
+    } catch (saveErr) {
+      console.warn(`[procurador] Falha ao salvar token em cache: ${(saveErr as Error).message}`);
+    }
+
+    return extractedToken;
   } catch {
     console.error(`[procurador] Erro ao parsear resposta JSON: ${response.bodyText.substring(0, 500)}`);
     return { error: true, status: response.status, body: response.bodyText, reason: "parse_error" } as any;
