@@ -1,38 +1,40 @@
 
 
-# Corrigir visualização de PDF no Safari/iOS (WebKitBlobResource erro 1)
+# Corrigir campos do serviço GERARGUIA31 (Gerar Guia DCTFWeb)
 
 ## Problema
-O Safari no iOS não suporta `window.open()` com blob URLs — retorna o erro "WebKitBlobResource erro 1". A função `openBase64Pdf` usa exatamente esse padrão.
+O serviço GERARGUIA31 está configurado com `fields: [F_PERIODO]`, enviando `{"periodoApuracao":"202401"}`. Porém a documentação oficial mostra que os campos corretos são: `categoria`, `anoPA`, `mesPA` e `numeroReciboEntrega`.
 
 ## Solução
-Substituir `window.open(blobUrl)` por uma abordagem compatível com Safari: usar um `<iframe>` embutido na página ou converter o base64 em data URL (`data:application/pdf;base64,...`) que o Safari consegue abrir. A abordagem mais robusta para iOS é forçar o download ao invés de tentar abrir em nova aba, já que o Safari tem restrições severas com blobs.
 
-## Alteração em `src/pages/IntegraContador.tsx`
+### Em `src/pages/IntegraContador.tsx`:
 
-Reescrever `openBase64Pdf` (~linhas 404-411):
+1. **Criar novos field definitions** para os campos específicos do DCTFWeb:
 
 ```typescript
-function openBase64Pdf(base64: string, filename: string) {
-  // Safari/iOS não suporta window.open com blob URLs
-  // Usar data URL que funciona em todos os browsers
-  const dataUrl = `data:application/pdf;base64,${base64}`;
-  
-  // Tentar abrir em nova aba
-  const newWindow = window.open(dataUrl, '_blank');
-  
-  // Se bloqueado (iOS Safari), fazer download direto
-  if (!newWindow) {
-    downloadBase64Pdf(base64, filename);
-  }
-}
+const F_CATEGORIA_DCTF = { key: 'categoria', label: 'Categoria', required: true, placeholder: 'GERAL_MENSAL', options: [
+  { value: 'GERAL_MENSAL', label: 'Geral Mensal' },
+  { value: 'GERAL_ANUAL', label: 'Geral Anual' },
+  { value: '13_SALARIO', label: '13º Salário' },
+] };
+const F_ANO_PA = { key: 'anoPA', label: 'Ano PA', required: true, placeholder: '2027' };
+const F_MES_PA = { key: 'mesPA', label: 'Mês PA', required: true, placeholder: '11' };
+const F_NUM_RECIBO = { key: 'numeroReciboEntrega', label: 'Nº Recibo Entrega', required: true, placeholder: '24573' };
 ```
 
-**Nota**: Data URLs muito grandes (>2MB) podem falhar em alguns browsers. Para esses casos, o fallback para download garante que o usuário sempre recebe o arquivo.
+2. **Atualizar o serviço GERARGUIA31**:
+```typescript
+// De:
+fields: [F_PERIODO]
+// Para:
+fields: [F_CATEGORIA_DCTF, F_ANO_PA, F_MES_PA, F_NUM_RECIBO]
+```
+
+3. **Garantir que `numeroReciboEntrega` seja enviado como número** (não string) no `handleSubmit` — adicionar conversão para campos numéricos.
 
 ## Arquivo alterado
-- `src/pages/IntegraContador.tsx` — ~8 linhas (função `openBase64Pdf`)
+- `src/pages/IntegraContador.tsx` — ~10 linhas (novos fields + atualização do serviço + conversão numérica)
 
 ## Resultado esperado
-O botão "Visualizar" funciona no Safari/iOS — abre o PDF ou faz download automático como fallback.
+O formulário exibe 4 campos (Categoria, Ano PA, Mês PA, Nº Recibo) e envia `{"categoria":"GERAL_MENSAL","anoPA":"2027","mesPA":"11","numeroReciboEntrega":24573}`.
 
