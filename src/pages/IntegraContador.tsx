@@ -361,6 +361,72 @@ export default function IntegraContador() {
     }
   }
 
+  // --- PDF extraction & download helpers ---
+  function extractFilesFromResponse(res: any): { name: string; base64: string }[] {
+    const files: { name: string; base64: string }[] = [];
+    try {
+      const dados = res?.data?.dados || res?.dados;
+      const parsed = typeof dados === 'string' ? JSON.parse(dados) : dados;
+      if (!parsed || typeof parsed !== 'object') return files;
+      const walk = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj.pdf && typeof obj.pdf === 'string' && obj.pdf.length > 100) {
+          files.push({ name: obj.nomeArquivo || 'documento.pdf', base64: obj.pdf });
+          return;
+        }
+        for (const v of Object.values(obj)) walk(v);
+      };
+      walk(parsed);
+    } catch { /* ignore */ }
+    return files;
+  }
+
+  function extractTextData(res: any): [string, string][] {
+    const entries: [string, string][] = [];
+    try {
+      const dados = res?.data?.dados || res?.dados;
+      const parsed = typeof dados === 'string' ? JSON.parse(dados) : dados;
+      if (!parsed || typeof parsed !== 'object') return entries;
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v === null || v === undefined) continue;
+        if (typeof v === 'object') continue; // skip nested (files)
+        entries.push([k, String(v)]);
+      }
+    } catch { /* ignore */ }
+    return entries;
+  }
+
+  function openBase64Pdf(base64: string, _filename: string) {
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  }
+
+  function downloadBase64Pdf(base64: string, filename: string) {
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function stripBase64FromResult(res: any): any {
+    try {
+      return JSON.parse(JSON.stringify(res, (key, value) => {
+        if (key === 'pdf' && typeof value === 'string' && value.length > 200) return '[BASE64_OMITIDO]';
+        return value;
+      }));
+    } catch { return res; }
+  }
+
   function renderCaixaPostalInbox(messages: any[]) {
     return (
       <div className="space-y-3">
