@@ -1,40 +1,64 @@
 
 
-# Corrigir campos do serviço GERARGUIA31 (Gerar Guia DCTFWeb)
+# Flag de Retenção em Obrigações + Geração Automática (Notas Tomadas)
 
-## Problema
-O serviço GERARGUIA31 está configurado com `fields: [F_PERIODO]`, enviando `{"periodoApuracao":"202401"}`. Porém a documentação oficial mostra que os campos corretos são: `categoria`, `anoPA`, `mesPA` e `numeroReciboEntrega`.
+## Visão Geral
+Adicionar flag "É Retenção" no cadastro de obrigações. A verificação automática mensal analisa as **notas de serviços tomados** (onde o cliente é o tomador, não o prestador) para detectar impostos retidos e gerar instâncias de obrigação automaticamente.
 
-## Solução
+A lógica de "tomado" já existe no sistema: uma nota é "tomada" quando `issuer_cnpj !== cnpj do cliente` (o cliente aparece como tomador do serviço).
 
-### Em `src/pages/IntegraContador.tsx`:
+## 1. Migration — Novas colunas na tabela `obligations`
 
-1. **Criar novos field definitions** para os campos específicos do DCTFWeb:
-
-```typescript
-const F_CATEGORIA_DCTF = { key: 'categoria', label: 'Categoria', required: true, placeholder: 'GERAL_MENSAL', options: [
-  { value: 'GERAL_MENSAL', label: 'Geral Mensal' },
-  { value: 'GERAL_ANUAL', label: 'Geral Anual' },
-  { value: '13_SALARIO', label: '13º Salário' },
-] };
-const F_ANO_PA = { key: 'anoPA', label: 'Ano PA', required: true, placeholder: '2027' };
-const F_MES_PA = { key: 'mesPA', label: 'Mês PA', required: true, placeholder: '11' };
-const F_NUM_RECIBO = { key: 'numeroReciboEntrega', label: 'Nº Recibo Entrega', required: true, placeholder: '24573' };
+```sql
+ALTER TABLE obligations ADD COLUMN is_retention boolean NOT NULL DEFAULT false;
+ALTER TABLE obligations ADD COLUMN retention_tax_type text;
+-- retention_tax_type: 'iss', 'inss', 'irrf', 'pis', 'cofins', 'csll', 'cp'
 ```
 
-2. **Atualizar o serviço GERARGUIA31**:
-```typescript
-// De:
-fields: [F_PERIODO]
-// Para:
-fields: [F_CATEGORIA_DCTF, F_ANO_PA, F_MES_PA, F_NUM_RECIBO]
+## 2. Frontend — `src/pages/Obligations.tsx`
+
+- Adicionar `is_retention` e `retention_tax_type` ao type `Obligation` e ao formulário
+- Quando `is_tax = true`, exibir Switch "É Retenção?"
+- Quando `is_retention = true`, exibir Select "Tipo de Retenção" (ISS, INSS, IRRF, PIS, COFINS, CSLL, CP)
+- Quando `is_retention = true`, o `assignment_mode` fica automático ("retention_auto") — não precisa selecionar empresas manualmente
+- Badge "Retenção" na listagem de obrigações
+- Salvar os novos campos no `saveObligation`
+
+## 3. Edge Function — `retention-obligation-generate`
+
+Lógica executada mensalmente (dia 1 às 6h):
+
+1. Buscar obrigações com `is_retention = true`
+2. Para cada obrigação, obter o `retention_tax_type`
+3. Consultar `invoices` do **mês anterior**, filtrando por **notas tomadas** (onde `issuer_cnpj != cnpj do cliente`)
+4. Parsear o XML (`raw_data->xml`) para detectar retenção:
+   - ISS: `tpRetISSQN = 2` e `vTotalRet > 0`
+   - INSS: `vRetINSS > 0`
+   - IRRF: `vRetIRRF > 0`
+   - PIS: `vRetPIS > 0`
+   - COFINS: `vRetCOFINS > 0`
+   - CSLL: `vRetCSLL > 0`
+   - CP: `vRetCP > 0`
+5. Para cada cliente com retenção detectada, criar `obligation_instance` se ainda não existir para aquele mês
+6. Calcular `due_date` usando `due_day` da obrigação + `previousBusinessDay`
+
+### Cron Job (via SQL insert, não migration)
+```sql
+SELECT cron.schedule('generate-retention-obligations', '0 6 1 * *',
+  $$ SELECT net.http_post(url:='...', headers:='...'::jsonb, body:='{}'::jsonb) $$);
 ```
 
-3. **Garantir que `numeroReciboEntrega` seja enviado como número** (não string) no `handleSubmit` — adicionar conversão para campos numéricos.
+## Arquivos
 
-## Arquivo alterado
-- `src/pages/IntegraContador.tsx` — ~10 linhas (novos fields + atualização do serviço + conversão numérica)
+| Arquivo | Ação |
+|---------|------|
+| `supabase/migrations/xxx.sql` | Colunas `is_retention`, `retention_tax_type` |
+| `src/pages/Obligations.tsx` | UI do flag + badge (~30 linhas) |
+| `supabase/functions/retention-obligation-generate/index.ts` | Edge Function (~150 linhas) |
+| Cron job via SQL insert | Agendar execução mensal |
 
-## Resultado esperado
-O formulário exibe 4 campos (Categoria, Ano PA, Mês PA, Nº Recibo) e envia `{"categoria":"GERAL_MENSAL","anoPA":"2027","mesPA":"11","numeroReciboEntrega":24573}`.
+## Resultado Esperado
+- Admin cadastra obrigação de imposto marcando "É Retenção" + tipo (ex: ISS)
+- Todo dia 1, o sistema analisa notas de serviços **tomados** do mês anterior
+- Se o cliente teve ISS retido como tomador, gera automaticamente a instância da obrigação (ex: Declaração de Serviços Tomados)
 
