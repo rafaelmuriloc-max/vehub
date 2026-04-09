@@ -593,42 +593,53 @@ export default function IntegraContador() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedService.fields.map((field) => (
-                  <div key={field.key}>
-                    <Label>
-                      {field.label}
-                      {field.required && <span className="text-destructive ml-1">*</span>}
-                    </Label>
-                    {field.options ? (
-                      <Select value={formData[field.key] || ''} onValueChange={(val) => setFormData((prev) => ({ ...prev, [field.key]: val }))}>
-                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent>
-                          {field.options.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        value={formData[field.key] || ''}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder}
-                      />
-                    )}
-                  </div>
-                ))}
+                {selectedService.customForm === 'pgdasd-declaracao' ? (
+                  <PgdasdDeclaracaoForm
+                    cnpjContribuinte={clients.find(c => c.id === selectedClientId)?.document?.replace(/\D/g, '') || ''}
+                    onSubmit={(dadosJson) => handleSubmit(dadosJson)}
+                    loading={loading}
+                    disabled={!selectedClientId || !isAdmin}
+                  />
+                ) : (
+                  <>
+                    {selectedService.fields.map((field) => (
+                      <div key={field.key}>
+                        <Label>
+                          {field.label}
+                          {field.required && <span className="text-destructive ml-1">*</span>}
+                        </Label>
+                        {field.options ? (
+                          <Select value={formData[field.key] || ''} onValueChange={(val) => setFormData((prev) => ({ ...prev, [field.key]: val }))}>
+                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                            <SelectContent>
+                              {field.options.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={formData[field.key] || ''}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                            placeholder={field.placeholder}
+                          />
+                        )}
+                      </div>
+                    ))}
 
-                <Button
-                  onClick={handleSubmit}
-                  disabled={loading || !selectedClientId || !isAdmin}
-                  className="w-full mt-2"
-                >
-                  {loading ? (
-                    <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Consultando...</>
-                  ) : (
-                    <><Send className="h-4 w-4 mr-2" /> Enviar Consulta</>
-                  )}
-                </Button>
+                    <Button
+                      onClick={() => handleSubmit()}
+                      disabled={loading || !selectedClientId || !isAdmin}
+                      className="w-full mt-2"
+                    >
+                      {loading ? (
+                        <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Consultando...</>
+                      ) : (
+                        <><Send className="h-4 w-4 mr-2" /> Enviar Consulta</>
+                      )}
+                    </Button>
+                  </>
+                )}
 
                 {!isAdmin && (
                   <p className="text-sm text-destructive">Apenas administradores podem executar consultas.</p>
