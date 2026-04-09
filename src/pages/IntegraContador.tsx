@@ -52,6 +52,14 @@ const F_NUM_PROCESSO = { key: 'numeroProcesso', label: 'Nº Processo', required:
 const F_NUM_PARCELAMENTO = { key: 'numeroParcelamento', label: 'Nº Parcelamento', required: true, placeholder: '' };
 const F_ANOMES_PARCELA = { key: 'anoMesParcela', label: 'Ano/Mês Parcela (AAAAMM)', required: true, placeholder: '202401' };
 const F_PARCELA_EMITIR = { key: 'parcelaParaEmitir', label: 'Parcela p/ Emitir (AAAAMM)', required: true, placeholder: '202401' };
+const F_CATEGORIA_DCTF = { key: 'categoria', label: 'Categoria', required: true, placeholder: 'GERAL_MENSAL', options: [
+  { value: 'GERAL_MENSAL', label: 'Geral Mensal' },
+  { value: 'GERAL_ANUAL', label: 'Geral Anual' },
+  { value: '13_SALARIO', label: '13º Salário' },
+] };
+const F_ANO_PA = { key: 'anoPA', label: 'Ano PA', required: true, placeholder: '2027' };
+const F_MES_PA = { key: 'mesPA', label: 'Mês PA', required: true, placeholder: '11' };
+const F_NUM_RECIBO = { key: 'numeroReciboEntrega', label: 'Nº Recibo Entrega', required: true, placeholder: '24573' };
 
 // Gera os 5 serviços padrão de uma modalidade de parcelamento
 function parcServices(modalidade: string, desc: string, idSuffix: number[]): ServiceDefinition[] {
@@ -109,7 +117,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     label: 'DCTFWeb / MIT',
     icon: <FileText className="h-4 w-4" />,
     services: [
-      { idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', label: 'Gerar Guia DCTFWeb', description: 'Gera guia de pagamento da DCTFWeb', tipo: 'Emitir', fields: [F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', label: 'Gerar Guia DCTFWeb', description: 'Gera guia de pagamento da DCTFWeb', tipo: 'Emitir', fields: [F_CATEGORIA_DCTF, F_ANO_PA, F_MES_PA, F_NUM_RECIBO] },
       { idSistema: 'DCTFWEB', idServico: 'CONSRECIBO32', label: 'Recibo DCTFWeb', description: 'Consulta recibo de entrega da DCTFWeb', tipo: 'Consultar', fields: [F_PERIODO] },
       { idSistema: 'DCTFWEB', idServico: 'CONSDECCOMPLETA33', label: 'Declaração Completa', description: 'Consulta declaração completa da DCTFWeb', tipo: 'Consultar', fields: [F_PERIODO] },
       { idSistema: 'DCTFWEB', idServico: 'CONSXMLDECLARACAO38', label: 'XML Declaração', description: 'Consulta XML da declaração DCTFWeb', tipo: 'Consultar', fields: [F_PERIODO] },
@@ -280,7 +288,12 @@ export default function IntegraContador() {
     setResult(null);
 
     try {
-      const dados = dadosOverride || (selectedService.fields.length > 0 ? JSON.stringify(formData) : '');
+      // Converter campos numéricos antes de enviar
+      const processedData = { ...formData };
+      if ('numeroReciboEntrega' in processedData) {
+        processedData.numeroReciboEntrega = Number(processedData.numeroReciboEntrega);
+      }
+      const dados = dadosOverride || (selectedService.fields.length > 0 ? JSON.stringify(processedData) : '');
       const { data, error } = await supabase.functions.invoke('integra-contador', {
         body: {
           client_id: selectedClientId,
