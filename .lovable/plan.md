@@ -1,39 +1,49 @@
 
 
-# Corrigir nome do chat e assinatura de mensagens
+# Corrigir assinatura de mensagens e nome do contato no chat
 
-## Problemas identificados
+## Problemas (conforme screenshot)
 
-1. **Nome no chat**: Na linha 123-125 de `Chat.tsx`, quando a conversa tem `client_id`, o nome exibido é `client.contact_name || client.company_name`, sobrescrevendo o nome que veio do WhatsApp (`conv.name`). Para conversas WhatsApp, o nome deve ser o do `conv.name` (pushName do WhatsApp).
+1. **Nome do contato mostra nome da empresa**: O webhook (`whatsapp-webhook`) define `conv.name` como `contact_name || company_name` (linha 231). Deveria usar `pushName` do WhatsApp quando disponível.
 
-2. **Assinatura em mensagens enviadas pelo chat**: Já funciona — `senderName` é passado nas edge functions. OK.
+2. **Mensagens enviadas (direita) sem assinatura**: No `MessageBubble.tsx` linha 137, `senderName` só é exibido quando `!showOnRight`. Ou seja, mensagens à direita nunca mostram o nome.
 
-3. **Assinatura em mensagens automáticas (obrigações)**: A edge function `whatsapp-send` (usada pelas automações) também passa `senderName` em alguns casos. Precisa garantir que automações NÃO enviem `senderName`.
-
-4. **Mensagens recebidas não devem ter assinatura**: No `MessageArea.tsx` linha 156, o `senderName` só é passado quando `msg.sender_id === currentUserId`. Mensagens recebidas (incoming) já não mostram assinatura no bubble. OK — mas o texto da mensagem recebida pode conter a assinatura `*Nome:*` embutida no conteúdo (vinda do WhatsApp). Isso é conteúdo externo e não controlamos.
+3. **Mensagens recebidas (esquerda) com assinatura**: No `MessageArea.tsx` linha 156, `senderName` é passado quando `msg.sender_id === currentUserId`. Mensagens internas do próprio usuário que aparecem à esquerda (por tipo de mensagem) mostram o nome indevidamente.
 
 ## Alterações
 
-### 1. `src/pages/Chat.tsx` — Priorizar nome WhatsApp
-Na resolução de nome (linhas 120-131), para conversas com `whatsapp_phone`, usar `conv.name` (pushName do WhatsApp) ao invés de sobrescrever com nome da empresa/contato do cliente.
+### 1. `src/components/chat/MessageBubble.tsx`
+- Remover a condição `!showOnRight` da exibição do `senderName` (linha 137)
+- Mostrar `senderName` em mensagens à direita (enviadas) como assinatura
 
+### 2. `src/components/chat/MessageArea.tsx`
+- Inverter a lógica da linha 156: passar `senderName` apenas para mensagens do próprio usuário que aparecem à **direita** (enviadas)
+- Para mensagens que não são do usuário atual, nunca passar `senderName`
+
+Lógica corrigida:
 ```typescript
-// Para conversas WhatsApp, usar o nome da conversa (pushName)
-if (conv.whatsapp_phone && conv.name) {
-  name = conv.name; // nome do WhatsApp
-} else if (conv.client_id && clientMap.has(conv.client_id)) {
-  const client = clientMap.get(conv.client_id)!;
-  name = client.contact_name || client.company_name || name;
-} else if (!conv.is_group && !conv.client_id) { ... }
+senderName={msg.sender_id === currentUserId ? msg.sender_name : undefined}
 ```
+Essa parte já está correta — o problema é no MessageBubble que só mostra à esquerda.
 
-### 2. `src/lib/sendActivityWhatsApp.ts` — Remover assinatura das automações
-Verificar se essa função passa `senderName` ao chamar `whatsapp-send` ou `whatsapp-send-text`, e remover para que automações não assinem.
+### 3. `supabase/functions/whatsapp-webhook/index.ts`
+- Na criação/atualização de conversa, priorizar `pushName` sobre `clientName` para o campo `name`
+- Linha 260: usar `pushName || clientName` ao invés de `clientName`
+- Linha 388: atualizar também nomes genéricos com `pushName` quando disponível
+- Na criação de nova conversa: usar `pushName || clientName`
 
-### 3. Edge functions — Sem mudanças necessárias
-A lógica `senderName ? ... : ...` já funciona: se não enviar `senderName`, não assina. Basta garantir que o frontend/automações passem (ou não) corretamente.
+### 4. `src/pages/Chat.tsx`
+- Na resolução de nomes (linha 123), a lógica já prioriza `conv.name` para WhatsApp. O problema é que `conv.name` no DB está com o nome da empresa. Após o fix no webhook, novas conversas terão o pushName. Para conversas existentes, pode-se forçar uma atualização na próxima mensagem recebida.
 
-## Arquivos
-- `src/pages/Chat.tsx` — ~5 linhas (priorizar `conv.name` para WhatsApp)
-- `src/lib/sendActivityWhatsApp.ts` — verificar/remover `senderName` se presente
+## Resumo de arquivos
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/chat/MessageBubble.tsx` | Mostrar senderName também à direita (~2 linhas) |
+| `src/components/chat/MessageArea.tsx` | Sem mudança (lógica já correta) |
+| `supabase/functions/whatsapp-webhook/index.ts` | Priorizar pushName para conv.name (~5 linhas) |
+
+## Resultado esperado
+- Mensagens enviadas pelo chat mostram assinatura (nome do usuário logado)
+- Mensagens recebidas não mostram assinatura
+- Nome do contato no cabeçalho reflete o pushName do WhatsApp
 
