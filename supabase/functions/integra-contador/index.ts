@@ -86,14 +86,35 @@ function toBase64(xml: string): string {
 }
 
 /**
- * Minimal C14N for our use case: expands self-closing tags to explicit open+close.
- * Our XML has no namespaces (except in Signature), no comments, no PIs, no CDATA.
- * Per W3C Canonical XML 1.0: empty elements are represented as start-end tag pairs.
+ * W3C Canonical XML 1.0 (C14N) — minimal implementation:
+ * 1. Expands self-closing tags to explicit open+close pairs
+ * 2. Sorts attributes alphabetically by local name (required by C14N spec)
+ * Our XML has no namespaces on data elements, no comments, no PIs, no CDATA.
  */
 function canonicalize(xml: string): string {
-  // Expand self-closing tags: <foo attr="val" /> → <foo attr="val"></foo>
-  return xml.replace(/<([a-zA-Z][a-zA-Z0-9]*)((?:\s+[a-zA-Z:_][a-zA-Z0-9:._-]*\s*=\s*"[^"]*")*)\s*\/>/g,
-    '<$1$2></$1>');
+  return xml.replace(
+    /<([a-zA-Z][a-zA-Z0-9:]*)((?:\s+[a-zA-Z:_][a-zA-Z0-9:._-]*\s*=\s*"[^"]*")*)\s*(\/?)>/g,
+    (_match, tagName: string, attrString: string, selfClosing: string) => {
+      // Parse and sort attributes alphabetically by name
+      const attrs: string[] = [];
+      const attrRegex = /([a-zA-Z:_][a-zA-Z0-9:._-]*)\s*=\s*"([^"]*)"/g;
+      let m: RegExpExecArray | null;
+      while ((m = attrRegex.exec(attrString)) !== null) {
+        attrs.push(m[0]); // full attr="value" pair
+      }
+      // Sort by attribute name (the part before =)
+      attrs.sort((a, b) => {
+        const nameA = a.split('=')[0].trim();
+        const nameB = b.split('=')[0].trim();
+        return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
+      });
+      const sortedAttrs = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
+      if (selfClosing) {
+        return `<${tagName}${sortedAttrs}></${tagName}>`;
+      }
+      return `<${tagName}${sortedAttrs}>`;
+    }
+  );
 }
 
 async function signXmlWithCertificate(
