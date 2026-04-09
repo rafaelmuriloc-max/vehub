@@ -1,38 +1,40 @@
 
 
-# Fix message signatures to follow visual position
+# Fix: assinatura mostrando nome do usuário errado
 
-## Root cause
-In `MessageArea.tsx` line 156, `senderName` is passed based on `msg.sender_id === currentUserId`. But message positioning in `MessageBubble.tsx` is based on `messageType` (outgoing → right, incoming → left). These two criteria can be out of sync:
-- Incoming messages (`whatsapp_incoming`) with `sender_id === currentUserId` → shown LEFT but get signature (wrong)
-- Outgoing messages (`whatsapp_outgoing`) with `sender_id !== currentUserId` → shown RIGHT but no signature (wrong)
+## Causa raiz
 
-## Fix
-In `MessageArea.tsx`, replicate the same `showOnRight` logic from `MessageBubble` to decide when to pass `senderName`:
+Quando uma mensagem WhatsApp é enviada pelo chat, a edge function `whatsapp-send-text` grava `sender_id` como o **primeiro admin do sistema** (não o usuário logado). Quando o UI carrega as mensagens, resolve `sender_id` → perfil e mostra o nome desse admin como assinatura.
+
+Enquanto isso, a assinatura **correta** (`*Nome:*`) já está embutida no **conteúdo** da mensagem (linha 20 da edge function), que aparece no texto da bolha.
+
+Resultado: assinatura duplicada — uma correta (no texto) e outra errada (no cabeçalho da bolha).
+
+## Solução
+
+Duas abordagens possíveis (recomendo a opção A por ser mais limpa):
+
+### Opção A — Remover a assinatura duplicada do cabeçalho da bolha para mensagens WhatsApp
+
+No `MessageArea.tsx`, não passar `senderName` para mensagens WhatsApp outgoing (já que a assinatura está no conteúdo):
 
 ```typescript
-// Line 149-160 in MessageArea.tsx
-{group.msgs.map(msg => {
-  const isIncoming = msg.message_type === 'whatsapp_incoming' || msg.message_type === 'whatsapp_image' || msg.message_type === 'whatsapp_video' || msg.message_type === 'whatsapp_audio' || msg.message_type === 'whatsapp_document';
-  const isOutgoing = msg.message_type === 'whatsapp_outgoing' || msg.message_type === 'whatsapp';
-  const showOnRight = isOutgoing || (msg.sender_id === currentUserId && !isIncoming);
-  
-  return (
-    <MessageBubble
-      key={msg.id}
-      ...
-      senderName={showOnRight ? msg.sender_name : undefined}
-    />
-  );
-})}
+const isWhatsappOutgoing = msg.message_type === 'whatsapp_outgoing' || msg.message_type === 'whatsapp';
+senderName={showOnRight && !isWhatsappOutgoing ? msg.sender_name : undefined}
 ```
 
-This ensures:
-- Messages on the RIGHT (outgoing) always show the sender's name as signature
-- Messages on the LEFT (incoming) never show a signature
+Para mensagens internas (não-WhatsApp), continuar mostrando `msg.sender_name` normalmente.
 
-## Files
-| File | Change |
-|------|--------|
-| `src/components/chat/MessageArea.tsx` | ~8 lines — compute `showOnRight` and use it for `senderName` |
+### Opção B — Corrigir o sender_id na edge function
+
+Passar o `userId` do usuário logado para a edge function e usar esse como `sender_id` ao invés do primeiro admin. Isso requer mudanças na edge function para aceitar e validar o `userId`.
+
+## Recomendação
+
+**Opção A** — é a mais simples e resolve imediatamente. A assinatura já está no texto da mensagem para WhatsApp, então o cabeçalho é redundante.
+
+## Arquivos
+| Arquivo | Mudança |
+|---------|--------|
+| `src/components/chat/MessageArea.tsx` | ~1 linha — não passar `senderName` para msgs WhatsApp outgoing |
 
