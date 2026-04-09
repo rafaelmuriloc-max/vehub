@@ -40,6 +40,7 @@ type ServiceCategory = {
 // Helper para campos comuns
 const F_CNPJ = { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' };
 const F_PA = { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' };
+const F_PERIODO = { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' };
 const F_ANO = { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' };
 const F_PROTOCOLO = { key: 'protocolo', label: 'Protocolo', required: true, placeholder: '' };
 const F_NUM_PEDIDO = { key: 'numeroPedido', label: 'Número do Pedido', required: true, placeholder: '' };
