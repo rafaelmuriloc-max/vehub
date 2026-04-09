@@ -1,46 +1,64 @@
 
 
-# Corrigir nomes dos campos de dados do PGDASD e PAGTOWEB
+# Remover cnpjBasico do campo `dados` dos serviços PGDASD e outros
 
 ## Problema
-A documentação oficial do SERPRO (PDF enviado) mostra que o campo correto para o serviço GERARDAS12 e outros do PGDASD e "periodoApuracao", nao "pa". O sistema envia `{"cnpjBasico":"31333686","pa":"202512"}` mas o SERPRO espera `{"periodoApuracao":"201801"}`.
-
-Da mesma forma, o PAGTOWEB pode esperar nomes de campo diferentes de `cnpjBasico` e `anoCalendario`.
-
-## Evidencia do PDF
-```text
-GERARDAS12:
-  dados: "{ \"periodoApuracao\": \"201801\" }"
-
-CONSDECLARACAO13:
-  dados: "{ \"anoCalendario\": \"2018\" }"
-
-PAGTOWEB PAGAMENTOS71:
-  dados: "{ \"cnpjBasico\": \"99999999\", \"anoCalendario\": \"2024\" }"
+O exemplo oficial do SERPRO mostra claramente:
+```json
+"dados": "{ \"periodoApuracao\": \"201801\" }"
 ```
+Sem `cnpjBasico` dentro de `dados`. O CNPJ já é enviado em `contribuinte.numero` no body principal (feito pela edge function). Incluir `cnpjBasico` dentro de `dados` causa erros de "parâmetro inválido".
 
-O campo `anoCalendario` ja esta correto para CONSDECLARACAO13. O problema e especificamente o campo `pa` usado nos servicos de emissao do PGDASD — deveria ser `periodoApuracao`.
+## Serviços afetados
+Todos os serviços que atualmente incluem `F_CNPJ` nos `fields` mas que, segundo a documentação, não devem ter `cnpjBasico` em `dados`:
 
-## Solucao
+**PGDASD**: GERARDAS12, CONSDECLARACAO13, CONSULTIMADECREC14, CONSDECREC15, CONSEXTRATO16, GERARDASCOBRANCA17, GERARDASPROCESSO18, GERARDASAVULSO19, TRANSDECLARACAO11
 
-### Em `src/pages/IntegraContador.tsx`:
+**PGMEI**: GERARDASPDF21, GERARDASCODBARRA22, ATUBENEFICIO23, DIVIDAATIVA24
 
-1. Criar um novo campo constante:
+**CCMEI**: EMITIRCCMEI121, DADOSCCMEI122
+
+**DCTFWEB**: todos (31-313)
+
+**MIT**: todos (314-317)
+
+**DEFIS**: todos (141-144)
+
+**REGIMEAPURACAO**: todos (101-104)
+
+**SITFIS**: SOLICITARPROTOCOLO91, RELATORIOSITFIS92
+
+**PROCURACOES**: OBTERPROCURACAO41
+
+**AUTENTICAPROCURADOR**: ENVIOXMLASSINADO81
+
+**EVENTOSATUALIZACAO**: todos (131-134)
+
+**DTE**: CONSULTASITUACAODTE111
+
+**CAIXAPOSTAL**: MSGCONTRIBUINTE61, etc (sem cnpjBasico nos dados)
+
+**PAGTOWEB**: MANTER `F_CNPJ` — a documentação mostra `cnpjBasico` dentro de `dados` para este sistema.
+
+**SICALC**: MANTER `F_CNPJ` — verificar no PDF, mas provavelmente precisa.
+
+**Parcelamentos** (parcServices): MANTER `F_CNPJ` — estes sistemas podem precisar.
+
+## Alterações
+
+### `src/pages/IntegraContador.tsx`
+Remover `F_CNPJ` dos arrays `fields` dos serviços listados acima. O campo `cnpjBasico` ficará apenas nos serviços PAGTOWEB, SICALC e parcelamentos.
+
+Exemplo de mudança:
 ```typescript
-const F_PERIODO = { key: 'periodoApuracao', label: 'Periodo Apuracao (AAAAMM)', required: true, placeholder: '202401' };
+// Antes:
+fields: [F_CNPJ, F_PERIODO]
+// Depois:
+fields: [F_PERIODO]
 ```
 
-2. Substituir `F_PA` por `F_PERIODO` nos servicos PGDASD que usam periodo de apuracao:
-   - GERARDAS12, GERARDASCOBRANCA17, GERARDASAVULSO19, TRANSDECLARACAO11
-
-3. Manter `F_PA` para servicos de outros sistemas que realmente usam `pa` como nome de campo (se houver), ou remover se nao for mais usado.
-
-## Sobre o PAGTOWEB
-O erro `cnpjBasico invalido` no PAGTOWEB precisa ser verificado tambem no PDF. Vou verificar os campos corretos.
-
-## Arquivo alterado
-- `src/pages/IntegraContador.tsx` — ~10 linhas (renomear campos)
+São ~40 linhas de edição (remover `F_CNPJ,` de cada serviço afetado).
 
 ## Resultado esperado
-Os campos enviados ao SERPRO terao os nomes corretos conforme a documentacao oficial, eliminando os erros 400.
+O campo `dados` enviado ao SERPRO conterá apenas os parâmetros específicos do serviço, sem duplicar o CNPJ que já vai automaticamente em `contribuinte.numero`.
 
