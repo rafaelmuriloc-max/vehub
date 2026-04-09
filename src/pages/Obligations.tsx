@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any; annual_month: number | null };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any; annual_month: number | null; is_retention: boolean; retention_tax_type: string | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type DocumentType = { id: string; name: string };
 type Client = { id: string; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
@@ -70,6 +70,7 @@ export default function Obligations() {
     segment_tax_regimes: [] as string[],
     segment_city: '',
     annual_month: '' as string,
+    is_retention: false, retention_tax_type: '',
   });
   const [manualSelectedClients, setManualSelectedClients] = useState<string[]>([]);
   const [clientSearch, setClientSearch] = useState('');
@@ -141,7 +142,7 @@ export default function Obligations() {
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '', annual_month: '' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '', annual_month: '', is_retention: false, retention_tax_type: '' });
     setManualSelectedClients([]);
     setGenerateStartMonth('');
     setGenerateStartYear('');
@@ -161,6 +162,7 @@ export default function Obligations() {
       segment_tax_regimes: filters.tax_regime || [],
       segment_city: filters.city || '',
       annual_month: o.annual_month?.toString() || '',
+      is_retention: o.is_retention || false, retention_tax_type: o.retention_tax_type || '',
     });
     // Load manual selections
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === o.id).map(cdo => cdo.client_id);
@@ -190,7 +192,9 @@ export default function Obligations() {
       annual_month: obligationForm.recurrence === 'anual' && obligationForm.annual_month ? Number(obligationForm.annual_month) : null,
       is_tax: obligationForm.is_tax,
       tax_sphere: obligationForm.is_tax && obligationForm.tax_sphere ? obligationForm.tax_sphere : null,
-      assignment_mode: obligationForm.assignment_mode,
+      is_retention: obligationForm.is_tax && obligationForm.is_retention,
+      retention_tax_type: obligationForm.is_tax && obligationForm.is_retention && obligationForm.retention_tax_type ? obligationForm.retention_tax_type : null,
+      assignment_mode: obligationForm.is_retention ? 'retention_auto' : obligationForm.assignment_mode,
       segment_filters: segmentFilters,
     };
 
