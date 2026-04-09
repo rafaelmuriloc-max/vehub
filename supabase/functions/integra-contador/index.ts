@@ -638,6 +638,7 @@ Deno.serve(async (req) => {
         keyPem,
         bearerToken,
         jwtToken,
+        serviceClient,
       );
 
       // Retry on 401 (token expired) — re-authenticate and try again
