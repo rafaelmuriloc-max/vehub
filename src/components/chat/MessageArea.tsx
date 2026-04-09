@@ -146,19 +146,24 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                 {group.label}
               </span>
             </div>
-            {group.msgs.map(msg => (
-              <MessageBubble
-                key={msg.id}
-                content={msg.content}
-                timestamp={msg.created_at}
-                isMine={msg.sender_id === currentUserId}
-                isRead={!!msg.read_at}
-                senderName={msg.sender_id === currentUserId ? msg.sender_name : undefined}
-                isGroup={isGroup}
-                messageType={msg.message_type}
-                mediaUrl={msg.media_url}
-              />
-            ))}
+            {group.msgs.map(msg => {
+              const isIncoming = msg.message_type === 'whatsapp_incoming' || msg.message_type === 'whatsapp_image' || msg.message_type === 'whatsapp_video' || msg.message_type === 'whatsapp_audio' || msg.message_type === 'whatsapp_document';
+              const isOutgoing = msg.message_type === 'whatsapp_outgoing' || msg.message_type === 'whatsapp';
+              const showOnRight = isOutgoing || (msg.sender_id === currentUserId && !isIncoming);
+              return (
+                <MessageBubble
+                  key={msg.id}
+                  content={msg.content}
+                  timestamp={msg.created_at}
+                  isMine={msg.sender_id === currentUserId}
+                  isRead={!!msg.read_at}
+                  senderName={showOnRight ? msg.sender_name : undefined}
+                  isGroup={isGroup}
+                  messageType={msg.message_type}
+                  mediaUrl={msg.media_url}
+                />
+              );
+            })}
           </div>
         ))}
         <div ref={endRef} />
