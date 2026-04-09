@@ -1131,6 +1131,33 @@ export type Database = {
         }
         Relationships: []
       }
+      procurador_tokens: {
+        Row: {
+          client_cnpj: string
+          contratante_cnpj: string
+          created_at: string
+          expires_at: string
+          id: string
+          token: string
+        }
+        Insert: {
+          client_cnpj: string
+          contratante_cnpj: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          token: string
+        }
+        Update: {
+          client_cnpj?: string
+          contratante_cnpj?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
