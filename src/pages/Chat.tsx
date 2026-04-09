@@ -490,6 +490,7 @@ export default function Chat() {
             onSendContact={sendContact}
             isGroup={activeConv?.isGroup}
             avatarUrl={activeConv?.avatarUrl}
+            currentUserName={profile?.full_name || undefined}
             companyNames={activeConv?.companyNames}
             isClosed={isClosed}
             onCloseTicket={closeTicket}
