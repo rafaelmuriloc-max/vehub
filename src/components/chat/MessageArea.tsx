@@ -157,7 +157,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   timestamp={msg.created_at}
                   isMine={msg.sender_id === currentUserId}
                   isRead={!!msg.read_at}
-                  senderName={showOnRight ? msg.sender_name : undefined}
+                  senderName={showOnRight && !isOutgoing ? msg.sender_name : undefined}
                   isGroup={isGroup}
                   messageType={msg.message_type}
                   mediaUrl={msg.media_url}
