@@ -768,42 +768,44 @@ export default function Obligations() {
               <Label>É Imposto?</Label>
             </div>
             {obligationForm.is_tax && (
-              <div className="space-y-2">
-                <Label>Esfera Tributária *</Label>
-                <Select value={obligationForm.tax_sphere} onValueChange={v => setObligationForm({ ...obligationForm, tax_sphere: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione a esfera" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="federal">Federal</SelectItem>
-                    <SelectItem value="estadual">Estadual</SelectItem>
-                    <SelectItem value="municipal">Municipal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Switch
-                  checked={obligationForm.is_retention}
-                  onCheckedChange={v => setObligationForm({ ...obligationForm, is_retention: v, retention_tax_type: v ? obligationForm.retention_tax_type : '' })}
-                />
-                <Label>É Retenção?</Label>
-              </div>
-              {obligationForm.is_retention && (
+              <>
                 <div className="space-y-2">
-                  <Label>Tipo de Retenção *</Label>
-                  <Select value={obligationForm.retention_tax_type} onValueChange={v => setObligationForm({ ...obligationForm, retention_tax_type: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                  <Label>Esfera Tributária *</Label>
+                  <Select value={obligationForm.tax_sphere} onValueChange={v => setObligationForm({ ...obligationForm, tax_sphere: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a esfera" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="iss">ISS</SelectItem>
-                      <SelectItem value="inss">INSS</SelectItem>
-                      <SelectItem value="irrf">IRRF</SelectItem>
-                      <SelectItem value="pis">PIS</SelectItem>
-                      <SelectItem value="cofins">COFINS</SelectItem>
-                      <SelectItem value="csll">CSLL</SelectItem>
-                      <SelectItem value="cp">CP</SelectItem>
+                      <SelectItem value="federal">Federal</SelectItem>
+                      <SelectItem value="estadual">Estadual</SelectItem>
+                      <SelectItem value="municipal">Municipal</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">A obrigação será gerada automaticamente para clientes com essa retenção em notas tomadas</p>
                 </div>
-              )}
+                <div className="flex items-center space-x-3">
+                  <Switch
+                    checked={obligationForm.is_retention}
+                    onCheckedChange={v => setObligationForm({ ...obligationForm, is_retention: v, retention_tax_type: v ? obligationForm.retention_tax_type : '' })}
+                  />
+                  <Label>É Retenção?</Label>
+                </div>
+                {obligationForm.is_retention && (
+                  <div className="space-y-2">
+                    <Label>Tipo de Retenção *</Label>
+                    <Select value={obligationForm.retention_tax_type} onValueChange={v => setObligationForm({ ...obligationForm, retention_tax_type: v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="iss">ISS</SelectItem>
+                        <SelectItem value="inss">INSS</SelectItem>
+                        <SelectItem value="irrf">IRRF</SelectItem>
+                        <SelectItem value="pis">PIS</SelectItem>
+                        <SelectItem value="cofins">COFINS</SelectItem>
+                        <SelectItem value="csll">CSLL</SelectItem>
+                        <SelectItem value="cp">CP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">A obrigação será gerada automaticamente para clientes com essa retenção em notas tomadas</p>
+                  </div>
+                )}
+              </>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
