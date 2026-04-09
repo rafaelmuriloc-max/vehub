@@ -1,64 +1,83 @@
 
 
-# Adicionar atributo Id na raiz e Reference URI com ID no XML do Termo de Autorização
+# Tratar HTTP 304 do SERPRO no fluxo AUTENTICAPROCURADOR
 
-## Problema
-O SERPRO continua rejeitando a assinatura. A documentação e o exemplo base64 decodificado mostram que o XML deve ter um `Id` na tag raiz e a `Reference` deve apontar para esse `Id` via `URI="#..."`, não `URI=""`.
+## Situação atual
+O SERPRO aceita a assinatura e retorna **304** — a autorização de procurador já existe. O body vem vazio. O código trata 304 como erro porque `status >= 300`.
 
-## Alterações em `supabase/functions/integra-contador/index.ts`
+A documentação do SERPRO indica que o 304 significa "autorização já concedida". O token de procurador foi retornado na primeira chamada bem-sucedida, mas não foi persistido.
 
-### 1. `generateSerproProcuradorXML` — adicionar `Id` na raiz
+## Solução
+
+### 1. Persistir o token de procurador no Supabase
+Criar uma tabela `procurador_tokens` para cachear tokens obtidos:
+
+```sql
+CREATE TABLE procurador_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  contratante_cnpj text NOT NULL,
+  autor_cnpj text NOT NULL,
+  token text NOT NULL,
+  obtained_at timestamptz DEFAULT now(),
+  expires_at timestamptz,
+  UNIQUE(contratante_cnpj, autor_cnpj)
+);
+ALTER TABLE procurador_tokens ENABLE ROW LEVEL SECURITY;
+```
+
+### 2. No `obtainProcuradorToken` (integra-contador/index.ts):
+
+**Antes de chamar /Apoiar**: verificar se já existe token em cache no Supabase:
 ```typescript
-// Antes:
-return `<termoDeAutorizacao><dados>...`
+const { data: cached } = await supabaseAdmin
+  .from("procurador_tokens")
+  .select("token, expires_at")
+  .eq("contratante_cnpj", contratanteCnpj)
+  .eq("autor_cnpj", autorCnpj)
+  .single();
 
-// Depois:
-const termoId = `TERMO-${Date.now()}`;
-return { xml: `<termoDeAutorizacao Id="${termoId}"><dados>...`, termoId };
+if (cached?.token && (!cached.expires_at || new Date(cached.expires_at) > new Date())) {
+  return cached.token;
+}
 ```
-Retornar um objeto com `xml` e `termoId` para que a assinatura use o ID correto.
 
-### 2. `signXmlWithCertificate` — receber `referenceId` e usar `URI="#referenceId"`
-- Adicionar parâmetro `referenceId: string`
-- Alterar `Reference URI=""` para `Reference URI="#${referenceId}"`
-- Para o cálculo do digest: remover a `<Signature>` (enveloped-signature), canonicalizar, e hash — isso continua correto pois o `URI="#ID"` referencia o elemento raiz que contém todo o documento
-
-### 3. `verifySignatureLocally` — mesma lógica (remover Signature, canonicalizar, hash)
-Sem mudanças necessárias — o digest continua sendo do documento sem Signature.
-
-### 4. `obtainProcuradorToken` — adaptar para receber `termoId`
+**Ao receber 2xx**: salvar o token obtido no banco:
 ```typescript
-const { xml, termoId } = generateSerproProcuradorXML({...});
-const signedXml = await signXmlWithCertificate(xml, clientPrivateKey, clientCertObj, termoId);
+await supabaseAdmin.from("procurador_tokens").upsert({
+  contratante_cnpj: contratanteCnpj,
+  autor_cnpj: autorCnpj,
+  token: extractedToken,
+  obtained_at: new Date().toISOString(),
+});
 ```
 
-## Detalhes técnicos
-
-```text
-Estrutura XML final:
-<termoDeAutorizacao Id="TERMO-1712592000000">
-  <dados>
-    <sistema id="API Integra Contador" />
-    ...
-  </dados>
-  <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
-    <SignedInfo>
-      ...
-      <Reference URI="#TERMO-1712592000000">
-        <Transforms>
-          <Transform Algorithm="...enveloped-signature" />
-          <Transform Algorithm="...c14n..." />
-        </Transforms>
-        <DigestMethod Algorithm="...sha256" />
-        <DigestValue>...</DigestValue>
-      </Reference>
-    </SignedInfo>
-    <SignatureValue>...</SignatureValue>
-    <KeyInfo>...</KeyInfo>
-  </Signature>
-</termoDeAutorizacao>
+**Ao receber 304**: buscar token do cache. Se não existir, retornar erro explicativo:
+```typescript
+if (response.status === 304) {
+  const { data: cached } = await supabaseAdmin
+    .from("procurador_tokens")
+    .select("token")
+    .eq("contratante_cnpj", contratanteCnpj)
+    .eq("autor_cnpj", autorCnpj)
+    .single();
+  if (cached?.token) return cached.token;
+  // Sem token em cache — erro
+}
 ```
 
-## Arquivo alterado
-- `supabase/functions/integra-contador/index.ts` — ~15 linhas alteradas em 4 funções
+### 3. Corrigir build errors pré-existentes
+Os 18 erros de TypeScript são de **outros arquivos** (cnpj-lookup, cnpj-query, manage-user, nfse-download, nfse-emit, nfse-query, smtp-send, whatsapp-send) e precisam ser corrigidos:
+- `'e' is of type 'unknown'` → adicionar `(e as Error).message`
+- `Unused '@ts-expect-error'` → remover diretivas desnecessárias
+- Type incompatibilities → usar casts apropriados
+
+## Arquivos alterados
+- **Nova migração SQL**: criar tabela `procurador_tokens`
+- **`supabase/functions/integra-contador/index.ts`**: ~30 linhas — cache de tokens + tratar 304
+- **6 outros arquivos de edge functions**: correções pontuais de TypeScript (1-2 linhas cada)
+
+## Resultado esperado
+- 304 deixa de ser erro — o token é recuperado do banco
+- Primeira chamada (2xx) salva o token para futuras reutilizações
+- Build passa sem erros de TypeScript
 
