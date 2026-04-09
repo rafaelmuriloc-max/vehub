@@ -263,14 +263,16 @@ export default function IntegraContador() {
     setResult(null);
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(dadosOverride?: string) {
     if (!selectedService || !selectedClientId) return;
 
-    // Validate required fields
-    for (const field of selectedService.fields) {
-      if (field.required && !formData[field.key]) {
-        toast({ title: 'Campo obrigatório', description: field.label, variant: 'destructive' });
-        return;
+    // Validate required fields (skip if custom form handles its own validation)
+    if (!dadosOverride) {
+      for (const field of selectedService.fields) {
+        if (field.required && !formData[field.key]) {
+          toast({ title: 'Campo obrigatório', description: field.label, variant: 'destructive' });
+          return;
+        }
       }
     }
 
@@ -278,13 +280,14 @@ export default function IntegraContador() {
     setResult(null);
 
     try {
+      const dados = dadosOverride || (selectedService.fields.length > 0 ? JSON.stringify(formData) : '');
       const { data, error } = await supabase.functions.invoke('integra-contador', {
         body: {
           client_id: selectedClientId,
           idSistema: selectedService.idSistema,
           idServico: selectedService.idServico,
           tipo: selectedService.tipo,
-          dados: selectedService.fields.length > 0 ? JSON.stringify(formData) : '',
+          dados,
         },
       });
 
