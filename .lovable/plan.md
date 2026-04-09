@@ -1,64 +1,49 @@
 
 
-# Remover cnpjBasico do campo `dados` dos serviços PGDASD e outros
+# Exibir PDFs e arquivos da resposta SERPRO ao invés de JSON bruto
 
 ## Problema
-O exemplo oficial do SERPRO mostra claramente:
-```json
-"dados": "{ \"periodoApuracao\": \"201801\" }"
-```
-Sem `cnpjBasico` dentro de `dados`. O CNPJ já é enviado em `contribuinte.numero` no body principal (feito pela edge function). Incluir `cnpjBasico` dentro de `dados` causa erros de "parâmetro inválido".
+A resposta do SERPRO para serviços como CONSULTIMADECREC14 retorna PDFs codificados em base64 dentro do campo `dados` (ex: `recibo.pdf`, `declaracao.pdf`). Atualmente o sistema exibe o JSON bruto com toda a string base64, quando deveria detectar esses arquivos e oferecer download/visualização.
 
-## Serviços afetados
-Todos os serviços que atualmente incluem `F_CNPJ` nos `fields` mas que, segundo a documentação, não devem ter `cnpjBasico` em `dados`:
+## Solução
 
-**PGDASD**: GERARDAS12, CONSDECLARACAO13, CONSULTIMADECREC14, CONSDECREC15, CONSEXTRATO16, GERARDASCOBRANCA17, GERARDASPROCESSO18, GERARDASAVULSO19, TRANSDECLARACAO11
+### Em `src/pages/IntegraContador.tsx`:
 
-**PGMEI**: GERARDASPDF21, GERARDASCODBARRA22, ATUBENEFICIO23, DIVIDAATIVA24
+1. **Criar função `extractFilesFromResponse(result)`** que:
+   - Parseia `data.dados` (string JSON) procurando campos com chaves `pdf`, `nomeArquivo` em qualquer nível
+   - Retorna array de `{ name: string, base64: string, type: 'pdf' }` para cada arquivo encontrado
+   - Suporta estruturas como `{ recibo: { nomeArquivo, pdf }, declaracao: { nomeArquivo, pdf }, maed: null }`
 
-**CCMEI**: EMITIRCCMEI121, DADOSCCMEI122
+2. **Criar componente `renderSerproFiles(files, result)`** que:
+   - Exibe cards para cada arquivo com nome e botão de download
+   - Ao clicar, converte base64 em Blob (`application/pdf`), cria URL com `URL.createObjectURL` e abre em nova aba ou dispara download
+   - Mantém o JSON bruto em accordion "Ver JSON completo" (sem os campos base64 gigantes para performance)
 
-**DCTFWEB**: todos (31-313)
+3. **Alterar o bloco de renderização do resultado** (linhas 587-595):
+   - Antes de mostrar JSON bruto, verificar se há arquivos extraíveis
+   - Se sim, renderizar com `renderSerproFiles`
+   - Se não, manter o JSON formatado atual
+   - Caixa Postal continua com tratamento específico existente
 
-**MIT**: todos (314-317)
+4. **Exibir também dados textuais** da resposta (ex: `numeroDeclaracao`) em formato legível acima dos botões de download.
 
-**DEFIS**: todos (141-144)
+## Detalhes técnicos
 
-**REGIMEAPURACAO**: todos (101-104)
-
-**SITFIS**: SOLICITARPROTOCOLO91, RELATORIOSITFIS92
-
-**PROCURACOES**: OBTERPROCURACAO41
-
-**AUTENTICAPROCURADOR**: ENVIOXMLASSINADO81
-
-**EVENTOSATUALIZACAO**: todos (131-134)
-
-**DTE**: CONSULTASITUACAODTE111
-
-**CAIXAPOSTAL**: MSGCONTRIBUINTE61, etc (sem cnpjBasico nos dados)
-
-**PAGTOWEB**: MANTER `F_CNPJ` — a documentação mostra `cnpjBasico` dentro de `dados` para este sistema.
-
-**SICALC**: MANTER `F_CNPJ` — verificar no PDF, mas provavelmente precisa.
-
-**Parcelamentos** (parcServices): MANTER `F_CNPJ` — estes sistemas podem precisar.
-
-## Alterações
-
-### `src/pages/IntegraContador.tsx`
-Remover `F_CNPJ` dos arrays `fields` dos serviços listados acima. O campo `cnpjBasico` ficará apenas nos serviços PAGTOWEB, SICALC e parcelamentos.
-
-Exemplo de mudança:
 ```typescript
-// Antes:
-fields: [F_CNPJ, F_PERIODO]
-// Depois:
-fields: [F_PERIODO]
+// Converter base64 para download
+function downloadBase64Pdf(base64: string, filename: string) {
+  const bytes = atob(base64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  const blob = new Blob([arr], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
 ```
 
-São ~40 linhas de edição (remover `F_CNPJ,` de cada serviço afetado).
+## Arquivo alterado
+- `src/pages/IntegraContador.tsx` — ~60 linhas adicionadas (funções de extração + renderização de arquivos)
 
 ## Resultado esperado
-O campo `dados` enviado ao SERPRO conterá apenas os parâmetros específicos do serviço, sem duplicar o CNPJ que já vai automaticamente em `contribuinte.numero`.
+Quando o SERPRO retorna PDFs (recibo, declaração, guia DAS), o usuário vê botões de download ao invés de JSON com base64.
 
