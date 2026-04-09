@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 type Department = { id: string; name: string };
-type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any; annual_month: number | null };
+type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any; annual_month: number | null; is_retention: boolean; retention_tax_type: string | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type DocumentType = { id: string; name: string };
 type Client = { id: string; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
@@ -70,6 +70,7 @@ export default function Obligations() {
     segment_tax_regimes: [] as string[],
     segment_city: '',
     annual_month: '' as string,
+    is_retention: false, retention_tax_type: '',
   });
   const [manualSelectedClients, setManualSelectedClients] = useState<string[]>([]);
   const [clientSearch, setClientSearch] = useState('');
@@ -141,7 +142,7 @@ export default function Obligations() {
   // ---- Obligation CRUD ----
   function openNewObligation() {
     setEditingObligation(null);
-    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '', annual_month: '' });
+    setObligationForm({ name: '', description: '', department_id: departments[0]?.id || '', recurrence: 'mensal', alert_day: '', target_day: '', due_day: '', competence_rule: 'current', is_tax: false, tax_sphere: '', assignment_mode: 'manual', segment_payroll_filter: '', segment_tax_regimes: [], segment_city: '', annual_month: '', is_retention: false, retention_tax_type: '' });
     setManualSelectedClients([]);
     setGenerateStartMonth('');
     setGenerateStartYear('');
@@ -161,6 +162,7 @@ export default function Obligations() {
       segment_tax_regimes: filters.tax_regime || [],
       segment_city: filters.city || '',
       annual_month: o.annual_month?.toString() || '',
+      is_retention: o.is_retention || false, retention_tax_type: o.retention_tax_type || '',
     });
     // Load manual selections
     const linked = clientDeptObligations.filter(cdo => cdo.obligation_id === o.id).map(cdo => cdo.client_id);
@@ -190,7 +192,9 @@ export default function Obligations() {
       annual_month: obligationForm.recurrence === 'anual' && obligationForm.annual_month ? Number(obligationForm.annual_month) : null,
       is_tax: obligationForm.is_tax,
       tax_sphere: obligationForm.is_tax && obligationForm.tax_sphere ? obligationForm.tax_sphere : null,
-      assignment_mode: obligationForm.assignment_mode,
+      is_retention: obligationForm.is_tax && obligationForm.is_retention,
+      retention_tax_type: obligationForm.is_tax && obligationForm.is_retention && obligationForm.retention_tax_type ? obligationForm.retention_tax_type : null,
+      assignment_mode: obligationForm.is_retention ? 'retention_auto' : obligationForm.assignment_mode,
       segment_filters: segmentFilters,
     };
 
@@ -206,7 +210,7 @@ export default function Obligations() {
     }
 
     // Sync client_department_obligations
-    if (obligationId) {
+    if (obligationId && !(obligationForm.is_tax && obligationForm.is_retention)) {
       await syncClientObligations(obligationId, obligationForm.department_id);
     }
 
@@ -547,6 +551,12 @@ export default function Obligations() {
                           Imposto{ob.tax_sphere ? ` ${ob.tax_sphere.charAt(0).toUpperCase() + ob.tax_sphere.slice(1)}` : ''}
                         </span>
                       )}
+                      {/* Badge retenção */}
+                      {ob.is_retention && (
+                        <span className="hidden sm:inline-flex shrink-0 items-center" style={{ background: '#FFF7ED', color: '#C2410C', fontSize: 11.5, padding: '4px 10px', borderRadius: 99 }}>
+                          Retenção {ob.retention_tax_type?.toUpperCase() || ''}
+                        </span>
+                      )}
                       {/* 6. Badge clientes */}
                       {linkedCount > 0 && (
                         <span className="hidden sm:inline-flex shrink-0 items-center gap-1" style={{ background: '#F0F3FA', border: '1px solid #E3E8F2', color: '#64748B', fontSize: 11, padding: '4px 10px', borderRadius: 99 }}>
@@ -758,17 +768,44 @@ export default function Obligations() {
               <Label>É Imposto?</Label>
             </div>
             {obligationForm.is_tax && (
-              <div className="space-y-2">
-                <Label>Esfera Tributária *</Label>
-                <Select value={obligationForm.tax_sphere} onValueChange={v => setObligationForm({ ...obligationForm, tax_sphere: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione a esfera" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="federal">Federal</SelectItem>
-                    <SelectItem value="estadual">Estadual</SelectItem>
-                    <SelectItem value="municipal">Municipal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label>Esfera Tributária *</Label>
+                  <Select value={obligationForm.tax_sphere} onValueChange={v => setObligationForm({ ...obligationForm, tax_sphere: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a esfera" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="federal">Federal</SelectItem>
+                      <SelectItem value="estadual">Estadual</SelectItem>
+                      <SelectItem value="municipal">Municipal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Switch
+                    checked={obligationForm.is_retention}
+                    onCheckedChange={v => setObligationForm({ ...obligationForm, is_retention: v, retention_tax_type: v ? obligationForm.retention_tax_type : '' })}
+                  />
+                  <Label>É Retenção?</Label>
+                </div>
+                {obligationForm.is_retention && (
+                  <div className="space-y-2">
+                    <Label>Tipo de Retenção *</Label>
+                    <Select value={obligationForm.retention_tax_type} onValueChange={v => setObligationForm({ ...obligationForm, retention_tax_type: v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="iss">ISS</SelectItem>
+                        <SelectItem value="inss">INSS</SelectItem>
+                        <SelectItem value="irrf">IRRF</SelectItem>
+                        <SelectItem value="pis">PIS</SelectItem>
+                        <SelectItem value="cofins">COFINS</SelectItem>
+                        <SelectItem value="csll">CSLL</SelectItem>
+                        <SelectItem value="cp">CP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">A obrigação será gerada automaticamente para clientes com essa retenção em notas tomadas</p>
+                  </div>
+                )}
+              </>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
@@ -800,6 +837,12 @@ export default function Obligations() {
             <Separator />
 
             {/* === Empresas Vinculadas === */}
+            {obligationForm.is_retention ? (
+              <div className="rounded-lg border p-3 space-y-1" style={{ background: '#FFF7ED', borderColor: '#FDBA74' }}>
+                <p className="text-sm font-medium" style={{ color: '#C2410C' }}>Vinculação automática por retenção</p>
+                <p className="text-xs text-muted-foreground">As instâncias serão geradas automaticamente no dia 1 de cada mês para clientes com {obligationForm.retention_tax_type?.toUpperCase() || 'imposto'} retido em notas de serviços tomados do mês anterior.</p>
+              </div>
+            ) : (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
@@ -919,6 +962,7 @@ export default function Obligations() {
                 <p className="text-sm text-muted-foreground">Todas as {clients.length} empresas ativas serão vinculadas.</p>
               )}
             </div>
+            )}
 
             <Separator />
 

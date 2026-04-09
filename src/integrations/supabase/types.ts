@@ -1041,9 +1041,11 @@ export type Database = {
           description: string | null
           due_day: number | null
           id: string
+          is_retention: boolean
           is_tax: boolean
           name: string
           recurrence: string
+          retention_tax_type: string | null
           segment_filters: Json | null
           target_day: number | null
           tax_sphere: string | null
@@ -1059,9 +1061,11 @@ export type Database = {
           description?: string | null
           due_day?: number | null
           id?: string
+          is_retention?: boolean
           is_tax?: boolean
           name: string
           recurrence?: string
+          retention_tax_type?: string | null
           segment_filters?: Json | null
           target_day?: number | null
           tax_sphere?: string | null
@@ -1077,9 +1081,11 @@ export type Database = {
           description?: string | null
           due_day?: number | null
           id?: string
+          is_retention?: boolean
           is_tax?: boolean
           name?: string
           recurrence?: string
+          retention_tax_type?: string | null
           segment_filters?: Json | null
           target_day?: number | null
           tax_sphere?: string | null
