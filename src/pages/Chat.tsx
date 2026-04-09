@@ -120,7 +120,9 @@ export default function Chat() {
     const items: ConversationItem[] = convs.map(conv => {
       let name = conv.name || 'Conversa';
 
-      if (conv.client_id && clientMap.has(conv.client_id)) {
+      if (conv.whatsapp_phone && conv.name) {
+        name = conv.name;
+      } else if (conv.client_id && clientMap.has(conv.client_id)) {
         const client = clientMap.get(conv.client_id)!;
         name = client.contact_name || client.company_name || name;
       } else if (!conv.is_group && !conv.client_id) {
