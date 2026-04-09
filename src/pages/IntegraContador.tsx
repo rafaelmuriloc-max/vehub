@@ -90,7 +90,35 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       { idSistema: 'DEFIS', idServico: 'CONSDECREC144', label: 'Declaração/Recibo DEFIS', description: 'Consulta declaração e recibo DEFIS por ano', tipo: 'Consultar', fields: [F_ANO] },
     ],
   },
-  sicalc: {
+  mei: {
+    label: 'MEI',
+    icon: <Building2 className="h-4 w-4" />,
+    services: [
+      { idSistema: 'PGMEI', idServico: 'GERARDASPDF21', label: 'DAS MEI (PDF)', description: 'Gera DAS do MEI em formato PDF', tipo: 'Emitir', fields: [F_PERIODO] },
+      { idSistema: 'PGMEI', idServico: 'GERARDASCODBARRA22', label: 'DAS MEI (Cód. Barras)', description: 'Gera DAS do MEI com código de barras', tipo: 'Emitir', fields: [F_PERIODO] },
+      { idSistema: 'PGMEI', idServico: 'ATUBENEFICIO23', label: 'Atualizar Benefício', description: 'Atualiza benefício do MEI', tipo: 'Emitir', fields: [] },
+      { idSistema: 'PGMEI', idServico: 'DIVIDAATIVA24', label: 'Dívida Ativa MEI', description: 'Consulta dívida ativa do MEI', tipo: 'Consultar', fields: [F_ANO] },
+      { idSistema: 'CCMEI', idServico: 'EMITIRCCMEI121', label: 'Certificado Condição MEI', description: 'Emite certificado de condição de MEI', tipo: 'Emitir', fields: [] },
+      { idSistema: 'CCMEI', idServico: 'DADOSCCMEI122', label: 'Dados CCMEI', description: 'Consulta dados do certificado de condição MEI', tipo: 'Consultar', fields: [] },
+      { idSistema: 'CCMEI', idServico: 'CCMEISITCADASTRAL123', label: 'Situação Cadastral MEI por CPF', description: 'Consulta situação cadastral do CNPJ MEI por CPF', tipo: 'Consultar', fields: [{ key: 'cpf', label: 'CPF (11 dígitos)', required: true, placeholder: '12345678901' }] },
+    ],
+  },
+  dctfweb: {
+    label: 'DCTFWeb / MIT',
+    icon: <FileText className="h-4 w-4" />,
+    services: [
+      { idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', label: 'Gerar Guia DCTFWeb', description: 'Gera guia de pagamento da DCTFWeb', tipo: 'Emitir', fields: [F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'CONSRECIBO32', label: 'Recibo DCTFWeb', description: 'Consulta recibo de entrega da DCTFWeb', tipo: 'Consultar', fields: [F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'CONSDECCOMPLETA33', label: 'Declaração Completa', description: 'Consulta declaração completa da DCTFWeb', tipo: 'Consultar', fields: [F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'CONSXMLDECLARACAO38', label: 'XML Declaração', description: 'Consulta XML da declaração DCTFWeb', tipo: 'Consultar', fields: [F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'TRANSDECLARACAO310', label: 'Transmitir Declaração', description: 'Transmite declaração DCTFWeb', tipo: 'Declarar', fields: [F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'GERARGUIAANDAMENTO313', label: 'Guia Declaração em Andamento', description: 'Gera guia de declaração em andamento', tipo: 'Emitir', fields: [F_PERIODO] },
+      { idSistema: 'MIT', idServico: 'ENCAPURACAO314', label: 'Encerrar Apuração MIT', description: 'Encerra apuração MIT (Multirreceitas)', tipo: 'Declarar', fields: [F_PERIODO] },
+      { idSistema: 'MIT', idServico: 'SITUACAOENC315', label: 'Situação Encerramento MIT', description: 'Consulta situação do encerramento MIT', tipo: 'Apoiar', fields: [F_PERIODO] },
+      { idSistema: 'MIT', idServico: 'CONSAPURACAO316', label: 'Consultar Apuração MIT', description: 'Consulta dados de apuração MIT', tipo: 'Consultar', fields: [F_PERIODO] },
+      { idSistema: 'MIT', idServico: 'LISTAAPURACOES317', label: 'Listar Apurações MIT', description: 'Lista apurações MIT disponíveis', tipo: 'Consultar', fields: [] },
+    ],
+  },
     label: 'Sicalc (DARF)',
     icon: <CreditCard className="h-4 w-4" />,
     services: [
