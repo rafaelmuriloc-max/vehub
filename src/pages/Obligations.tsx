@@ -962,6 +962,7 @@ export default function Obligations() {
                 <p className="text-sm text-muted-foreground">Todas as {clients.length} empresas ativas serão vinculadas.</p>
               )}
             </div>
+            )}
 
             <Separator />
 
