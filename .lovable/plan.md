@@ -1,64 +1,39 @@
 
 
-# Flag de Retenção em Obrigações + Geração Automática (Notas Tomadas)
+# Corrigir nome do chat e assinatura de mensagens
 
-## Visão Geral
-Adicionar flag "É Retenção" no cadastro de obrigações. A verificação automática mensal analisa as **notas de serviços tomados** (onde o cliente é o tomador, não o prestador) para detectar impostos retidos e gerar instâncias de obrigação automaticamente.
+## Problemas identificados
 
-A lógica de "tomado" já existe no sistema: uma nota é "tomada" quando `issuer_cnpj !== cnpj do cliente` (o cliente aparece como tomador do serviço).
+1. **Nome no chat**: Na linha 123-125 de `Chat.tsx`, quando a conversa tem `client_id`, o nome exibido é `client.contact_name || client.company_name`, sobrescrevendo o nome que veio do WhatsApp (`conv.name`). Para conversas WhatsApp, o nome deve ser o do `conv.name` (pushName do WhatsApp).
 
-## 1. Migration — Novas colunas na tabela `obligations`
+2. **Assinatura em mensagens enviadas pelo chat**: Já funciona — `senderName` é passado nas edge functions. OK.
 
-```sql
-ALTER TABLE obligations ADD COLUMN is_retention boolean NOT NULL DEFAULT false;
-ALTER TABLE obligations ADD COLUMN retention_tax_type text;
--- retention_tax_type: 'iss', 'inss', 'irrf', 'pis', 'cofins', 'csll', 'cp'
+3. **Assinatura em mensagens automáticas (obrigações)**: A edge function `whatsapp-send` (usada pelas automações) também passa `senderName` em alguns casos. Precisa garantir que automações NÃO enviem `senderName`.
+
+4. **Mensagens recebidas não devem ter assinatura**: No `MessageArea.tsx` linha 156, o `senderName` só é passado quando `msg.sender_id === currentUserId`. Mensagens recebidas (incoming) já não mostram assinatura no bubble. OK — mas o texto da mensagem recebida pode conter a assinatura `*Nome:*` embutida no conteúdo (vinda do WhatsApp). Isso é conteúdo externo e não controlamos.
+
+## Alterações
+
+### 1. `src/pages/Chat.tsx` — Priorizar nome WhatsApp
+Na resolução de nome (linhas 120-131), para conversas com `whatsapp_phone`, usar `conv.name` (pushName do WhatsApp) ao invés de sobrescrever com nome da empresa/contato do cliente.
+
+```typescript
+// Para conversas WhatsApp, usar o nome da conversa (pushName)
+if (conv.whatsapp_phone && conv.name) {
+  name = conv.name; // nome do WhatsApp
+} else if (conv.client_id && clientMap.has(conv.client_id)) {
+  const client = clientMap.get(conv.client_id)!;
+  name = client.contact_name || client.company_name || name;
+} else if (!conv.is_group && !conv.client_id) { ... }
 ```
 
-## 2. Frontend — `src/pages/Obligations.tsx`
+### 2. `src/lib/sendActivityWhatsApp.ts` — Remover assinatura das automações
+Verificar se essa função passa `senderName` ao chamar `whatsapp-send` ou `whatsapp-send-text`, e remover para que automações não assinem.
 
-- Adicionar `is_retention` e `retention_tax_type` ao type `Obligation` e ao formulário
-- Quando `is_tax = true`, exibir Switch "É Retenção?"
-- Quando `is_retention = true`, exibir Select "Tipo de Retenção" (ISS, INSS, IRRF, PIS, COFINS, CSLL, CP)
-- Quando `is_retention = true`, o `assignment_mode` fica automático ("retention_auto") — não precisa selecionar empresas manualmente
-- Badge "Retenção" na listagem de obrigações
-- Salvar os novos campos no `saveObligation`
-
-## 3. Edge Function — `retention-obligation-generate`
-
-Lógica executada mensalmente (dia 1 às 6h):
-
-1. Buscar obrigações com `is_retention = true`
-2. Para cada obrigação, obter o `retention_tax_type`
-3. Consultar `invoices` do **mês anterior**, filtrando por **notas tomadas** (onde `issuer_cnpj != cnpj do cliente`)
-4. Parsear o XML (`raw_data->xml`) para detectar retenção:
-   - ISS: `tpRetISSQN = 2` e `vTotalRet > 0`
-   - INSS: `vRetINSS > 0`
-   - IRRF: `vRetIRRF > 0`
-   - PIS: `vRetPIS > 0`
-   - COFINS: `vRetCOFINS > 0`
-   - CSLL: `vRetCSLL > 0`
-   - CP: `vRetCP > 0`
-5. Para cada cliente com retenção detectada, criar `obligation_instance` se ainda não existir para aquele mês
-6. Calcular `due_date` usando `due_day` da obrigação + `previousBusinessDay`
-
-### Cron Job (via SQL insert, não migration)
-```sql
-SELECT cron.schedule('generate-retention-obligations', '0 6 1 * *',
-  $$ SELECT net.http_post(url:='...', headers:='...'::jsonb, body:='{}'::jsonb) $$);
-```
+### 3. Edge functions — Sem mudanças necessárias
+A lógica `senderName ? ... : ...` já funciona: se não enviar `senderName`, não assina. Basta garantir que o frontend/automações passem (ou não) corretamente.
 
 ## Arquivos
-
-| Arquivo | Ação |
-|---------|------|
-| `supabase/migrations/xxx.sql` | Colunas `is_retention`, `retention_tax_type` |
-| `src/pages/Obligations.tsx` | UI do flag + badge (~30 linhas) |
-| `supabase/functions/retention-obligation-generate/index.ts` | Edge Function (~150 linhas) |
-| Cron job via SQL insert | Agendar execução mensal |
-
-## Resultado Esperado
-- Admin cadastra obrigação de imposto marcando "É Retenção" + tipo (ex: ISS)
-- Todo dia 1, o sistema analisa notas de serviços **tomados** do mês anterior
-- Se o cliente teve ISS retido como tomador, gera automaticamente a instância da obrigação (ex: Declaração de Serviços Tomados)
+- `src/pages/Chat.tsx` — ~5 linhas (priorizar `conv.name` para WhatsApp)
+- `src/lib/sendActivityWhatsApp.ts` — verificar/remover `senderName` se presente
 
