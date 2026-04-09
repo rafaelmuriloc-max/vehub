@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell, MailOpen, MailCheck, Eye, Download, FileDown } from 'lucide-react';
+import PgdasdDeclaracaoForm from '@/components/integra-contador/PgdasdDeclaracaoForm';
 
 type Client = {
   id: string;
@@ -29,6 +30,7 @@ type ServiceDefinition = {
   description: string;
   tipo: string;
   fields: { key: string; label: string; required?: boolean; placeholder?: string; options?: { value: string; label: string }[] }[];
+  customForm?: string;
 };
 
 type ServiceCategory = {
@@ -69,7 +71,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <Scale className="h-4 w-4" />,
     services: [
       // PGDASD
-      { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal', description: 'Transmite declaração mensal do PGDAS-D', tipo: 'Declarar', fields: [F_PA] },
+      { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal', description: 'Transmite declaração mensal do PGDAS-D', tipo: 'Declarar', fields: [], customForm: 'pgdasd-declaracao' },
       { idSistema: 'PGDASD', idServico: 'GERARDAS12', label: 'Gerar DAS', description: 'Gera guia DAS do Simples Nacional', tipo: 'Emitir', fields: [F_PERIODO] },
       { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D', description: 'Consulta declarações transmitidas do PGDAS-D', tipo: 'Consultar', fields: [F_ANO] },
       { idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', label: 'Última Declaração/Recibo', description: 'Consulta última declaração e recibo do PGDAS-D', tipo: 'Consultar', fields: [F_PERIODO] },
@@ -261,14 +263,16 @@ export default function IntegraContador() {
     setResult(null);
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(dadosOverride?: string) {
     if (!selectedService || !selectedClientId) return;
 
-    // Validate required fields
-    for (const field of selectedService.fields) {
-      if (field.required && !formData[field.key]) {
-        toast({ title: 'Campo obrigatório', description: field.label, variant: 'destructive' });
-        return;
+    // Validate required fields (skip if custom form handles its own validation)
+    if (!dadosOverride) {
+      for (const field of selectedService.fields) {
+        if (field.required && !formData[field.key]) {
+          toast({ title: 'Campo obrigatório', description: field.label, variant: 'destructive' });
+          return;
+        }
       }
     }
 
@@ -276,13 +280,14 @@ export default function IntegraContador() {
     setResult(null);
 
     try {
+      const dados = dadosOverride || (selectedService.fields.length > 0 ? JSON.stringify(formData) : '');
       const { data, error } = await supabase.functions.invoke('integra-contador', {
         body: {
           client_id: selectedClientId,
           idSistema: selectedService.idSistema,
           idServico: selectedService.idServico,
           tipo: selectedService.tipo,
-          dados: selectedService.fields.length > 0 ? JSON.stringify(formData) : '',
+          dados,
         },
       });
 
@@ -588,42 +593,53 @@ export default function IntegraContador() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedService.fields.map((field) => (
-                  <div key={field.key}>
-                    <Label>
-                      {field.label}
-                      {field.required && <span className="text-destructive ml-1">*</span>}
-                    </Label>
-                    {field.options ? (
-                      <Select value={formData[field.key] || ''} onValueChange={(val) => setFormData((prev) => ({ ...prev, [field.key]: val }))}>
-                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent>
-                          {field.options.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        value={formData[field.key] || ''}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder}
-                      />
-                    )}
-                  </div>
-                ))}
+                {selectedService.customForm === 'pgdasd-declaracao' ? (
+                  <PgdasdDeclaracaoForm
+                    cnpjContribuinte={clients.find(c => c.id === selectedClientId)?.document?.replace(/\D/g, '') || ''}
+                    onSubmit={(dadosJson) => handleSubmit(dadosJson)}
+                    loading={loading}
+                    disabled={!selectedClientId || !isAdmin}
+                  />
+                ) : (
+                  <>
+                    {selectedService.fields.map((field) => (
+                      <div key={field.key}>
+                        <Label>
+                          {field.label}
+                          {field.required && <span className="text-destructive ml-1">*</span>}
+                        </Label>
+                        {field.options ? (
+                          <Select value={formData[field.key] || ''} onValueChange={(val) => setFormData((prev) => ({ ...prev, [field.key]: val }))}>
+                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                            <SelectContent>
+                              {field.options.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={formData[field.key] || ''}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                            placeholder={field.placeholder}
+                          />
+                        )}
+                      </div>
+                    ))}
 
-                <Button
-                  onClick={handleSubmit}
-                  disabled={loading || !selectedClientId || !isAdmin}
-                  className="w-full mt-2"
-                >
-                  {loading ? (
-                    <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Consultando...</>
-                  ) : (
-                    <><Send className="h-4 w-4 mr-2" /> Enviar Consulta</>
-                  )}
-                </Button>
+                    <Button
+                      onClick={() => handleSubmit()}
+                      disabled={loading || !selectedClientId || !isAdmin}
+                      className="w-full mt-2"
+                    >
+                      {loading ? (
+                        <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Consultando...</>
+                      ) : (
+                        <><Send className="h-4 w-4 mr-2" /> Enviar Consulta</>
+                      )}
+                    </Button>
+                  </>
+                )}
 
                 {!isAdmin && (
                   <p className="text-sm text-destructive">Apenas administradores podem executar consultas.</p>
