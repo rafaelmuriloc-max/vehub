@@ -210,7 +210,7 @@ export default function Obligations() {
     }
 
     // Sync client_department_obligations
-    if (obligationId) {
+    if (obligationId && !(obligationForm.is_tax && obligationForm.is_retention)) {
       await syncClientObligations(obligationId, obligationForm.department_id);
     }
 
@@ -551,6 +551,11 @@ export default function Obligations() {
                           Imposto{ob.tax_sphere ? ` ${ob.tax_sphere.charAt(0).toUpperCase() + ob.tax_sphere.slice(1)}` : ''}
                         </span>
                       )}
+                      {/* Badge retenção */}
+                      {ob.is_retention && (
+                        <span className="hidden sm:inline-flex shrink-0 items-center" style={{ background: '#FFF7ED', color: '#C2410C', fontSize: 11.5, padding: '4px 10px', borderRadius: 99 }}>
+                          Retenção {ob.retention_tax_type?.toUpperCase() || ''}
+                        </span>
                       {/* 6. Badge clientes */}
                       {linkedCount > 0 && (
                         <span className="hidden sm:inline-flex shrink-0 items-center gap-1" style={{ background: '#F0F3FA', border: '1px solid #E3E8F2', color: '#64748B', fontSize: 11, padding: '4px 10px', borderRadius: 99 }}>
