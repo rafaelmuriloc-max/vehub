@@ -119,6 +119,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       { idSistema: 'MIT', idServico: 'LISTAAPURACOES317', label: 'Listar Apurações MIT', description: 'Lista apurações MIT disponíveis', tipo: 'Consultar', fields: [] },
     ],
   },
+  sicalc: {
     label: 'Sicalc (DARF)',
     icon: <CreditCard className="h-4 w-4" />,
     services: [
