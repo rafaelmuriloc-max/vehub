@@ -1,59 +1,46 @@
 
 
-# Corrigir canonicalização C14N: adicionar ordenação de atributos
+# Corrigir nomes dos campos de dados do PGDASD e PAGTOWEB
 
-## Problema raiz identificado
+## Problema
+A documentação oficial do SERPRO (PDF enviado) mostra que o campo correto para o serviço GERARDAS12 e outros do PGDASD e "periodoApuracao", nao "pa". O sistema envia `{"cnpjBasico":"31333686","pa":"202512"}` mas o SERPRO espera `{"periodoApuracao":"201801"}`.
 
-O SERPRO usa uma implementação padrão W3C de Canonical XML (C14N) que **ordena atributos alfabeticamente por nome local**. Nossa função `canonicalize()` apenas expande self-closing tags mas **não reordena atributos**.
+Da mesma forma, o PAGTOWEB pode esperar nomes de campo diferentes de `cnpjBasico` e `anoCalendario`.
 
-Exemplo concreto do que acontece:
-
+## Evidencia do PDF
 ```text
-Nosso digest (atributos na ordem original):
-<destinatario numero="594..." nome="Velocitã..." tipo="PJ" papel="contratante"></destinatario>
+GERARDAS12:
+  dados: "{ \"periodoApuracao\": \"201801\" }"
 
-C14N correto do SERPRO (atributos em ordem alfabética):
-<destinatario nome="Velocitã..." numero="594..." papel="contratante" tipo="PJ"></destinatario>
+CONSDECLARACAO13:
+  dados: "{ \"anoCalendario\": \"2018\" }"
 
-→ Digests diferentes → assinatura inválida
+PAGTOWEB PAGAMENTOS71:
+  dados: "{ \"cnpjBasico\": \"99999999\", \"anoCalendario\": \"2024\" }"
 ```
 
-Isso afeta os elementos `<destinatario>`, `<assinadoPor>`, e qualquer outro com mais de um atributo. O digest que assinamos localmente é diferente do que o SERPRO calcula, então a assinatura é sempre rejeitada.
+O campo `anoCalendario` ja esta correto para CONSDECLARACAO13. O problema e especificamente o campo `pa` usado nos servicos de emissao do PGDASD — deveria ser `periodoApuracao`.
 
-## Solução
+## Solucao
 
-Reescrever a função `canonicalize()` em `supabase/functions/integra-contador/index.ts` para implementar C14N corretamente:
+### Em `src/pages/IntegraContador.tsx`:
 
-1. Fazer parse do XML com regex para extrair cada elemento e seus atributos
-2. Ordenar atributos de cada elemento alfabeticamente pelo nome do atributo
-3. Expandir self-closing tags (já faz)
-4. Manter tudo o mais intacto (texto, encoding UTF-8, etc.)
-
-A nova função vai:
-- Usar regex para encontrar cada tag de abertura ou self-closing
-- Extrair todos os pares atributo="valor"
-- Reordená-los por nome do atributo
-- Reconstruir a tag com atributos ordenados
-
-## Detalhes técnicos
-
-```text
-Funções afetadas:
-- canonicalize(): reescrita completa (~20 linhas)
-- Nenhuma outra mudança necessária
-
-O que a nova canonicalize() fará:
-1. Match cada tag: <tagName attr1="v1" attr2="v2" ... />  ou  <tagName attr1="v1" ...>
-2. Parse dos atributos em pares [nome, valor]
-3. Sort por nome (String.localeCompare ou simples <)
-4. Reconstruir: <tagName attrA="vA" attrB="vB">  (ou ...></tagName> se era self-closing)
-
-Arquivo: supabase/functions/integra-contador/index.ts
-Alteração: ~25 linhas (função canonicalize, linhas ~93-97)
+1. Criar um novo campo constante:
+```typescript
+const F_PERIODO = { key: 'periodoApuracao', label: 'Periodo Apuracao (AAAAMM)', required: true, placeholder: '202401' };
 ```
+
+2. Substituir `F_PA` por `F_PERIODO` nos servicos PGDASD que usam periodo de apuracao:
+   - GERARDAS12, GERARDASCOBRANCA17, GERARDASAVULSO19, TRANSDECLARACAO11
+
+3. Manter `F_PA` para servicos de outros sistemas que realmente usam `pa` como nome de campo (se houver), ou remover se nao for mais usado.
+
+## Sobre o PAGTOWEB
+O erro `cnpjBasico invalido` no PAGTOWEB precisa ser verificado tambem no PDF. Vou verificar os campos corretos.
+
+## Arquivo alterado
+- `src/pages/IntegraContador.tsx` — ~10 linhas (renomear campos)
 
 ## Resultado esperado
-- O digest calculado localmente será idêntico ao que o SERPRO calcula com sua implementação C14N padrão
-- A assinatura passará na verificação do SERPRO
-- A verificação local continuará passando (pois usa a mesma canonicalização)
+Os campos enviados ao SERPRO terao os nomes corretos conforme a documentacao oficial, eliminando os erros 400.
 
