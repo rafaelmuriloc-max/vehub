@@ -254,7 +254,29 @@ async function obtainProcuradorToken(
   officeKeyPem: string,
   bearerToken: string,
   jwtToken: string | undefined,
+  supabaseAdmin: ReturnType<typeof createClient>,
 ): Promise<string | null> {
+  // === Check cache first ===
+  try {
+    const { data: cached } = await supabaseAdmin
+      .from("procurador_tokens")
+      .select("token, expires_at")
+      .eq("contratante_cnpj", contratanteCnpj)
+      .eq("client_cnpj", clientCnpj)
+      .single();
+
+    if (cached?.token) {
+      const notExpired = !cached.expires_at || new Date(cached.expires_at) > new Date();
+      if (notExpired) {
+        console.log(`[procurador] ✅ Token encontrado em cache (expira: ${cached.expires_at || 'sem expiração'})`);
+        return cached.token;
+      }
+      console.log(`[procurador] Token em cache expirado, obtendo novo...`);
+    }
+  } catch (cacheErr) {
+    console.log(`[procurador] Sem token em cache, prosseguindo com SERPRO...`);
+  }
+
   console.log(`[procurador] Gerando Termo de Autorização: contratante=${contratanteCnpj}, autor=${clientCnpj}`);
 
   // 1. Generate XML
