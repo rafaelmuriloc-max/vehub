@@ -837,6 +837,12 @@ export default function Obligations() {
             <Separator />
 
             {/* === Empresas Vinculadas === */}
+            {obligationForm.is_retention ? (
+              <div className="rounded-lg border p-3 space-y-1" style={{ background: '#FFF7ED', borderColor: '#FDBA74' }}>
+                <p className="text-sm font-medium" style={{ color: '#C2410C' }}>Vinculação automática por retenção</p>
+                <p className="text-xs text-muted-foreground">As instâncias serão geradas automaticamente no dia 1 de cada mês para clientes com {obligationForm.retention_tax_type?.toUpperCase() || 'imposto'} retido em notas de serviços tomados do mês anterior.</p>
+              </div>
+            ) : (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
