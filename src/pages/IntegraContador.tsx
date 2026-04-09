@@ -40,6 +40,7 @@ type ServiceCategory = {
 // Helper para campos comuns
 const F_CNPJ = { key: 'cnpjBasico', label: 'CNPJ Básico (8 dígitos)', required: true, placeholder: '12345678' };
 const F_PA = { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' };
+const F_PERIODO = { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' };
 const F_ANO = { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' };
 const F_PROTOCOLO = { key: 'protocolo', label: 'Protocolo', required: true, placeholder: '' };
 const F_NUM_PEDIDO = { key: 'numeroPedido', label: 'Número do Pedido', required: true, placeholder: '' };
@@ -69,14 +70,14 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     services: [
       // PGDASD
       { idSistema: 'PGDASD', idServico: 'TRANSDECLARACAO11', label: 'Entregar Declaração Mensal', description: 'Transmite declaração mensal do PGDAS-D', tipo: 'Declarar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGDASD', idServico: 'GERARDAS12', label: 'Gerar DAS', description: 'Gera guia DAS do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'GERARDAS12', label: 'Gerar DAS', description: 'Gera guia DAS do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PERIODO] },
       { idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', label: 'Consultar Declaração PGDAS-D', description: 'Consulta declarações transmitidas do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ, F_ANO] },
-      { idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', label: 'Última Declaração/Recibo', description: 'Consulta última declaração e recibo do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ] },
+      { idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', label: 'Última Declaração/Recibo', description: 'Consulta última declaração e recibo do PGDAS-D', tipo: 'Consultar', fields: [F_CNPJ, F_PERIODO] },
       { idSistema: 'PGDASD', idServico: 'CONSDECREC15', label: 'Declaração/Recibo por Nº', description: 'Consulta declaração e recibo por número da declaração', tipo: 'Consultar', fields: [F_CNPJ, F_NUM_DECLARACAO] },
       { idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', label: 'Extrato do DAS', description: 'Consulta extrato do DAS pelo número do DAS', tipo: 'Consultar', fields: [F_CNPJ, F_NUM_DAS] },
-      { idSistema: 'PGDASD', idServico: 'GERARDASCOBRANCA17', label: 'DAS Cobrança RFB', description: 'Gera DAS de cobrança da Receita Federal', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'GERARDASCOBRANCA17', label: 'DAS Cobrança RFB', description: 'Gera DAS de cobrança da Receita Federal', tipo: 'Emitir', fields: [F_CNPJ, F_PERIODO] },
       { idSistema: 'PGDASD', idServico: 'GERARDASPROCESSO18', label: 'DAS Processo Cobrança', description: 'Gera DAS referente a processo de Cobrança RFB', tipo: 'Emitir', fields: [F_CNPJ, F_NUM_PROCESSO] },
-      { idSistema: 'PGDASD', idServico: 'GERARDASAVULSO19', label: 'DAS Avulso', description: 'Gera DAS avulso do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGDASD', idServico: 'GERARDASAVULSO19', label: 'DAS Avulso', description: 'Gera DAS avulso do Simples Nacional', tipo: 'Emitir', fields: [F_CNPJ, F_PERIODO] },
       // Regime de Apuração
       { idSistema: 'REGIMEAPURACAO', idServico: 'EFETUAROPCAOREGIME101', label: 'Efetuar Opção Regime', description: 'Efetua opção de regime de apuração', tipo: 'Declarar', fields: [F_CNPJ, F_ANO] },
       { idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTARANOSCALENDARIOS102', label: 'Consultar Anos Calendário', description: 'Consulta opções de regime de apuração por ano', tipo: 'Consultar', fields: [F_CNPJ] },
@@ -93,8 +94,8 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     label: 'MEI',
     icon: <Building2 className="h-4 w-4" />,
     services: [
-      { idSistema: 'PGMEI', idServico: 'GERARDASPDF21', label: 'DAS MEI (PDF)', description: 'Gera DAS do MEI em formato PDF', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'PGMEI', idServico: 'GERARDASCODBARRA22', label: 'DAS MEI (Cód. Barras)', description: 'Gera DAS do MEI com código de barras', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'PGMEI', idServico: 'GERARDASPDF21', label: 'DAS MEI (PDF)', description: 'Gera DAS do MEI em formato PDF', tipo: 'Emitir', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'PGMEI', idServico: 'GERARDASCODBARRA22', label: 'DAS MEI (Cód. Barras)', description: 'Gera DAS do MEI com código de barras', tipo: 'Emitir', fields: [F_CNPJ, F_PERIODO] },
       { idSistema: 'PGMEI', idServico: 'ATUBENEFICIO23', label: 'Atualizar Benefício', description: 'Atualiza benefício do MEI', tipo: 'Emitir', fields: [F_CNPJ] },
       { idSistema: 'PGMEI', idServico: 'DIVIDAATIVA24', label: 'Dívida Ativa MEI', description: 'Consulta dívida ativa do MEI', tipo: 'Consultar', fields: [F_CNPJ, F_ANO] },
       { idSistema: 'CCMEI', idServico: 'EMITIRCCMEI121', label: 'Certificado Condição MEI', description: 'Emite certificado de condição de MEI', tipo: 'Emitir', fields: [F_CNPJ] },
@@ -107,16 +108,16 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <FileText className="h-4 w-4" />,
     services: [
       // DCTFWeb
-      { idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', label: 'Gerar Guia DCTFWeb', description: 'Gera guia de pagamento da DCTFWeb', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'DCTFWEB', idServico: 'CONSRECIBO32', label: 'Recibo DCTFWeb', description: 'Consulta recibo de entrega da DCTFWeb', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'DCTFWEB', idServico: 'CONSDECCOMPLETA33', label: 'Declaração Completa', description: 'Consulta declaração completa da DCTFWeb', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'DCTFWEB', idServico: 'CONSXMLDECLARACAO38', label: 'XML Declaração', description: 'Consulta XML da declaração DCTFWeb', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'DCTFWEB', idServico: 'TRANSDECLARACAO310', label: 'Transmitir Declaração', description: 'Transmite declaração DCTFWeb', tipo: 'Declarar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'DCTFWEB', idServico: 'GERARGUIAANDAMENTO313', label: 'Guia Declaração em Andamento', description: 'Gera guia de declaração em andamento', tipo: 'Emitir', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'DCTFWEB', idServico: 'GERARGUIA31', label: 'Gerar Guia DCTFWeb', description: 'Gera guia de pagamento da DCTFWeb', tipo: 'Emitir', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'CONSRECIBO32', label: 'Recibo DCTFWeb', description: 'Consulta recibo de entrega da DCTFWeb', tipo: 'Consultar', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'CONSDECCOMPLETA33', label: 'Declaração Completa', description: 'Consulta declaração completa da DCTFWeb', tipo: 'Consultar', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'CONSXMLDECLARACAO38', label: 'XML Declaração', description: 'Consulta XML da declaração DCTFWeb', tipo: 'Consultar', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'TRANSDECLARACAO310', label: 'Transmitir Declaração', description: 'Transmite declaração DCTFWeb', tipo: 'Declarar', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'DCTFWEB', idServico: 'GERARGUIAANDAMENTO313', label: 'Guia Declaração em Andamento', description: 'Gera guia de declaração em andamento', tipo: 'Emitir', fields: [F_CNPJ, F_PERIODO] },
       // MIT (Multirreceitas)
-      { idSistema: 'MIT', idServico: 'ENCAPURACAO314', label: 'Encerrar Apuração MIT', description: 'Encerra apuração MIT (Multirreceitas)', tipo: 'Declarar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'MIT', idServico: 'SITUACAOENC315', label: 'Situação Encerramento MIT', description: 'Consulta situação do encerramento MIT', tipo: 'Apoiar', fields: [F_CNPJ, F_PA] },
-      { idSistema: 'MIT', idServico: 'CONSAPURACAO316', label: 'Consultar Apuração MIT', description: 'Consulta dados de apuração MIT', tipo: 'Consultar', fields: [F_CNPJ, F_PA] },
+      { idSistema: 'MIT', idServico: 'ENCAPURACAO314', label: 'Encerrar Apuração MIT', description: 'Encerra apuração MIT (Multirreceitas)', tipo: 'Declarar', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'MIT', idServico: 'SITUACAOENC315', label: 'Situação Encerramento MIT', description: 'Consulta situação do encerramento MIT', tipo: 'Apoiar', fields: [F_CNPJ, F_PERIODO] },
+      { idSistema: 'MIT', idServico: 'CONSAPURACAO316', label: 'Consultar Apuração MIT', description: 'Consulta dados de apuração MIT', tipo: 'Consultar', fields: [F_CNPJ, F_PERIODO] },
       { idSistema: 'MIT', idServico: 'LISTAAPURACOES317', label: 'Listar Apurações MIT', description: 'Lista apurações MIT disponíveis', tipo: 'Consultar', fields: [F_CNPJ] },
     ],
   },
