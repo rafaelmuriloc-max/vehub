@@ -1,40 +1,33 @@
 
 
-# Fix: assinatura mostrando nome do usuário errado
+# Fix: mostrar assinatura do usuário logado e remover badge "WhatsApp" nas mensagens enviadas
+
+## Problemas atuais (conforme screenshot)
+1. Mensagens enviadas (direita) mostram o badge "WhatsApp" - não deveria aparecer
+2. Mensagens enviadas não mostram a assinatura do usuário logado
 
 ## Causa raiz
-
-Quando uma mensagem WhatsApp é enviada pelo chat, a edge function `whatsapp-send-text` grava `sender_id` como o **primeiro admin do sistema** (não o usuário logado). Quando o UI carrega as mensagens, resolve `sender_id` → perfil e mostra o nome desse admin como assinatura.
-
-Enquanto isso, a assinatura **correta** (`*Nome:*`) já está embutida no **conteúdo** da mensagem (linha 20 da edge function), que aparece no texto da bolha.
-
-Resultado: assinatura duplicada — uma correta (no texto) e outra errada (no cabeçalho da bolha).
+- O badge "WhatsApp" é renderizado em `MessageBubble.tsx` linhas 140-145 para todas as mensagens `isOutgoing`
+- A assinatura não aparece porque na linha 160 de `MessageArea.tsx`: `showOnRight && !isOutgoing` exclui mensagens WhatsApp outgoing
+- Mesmo se passasse `msg.sender_name`, seria o nome errado (admin do sistema, não o usuário logado) porque a edge function grava `sender_id` como o primeiro admin
 
 ## Solução
 
-Duas abordagens possíveis (recomendo a opção A por ser mais limpa):
+### 1. `src/components/chat/MessageBubble.tsx`
+- Remover o bloco do badge "WhatsApp" (linhas 140-145) das mensagens outgoing
 
-### Opção A — Remover a assinatura duplicada do cabeçalho da bolha para mensagens WhatsApp
+### 2. `src/components/chat/MessageArea.tsx`
+- Adicionar prop `currentUserName?: string` ao componente
+- Para mensagens outgoing, passar `currentUserName` como `senderName` (em vez de `msg.sender_name` que é o admin errado)
+- Para mensagens internas (`text`) do usuário logado, continuar usando `msg.sender_name`
 
-No `MessageArea.tsx`, não passar `senderName` para mensagens WhatsApp outgoing (já que a assinatura está no conteúdo):
-
-```typescript
-const isWhatsappOutgoing = msg.message_type === 'whatsapp_outgoing' || msg.message_type === 'whatsapp';
-senderName={showOnRight && !isWhatsappOutgoing ? msg.sender_name : undefined}
-```
-
-Para mensagens internas (não-WhatsApp), continuar mostrando `msg.sender_name` normalmente.
-
-### Opção B — Corrigir o sender_id na edge function
-
-Passar o `userId` do usuário logado para a edge function e usar esse como `sender_id` ao invés do primeiro admin. Isso requer mudanças na edge function para aceitar e validar o `userId`.
-
-## Recomendação
-
-**Opção A** — é a mais simples e resolve imediatamente. A assinatura já está no texto da mensagem para WhatsApp, então o cabeçalho é redundante.
+### 3. `src/pages/Chat.tsx`
+- Passar `currentUserName={profile?.full_name}` ao `MessageArea`
 
 ## Arquivos
 | Arquivo | Mudança |
 |---------|--------|
-| `src/components/chat/MessageArea.tsx` | ~1 linha — não passar `senderName` para msgs WhatsApp outgoing |
+| `src/components/chat/MessageBubble.tsx` | Remover badge "WhatsApp" (~5 linhas) |
+| `src/components/chat/MessageArea.tsx` | Adicionar prop `currentUserName`, usar para outgoing (~3 linhas) |
+| `src/pages/Chat.tsx` | Passar `currentUserName={profile?.full_name}` (~1 linha) |
 
