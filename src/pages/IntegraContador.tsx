@@ -289,7 +289,7 @@ export default function IntegraContador() {
 
     try {
       // Converter campos numéricos antes de enviar
-      const processedData = { ...formData };
+      const processedData: Record<string, string | number> = { ...formData };
       if ('numeroReciboEntrega' in processedData) {
         processedData.numeroReciboEntrega = Number(processedData.numeroReciboEntrega);
       }
