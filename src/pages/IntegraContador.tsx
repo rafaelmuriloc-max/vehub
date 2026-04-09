@@ -30,6 +30,7 @@ type ServiceDefinition = {
   description: string;
   tipo: string;
   fields: { key: string; label: string; required?: boolean; placeholder?: string; options?: { value: string; label: string }[] }[];
+  customForm?: string;
 };
 
 type ServiceCategory = {
