@@ -1,0 +1,1 @@
+DELETE FROM obligation_instances WHERE obligation_id IN (SELECT id FROM obligations WHERE retention_tax_type = 'inss') AND reference_month = '2026-04-01';
