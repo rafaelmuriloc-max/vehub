@@ -82,8 +82,12 @@ Deno.serve(async (req) => {
       if (isEmitted) {
         // Prestadas: client is the issuer — used for REINF/INSS
         const xml = inv.raw_data?.xml as string | undefined;
-        if (xml && extractXmlValue(xml, "vRetINSS") > 0) {
-          clientPrestadas.add(inv.client_id);
+        if (xml) {
+          const hasRetINSS = extractXmlValue(xml, "vRetINSS") > 0
+            || /RETEN[CÇ][AÃ]O\s+DE\s+INSS/i.test(xml);
+          if (hasRetINSS) {
+            clientPrestadas.add(inv.client_id);
+          }
         }
       } else {
         // Tomadas: client is the taker — used for other retention types
