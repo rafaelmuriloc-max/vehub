@@ -1,48 +1,34 @@
 
 
-# Corrigir detecção de INSS para NFS-e nacional (REINF)
+# Ampliar detecção de INSS/CP para REINF
 
 ## Problema
 
-A Edge Function `retention-obligation-generate` verifica a tag XML `vRetINSS` para identificar notas com retenção de INSS. Porém, no formato NFS-e nacional (SPED), essa tag **não existe**. Nenhuma das 768 notas de março contém `vRetINSS`.
-
-A informação de retenção de INSS está no texto descritivo da nota, dentro das tags `xInfComp` ou `xDescServ`, com padrão como:
-```
-RETENCAO DE INSS SOBRE MAO OBRA R$ 326,64 X 11% = R$ 35,93
-```
-
-Há 1 cliente (WR SINALIZACOES) com 35 notas prestadas em março contendo esse padrão, e zero instâncias REINF foram geradas.
+A regex atual só detecta "RETENÇÃO DE INSS". Algumas empresas usam a descrição "Contribuição Previdenciária Retida" ou mencionam "CP" nas notas, e também existe a tag XML `vRetCP` que indica contribuição previdenciária retida. Essas notas não estão sendo detectadas.
 
 ## Solução
 
-Alterar a lógica de detecção de INSS na Edge Function para, além de verificar `vRetINSS > 0`, também buscar o padrão textual `RETENCAO DE INSS` no XML da nota.
+Expandir a condição de detecção na linha 86-87 para incluir:
+- `vRetCP > 0` (tag XML de contribuição previdenciária)
+- Regex para "Contribui(ção|cao) Previdenci(á|a)ria Retida"
 
-### Mudança no código (linhas 82-87)
+### Código (linhas 86-87)
 
 ```typescript
-if (isEmitted) {
-  const xml = inv.raw_data?.xml as string | undefined;
-  if (xml) {
-    const hasRetINSS = extractXmlValue(xml, "vRetINSS") > 0 
-      || /RETEN[CÇ][AÃ]O\s+DE\s+INSS/i.test(xml);
-    if (hasRetINSS) {
-      clientPrestadas.add(inv.client_id);
-    }
-  }
-}
+const hasRetINSS = extractXmlValue(xml, "vRetINSS") > 0
+  || extractXmlValue(xml, "vRetCP") > 0
+  || /RETEN[CÇ][AÃ]O\s+DE\s+INSS/i.test(xml)
+  || /CONTRIBUI[CÇ][AÃ]O\s+PREVIDENCI[AÁ]RIA\s+RETIDA/i.test(xml);
 ```
 
 ### Ações
-1. Atualizar a Edge Function com a nova detecção
-2. Re-deployar e executar para gerar as instâncias REINF de abril
+1. Atualizar a Edge Function
+2. Deletar instâncias REINF existentes de abril (ref 2026-04-01) para re-gerar
+3. Re-deployar e executar a função
 
 ## Arquivo
 
 | Arquivo | Mudança |
 |---------|--------|
-| `supabase/functions/retention-obligation-generate/index.ts` | ~3 linhas — adicionar regex para detectar INSS no texto da nota |
-
-## Resultado esperado
-
-A REINF será gerada para WR SINALIZACOES (e qualquer outro cliente com notas prestadas contendo retenção de INSS) com vencimento em 15/04/2026.
+| `supabase/functions/retention-obligation-generate/index.ts` | ~2 linhas — adicionar `vRetCP` e regex para "Contribuição Previdenciária Retida" |
 
