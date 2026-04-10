@@ -1,44 +1,38 @@
 
 
-# Corrigir geração de REINF para notas de serviços prestados (emitidos)
+# Corrigir REINF: gerar apenas para notas prestadas com INSS retido
 
 ## Problema
 
-A obrigação REINF está configurada com `retention_tax_type = 'inss'` e `assignment_mode = 'retention_auto'`. Porém, a Edge Function `retention-obligation-generate` só analisa **notas tomadas** (onde o cliente NÃO é o emissor, linha 80: `if (issuerCnpj === clientCnpj) continue`).
-
-Para a REINF, o critério correto é o oposto: notas de **serviços prestados** (emitidos), onde o cliente **É** o emissor. Existem 5 clientes com notas emitidas em março.
+Na linha 82-84 da Edge Function, **todo** cliente que emitiu uma nota no período é adicionado ao conjunto `clientPrestadas`, sem verificar se a nota tem retenção de INSS. Resultado: a REINF foi gerada para clientes sem INSS retido.
 
 ## Solução
 
-Modificar a Edge Function `retention-obligation-generate` para suportar dois fluxos de detecção:
+Ao processar notas prestadas (onde `isEmitted === true`), verificar o XML da nota para `vRetINSS > 0` antes de adicionar o cliente ao conjunto. Apenas clientes com pelo menos uma nota prestada contendo retenção de INSS terão a REINF gerada.
 
-1. **Obrigações de retenção "tomadas"** (comportamento atual): ISS, IRRF, PIS, COFINS, CSLL, CP — notas onde o cliente é o tomador
-2. **Obrigações de retenção "prestadas"** (novo): INSS/REINF — notas onde o cliente é o emissor
+## Mudança (linhas 82-84)
 
-### Mudanças na Edge Function
+```typescript
+// Antes:
+if (isEmitted) {
+  clientPrestadas.add(inv.client_id);
+}
 
-Na etapa 5, além do loop atual que filtra tomadas (`issuerCnpj !== clientCnpj`), adicionar um segundo loop que filtra **prestadas** (`issuerCnpj === clientCnpj`) e marca o tipo `inss_prestado` ou simplesmente `inss`.
+// Depois:
+if (isEmitted) {
+  const xml = inv.raw_data?.xml as string | undefined;
+  if (xml && extractXmlValue(xml, "vRetINSS") > 0) {
+    clientPrestadas.add(inv.client_id);
+  }
+}
+```
 
-Alternativa mais limpa: adicionar um campo na tabela `obligations` para indicar se a retenção é sobre notas tomadas ou prestadas, mas como só a REINF precisa disso, podemos tratar diretamente no código:
-
-- Se `retention_tax_type === 'inss'`: buscar notas **prestadas** (cliente = emissor)
-- Para todos os outros tipos: buscar notas **tomadas** (comportamento atual)
-
-### Código
-
-No loop de invoices (linhas 72-93), ao invés de pular quando `issuerCnpj === clientCnpj`, criar dois Maps:
-- `clientRetentionsTomadas` — notas tomadas (atual)
-- `clientPrestadas` — Set de client_ids que emitiram notas no período
-
-Na etapa 6 (linha 99+), para obrigações com `retention_tax_type === 'inss'`, usar `clientPrestadas` em vez de `clientRetentions`.
+## Ações adicionais
+- Deletar as instâncias REINF já geradas incorretamente (referência 2026-04-01) para clientes sem INSS retido
+- Re-executar a função para gerar apenas as corretas
 
 ## Arquivo
-
 | Arquivo | Mudança |
 |---------|--------|
-| `supabase/functions/retention-obligation-generate/index.ts` | ~15 linhas — separar fluxo prestadas vs tomadas, usar prestadas para INSS/REINF |
-
-## Resultado esperado
-
-Ao executar a Edge Function em abril, ela detectará os 5 clientes que emitiram notas em março e gerará instâncias da REINF com vencimento dia 15/04 (ou dia útil anterior).
+| `supabase/functions/retention-obligation-generate/index.ts` | ~3 linhas — verificar `vRetINSS > 0` antes de adicionar a `clientPrestadas` |
 
