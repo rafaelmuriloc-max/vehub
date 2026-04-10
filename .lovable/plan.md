@@ -1,38 +1,34 @@
 
 
-# Corrigir REINF: gerar apenas para notas prestadas com INSS retido
+# Fix: lista de conversas mostrando "Você" em vez do nome do contato
 
-## Problema
+## Causa raiz
 
-Na linha 82-84 da Edge Function, **todo** cliente que emitiu uma nota no período é adicionado ao conjunto `clientPrestadas`, sem verificar se a nota tem retenção de INSS. Resultado: a REINF foi gerada para clientes sem INSS retido.
+Na Edge Function `whatsapp-webhook`, linha 390, o nome da conversa é atualizado com o `pushName` de **toda** mensagem recebida pelo webhook, incluindo mensagens `fromMe: true` (enviadas pelo celular do escritório). Quando uma mensagem é enviada pelo celular, o `pushName` é o nome do perfil WhatsApp do próprio escritório — que aparentemente é algo como "Você" ou o nome do funcionário. Isso sobrescreve o nome correto do contato.
 
 ## Solução
 
-Ao processar notas prestadas (onde `isEmitted === true`), verificar o XML da nota para `vRetINSS > 0` antes de adicionar o cliente ao conjunto. Apenas clientes com pelo menos uma nota prestada contendo retenção de INSS terão a REINF gerada.
+Adicionar a condição `!isFromMe` na verificação de atualização do nome (linha 390), para que apenas mensagens **recebidas** do contato atualizem o nome da conversa.
 
-## Mudança (linhas 82-84)
+## Mudança
 
 ```typescript
-// Antes:
-if (isEmitted) {
-  clientPrestadas.add(inv.client_id);
-}
+// Antes (linha 390):
+if (pushName && existingConvData?.name !== pushName) {
 
 // Depois:
-if (isEmitted) {
-  const xml = inv.raw_data?.xml as string | undefined;
-  if (xml && extractXmlValue(xml, "vRetINSS") > 0) {
-    clientPrestadas.add(inv.client_id);
-  }
-}
+if (!isFromMe && pushName && existingConvData?.name !== pushName) {
 ```
 
-## Ações adicionais
-- Deletar as instâncias REINF já geradas incorretamente (referência 2026-04-01) para clientes sem INSS retido
-- Re-executar a função para gerar apenas as corretas
+Mesma condição na criação de nova conversa (linha 333): o `pushName` de mensagem `fromMe` não deve ser usado. Mas na criação, se for `fromMe`, a conversa provavelmente não existia antes — caso raro. Ainda assim, proteger com fallback.
 
-## Arquivo
+## Correção dos dados existentes
+
+Executar uma query para identificar conversas cujo nome foi sobrescrito. Como o nome correto está no histórico de mensagens incoming, podemos restaurar via SQL buscando o `pushName` da última mensagem incoming de cada conversa afetada. Alternativamente, a próxima mensagem incoming do contato corrigirá automaticamente o nome.
+
+## Arquivos
+
 | Arquivo | Mudança |
 |---------|--------|
-| `supabase/functions/retention-obligation-generate/index.ts` | ~3 linhas — verificar `vRetINSS > 0` antes de adicionar a `clientPrestadas` |
+| `supabase/functions/whatsapp-webhook/index.ts` | ~1 linha — adicionar `!isFromMe` na condição de update do nome (linha 390) |
 
