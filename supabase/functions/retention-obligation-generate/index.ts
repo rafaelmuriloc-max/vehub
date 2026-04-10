@@ -84,7 +84,9 @@ Deno.serve(async (req) => {
         const xml = inv.raw_data?.xml as string | undefined;
         if (xml) {
           const hasRetINSS = extractXmlValue(xml, "vRetINSS") > 0
-            || /RETEN[CÇ][AÃ]O\s+DE\s+INSS/i.test(xml);
+            || extractXmlValue(xml, "vRetCP") > 0
+            || /RETEN[CÇ][AÃ]O\s+DE\s+INSS/i.test(xml)
+            || /CONTRIBUI[CÇ][AÃ]O\s+PREVIDENCI[AÁ]RIA\s+RETIDA/i.test(xml);
           if (hasRetINSS) {
             clientPrestadas.add(inv.client_id);
           }
