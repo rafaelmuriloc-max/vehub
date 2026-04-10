@@ -65,9 +65,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "No invoices in previous month", generated: 0 });
     }
 
-    // 5. For each client, check if they have taken invoices with retentions
-    // Group by client_id and retention type
-    const clientRetentions = new Map<string, Set<string>>(); // client_id -> Set of retention types
+    // 5. For each client, check invoices for retentions
+    // Two flows: "tomadas" (client is taker) and "prestadas" (client is issuer)
+    const clientRetentions = new Map<string, Set<string>>(); // client_id -> Set of retention types (tomadas)
+    const clientPrestadas = new Set<string>(); // client_ids that issued invoices in the period
 
     for (const inv of invoices) {
       const client = allClients.find((c) => c.id === inv.client_id);
@@ -76,20 +77,24 @@ Deno.serve(async (req) => {
       const clientCnpj = client.document.replace(/\D/g, "");
       const issuerCnpj = (inv.issuer_cnpj || "").replace(/\D/g, "");
 
-      // Only "tomadas" - where the client is NOT the issuer
-      if (issuerCnpj === clientCnpj) continue;
+      const isEmitted = issuerCnpj === clientCnpj;
 
-      // Parse XML for retentions
-      const xml = inv.raw_data?.xml as string | undefined;
-      if (!xml) continue;
+      if (isEmitted) {
+        // Prestadas: client is the issuer — used for REINF/INSS
+        clientPrestadas.add(inv.client_id);
+      } else {
+        // Tomadas: client is the taker — used for other retention types
+        const xml = inv.raw_data?.xml as string | undefined;
+        if (!xml) continue;
 
-      const retTypes = detectRetentions(xml);
-      if (retTypes.length > 0) {
-        if (!clientRetentions.has(inv.client_id)) {
-          clientRetentions.set(inv.client_id, new Set());
+        const retTypes = detectRetentions(xml);
+        if (retTypes.length > 0) {
+          if (!clientRetentions.has(inv.client_id)) {
+            clientRetentions.set(inv.client_id, new Set());
+          }
+          const set = clientRetentions.get(inv.client_id)!;
+          for (const t of retTypes) set.add(t);
         }
-        const set = clientRetentions.get(inv.client_id)!;
-        for (const t of retTypes) set.add(t);
       }
     }
 
@@ -99,11 +104,18 @@ Deno.serve(async (req) => {
     for (const ob of retentionObligations) {
       if (!ob.retention_tax_type) continue;
 
-      // Find clients that have this retention type
-      const clientsWithRetention: string[] = [];
-      for (const [clientId, types] of clientRetentions) {
-        if (types.has(ob.retention_tax_type)) {
-          clientsWithRetention.push(clientId);
+      // For INSS/REINF: use prestadas (client is issuer)
+      // For all other types: use tomadas (client is taker)
+      let clientsWithRetention: string[];
+
+      if (ob.retention_tax_type === "inss") {
+        clientsWithRetention = Array.from(clientPrestadas);
+      } else {
+        clientsWithRetention = [];
+        for (const [clientId, types] of clientRetentions) {
+          if (types.has(ob.retention_tax_type)) {
+            clientsWithRetention.push(clientId);
+          }
         }
       }
 
