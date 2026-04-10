@@ -118,7 +118,14 @@ Deno.serve(async (req) => {
       let clientsWithRetention: string[];
 
       if (ob.retention_tax_type === "inss") {
-        clientsWithRetention = Array.from(clientPrestadas);
+        // Union of prestadas + tomadas with inss/cp retention
+        const set = new Set(clientPrestadas);
+        for (const [clientId, types] of clientRetentions) {
+          if (types.has("inss") || types.has("cp")) {
+            set.add(clientId);
+          }
+        }
+        clientsWithRetention = Array.from(set);
       } else {
         clientsWithRetention = [];
         for (const [clientId, types] of clientRetentions) {
@@ -210,6 +217,10 @@ function detectRetentions(xml: string): string[] {
 
   // CP
   if (extractXmlValue(xml, "vRetCP") > 0) types.push("cp");
+
+  // Textual INSS/CP detection
+  if (/RETEN[CÇ][AÃ]O\s+DE\s+INSS/i.test(xml)) types.push("inss");
+  if (/CONTRIBUI[CÇ][AÃ]O\s+PREVIDENCI[AÁ]RIA\s+RETIDA/i.test(xml)) types.push("inss");
 
   return types;
 }
