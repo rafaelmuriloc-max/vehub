@@ -258,8 +258,8 @@ Deno.serve(async (req) => {
       if (clientId && !convByPhone[0].client_id) {
         updates.client_id = clientId;
       }
-      // Always prefer pushName for conversation name
-      if (pushName) {
+      // Only update name from incoming messages (not fromMe)
+      if (!isFromMe && pushName) {
         updates.name = pushName;
       }
       // Upgrade phone to canonical format
@@ -330,7 +330,7 @@ Deno.serve(async (req) => {
       const { data: newConv, error: convErr } = await supabase
         .from("chat_conversations")
         .insert({
-          name: pushName || clientName,
+          name: (!isFromMe && pushName) ? pushName : clientName,
           is_group: false,
           created_by: systemUserId,
           client_id: clientId,
@@ -387,7 +387,7 @@ Deno.serve(async (req) => {
       }
 
       // Update name: prefer pushName, fallback to clientName for generic names
-      if (pushName && existingConvData?.name !== pushName) {
+      if (!isFromMe && pushName && existingConvData?.name !== pushName) {
         await supabase.from("chat_conversations").update({ name: pushName }).eq("id", conversationId);
       } else if (clientId && existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
         await supabase.from("chat_conversations").update({ name: clientName }).eq("id", conversationId);
