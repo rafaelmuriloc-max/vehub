@@ -780,11 +780,58 @@ Deno.serve(async (req) => {
       console.log(`API response status (retry): ${apiResponse.status}`);
     }
 
-    let responseData: unknown;
+    let responseData: any;
     try {
       responseData = JSON.parse(apiResponse.bodyText);
     } catch {
       responseData = apiResponse.bodyText;
+    }
+
+    // SITFIS protocol caching: save on 200, retrieve on 304
+    if (idServico === 'SOLICITARPROTOCOLO91') {
+      console.log(`[SITFIS] Raw response status: ${apiResponse.status}, body: ${apiResponse.bodyText?.substring(0, 500)}`);
+      
+      if (apiResponse.status >= 200 && apiResponse.status < 300) {
+        // Extract and cache the protocol
+        const dadosField = responseData?.dados || responseData?.pedidoDados?.dados;
+        let protocolo = '';
+        if (typeof dadosField === 'string') {
+          try { protocolo = JSON.parse(dadosField).protocoloRelatorio; } catch {}
+        } else if (typeof dadosField === 'object' && dadosField?.protocoloRelatorio) {
+          protocolo = dadosField.protocoloRelatorio;
+        }
+        if (protocolo) {
+          const cacheKey = `sitfis_protocolo:${clientCnpjClean}`;
+          console.log(`[SITFIS] Caching protocol for ${cacheKey}: ${protocolo}`);
+          await serviceClient.from('integra_contador_cache')
+            .upsert({
+              cache_key: cacheKey,
+              cache_value: protocolo,
+              expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            }, { onConflict: 'cache_key' });
+        }
+      } else if (apiResponse.status === 304) {
+        // Retrieve cached protocol
+        const cacheKey = `sitfis_protocolo:${clientCnpjClean}`;
+        console.log(`[SITFIS] 304 received, looking up cached protocol for ${cacheKey}`);
+        const { data: cached } = await serviceClient
+          .from('integra_contador_cache')
+          .select('cache_value')
+          .eq('cache_key', cacheKey)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle();
+
+        if (cached) {
+          console.log(`[SITFIS] Found cached protocol: ${cached.cache_value}`);
+          if (typeof responseData === 'object' && responseData !== null) {
+            responseData.dados = JSON.stringify({ protocoloRelatorio: cached.cache_value });
+          } else {
+            responseData = { dados: JSON.stringify({ protocoloRelatorio: cached.cache_value }) };
+          }
+        } else {
+          console.log(`[SITFIS] No cached protocol found for ${cacheKey}`);
+        }
+      }
     }
 
     return jsonResponse({

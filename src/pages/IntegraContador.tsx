@@ -311,10 +311,11 @@ export default function IntegraContador() {
           throw new Error(errMsg);
         }
 
-        // Extrair protocolo da resposta
+        // Extrair protocolo da resposta (múltiplos caminhos de extração)
         let protocoloRelatorio = '';
+        // Caminho 1: step1.data.data.dados (resposta padrão ou cache injetado)
         const dadosStep1 = step1.data?.data?.dados;
-        if (typeof dadosStep1 === 'string') {
+        if (typeof dadosStep1 === 'string' && dadosStep1) {
           try {
             const parsed = JSON.parse(dadosStep1);
             protocoloRelatorio = parsed.protocoloRelatorio || '';
@@ -324,9 +325,22 @@ export default function IntegraContador() {
         } else if (dadosStep1?.protocoloRelatorio) {
           protocoloRelatorio = dadosStep1.protocoloRelatorio;
         }
+        // Caminho 2: step1.data.dados (fallback)
+        if (!protocoloRelatorio) {
+          const dadosDirect = step1.data?.dados;
+          if (typeof dadosDirect === 'string' && dadosDirect) {
+            try {
+              const parsed = JSON.parse(dadosDirect);
+              protocoloRelatorio = parsed.protocoloRelatorio || '';
+            } catch {}
+          } else if (dadosDirect?.protocoloRelatorio) {
+            protocoloRelatorio = dadosDirect.protocoloRelatorio;
+          }
+        }
 
         if (!protocoloRelatorio) {
-          throw new Error('Protocolo não encontrado na resposta da etapa 1');
+          console.error('[SITFIS] Resposta step1 completa:', JSON.stringify(step1.data));
+          throw new Error('Protocolo não encontrado na resposta da etapa 1. Tente novamente em alguns minutos.');
         }
 
         // Etapa 2: emitir relatório com protocolo
