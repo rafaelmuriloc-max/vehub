@@ -1,30 +1,24 @@
 
-# Corrigir campo do Relatório de Situação Fiscal (SITFIS)
 
-## Problema
+# Corrigir versão do SITFIS: 1.0 → 2.0
 
-O serviço RELATORIOSITFIS92 usa `F_PROTOCOLO` que tem key `protocolo`, mas a API SERPRO espera `protocoloRelatorio` no payload `dados`.
+## Contexto
+
+Confirmado na documentação oficial SERPRO (changelog e página do serviço): a versão 1.0.0 do SITFIS foi descontinuada em 01/04/2024, substituída pela 2.0.0. A API de produção rejeita requests com versão 1.0.
 
 ## Solução
 
-Alterar o campo do serviço RELATORIOSITFIS92 para usar a key correta `protocoloRelatorio`.
+Adicionar `versaoSistema: '2.0'` nos dois serviços SITFIS do catálogo e garantir que o frontend envie esse campo à Edge Function.
 
-### Mudança (linha 156)
+### Mudanças
 
-```typescript
-// Antes:
-fields: [F_PROTOCOLO]
-
-// Depois:
-fields: [{ key: 'protocoloRelatorio', label: 'Protocolo do Relatório', required: true, placeholder: '' }]
-```
+1. **Tipo `ServiceDefinition`** — adicionar campo opcional `versaoSistema?: string`
+2. **Catálogo SITFIS** — adicionar `versaoSistema: '2.0'` em `SOLICITARPROTOCOLO91` e `RELATORIOSITFIS92`
+3. **`handleSubmit`** — incluir `versaoSistema` do serviço selecionado no body enviado à Edge Function (fallback `'1.0'`)
 
 ## Arquivo
 
 | Arquivo | Mudança |
 |---------|--------|
-| `src/pages/IntegraContador.tsx` | Linha 156 — trocar `F_PROTOCOLO` por campo com key `protocoloRelatorio` |
+| `src/pages/IntegraContador.tsx` | Tipo, catálogo e submit — ~5 linhas |
 
-## Nota
-
-Os serviços SITFIS já estão registrados no catálogo (categoria `situacaofiscal`). A Edge Function já suporta os tipos `Apoiar` e `Emitir` usados por esses serviços. A única correção necessária é o nome do campo.
