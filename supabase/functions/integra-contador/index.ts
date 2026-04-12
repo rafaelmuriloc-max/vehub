@@ -787,33 +787,45 @@ Deno.serve(async (req) => {
       responseData = apiResponse.bodyText;
     }
 
-    // SITFIS protocol caching: save on 200, retrieve on 304
+    // SITFIS protocol caching: save full context on 200, retrieve on 304
     if (idServico === 'SOLICITARPROTOCOLO91') {
       console.log(`[SITFIS] Raw response status: ${apiResponse.status}, body: ${apiResponse.bodyText?.substring(0, 500)}`);
       
+      // Extract protocol from response
+      let protocolo = '';
       if (apiResponse.status >= 200 && apiResponse.status < 300) {
-        // Extract and cache the protocol
         const dadosField = responseData?.dados || responseData?.pedidoDados?.dados;
-        let protocolo = '';
         if (typeof dadosField === 'string') {
           try { protocolo = JSON.parse(dadosField).protocoloRelatorio; } catch {}
         } else if (typeof dadosField === 'object' && dadosField?.protocoloRelatorio) {
           protocolo = dadosField.protocoloRelatorio;
         }
-        if (protocolo) {
-          const cacheKey = `sitfis_protocolo:${clientCnpjClean}`;
-          console.log(`[SITFIS] Caching protocol for ${cacheKey}: ${protocolo}`);
-          await serviceClient.from('integra_contador_cache')
-            .upsert({
-              cache_key: cacheKey,
-              cache_value: protocolo,
-              expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            }, { onConflict: 'cache_key' });
-        }
-      } else if (apiResponse.status === 304) {
-        // Retrieve cached protocol
-        const cacheKey = `sitfis_protocolo:${clientCnpjClean}`;
-        console.log(`[SITFIS] 304 received, looking up cached protocol for ${cacheKey}`);
+      }
+
+      // Build the full SITFIS context to cache
+      const sitfisContext = {
+        protocoloRelatorio: protocolo,
+        contratante: requestBody.contratante,
+        autorPedidoDados: requestBody.autorPedidoDados,
+        contribuinte: requestBody.contribuinte,
+      };
+
+      const cacheKey = `sitfis_contexto:${clientCnpjClean}`;
+
+      if (protocolo) {
+        // Cache full context
+        console.log(`[SITFIS] Caching full context for ${cacheKey}`);
+        await serviceClient.from('integra_contador_cache')
+          .upsert({
+            cache_key: cacheKey,
+            cache_value: JSON.stringify(sitfisContext),
+            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          }, { onConflict: 'cache_key' });
+      }
+
+      if (apiResponse.status === 304 && !protocolo) {
+        // Retrieve cached context
+        console.log(`[SITFIS] 304 received, looking up cached context for ${cacheKey}`);
         const { data: cached } = await serviceClient
           .from('integra_contador_cache')
           .select('cache_value')
@@ -822,15 +834,22 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (cached) {
-          console.log(`[SITFIS] Found cached protocol: ${cached.cache_value}`);
-          if (typeof responseData === 'object' && responseData !== null) {
-            responseData.dados = JSON.stringify({ protocoloRelatorio: cached.cache_value });
-          } else {
-            responseData = { dados: JSON.stringify({ protocoloRelatorio: cached.cache_value }) };
-          }
+          const cachedCtx = JSON.parse(cached.cache_value);
+          console.log(`[SITFIS] Found cached context with protocol: ${cachedCtx.protocoloRelatorio}`);
+          sitfisContext.protocoloRelatorio = cachedCtx.protocoloRelatorio;
+          sitfisContext.contratante = cachedCtx.contratante;
+          sitfisContext.autorPedidoDados = cachedCtx.autorPedidoDados;
+          sitfisContext.contribuinte = cachedCtx.contribuinte;
         } else {
-          console.log(`[SITFIS] No cached protocol found for ${cacheKey}`);
+          console.log(`[SITFIS] No cached context found for ${cacheKey}`);
         }
+      }
+
+      // Inject normalized context into response for frontend
+      if (typeof responseData === 'object' && responseData !== null) {
+        responseData.sitfis_context = sitfisContext;
+      } else {
+        responseData = { sitfis_context: sitfisContext };
       }
     }
 
