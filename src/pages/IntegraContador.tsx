@@ -153,7 +153,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     icon: <Search className="h-4 w-4" />,
     services: [
       { idSistema: 'SITFIS', idServico: 'SOLICITARPROTOCOLO91', label: 'Solicitar Protocolo', description: 'Solicita protocolo do relatório de situação fiscal', tipo: 'Apoiar', fields: [] },
-      { idSistema: 'SITFIS', idServico: 'RELATORIOSITFIS92', label: 'Relatório Situação Fiscal', description: 'Emite relatório completo da situação fiscal', tipo: 'Emitir', fields: [F_PROTOCOLO] },
+      { idSistema: 'SITFIS', idServico: 'RELATORIOSITFIS92', label: 'Relatório Situação Fiscal', description: 'Emite relatório completo da situação fiscal', tipo: 'Emitir', fields: [{ key: 'protocoloRelatorio', label: 'Protocolo do Relatório', required: true, placeholder: '' }] },
     ],
   },
   pagamentos: {
