@@ -497,7 +497,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { client_id, idSistema, idServico, tipo, dados, versaoSistema } = body;
+    const { client_id, idSistema, idServico, tipo, dados, versaoSistema, sitfis_context } = body;
 
     if (!client_id || !idSistema || !idServico || !tipo) {
       return jsonResponse({ error: "Campos obrigatórios: client_id, idSistema, idServico, tipo" }, 400);
@@ -722,17 +722,37 @@ Deno.serve(async (req) => {
     }
 
     // Build request body for Integra Contador
-    const requestBody = {
-      contratante: { numero: contratanteCnpj, tipo: 2 },
-      autorPedidoDados: { numero: autorPedidoCpfCnpj, tipo: autorPedidoTipo },
-      contribuinte: { numero: clientCnpjClean, tipo: clientCnpjClean.length <= 11 ? 1 : 2 },
-      pedidoDados: {
-        idSistema,
-        idServico,
-        versaoSistema: versaoSistema || "1.0",
-        dados: typeof dados === "string" ? dados : JSON.stringify(dados || {}),
-      },
-    };
+    let requestBody: any;
+    
+    // For RELATORIOSITFIS92, use the context from step 1 (passed by frontend)
+    if (idServico === 'RELATORIOSITFIS92' && sitfis_context) {
+      console.log(`[SITFIS] Building step 2 body with context from step 1`);
+      requestBody = {
+        contratante: sitfis_context.contratante,
+        autorPedidoDados: sitfis_context.autorPedidoDados,
+        contribuinte: sitfis_context.contribuinte,
+        pedidoDados: {
+          idSistema,
+          idServico,
+          versaoSistema: versaoSistema || "1.0",
+          dados: typeof dados === "string" ? dados : JSON.stringify(dados || {}),
+        },
+      };
+    } else {
+      requestBody = {
+        contratante: { numero: contratanteCnpj, tipo: 2 },
+        autorPedidoDados: { numero: autorPedidoCpfCnpj, tipo: autorPedidoTipo },
+        contribuinte: { numero: clientCnpjClean, tipo: clientCnpjClean.length <= 11 ? 1 : 2 },
+        pedidoDados: {
+          idSistema,
+          idServico,
+          versaoSistema: versaoSistema || "1.0",
+          dados: typeof dados === "string" ? dados : JSON.stringify(dados || {}),
+        },
+      };
+    }
+    
+    console.log(`[integra-contador] Request body: ${JSON.stringify(requestBody).substring(0, 500)}`);
 
     // Call SERPRO API (with retry on 401)
     async function callSerproApi(bt: string, jt: string | undefined): Promise<MtlsTextResponse> {
