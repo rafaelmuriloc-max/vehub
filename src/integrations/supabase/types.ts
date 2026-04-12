@@ -719,6 +719,30 @@ export type Database = {
           },
         ]
       }
+      integra_contador_cache: {
+        Row: {
+          cache_key: string
+          cache_value: string
+          created_at: string | null
+          expires_at: string
+          id: string
+        }
+        Insert: {
+          cache_key: string
+          cache_value: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+        }
+        Update: {
+          cache_key?: string
+          cache_value?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           access_key: string | null
