@@ -714,7 +714,7 @@ export default function IntegraContador() {
                       className="w-full mt-2"
                     >
                       {loading ? (
-                        <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Consultando...</>
+                        <><Loader2 className="h-4 w-4 animate-spin mr-2" /> {loadingMessage || 'Consultando...'}</>
                       ) : (
                         <><Send className="h-4 w-4 mr-2" /> Enviar Consulta</>
                       )}
