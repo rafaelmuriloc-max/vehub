@@ -286,10 +286,73 @@ export default function IntegraContador() {
     }
 
     setLoading(true);
+    setLoadingMessage('');
     setResult(null);
 
     try {
-      // Converter campos numéricos antes de enviar
+      // Fluxo automático de 2 etapas para Situação Fiscal
+      if (selectedService.idSistema === 'SITFIS' && selectedService.idServico === 'RELATORIOSITFIS92' && !dadosOverride) {
+        // Etapa 1: solicitar protocolo
+        setLoadingMessage('Solicitando protocolo...');
+        const step1 = await supabase.functions.invoke('integra-contador', {
+          body: {
+            client_id: selectedClientId,
+            idSistema: 'SITFIS',
+            idServico: 'SOLICITARPROTOCOLO91',
+            tipo: 'Apoiar',
+            versaoSistema: '2.0',
+            dados: '',
+          },
+        });
+        if (step1.error) throw step1.error;
+        if (!step1.data?.success) {
+          const msgs = step1.data?.data?.mensagens;
+          const errMsg = msgs?.map((m: any) => m.texto).join('; ') || step1.data?.error || 'Erro ao solicitar protocolo';
+          throw new Error(errMsg);
+        }
+
+        // Extrair protocolo da resposta
+        let protocoloRelatorio = '';
+        const dadosStep1 = step1.data?.data?.dados;
+        if (typeof dadosStep1 === 'string') {
+          try {
+            const parsed = JSON.parse(dadosStep1);
+            protocoloRelatorio = parsed.protocoloRelatorio || '';
+          } catch {
+            protocoloRelatorio = dadosStep1;
+          }
+        } else if (dadosStep1?.protocoloRelatorio) {
+          protocoloRelatorio = dadosStep1.protocoloRelatorio;
+        }
+
+        if (!protocoloRelatorio) {
+          throw new Error('Protocolo não encontrado na resposta da etapa 1');
+        }
+
+        // Etapa 2: emitir relatório com protocolo
+        setLoadingMessage('Emitindo relatório...');
+        const step2 = await supabase.functions.invoke('integra-contador', {
+          body: {
+            client_id: selectedClientId,
+            idSistema: 'SITFIS',
+            idServico: 'RELATORIOSITFIS92',
+            tipo: 'Emitir',
+            versaoSistema: '2.0',
+            dados: JSON.stringify({ protocoloRelatorio }),
+          },
+        });
+        if (step2.error) throw step2.error;
+        setResult(step2.data);
+
+        if (step2.data?.success) {
+          toast({ title: 'Relatório emitido', description: 'Relatório de Situação Fiscal gerado com sucesso.' });
+        } else {
+          toast({ title: 'Erro na emissão', description: step2.data?.error || 'Erro desconhecido', variant: 'destructive' });
+        }
+        return;
+      }
+
+      // Fluxo padrão
       const processedData: Record<string, string | number> = { ...formData };
       if ('numeroReciboEntrega' in processedData) {
         processedData.numeroReciboEntrega = Number(processedData.numeroReciboEntrega);
@@ -319,6 +382,7 @@ export default function IntegraContador() {
       setResult({ error: err.message });
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   }
 
