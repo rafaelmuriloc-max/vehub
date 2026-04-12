@@ -1,81 +1,49 @@
 
 
-# Simplificar fluxo de Situação Fiscal (SITFIS) — 2 etapas em 1
+# Fix SITFIS: tratar status 304 como sucesso
 
 ## Problema
 
-O usuário precisa executar manualmente dois serviços: primeiro `SOLICITARPROTOCOLO91` para obter o protocolo, depois copiar o protocolo e usar no `RELATORIOSITFIS92`. Isso deve ser automatizado em uma única ação.
+A API SERPRO retorna **304** para o serviço `SOLICITARPROTOCOLO91` (Apoiar), significando "autorização já concedida". A Edge Function trata 304 como falha (`success: false`) porque a verificação de sucesso só aceita 200-299. O frontend recebe `success: false` e exibe "Erro ao solicitar protocolo".
 
 ## Solução
 
-Substituir os dois serviços SITFIS por um único serviço "Relatório de Situação Fiscal" sem campos obrigatórios. No `handleSubmit`, quando esse serviço for selecionado, o frontend faz automaticamente:
+Duas mudanças:
 
-1. Chama a Edge Function com `SOLICITARPROTOCOLO91` (tipo `Apoiar`) para obter o protocolo
-2. Extrai o `protocoloRelatorio` da resposta
-3. Chama a Edge Function com `RELATORIOSITFIS92` (tipo `Emitir`) passando o protocolo obtido
-4. Exibe o resultado final (relatório)
-
-O usuário verá um loading com mensagem indicando o progresso ("Solicitando protocolo..." → "Emitindo relatório...").
-
-### Mudanças no catálogo (linhas 152-158)
+### 1. Edge Function — incluir 304 como sucesso (`supabase/functions/integra-contador/index.ts`, linha 791)
 
 ```typescript
-situacaofiscal: {
-  label: 'Situação Fiscal',
-  icon: <Search className="h-4 w-4" />,
-  services: [
-    { 
-      idSistema: 'SITFIS', 
-      idServico: 'RELATORIOSITFIS92', 
-      label: 'Relatório de Situação Fiscal', 
-      description: 'Solicita protocolo e emite relatório automaticamente', 
-      tipo: 'Emitir', 
-      versaoSistema: '2.0', 
-      fields: [] 
-    },
-  ],
-},
+// Antes:
+success: apiResponse.status >= 200 && apiResponse.status < 300,
+
+// Depois:
+success: (apiResponse.status >= 200 && apiResponse.status < 300) || apiResponse.status === 304,
 ```
 
-### Mudança no handleSubmit (após linha 275)
+### 2. Frontend — melhorar extração do protocolo da resposta 304 (`src/pages/IntegraContador.tsx`, linhas 307-312)
 
-Adicionar lógica especial antes do fluxo padrão:
+Ajustar a validação para aceitar respostas com `success: true` mesmo quando status é 304, e tentar extrair o protocolo de `data.dados` ou de campos alternativos da resposta 304.
 
 ```typescript
-// Se é SITFIS RELATORIOSITFIS92 sem dados preenchidos, 
-// fazer o fluxo de 2 etapas automaticamente
-if (selectedService.idSistema === 'SITFIS' 
-    && selectedService.idServico === 'RELATORIOSITFIS92' 
-    && !dadosOverride) {
-  // Etapa 1: solicitar protocolo
-  setLoadingMessage('Solicitando protocolo...');
-  const step1 = await supabase.functions.invoke('integra-contador', {
-    body: {
-      client_id: selectedClientId,
-      idSistema: 'SITFIS',
-      idServico: 'SOLICITARPROTOCOLO91',
-      tipo: 'Apoiar',
-      versaoSistema: '2.0',
-      dados: '',
-    },
-  });
-  if (step1.error || !step1.data?.success) throw new Error(step1.data?.error || 'Erro ao solicitar protocolo');
-  
-  // Extrair protocolo da resposta
-  const protocoloRelatorio = /* extrair de step1.data.dados */;
-  
-  // Etapa 2: emitir relatório
-  setLoadingMessage('Emitindo relatório...');
-  // Chama com dados = { protocoloRelatorio }
-  // ... continua com o fluxo normal
+// Antes:
+if (!step1.data?.success) {
+  const msgs = step1.data?.data?.mensagens;
+  const errMsg = msgs?.map(...) || ...;
+  throw new Error(errMsg);
+}
+
+// Depois:  
+if (!step1.data?.success && step1.data?.status !== 304) {
+  const msgs = step1.data?.data?.mensagens;
+  const errMsg = msgs?.map(...) || ...;
+  throw new Error(errMsg);
 }
 ```
 
-Também adicionar um state `loadingMessage` para mostrar o progresso ao usuário.
-
-## Arquivo
+## Arquivos
 
 | Arquivo | Mudança |
 |---------|--------|
-| `src/pages/IntegraContador.tsx` | Catálogo (remover SOLICITARPROTOCOLO91, ajustar RELATORIOSITFIS92), handleSubmit (lógica de 2 etapas), state `loadingMessage` |
+| `supabase/functions/integra-contador/index.ts` | Linha 791 — incluir 304 na condição de sucesso |
+| `src/pages/IntegraContador.tsx` | Linhas 307-312 — aceitar status 304 como válido |
 
