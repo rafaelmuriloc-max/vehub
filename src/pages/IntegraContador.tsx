@@ -311,39 +311,16 @@ export default function IntegraContador() {
           throw new Error(errMsg);
         }
 
-        // Extrair protocolo da resposta (múltiplos caminhos de extração)
-        let protocoloRelatorio = '';
-        // Caminho 1: step1.data.data.dados (resposta padrão ou cache injetado)
-        const dadosStep1 = step1.data?.data?.dados;
-        if (typeof dadosStep1 === 'string' && dadosStep1) {
-          try {
-            const parsed = JSON.parse(dadosStep1);
-            protocoloRelatorio = parsed.protocoloRelatorio || '';
-          } catch {
-            protocoloRelatorio = dadosStep1;
-          }
-        } else if (dadosStep1?.protocoloRelatorio) {
-          protocoloRelatorio = dadosStep1.protocoloRelatorio;
-        }
-        // Caminho 2: step1.data.dados (fallback)
-        if (!protocoloRelatorio) {
-          const dadosDirect = step1.data?.dados;
-          if (typeof dadosDirect === 'string' && dadosDirect) {
-            try {
-              const parsed = JSON.parse(dadosDirect);
-              protocoloRelatorio = parsed.protocoloRelatorio || '';
-            } catch {}
-          } else if (dadosDirect?.protocoloRelatorio) {
-            protocoloRelatorio = dadosDirect.protocoloRelatorio;
-          }
-        }
+        // Extract normalized context from edge function response
+        const sitfisCtx = step1.data?.data?.sitfis_context;
+        const protocoloRelatorio = sitfisCtx?.protocoloRelatorio;
 
         if (!protocoloRelatorio) {
           console.error('[SITFIS] Resposta step1 completa:', JSON.stringify(step1.data));
           throw new Error('Protocolo não encontrado na resposta da etapa 1. Tente novamente em alguns minutos.');
         }
 
-        // Etapa 2: emitir relatório com protocolo
+        // Etapa 2: emitir relatório usando contexto completo da etapa 1
         setLoadingMessage('Emitindo relatório...');
         const step2 = await supabase.functions.invoke('integra-contador', {
           body: {
@@ -351,8 +328,9 @@ export default function IntegraContador() {
             idSistema: 'SITFIS',
             idServico: 'RELATORIOSITFIS92',
             tipo: 'Emitir',
-            versaoSistema: '2.0',
+            versaoSistema: '1.0',
             dados: JSON.stringify({ protocoloRelatorio }),
+            sitfis_context: sitfisCtx,
           },
         });
         if (step2.error) throw step2.error;
