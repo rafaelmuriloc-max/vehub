@@ -788,7 +788,7 @@ Deno.serve(async (req) => {
     }
 
     return jsonResponse({
-      success: apiResponse.status >= 200 && apiResponse.status < 300,
+      success: (apiResponse.status >= 200 && apiResponse.status < 300) || apiResponse.status === 304,
       status: apiResponse.status,
       data: responseData,
       client_name: client.company_name,

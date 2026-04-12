@@ -305,7 +305,7 @@ export default function IntegraContador() {
           },
         });
         if (step1.error) throw step1.error;
-        if (!step1.data?.success) {
+        if (!step1.data?.success && step1.data?.status !== 304) {
           const msgs = step1.data?.data?.mensagens;
           const errMsg = msgs?.map((m: any) => m.texto).join('; ') || step1.data?.error || 'Erro ao solicitar protocolo';
           throw new Error(errMsg);
