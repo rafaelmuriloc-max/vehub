@@ -153,8 +153,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
     label: 'Situação Fiscal',
     icon: <Search className="h-4 w-4" />,
     services: [
-      { idSistema: 'SITFIS', idServico: 'SOLICITARPROTOCOLO91', label: 'Solicitar Protocolo', description: 'Solicita protocolo do relatório de situação fiscal', tipo: 'Apoiar', versaoSistema: '2.0', fields: [] },
-      { idSistema: 'SITFIS', idServico: 'RELATORIOSITFIS92', label: 'Relatório Situação Fiscal', description: 'Emite relatório completo da situação fiscal', tipo: 'Emitir', versaoSistema: '2.0', fields: [{ key: 'protocoloRelatorio', label: 'Protocolo do Relatório', required: true, placeholder: '' }] },
+      { idSistema: 'SITFIS', idServico: 'RELATORIOSITFIS92', label: 'Relatório de Situação Fiscal', description: 'Solicita protocolo e emite relatório automaticamente', tipo: 'Emitir', versaoSistema: '2.0', fields: [] },
     ],
   },
   pagamentos: {
@@ -233,6 +232,7 @@ export default function IntegraContador() {
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [result, setResult] = useState<unknown>(null);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [messageDetail, setMessageDetail] = useState<any>(null);
