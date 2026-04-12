@@ -1,113 +1,76 @@
 
+# Ajustar SITFIS para montar a 2ª etapa com o protocolo e o mesmo contexto da 1ª
 
-# Fix SITFIS: protocolo não retornado em resposta 304
+## Problema identificado
 
-## Problema
+Hoje o fluxo automático do SITFIS ainda depende de duas coisas frágeis:
 
-A API SERPRO retorna o `protocoloRelatorio` **apenas no primeiro request** (status 200). Nos requests seguintes, retorna 304 com **body vazio**. O frontend tenta extrair o protocolo do body vazio e falha com "Protocolo não encontrado na resposta da etapa 1".
+1. A etapa 1 (`SOLICITARPROTOCOLO91`) retorna `304` com body vazio em vários casos
+2. A etapa 2 (`RELATORIOSITFIS92`) é montada pelo fluxo genérico da Edge Function, recalculando `autorPedidoDados`, `contribuinte` e `versaoSistema` a partir do cliente selecionado
 
-Resposta real capturada na rede:
-```json
-{"success":true,"status":304,"data":"","client_name":"...","service":{...}}
-```
+Pelo body que você enviou, a etapa 2 precisa reutilizar o contexto correto da etapa 1 e enviar o protocolo dentro de `pedidoDados.dados` exatamente no formato esperado.
 
 ## Solução
 
-Cachear o protocolo no banco de dados quando a resposta é 200, e recuperá-lo do cache quando a resposta é 304.
+### 1. Normalizar a resposta da etapa 1 na Edge Function
+Em `supabase/functions/integra-contador/index.ts`:
 
-### 1. Edge Function (`supabase/functions/integra-contador/index.ts`)
+- Para `SOLICITARPROTOCOLO91`, extrair e normalizar:
+  - `protocoloRelatorio`
+  - `contratante`
+  - `autorPedidoDados`
+  - `contribuinte`
+  - `versaoSistema`
+- Salvar isso no cache existente (`integra_contador_cache`) como JSON, não só a string do protocolo
+- Quando vier `304`, devolver esse contexto normalizado do cache para o frontend
 
-Após receber a resposta da API SERPRO, se o serviço for `SOLICITARPROTOCOLO91`:
-- **Status 200**: extrair `protocoloRelatorio` da resposta e salvar no Supabase (tabela `integra_contador_cache`) com chave = `sitfis_protocolo:{contribuinte_cnpj}`, TTL de 24h
-- **Status 304**: buscar o protocolo cacheado da tabela `integra_contador_cache` e incluí-lo na resposta retornada ao frontend
+Assim a etapa 2 não precisa “adivinhar” nada.
 
-Isso garante que o frontend sempre receba o protocolo, independente do status.
+### 2. Montar a etapa 2 com body específico de SITFIS
+Ainda em `supabase/functions/integra-contador/index.ts`:
 
-### 2. Migração — criar tabela de cache
+- Criar um tratamento específico para `RELATORIOSITFIS92`
+- Em vez de usar o builder genérico, montar o body final usando:
+  - o mesmo `contratante`
+  - o mesmo `autorPedidoDados`
+  - o mesmo `contribuinte`
+  - a `versaoSistema` correta dessa etapa
+  - `pedidoDados.dados` = `JSON.stringify({ protocoloRelatorio })`
 
-```sql
-create table public.integra_contador_cache (
-  id uuid primary key default gen_random_uuid(),
-  cache_key text unique not null,
-  cache_value text not null,
-  expires_at timestamptz not null,
-  created_at timestamptz default now()
-);
+Em outras palavras, a chamada final passará a seguir este formato lógico:
 
-alter table public.integra_contador_cache enable row level security;
-
--- Cleanup de registros expirados (opcional, pode ser feito via cron)
-create index idx_integra_cache_key on public.integra_contador_cache(cache_key);
-create index idx_integra_cache_expires on public.integra_contador_cache(expires_at);
-```
-
-### 3. Edge Function — lógica de cache (após linha 790)
-
-```typescript
-// Após obter responseData, se for SOLICITARPROTOCOLO91:
-if (idServico === 'SOLICITARPROTOCOLO91') {
-  if (apiResponse.status >= 200 && apiResponse.status < 300) {
-    // Extrair protocolo e cachear
-    const dados = responseData?.dados || responseData?.pedidoDados?.dados;
-    let protocolo = '';
-    if (typeof dados === 'string') {
-      try { protocolo = JSON.parse(dados).protocoloRelatorio; } catch {}
-    }
-    if (protocolo) {
-      const contribuinteCnpj = requestBody.contribuinte?.numero;
-      await supabaseAdmin.from('integra_contador_cache')
-        .upsert({
-          cache_key: `sitfis_protocolo:${contribuinteCnpj}`,
-          cache_value: protocolo,
-          expires_at: new Date(Date.now() + 24*60*60*1000).toISOString()
-        }, { onConflict: 'cache_key' });
-    }
-  } else if (apiResponse.status === 304) {
-    // Buscar protocolo do cache
-    const contribuinteCnpj = requestBody.contribuinte?.numero;
-    const { data: cached } = await supabaseAdmin
-      .from('integra_contador_cache')
-      .select('cache_value')
-      .eq('cache_key', `sitfis_protocolo:${contribuinteCnpj}`)
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle();
-    
-    if (cached) {
-      // Incluir protocolo na resposta para o frontend
-      responseData = {
-        ...responseData,
-        dados: JSON.stringify({ protocoloRelatorio: cached.cache_value })
-      };
-    }
+```json
+{
+  "contratante": { ... },
+  "autorPedidoDados": { ... },
+  "contribuinte": { ... },
+  "pedidoDados": {
+    "idSistema": "SITFIS",
+    "idServico": "RELATORIOSITFIS92",
+    "versaoSistema": "...",
+    "dados": "{ \"protocoloRelatorio\": \"...\" }"
   }
 }
 ```
 
-### 4. Frontend (`src/pages/IntegraContador.tsx`)
+### 3. Simplificar o frontend
+Em `src/pages/IntegraContador.tsx`:
 
-Também buscar o protocolo de `step1.data?.data?.dados` (quando a edge function injeta no 304) e de `step1.data?.dados` (resposta direta 200). A extração atual já cobre esses paths, mas adicionar fallback para `step1.data?.data` como objeto direto:
+- A etapa 1 vai ler um campo normalizado único retornado pela Edge Function
+- A etapa 2 vai enviar para a função apenas o protocolo e, se necessário, o contexto SITFIS normalizado
+- Remover a extração frágil em vários caminhos (`step1.data.data.dados`, `step1.data.dados`, etc.)
 
-```typescript
-// Adicionar mais caminhos de extração
-const responseObj = step1.data?.data;
-if (typeof responseObj === 'object' && responseObj?.dados) {
-  // ...parse dados
-}
-// Também tentar step1.data?.dados diretamente
-```
+Isso deixa o frontend mais simples e tira a responsabilidade de montar o body correto do navegador.
 
-### 5. Logging adicional na Edge Function
-
-Adicionar `console.log` do body bruto para SITFIS para facilitar debug futuro:
-```typescript
-console.log(`[SITFIS] Raw response body: ${apiResponse.bodyText?.substring(0, 500)}`);
-```
+## Ajuste importante de regra
+Para SITFIS, a etapa 2 não deve recalcular `autorPedidoDados` e `contribuinte` apenas com base em `client.document`. Ela deve reutilizar exatamente o contexto válido da etapa anterior/cache, porque é isso que garante o body compatível com o protocolo retornado.
 
 ## Arquivos
-
 | Arquivo | Mudança |
-|---------|--------|
-| Nova migração SQL | Criar tabela `integra_contador_cache` |
-| `supabase/functions/integra-contador/index.ts` | Cache de protocolo (salvar no 200, recuperar no 304) + logging |
-| `src/pages/IntegraContador.tsx` | Melhorar extração do protocolo com mais fallbacks |
+|---|---|
+| `supabase/functions/integra-contador/index.ts` | Normalizar etapa 1, salvar contexto completo no cache e montar body específico da etapa 2 |
+| `src/pages/IntegraContador.tsx` | Simplificar fluxo de 2 etapas para consumir resposta normalizada |
+| Sem nova migração | A tabela `integra_contador_cache` já existe e o `cache_value` pode armazenar JSON |
 
+## Detalhe técnico
+Vou manter a versão (`versaoSistema`) configurada por etapa, em vez de deixar isso implícito no fluxo genérico. Assim a etapa 1 e a etapa 2 podem usar exatamente a versão exigida pelo SITFIS, sem mistura entre elas.
