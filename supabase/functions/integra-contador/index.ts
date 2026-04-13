@@ -811,24 +811,36 @@ Deno.serve(async (req) => {
     if (idServico === 'SOLICITARPROTOCOLO91') {
       console.log(`[SITFIS] Raw response status: ${apiResponse.status}, body: ${apiResponse.bodyText?.substring(0, 500)}`);
       
-      // Extract protocol from response
+      // Extract protocol and tempoEspera from response
       let protocolo = '';
+      let tempoEspera: number | null = null;
       if (apiResponse.status >= 200 && apiResponse.status < 300) {
         const dadosField = responseData?.dados || responseData?.pedidoDados?.dados;
+        let parsedDados: any = null;
         if (typeof dadosField === 'string') {
-          try { protocolo = JSON.parse(dadosField).protocoloRelatorio; } catch {}
-        } else if (typeof dadosField === 'object' && dadosField?.protocoloRelatorio) {
-          protocolo = dadosField.protocoloRelatorio;
+          try { parsedDados = JSON.parse(dadosField); } catch {}
+        } else if (typeof dadosField === 'object') {
+          parsedDados = dadosField;
+        }
+        if (parsedDados?.protocoloRelatorio) {
+          protocolo = parsedDados.protocoloRelatorio;
+        }
+        if (parsedDados?.tempoEspera && !protocolo) {
+          tempoEspera = Number(parsedDados.tempoEspera);
+          console.log(`[SITFIS] tempoEspera detected: ${tempoEspera}ms`);
         }
       }
 
       // Build the full SITFIS context to cache
-      const sitfisContext = {
+      const sitfisContext: any = {
         protocoloRelatorio: protocolo,
         contratante: requestBody.contratante,
         autorPedidoDados: requestBody.autorPedidoDados,
         contribuinte: requestBody.contribuinte,
       };
+      if (tempoEspera) {
+        sitfisContext.tempoEspera = tempoEspera;
+      }
 
       const cacheKey = `sitfis_contexto:${clientCnpjClean}`;
 
