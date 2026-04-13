@@ -129,7 +129,7 @@ export default function SituacaoFiscalTab() {
       // Extract PDF and status from response
       const responseData = step2.data?.data;
       let pdfBase64: string | null = null;
-      let fiscalStatus = 'regular';
+      let fiscalStatus = 'irregular';
 
       // Walk response to find PDF
       const walkForPdf = (obj: any): string | null => {
@@ -155,10 +155,28 @@ export default function SituacaoFiscalTab() {
 
       pdfBase64 = walkForPdf(parsedDados) || walkForPdf(responseData);
 
-      // Check for irregular status
+      // Check for regular status - only if NO negative indicators found
       const responseStr = JSON.stringify(responseData || '').toLowerCase();
-      if (responseStr.includes('irregular') || responseStr.includes('pendência') || responseStr.includes('pendencia')) {
-        fiscalStatus = 'irregular';
+      const negativeIndicators = [
+        'irregular',
+        'pendência', 'pendencia',
+        'débito', 'debito',
+        'inadimplente', 'inadimplência', 'inadimplencia',
+        'dívida', 'divida',
+        'multa',
+        'infração', 'infracao',
+        'não regular', 'nao regular',
+        'situação irregular', 'situacao irregular',
+        'exigibilidade suspensa',
+        'cobrança', 'cobranca',
+        'auto de infração', 'auto de infracao',
+        'omissão', 'omissao',
+        'parcelamento',
+      ];
+
+      const hasNegative = negativeIndicators.some(term => responseStr.includes(term));
+      if (!hasNegative) {
+        fiscalStatus = 'regular';
       }
 
       // Upsert result
