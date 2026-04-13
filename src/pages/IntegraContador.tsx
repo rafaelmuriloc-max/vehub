@@ -1011,6 +1011,12 @@ export default function IntegraContador() {
           ) : null}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="sitfis">
+          <SituacaoFiscalTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
