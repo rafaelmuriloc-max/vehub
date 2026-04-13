@@ -1280,6 +1280,44 @@ export type Database = {
         }
         Relationships: []
       }
+      sitfis_results: {
+        Row: {
+          client_id: string
+          consulted_at: string
+          error_message: string | null
+          id: string
+          pdf_base64: string | null
+          raw_response: Json | null
+          status: string
+        }
+        Insert: {
+          client_id: string
+          consulted_at?: string
+          error_message?: string | null
+          id?: string
+          pdf_base64?: string | null
+          raw_response?: Json | null
+          status?: string
+        }
+        Update: {
+          client_id?: string
+          consulted_at?: string
+          error_message?: string | null
+          id?: string
+          pdf_base64?: string | null
+          raw_response?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sitfis_results_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_assignments: {
         Row: {
           assigned_at: string
