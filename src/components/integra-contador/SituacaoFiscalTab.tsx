@@ -1,0 +1,443 @@
+import { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+
+type ClientWithSitfis = {
+  id: string;
+  company_name: string;
+  document: string | null;
+  sitfis_status: string | null;
+  consulted_at: string | null;
+  pdf_base64: string | null;
+  error_message: string | null;
+};
+
+export default function SituacaoFiscalTab() {
+  const { toast } = useToast();
+  const [clients, setClients] = useState<ClientWithSitfis[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [consultingId, setConsultingId] = useState<string | null>(null);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('id, company_name, document, digital_certificate_url')
+        .not('digital_certificate_url', 'is', null)
+        .eq('status', 'active')
+        .order('company_name');
+
+      if (!clientsData) { setLoading(false); return; }
+
+      const { data: sitfisData } = await supabase
+        .from('sitfis_results' as any)
+        .select('client_id, status, consulted_at, pdf_base64, error_message');
+
+      const sitfisMap = new Map<string, any>();
+      (sitfisData || []).forEach((r: any) => sitfisMap.set(r.client_id, r));
+
+      const merged: ClientWithSitfis[] = clientsData.map(c => {
+        const s = sitfisMap.get(c.id);
+        return {
+          id: c.id,
+          company_name: c.company_name,
+          document: c.document,
+          sitfis_status: s?.status || null,
+          consulted_at: s?.consulted_at || null,
+          pdf_base64: s?.pdf_base64 || null,
+          error_message: s?.error_message || null,
+        };
+      });
+      setClients(merged);
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  async function consultarSitfis(clientId: string): Promise<boolean> {
+    try {
+      // Step 1: request protocol with retries
+      let protocoloRelatorio: string | null = null;
+      let sitfisCtx: any = null;
+      const maxTentativas = 3;
+
+      for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
+        const step1 = await supabase.functions.invoke('integra-contador', {
+          body: {
+            client_id: clientId,
+            idSistema: 'SITFIS',
+            idServico: 'SOLICITARPROTOCOLO91',
+            tipo: 'Apoiar',
+            versaoSistema: '2.0',
+            dados: '',
+          },
+        });
+        if (step1.error) throw step1.error;
+        if (!step1.data?.success && step1.data?.status !== 304) {
+          const msgs = step1.data?.data?.mensagens;
+          const errMsg = msgs?.map((m: any) => m.texto).join('; ') || step1.data?.error || 'Erro ao solicitar protocolo';
+          throw new Error(errMsg);
+        }
+
+        sitfisCtx = step1.data?.data?.sitfis_context;
+        protocoloRelatorio = sitfisCtx?.protocoloRelatorio || null;
+        if (protocoloRelatorio) break;
+
+        const tempoEspera = sitfisCtx?.tempoEspera;
+        if (tempoEspera && tentativa < maxTentativas - 1) {
+          await new Promise(resolve => setTimeout(resolve, Number(tempoEspera)));
+          continue;
+        }
+        break;
+      }
+
+      if (!protocoloRelatorio) {
+        throw new Error('Protocolo não encontrado após tentativas.');
+      }
+
+      // Step 2: emit report
+      const step2 = await supabase.functions.invoke('integra-contador', {
+        body: {
+          client_id: clientId,
+          idSistema: 'SITFIS',
+          idServico: 'RELATORIOSITFIS92',
+          tipo: 'Emitir',
+          versaoSistema: '2.0',
+          dados: JSON.stringify({ protocoloRelatorio }),
+          sitfis_context: sitfisCtx,
+        },
+      });
+      if (step2.error) throw step2.error;
+
+      // Extract PDF and status from response
+      const responseData = step2.data?.data;
+      let pdfBase64: string | null = null;
+      let fiscalStatus = 'regular';
+
+      // Walk response to find PDF
+      const walkForPdf = (obj: any): string | null => {
+        if (!obj || typeof obj !== 'object') return null;
+        for (const [k, v] of Object.entries(obj)) {
+          if (k === 'pdf' && typeof v === 'string' && (v as string).length > 100) return v as string;
+          if (typeof v === 'string' && (v as string).startsWith('JVBERi0') && (v as string).length > 100) return v as string;
+          if (typeof v === 'object') {
+            const found = walkForPdf(v);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+
+      // Try to parse dados field
+      let parsedDados: any = null;
+      if (typeof responseData?.dados === 'string') {
+        try { parsedDados = JSON.parse(responseData.dados); } catch {}
+      } else if (typeof responseData?.dados === 'object') {
+        parsedDados = responseData.dados;
+      }
+
+      pdfBase64 = walkForPdf(parsedDados) || walkForPdf(responseData);
+
+      // Check for irregular status
+      const responseStr = JSON.stringify(responseData || '').toLowerCase();
+      if (responseStr.includes('irregular') || responseStr.includes('pendência') || responseStr.includes('pendencia')) {
+        fiscalStatus = 'irregular';
+      }
+
+      // Upsert result
+      await supabase.from('sitfis_results' as any).upsert({
+        client_id: clientId,
+        status: fiscalStatus,
+        consulted_at: new Date().toISOString(),
+        pdf_base64: pdfBase64,
+        raw_response: responseData,
+        error_message: null,
+      } as any, { onConflict: 'client_id' } as any);
+
+      return true;
+    } catch (err: any) {
+      console.error(`[SITFIS] Erro para ${clientId}:`, err);
+      await supabase.from('sitfis_results' as any).upsert({
+        client_id: clientId,
+        status: 'error',
+        consulted_at: new Date().toISOString(),
+        pdf_base64: null,
+        raw_response: null,
+        error_message: err.message || 'Erro desconhecido',
+      } as any, { onConflict: 'client_id' } as any);
+      return false;
+    }
+  }
+
+  async function handleConsultarIndividual(clientId: string) {
+    setConsultingId(clientId);
+    const ok = await consultarSitfis(clientId);
+    await loadData();
+    setConsultingId(null);
+    toast({
+      title: ok ? 'Consulta concluída' : 'Erro na consulta',
+      description: ok ? 'Situação fiscal atualizada.' : 'Verifique os logs.',
+      variant: ok ? 'default' : 'destructive',
+    });
+  }
+
+  async function handleConsultarLote() {
+    const ids = selected.size > 0 ? Array.from(selected) : clients.map(c => c.id);
+    if (ids.length === 0) return;
+
+    setBatchRunning(true);
+    setBatchProgress({ current: 0, total: ids.length });
+    let successCount = 0;
+
+    for (let i = 0; i < ids.length; i++) {
+      setBatchProgress({ current: i + 1, total: ids.length });
+      const ok = await consultarSitfis(ids[i]);
+      if (ok) successCount++;
+      await loadData();
+    }
+
+    setBatchRunning(false);
+    toast({
+      title: 'Consulta em lote concluída',
+      description: `${successCount}/${ids.length} consultas realizadas com sucesso.`,
+    });
+  }
+
+  function openPdf(pdf: string) {
+    const dataUrl = `data:application/pdf;base64,${pdf}`;
+    window.open(dataUrl, '_blank');
+  }
+
+  function downloadPdf(pdf: string, name: string) {
+    const dataUrl = `data:application/pdf;base64,${pdf}`;
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `Situacao_Fiscal_${name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    link.click();
+  }
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map(c => c.id)));
+    }
+  }
+
+  const filtered = clients.filter(c => {
+    const matchSearch = !search ||
+      c.company_name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.document || '').includes(search);
+    const matchStatus = filterStatus === 'all' ||
+      (filterStatus === 'pending' && !c.sitfis_status) ||
+      c.sitfis_status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  function statusBadge(status: string | null) {
+    if (!status || status === 'pending') {
+      return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
+    }
+    if (status === 'regular') {
+      return <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-700"><CheckCircle2 className="h-3 w-3" /> Regular</Badge>;
+    }
+    if (status === 'irregular') {
+      return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Irregular</Badge>;
+    }
+    if (status === 'error') {
+      return <Badge variant="secondary" className="gap-1 text-orange-600"><AlertCircle className="h-3 w-3" /> Erro</Badge>;
+    }
+    return <Badge variant="outline">{status}</Badge>;
+  }
+
+  if (loading && clients.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
+            <Button
+              onClick={handleConsultarLote}
+              disabled={batchRunning || !!consultingId}
+              className="gap-2"
+            >
+              {batchRunning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {batchProgress.current}/{batchProgress.total}
+                </>
+              ) : (
+                <>
+                  <PlayCircle className="h-4 w-4" />
+                  Consultar em Lote {selected.size > 0 ? `(${selected.size})` : `(${clients.length})`}
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou CNPJ..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="Filtrar situação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="regular">Regular</SelectItem>
+                <SelectItem value="irregular">Irregular</SelectItem>
+                <SelectItem value="error">Erro</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filtered.length > 0 && selected.size === filtered.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Razão Social</TableHead>
+                  <TableHead className="hidden md:table-cell">CNPJ/CPF</TableHead>
+                  <TableHead className="w-32">Situação</TableHead>
+                  <TableHead className="hidden lg:table-cell w-44">Última Consulta</TableHead>
+                  <TableHead className="w-32 text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      Nenhum cliente encontrado
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map(c => (
+                    <TableRow key={c.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(c.id)}
+                          onCheckedChange={() => toggleSelect(c.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{c.company_name}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                        {c.document || '—'}
+                      </TableCell>
+                      <TableCell>
+                        {consultingId === c.id ? (
+                          <Badge variant="outline" className="gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Consultando
+                          </Badge>
+                        ) : (
+                          statusBadge(c.sitfis_status)
+                        )}
+                        {c.error_message && c.sitfis_status === 'error' && (
+                          <p className="text-xs text-destructive mt-1 line-clamp-1" title={c.error_message}>
+                            {c.error_message}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                        {c.consulted_at
+                          ? new Date(c.consulted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+                          : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Consultar"
+                            onClick={() => handleConsultarIndividual(c.id)}
+                            disabled={!!consultingId || batchRunning}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Visualizar PDF"
+                            onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
+                            disabled={!c.pdf_base64}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Baixar PDF"
+                            onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
+                            disabled={!c.pdf_base64}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <span>{filtered.length} cliente(s)</span>
+            <span className="text-emerald-600">
+              {clients.filter(c => c.sitfis_status === 'regular').length} regular
+            </span>
+            <span className="text-destructive">
+              {clients.filter(c => c.sitfis_status === 'irregular').length} irregular
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
