@@ -459,19 +459,50 @@ export default function IntegraContador() {
   // --- PDF extraction & download helpers ---
   function extractFilesFromResponse(res: any): { name: string; base64: string }[] {
     const files: { name: string; base64: string }[] = [];
+    const isSitfis = selectedService?.idServico === 'RELATORIOSITFIS92';
+    const defaultName = isSitfis ? 'Relatório Situação Fiscal.pdf' : 'documento.pdf';
+
+    // Try multiple paths where dados might live
+    const candidates = [
+      res?.data?.dados,
+      res?.dados,
+      res?.data?.data?.dados,
+      res?.data,
+    ];
+
     try {
-      const dados = res?.data?.dados || res?.dados;
-      const parsed = typeof dados === 'string' ? JSON.parse(dados) : dados;
-      if (!parsed || typeof parsed !== 'object') return files;
-      const walk = (obj: any) => {
-        if (!obj || typeof obj !== 'object') return;
-        if (obj.pdf && typeof obj.pdf === 'string' && obj.pdf.length > 100) {
-          files.push({ name: obj.nomeArquivo || 'documento.pdf', base64: obj.pdf });
-          return;
+      for (const raw of candidates) {
+        if (!raw) continue;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!parsed || typeof parsed !== 'object') continue;
+
+        const walk = (obj: any) => {
+          if (!obj || typeof obj !== 'object') return;
+          if (typeof obj.pdf === 'string' && obj.pdf.length > 100) {
+            files.push({ name: obj.nomeArquivo || defaultName, base64: obj.pdf });
+            return;
+          }
+          for (const v of Object.values(obj)) walk(v);
+        };
+        walk(parsed);
+
+        if (files.length > 0) break;
+      }
+
+      // Fallback: check if any string value in dados looks like base64 PDF
+      if (files.length === 0) {
+        for (const raw of candidates) {
+          if (!raw) continue;
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (!parsed || typeof parsed !== 'object') continue;
+          for (const [key, val] of Object.entries(parsed)) {
+            if (typeof val === 'string' && val.length > 100 && val.startsWith('JVBERi0')) {
+              files.push({ name: defaultName, base64: val });
+            }
+          }
+          if (files.length > 0) break;
         }
-        for (const v of Object.values(obj)) walk(v);
-      };
-      walk(parsed);
+      }
     } catch { /* ignore */ }
     return files;
   }
