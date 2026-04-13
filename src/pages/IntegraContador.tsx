@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell, MailOpen, MailCheck, Eye, Download, FileDown } from 'lucide-react';
 import PgdasdDeclaracaoForm from '@/components/integra-contador/PgdasdDeclaracaoForm';
+import SituacaoFiscalTab from '@/components/integra-contador/SituacaoFiscalTab';
 
 type Client = {
   id: string;
@@ -639,6 +640,19 @@ export default function IntegraContador() {
         </p>
       </div>
 
+      <Tabs defaultValue="servicos" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="servicos" className="gap-1.5">
+            <Landmark className="h-4 w-4" />
+            Serviços
+          </TabsTrigger>
+          <TabsTrigger value="sitfis" className="gap-1.5">
+            <Shield className="h-4 w-4" />
+            Situação Fiscal
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="servicos">
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left: Configuration */}
         <div className="space-y-4">
