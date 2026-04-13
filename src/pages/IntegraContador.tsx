@@ -516,6 +516,8 @@ export default function IntegraContador() {
       for (const [k, v] of Object.entries(parsed)) {
         if (v === null || v === undefined) continue;
         if (typeof v === 'object') continue; // skip nested (files)
+        if (k === 'pdf') continue;
+        if (typeof v === 'string' && v.length > 500) continue;
         entries.push([k, String(v)]);
       }
     } catch { /* ignore */ }
@@ -812,7 +814,7 @@ export default function IntegraContador() {
                           <div className="grid gap-3">
                             {files.map((f, i) => (
                               <Card key={i} className="border-dashed">
-                                <CardContent className="flex items-center justify-between p-4">
+                                <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4">
                                   <div className="flex items-center gap-3">
                                     <FileDown className="h-8 w-8 text-primary" />
                                     <div>
