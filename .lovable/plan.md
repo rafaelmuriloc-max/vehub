@@ -1,72 +1,53 @@
 
 
-# Aba "Situação Fiscal" separada no Integra Contador
+# Melhorar detecção de status fiscal (Regular/Irregular)
 
-## Visão geral
+## Problema
 
-Criar uma aba dedicada para Situação Fiscal dentro da página Integra Contador, com:
-- Tabela listando todos os clientes (com certificado digital)
-- Colunas: Nome, Situação (Regular/Irregular), Data última consulta, Ações
-- Botão "Consultar em Lote" para processar todos os clientes sequencialmente
-- Botões individuais: Consultar, Visualizar PDF, Baixar PDF
+Atualmente, o status só é marcado como "irregular" se o JSON da resposta contiver as palavras "irregular", "pendência" ou "pendencia". Isso é insuficiente -- o relatório pode conter débitos, multas ou outras situações que indicam irregularidade sem usar essas palavras exatas.
 
-## Nova tabela no Supabase
+## Solução
 
-Criar `sitfis_results` para persistir os resultados:
+Expandir a verificação no `SituacaoFiscalTab.tsx` (linhas 158-162) para incluir uma lista mais abrangente de termos que indicam problemas fiscais. O status padrão será `'irregular'` e só será `'regular'` se **nenhum** dos termos negativos for encontrado.
 
-```sql
-create table public.sitfis_results (
-  id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references clients(id) on delete cascade,
-  status text not null default 'pending', -- 'regular', 'irregular', 'pending', 'error'
-  consulted_at timestamp with time zone not null default now(),
-  pdf_base64 text,
-  raw_response jsonb,
-  error_message text,
-  unique(client_id)
-);
+### Mudança em `src/components/integra-contador/SituacaoFiscalTab.tsx`
 
-alter table public.sitfis_results enable row level security;
+Substituir o bloco de detecção (linhas 132, 158-162):
 
-create policy "Authenticated can view" on public.sitfis_results
-  for select to authenticated using (true);
+```typescript
+// Default to irregular - only regular if no issues found
+let fiscalStatus = 'irregular';
 
-create policy "Admins can manage" on public.sitfis_results
-  for all to authenticated using (has_role(auth.uid(), 'admin'::app_role))
-  with check (has_role(auth.uid(), 'admin'::app_role));
+// ...existing PDF extraction code...
+
+// Check for regular status - only if NO negative indicators found
+const responseStr = JSON.stringify(responseData || '').toLowerCase();
+const negativeIndicators = [
+  'irregular',
+  'pendência', 'pendencia',
+  'débito', 'debito',
+  'inadimplente', 'inadimplência', 'inadimplencia',
+  'dívida', 'divida',
+  'multa',
+  'infração', 'infracao',
+  'não regular', 'nao regular',
+  'situação irregular', 'situacao irregular',
+  'exigibilidade suspensa',
+  'cobrança', 'cobranca',
+  'auto de infração', 'auto de infracao',
+  'omissão', 'omissao',
+  'parcelamento',
+];
+
+const hasNegative = negativeIndicators.some(term => responseStr.includes(term));
+if (!hasNegative) {
+  fiscalStatus = 'regular';
+}
 ```
 
-## Mudanças em arquivos
-
-### `src/pages/IntegraContador.tsx`
-
-1. Adicionar uma aba de nível superior ao componente: "Serviços" (conteúdo atual) e "Situação Fiscal" (nova)
-2. A aba "Situação Fiscal" será um componente separado importado
-
-### `src/components/integra-contador/SituacaoFiscalTab.tsx` (novo)
-
-Componente com:
-- Carrega clientes com certificado + resultados de `sitfis_results` via join
-- Tabela com colunas: checkbox, Razão Social, CNPJ/CPF, Situação (badge colorido), Consultado em, Ação
-- Badge "Regular" (verde) / "Irregular" (vermelho) / "Pendente" (cinza)
-- Botão "Consultar em Lote" no topo — itera clientes selecionados, chama o fluxo SITFIS existente (etapa 1 + etapa 2), e faz upsert do resultado em `sitfis_results`
-- Botões de ação por linha:
-  - Consultar (RefreshCw) — executa SITFIS individual
-  - Visualizar (Eye) — abre PDF em nova aba via data URL
-  - Baixar (Download) — download do PDF
-- Busca por CNPJ/Razão social
-- Filtro por situação
-
-### `supabase/functions/integra-contador/index.ts`
-
-Ajustar para, ao completar `RELATORIOSITFIS92` com sucesso, fazer upsert em `sitfis_results` com o PDF base64, status extraído da resposta, e timestamp. Isso garante que os dados ficam persistidos mesmo se chamado via lote.
-
-## Arquivos
+Inversão de lógica: antes era "regular por padrão, irregular se achar palavras". Agora é **"irregular por padrão, regular só se não achar nenhum indicador negativo"**.
 
 | Arquivo | Mudança |
 |---------|--------|
-| `supabase/migrations/xxx_create_sitfis_results.sql` | Nova tabela `sitfis_results` |
-| `src/components/integra-contador/SituacaoFiscalTab.tsx` | Novo componente da aba |
-| `src/pages/IntegraContador.tsx` | Adicionar tabs de nível superior e importar nova aba |
-| `supabase/functions/integra-contador/index.ts` | Upsert em `sitfis_results` após RELATORIOSITFIS92 |
+| `src/components/integra-contador/SituacaoFiscalTab.tsx` | Inverter lógica de detecção + expandir lista de termos negativos |
 
