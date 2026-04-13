@@ -347,7 +347,7 @@ export default function IntegraContador() {
             idSistema: 'SITFIS',
             idServico: 'RELATORIOSITFIS92',
             tipo: 'Emitir',
-            versaoSistema: '1.0',
+            versaoSistema: '2.0',
             dados: JSON.stringify({ protocoloRelatorio }),
             sitfis_context: sitfisCtx,
           },

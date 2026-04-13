@@ -734,7 +734,7 @@ Deno.serve(async (req) => {
         pedidoDados: {
           idSistema,
           idServico,
-          versaoSistema: versaoSistema || "1.0",
+          versaoSistema: versaoSistema || "2.0",
           dados: typeof dados === "string" ? dados : JSON.stringify(dados || {}),
         },
       };
