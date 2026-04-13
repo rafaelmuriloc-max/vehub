@@ -292,32 +292,51 @@ export default function IntegraContador() {
     try {
       // Fluxo automático de 2 etapas para Situação Fiscal
       if (selectedService.idSistema === 'SITFIS' && selectedService.idServico === 'RELATORIOSITFIS92' && !dadosOverride) {
-        // Etapa 1: solicitar protocolo
-        setLoadingMessage('Solicitando protocolo...');
-        const step1 = await supabase.functions.invoke('integra-contador', {
-          body: {
-            client_id: selectedClientId,
-            idSistema: 'SITFIS',
-            idServico: 'SOLICITARPROTOCOLO91',
-            tipo: 'Apoiar',
-            versaoSistema: '2.0',
-            dados: '',
-          },
-        });
-        if (step1.error) throw step1.error;
-        if (!step1.data?.success && step1.data?.status !== 304) {
-          const msgs = step1.data?.data?.mensagens;
-          const errMsg = msgs?.map((m: any) => m.texto).join('; ') || step1.data?.error || 'Erro ao solicitar protocolo';
-          throw new Error(errMsg);
+        // Etapa 1: solicitar protocolo com retry quando tempoEspera é retornado
+        let protocoloRelatorio: string | null = null;
+        let sitfisCtx: any = null;
+        const maxTentativas = 3;
+
+        for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
+          setLoadingMessage(tentativa === 0 ? 'Solicitando protocolo...' : `Tentativa ${tentativa + 1}: solicitando protocolo...`);
+          const step1 = await supabase.functions.invoke('integra-contador', {
+            body: {
+              client_id: selectedClientId,
+              idSistema: 'SITFIS',
+              idServico: 'SOLICITARPROTOCOLO91',
+              tipo: 'Apoiar',
+              versaoSistema: '2.0',
+              dados: '',
+            },
+          });
+          if (step1.error) throw step1.error;
+          if (!step1.data?.success && step1.data?.status !== 304) {
+            const msgs = step1.data?.data?.mensagens;
+            const errMsg = msgs?.map((m: any) => m.texto).join('; ') || step1.data?.error || 'Erro ao solicitar protocolo';
+            throw new Error(errMsg);
+          }
+
+          sitfisCtx = step1.data?.data?.sitfis_context;
+          protocoloRelatorio = sitfisCtx?.protocoloRelatorio || null;
+
+          if (protocoloRelatorio) break;
+
+          // Check for tempoEspera (API asks us to wait)
+          const tempoEspera = sitfisCtx?.tempoEspera;
+          if (tempoEspera && tentativa < maxTentativas - 1) {
+            const waitSec = Math.ceil(Number(tempoEspera) / 1000);
+            setLoadingMessage(`Aguardando processamento... (${waitSec}s)`);
+            await new Promise(resolve => setTimeout(resolve, Number(tempoEspera)));
+            continue;
+          }
+
+          // No protocol and no tempoEspera — fail
+          break;
         }
 
-        // Extract normalized context from edge function response
-        const sitfisCtx = step1.data?.data?.sitfis_context;
-        const protocoloRelatorio = sitfisCtx?.protocoloRelatorio;
-
         if (!protocoloRelatorio) {
-          console.error('[SITFIS] Resposta step1 completa:', JSON.stringify(step1.data));
-          throw new Error('Protocolo não encontrado na resposta da etapa 1. Tente novamente em alguns minutos.');
+          console.error('[SITFIS] Resposta final sem protocolo:', JSON.stringify(sitfisCtx));
+          throw new Error('Protocolo não encontrado após tentativas. Tente novamente em alguns minutos.');
         }
 
         // Etapa 2: emitir relatório usando contexto completo da etapa 1
