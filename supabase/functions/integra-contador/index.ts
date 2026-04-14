@@ -618,6 +618,12 @@ Deno.serve(async (req) => {
     // When autorPedidoDados (client) differs from contratante (office), we need the procurador token
     let procuradorToken: string | null = null;
 
+    // Hoist client certificate variables so they're accessible for 403 retry
+    let clientCertPem: string | undefined;
+    let clientKeyPem: string | undefined;
+    let clientCertObj: any;
+    let clientPrivateKey: any;
+
     if (autorPedidoCpfCnpj !== contratanteCnpj) {
       console.log(`[integra-contador] autorPedidoDados (${autorPedidoCpfCnpj}) != contratante (${contratanteCnpj}) — iniciando fluxo de procurador`);
 
@@ -640,10 +646,14 @@ Deno.serve(async (req) => {
       }
 
       const clientPfxBytes = new Uint8Array(await clientCertFile.arrayBuffer());
-      const { certPem: clientCertPem, keyPem: clientKeyPem } = await parsePfx(clientPfxBytes, client.digital_certificate_password);
+      const parsedClientCert = await parsePfx(clientPfxBytes, client.digital_certificate_password);
+      clientCertPem = parsedClientCert.certPem;
+      clientKeyPem = parsedClientCert.keyPem;
 
       // Parse client's PFX to get the certificate object and private key for signing
-      const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
+      const parsedForSigning = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
+      clientCertObj = parsedForSigning.certificate;
+      clientPrivateKey = parsedForSigning.privateKey;
 
       // Try obtainProcuradorToken, retry once on 401 (token expired)
       let procuradorResult = await obtainProcuradorToken(
