@@ -810,6 +810,43 @@ Deno.serve(async (req) => {
       console.log(`API response status (retry): ${apiResponse.status}`);
     }
 
+    // Retry on 403 with procurador token (cached token may be stale on SERPRO side)
+    if (apiResponse.status === 403 && procuradorToken && clientCertPem && clientKeyPem && clientCertObj && clientPrivateKey) {
+      console.log(`[integra-contador] 403 com procuradorToken — invalidando cache e re-obtendo token fresco...`);
+
+      // Delete stale cached token
+      await serviceClient.from("procurador_tokens")
+        .delete()
+        .eq("contratante_cnpj", contratanteCnpj)
+        .eq("client_cnpj", clientCnpjClean);
+
+      // Re-obtain procurador token (will sign XML fresh since cache is empty)
+      const freshResult = await obtainProcuradorToken(
+        contratanteCnpj,
+        contratanteNome,
+        autorPedidoCpfCnpj,
+        client.company_name || "Cliente",
+        clientCertPem,
+        clientKeyPem,
+        clientCertObj,
+        clientPrivateKey,
+        certPem,
+        keyPem,
+        bearerToken,
+        jwtToken,
+        serviceClient,
+      );
+
+      if (typeof freshResult === "string" && freshResult.length > 0) {
+        procuradorToken = freshResult;
+        console.log(`[integra-contador] Token fresco obtido (${procuradorToken.length} chars), repetindo chamada...`);
+        apiResponse = await callSerproApi(bearerToken, jwtToken);
+        console.log(`API response status (403 retry): ${apiResponse.status}`);
+      } else {
+        console.log(`[integra-contador] Não foi possível obter token fresco, mantendo resposta 403 original.`);
+      }
+    }
+
     let responseData: any;
     try {
       responseData = JSON.parse(apiResponse.bodyText);
