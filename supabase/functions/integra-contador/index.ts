@@ -618,6 +618,12 @@ Deno.serve(async (req) => {
     // When autorPedidoDados (client) differs from contratante (office), we need the procurador token
     let procuradorToken: string | null = null;
 
+    // Hoist client certificate variables so they're accessible for 403 retry
+    let clientCertPem: string | undefined;
+    let clientKeyPem: string | undefined;
+    let clientCertObj: any;
+    let clientPrivateKey: any;
+
     if (autorPedidoCpfCnpj !== contratanteCnpj) {
       console.log(`[integra-contador] autorPedidoDados (${autorPedidoCpfCnpj}) != contratante (${contratanteCnpj}) — iniciando fluxo de procurador`);
 
@@ -640,10 +646,14 @@ Deno.serve(async (req) => {
       }
 
       const clientPfxBytes = new Uint8Array(await clientCertFile.arrayBuffer());
-      const { certPem: clientCertPem, keyPem: clientKeyPem } = await parsePfx(clientPfxBytes, client.digital_certificate_password);
+      const parsedClientCert = await parsePfx(clientPfxBytes, client.digital_certificate_password);
+      clientCertPem = parsedClientCert.certPem;
+      clientKeyPem = parsedClientCert.keyPem;
 
       // Parse client's PFX to get the certificate object and private key for signing
-      const { certificate: clientCertObj, privateKey: clientPrivateKey } = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
+      const parsedForSigning = parsePfxForSigning(clientPfxBytes, client.digital_certificate_password);
+      clientCertObj = parsedForSigning.certificate;
+      clientPrivateKey = parsedForSigning.privateKey;
 
       // Try obtainProcuradorToken, retry once on 401 (token expired)
       let procuradorResult = await obtainProcuradorToken(
@@ -798,6 +808,43 @@ Deno.serve(async (req) => {
       jwtToken = newAuth.jwtToken;
       apiResponse = await callSerproApi(bearerToken, jwtToken);
       console.log(`API response status (retry): ${apiResponse.status}`);
+    }
+
+    // Retry on 403 with procurador token (cached token may be stale on SERPRO side)
+    if (apiResponse.status === 403 && procuradorToken && clientCertPem && clientKeyPem && clientCertObj && clientPrivateKey) {
+      console.log(`[integra-contador] 403 com procuradorToken — invalidando cache e re-obtendo token fresco...`);
+
+      // Delete stale cached token
+      await serviceClient.from("procurador_tokens")
+        .delete()
+        .eq("contratante_cnpj", contratanteCnpj)
+        .eq("client_cnpj", clientCnpjClean);
+
+      // Re-obtain procurador token (will sign XML fresh since cache is empty)
+      const freshResult = await obtainProcuradorToken(
+        contratanteCnpj,
+        contratanteNome,
+        autorPedidoCpfCnpj,
+        client.company_name || "Cliente",
+        clientCertPem,
+        clientKeyPem,
+        clientCertObj,
+        clientPrivateKey,
+        certPem,
+        keyPem,
+        bearerToken,
+        jwtToken,
+        serviceClient,
+      );
+
+      if (typeof freshResult === "string" && freshResult.length > 0) {
+        procuradorToken = freshResult;
+        console.log(`[integra-contador] Token fresco obtido (${procuradorToken.length} chars), repetindo chamada...`);
+        apiResponse = await callSerproApi(bearerToken, jwtToken);
+        console.log(`API response status (403 retry): ${apiResponse.status}`);
+      } else {
+        console.log(`[integra-contador] Não foi possível obter token fresco, mantendo resposta 403 original.`);
+      }
     }
 
     let responseData: any;
