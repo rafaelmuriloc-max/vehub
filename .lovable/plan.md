@@ -1,53 +1,55 @@
 
 
-# Melhorar detecção de status fiscal (Regular/Irregular)
+# Retry com novo token de procurador ao receber 403
 
 ## Problema
 
-Atualmente, o status só é marcado como "irregular" se o JSON da resposta contiver as palavras "irregular", "pendência" ou "pendencia". Isso é insuficiente -- o relatório pode conter débitos, multas ou outras situações que indicam irregularidade sem usar essas palavras exatas.
+O fluxo de procuração funciona assim:
+1. `obtainProcuradorToken` busca o token no cache (`procurador_tokens`)
+2. Se encontra (dentro da validade de 24h), retorna direto
+3. O token é enviado no header `autenticar_procurador_token`
+4. SERPRO retorna 403 "AcessoNegado" mesmo com o token
+
+O problema: o token cacheado está inválido no lado do SERPRO (pode ter sido revogado ou expirado antes das 24h), mas o sistema não tenta obter um novo -- simplesmente retorna o erro 403.
 
 ## Solução
 
-Expandir a verificação no `SituacaoFiscalTab.tsx` (linhas 158-162) para incluir uma lista mais abrangente de termos que indicam problemas fiscais. O status padrão será `'irregular'` e só será `'regular'` se **nenhum** dos termos negativos for encontrado.
+Adicionar retry no `supabase/functions/integra-contador/index.ts`: quando a API retorna 403 e o `procuradorToken` veio do cache, invalidar o cache, obter um novo token (re-assinar o XML), e repetir a chamada.
 
-### Mudança em `src/components/integra-contador/SituacaoFiscalTab.tsx`
+### Mudanças em `supabase/functions/integra-contador/index.ts`
 
-Substituir o bloco de detecção (linhas 132, 158-162):
+1. **Após a chamada `callSerproApi`** (linha ~790): adicionar lógica de retry para 403 quando `procuradorToken` está presente:
+   - Deletar o token do cache (`procurador_tokens`)
+   - Re-executar `obtainProcuradorToken` (que agora não encontra cache e gera XML assinado fresco)
+   - Atualizar `procuradorToken` e repetir `callSerproApi`
+
+2. **Para isso funcionar**, as variáveis do certificado do cliente precisam estar acessíveis no escopo do retry. Atualmente o download/parse do certificado do cliente ocorre dentro do bloco `if (autorPedidoCpfCnpj !== contratanteCnpj)`. Basta manter referências dessas variáveis no escopo externo.
+
+Trecho aproximado da mudança (após linha 801):
 
 ```typescript
-// Default to irregular - only regular if no issues found
-let fiscalStatus = 'irregular';
-
-// ...existing PDF extraction code...
-
-// Check for regular status - only if NO negative indicators found
-const responseStr = JSON.stringify(responseData || '').toLowerCase();
-const negativeIndicators = [
-  'irregular',
-  'pendência', 'pendencia',
-  'débito', 'debito',
-  'inadimplente', 'inadimplência', 'inadimplencia',
-  'dívida', 'divida',
-  'multa',
-  'infração', 'infracao',
-  'não regular', 'nao regular',
-  'situação irregular', 'situacao irregular',
-  'exigibilidade suspensa',
-  'cobrança', 'cobranca',
-  'auto de infração', 'auto de infracao',
-  'omissão', 'omissao',
-  'parcelamento',
-];
-
-const hasNegative = negativeIndicators.some(term => responseStr.includes(term));
-if (!hasNegative) {
-  fiscalStatus = 'regular';
+// Retry on 403 with procurador token (cached token may be stale)
+if (apiResponse.status === 403 && procuradorToken) {
+  console.log(`[integra-contador] 403 com procuradorToken — invalidando cache e re-obtendo token...`);
+  
+  // Delete stale cache
+  await serviceClient.from("procurador_tokens")
+    .delete()
+    .eq("contratante_cnpj", contratanteCnpj)
+    .eq("client_cnpj", clientCnpjClean);
+  
+  // Re-obtain procurador token (will sign XML fresh)
+  const freshToken = await obtainProcuradorToken(...);
+  if (typeof freshToken === "string" && freshToken.length > 0) {
+    procuradorToken = freshToken;
+    apiResponse = await callSerproApi(bearerToken, jwtToken);
+  }
 }
 ```
 
-Inversão de lógica: antes era "regular por padrão, irregular se achar palavras". Agora é **"irregular por padrão, regular só se não achar nenhum indicador negativo"**.
+## Arquivos
 
 | Arquivo | Mudança |
 |---------|--------|
-| `src/components/integra-contador/SituacaoFiscalTab.tsx` | Inverter lógica de detecção + expandir lista de termos negativos |
+| `supabase/functions/integra-contador/index.ts` | Retry 403 invalidando cache do procurador e re-assinando XML |
 
