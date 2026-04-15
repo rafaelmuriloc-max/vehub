@@ -277,6 +277,7 @@ export type Database = {
           address: string | null
           business_classification: string | null
           business_segment: string | null
+          cadastral_status: string | null
           company_description: string | null
           company_name: string
           contact_email: string | null
@@ -324,6 +325,7 @@ export type Database = {
           address?: string | null
           business_classification?: string | null
           business_segment?: string | null
+          cadastral_status?: string | null
           company_description?: string | null
           company_name: string
           contact_email?: string | null
@@ -371,6 +373,7 @@ export type Database = {
           address?: string | null
           business_classification?: string | null
           business_segment?: string | null
+          cadastral_status?: string | null
           company_description?: string | null
           company_name?: string
           contact_email?: string | null
