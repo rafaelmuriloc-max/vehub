@@ -1745,7 +1745,45 @@ export default function Clients() {
                       });
                     }} />
                   </div>
-                  <div className="space-y-2"><Label>Inscrição Estadual</Label><Input {...f('state_registration')} /></div>
+                  <div className="space-y-2">
+                    <Label>Inscrição Estadual</Label>
+                    <div className="flex gap-2">
+                      <Input {...f('state_registration')} className="flex-1" />
+                      {!viewOnly && form.document && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          disabled={ieLookupLoading}
+                          title="Buscar IE no SAT/SC"
+                          onClick={async () => {
+                            setIeLookupLoading(true);
+                            try {
+                              const { data, error } = await supabase.functions.invoke('sat-sc-lookup', {
+                                body: { cnpj: form.document },
+                              });
+                              if (error) throw error;
+                              if (data?.success) {
+                                if (data.ie) setForm(prev => ({ ...prev, state_registration: data.ie }));
+                                toast({
+                                  title: data.ie ? `IE: ${data.ie}` : 'IE não encontrada',
+                                  description: data.situacao ? `Situação Cadastral: ${data.situacao}` : undefined,
+                                });
+                              } else {
+                                toast({ title: 'Erro', description: data?.error || 'Não encontrado', variant: 'destructive' });
+                              }
+                            } catch (err: any) {
+                              toast({ title: 'Erro na consulta', description: err.message, variant: 'destructive' });
+                            } finally {
+                              setIeLookupLoading(false);
+                            }
+                          }}
+                        >
+                          {ieLookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                   <div className="space-y-2"><Label>Inscrição Municipal</Label><Input {...f('municipal_registration')} /></div>
                 </div>
                 {renderDeptObligations('fiscal')}
