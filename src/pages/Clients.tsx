@@ -184,6 +184,7 @@ export default function Clients() {
    const [certResponsibleLoaded, setCertResponsibleLoaded] = useState(false);
    const [whatsappGroups, setWhatsappGroups] = useState<{ id: string; name: string }[]>([]);
    const [loadingGroups, setLoadingGroups] = useState(false);
+   const [ieLookupLoading, setIeLookupLoading] = useState(false);
 
    useEffect(() => {
      (async () => {
