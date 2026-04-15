@@ -149,10 +149,9 @@ function parseResult(clean: string): any {
     { field: 'ie', re: /Inscri[çc][aã]o\s*Estadual[^<]*<\/[^>]+>\s*(?:<[^>]*>\s*)*([^<]+)/i },
     { field: 'ie', re: /IE[:\s]*(\d{3}\.?\d{3}\.?\d{3})/i },
     { field: 'ie', re: /id="[^"]*[Ii]nscricao[Ee]stadual[^"]*"[^>]*>([^<]+)/i },
-    // Situação
+    // Situação - only match in structured data context, not random words
     { field: 'situacao', re: /Situa[çc][aã]o\s*Cadastral[^<]*<\/[^>]+>\s*(?:<[^>]*>\s*)*([^<]+)/i },
-    { field: 'situacao', re: /id="[^"]*[Ss]ituacao[^"]*"[^>]*>([^<]+)/i },
-    { field: 'situacao', re: /(Ativ[oa]|Baixad[oa]|Suspens[oa]|Inapt[oa]|Cancel[ao]d[ao]|Nul[ao])/i },
+    { field: 'situacao', re: /id="[^"]*[Ss]ituacao[Cc]adastral[^"]*"[^>]*>([^<]+)/i },
     // Razão Social
     { field: 'razao', re: /Raz[aã]o\s*Social[^<]*<\/[^>]+>\s*(?:<[^>]*>\s*)*([^<]+)/i },
     { field: 'razao', re: /Nome[^<]*Raz[aã]o[^<]*<\/[^>]+>\s*(?:<[^>]*>\s*)*([^<]+)/i },
