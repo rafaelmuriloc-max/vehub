@@ -32,10 +32,10 @@ Deno.serve(async (req) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
+      redirect: 'follow',
     });
 
     if (!getRes.ok) {
-      console.error('[SAT-SC] GET failed:', getRes.status);
       return new Response(JSON.stringify({ error: `Erro ao acessar SAT/SC: ${getRes.status}` }), {
         status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -43,62 +43,63 @@ Deno.serve(async (req) => {
 
     const html = await getRes.text();
 
-    // Extract ASP.NET tokens
-    const viewState = extractField(html, '__VIEWSTATE');
-    const viewStateGen = extractField(html, '__VIEWSTATEGENERATOR');
-    const eventValidation = extractField(html, '__EVENTVALIDATION');
-    const previousPage = extractField(html, '__PREVIOUSPAGE');
+    const viewState = extractHiddenField(html, '__VIEWSTATE');
+    const viewStateGen = extractHiddenField(html, '__VIEWSTATEGENERATOR');
+    const eventValidation = extractHiddenField(html, '__EVENTVALIDATION');
 
-    // Extract cookies
-    const cookies = (getRes.headers.get('set-cookie') || '')
-      .split(',')
-      .map(c => c.split(';')[0].trim())
-      .filter(Boolean)
-      .join('; ');
+    // Extract cookies from Set-Cookie headers
+    const cookies: string[] = [];
+    getRes.headers.forEach((value, key) => {
+      if (key.toLowerCase() === 'set-cookie') {
+        const cookieName = value.split(';')[0];
+        if (cookieName) cookies.push(cookieName.trim());
+      }
+    });
+    const cookieStr = cookies.join('; ');
 
-    console.log('[SAT-SC] ViewState found:', !!viewState, 'EventValidation found:', !!eventValidation, 'Cookies:', cookies.substring(0, 50));
+    console.log('[SAT-SC] Tokens found - VS:', viewState.length, 'EVT:', eventValidation.length);
 
-    // Step 2: POST with CNPJ
+    // Step 2: Regular POST (no async) to get full HTML result page
     const formData = new URLSearchParams();
-    if (viewState) formData.append('__VIEWSTATE', viewState);
+    formData.append('__VIEWSTATE', viewState);
     if (viewStateGen) formData.append('__VIEWSTATEGENERATOR', viewStateGen);
-    if (eventValidation) formData.append('__EVENTVALIDATION', eventValidation);
-    if (previousPage) formData.append('__PREVIOUSPAGE', previousPage);
-    
-    // ASP.NET form fields
-    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$IdentificationTypeField', '2'); // CNPJ
-    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$MaskedField', digits);
-    formData.append('__ASYNCPOST', 'true');
-    formData.append('__EVENTTARGET', 'Body_Main_Main_sepBusca_btnBuscar');
+    formData.append('__EVENTVALIDATION', eventValidation);
+    formData.append('__EVENTTARGET', '');
     formData.append('__EVENTARGUMENT', '');
+    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$IdentificationTypeField', '2');
+    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$MaskedField', digits);
+    // Simulate clicking the search button
+    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$btnBuscar', 'Buscar');
 
-    console.log('[SAT-SC] Submitting CNPJ query...');
+    console.log('[SAT-SC] Submitting CNPJ:', digits);
     const postRes = await fetch(pageUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cookie': cookies,
-        'X-Requested-With': 'XMLHttpRequest',
+        'Cookie': cookieStr,
         'Referer': pageUrl,
+        'Origin': 'https://sat.sef.sc.gov.br',
       },
       body: formData.toString(),
+      redirect: 'follow',
     });
 
-    if (!postRes.ok) {
-      console.error('[SAT-SC] POST failed:', postRes.status);
-      return new Response(JSON.stringify({ error: `Erro na consulta SAT/SC: ${postRes.status}` }), {
-        status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const resultHtml = await postRes.text();
+    console.log('[SAT-SC] Response status:', postRes.status, 'length:', resultHtml.length);
+
+    // Log a meaningful snippet (skip scripts)
+    const bodyMatch = resultHtml.match(/<div[^>]*class="[^"]*sat-ui-page-content[^"]*"[^>]*>([\s\S]*?)<div[^>]*class="[^"]*sat-ui-page-footer/i);
+    if (bodyMatch) {
+      console.log('[SAT-SC] Page content:', bodyMatch[1].substring(0, 3000));
+    } else {
+      // Log parts that might contain the result data
+      const textOnly = resultHtml.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
+      console.log('[SAT-SC] Cleaned HTML (first 3000):', textOnly.substring(0, 3000));
     }
 
-    const resultHtml = await postRes.text();
-    console.log('[SAT-SC] Response length:', resultHtml.length);
-    console.log('[SAT-SC] Response preview:', resultHtml.substring(0, 2000));
-
-    // Parse the result HTML
     const result = parseResult(resultHtml);
-    console.log('[SAT-SC] Parsed result:', JSON.stringify(result));
+    console.log('[SAT-SC] Result:', JSON.stringify(result));
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -112,15 +113,15 @@ Deno.serve(async (req) => {
   }
 });
 
-function extractField(html: string, fieldName: string): string {
-  // Try hidden input
-  const inputRegex = new RegExp(`name="${fieldName}"[^>]*value="([^"]*)"`, 'i');
-  const match = html.match(inputRegex);
+function extractHiddenField(html: string, name: string): string {
+  // Match: <input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="..." />
+  const regex = new RegExp(`<input[^>]*name="${name}"[^>]*value="([^"]*)"`, 'i');
+  const match = html.match(regex);
   if (match) return match[1];
 
-  // Try id-based
-  const idRegex = new RegExp(`id="${fieldName}"[^>]*value="([^"]*)"`, 'i');
-  const match2 = html.match(idRegex);
+  // Also try id-based
+  const regex2 = new RegExp(`<input[^>]*id="${name}"[^>]*value="([^"]*)"`, 'i');
+  const match2 = html.match(regex2);
   return match2 ? match2[1] : '';
 }
 
@@ -130,86 +131,95 @@ function parseResult(html: string): {
   situacao?: string;
   razao_social?: string;
   error?: string;
+  debug_snippet?: string;
 } {
-  // Check for error messages
-  if (html.includes('não foi encontrado') || html.includes('Nenhum registro encontrado') || html.includes('não encontrado')) {
+  // Strip scripts to avoid matching JS content
+  const clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '');
+
+  // Check for "not found" messages
+  if (clean.includes('não foi encontrado') || clean.includes('Nenhum registro') || clean.includes('Contribuinte não encontrado')) {
     return { success: false, error: 'Contribuinte não encontrado no SAT/SC' };
   }
 
-  // The result page typically shows data in a grid/table or label fields
-  // Try multiple patterns to extract IE
   let ie = '';
   let situacao = '';
   let razaoSocial = '';
 
-  // Pattern: Look for Inscrição Estadual value in spans/labels
-  const iePatterns = [
-    /Inscri[çc][aã]o\s*Estadual[^<]*<[^>]*>([^<]+)/i,
-    /IE[:\s]*(\d{3}\.?\d{3}\.?\d{3})/i,
-    /idnInscricaoEstadual[^>]*>([^<]+)/i,
-    /InscricaoEstadual[^>]*value="([^"]+)"/i,
-    /IE[:\s]+<[^>]*>(\d[\d.]+)/i,
+  // The SAT/SC result page uses labeled fields in panels
+  // Pattern 1: span-based labels like <span>Inscrição Estadual</span>...<span>VALUE</span>
+  // Pattern 2: label/value in table cells
+  // Pattern 3: ASP.NET control IDs
+
+  // Try to find IE by known control ID patterns
+  const ieIdPatterns = [
+    /id="[^"]*InscricaoEstadual[^"]*"[^>]*>([^<]+)/i,
+    /id="[^"]*inscricao[^"]*estadual[^"]*"[^>]*>([^<]+)/i,
+    /id="[^"]*IE[^"]*"[^>]*>(\d[\d.]+)/i,
   ];
 
-  for (const pattern of iePatterns) {
-    const match = html.match(pattern);
-    if (match && match[1] && match[1].trim()) {
-      ie = match[1].trim();
-      break;
-    }
+  for (const p of ieIdPatterns) {
+    const m = clean.match(p);
+    if (m && m[1]?.trim()) { ie = m[1].trim(); break; }
   }
 
-  // Pattern: Look for Situação Cadastral
-  const situacaoPatterns = [
-    /Situa[çc][aã]o\s*Cadastral[^<]*<[^>]*>([^<]+)/i,
-    /situacaoCadastral[^>]*>([^<]+)/i,
-    /SituacaoCadastral[^>]*value="([^"]+)"/i,
-    /Situa..o[:\s]*<[^>]*>(Ativ[ao]|Baixad[ao]|Suspens[ao]|Cancel[ao]d[ao]|Inapt[ao]|Nul[ao])/i,
-  ];
-
-  for (const pattern of situacaoPatterns) {
-    const match = html.match(pattern);
-    if (match && match[1] && match[1].trim()) {
-      situacao = match[1].trim();
-      break;
-    }
-  }
-
-  // Pattern: Look for Razão Social
-  const razaoPatterns = [
-    /Raz[aã]o\s*Social[^<]*<[^>]*>([^<]+)/i,
-    /razaoSocial[^>]*>([^<]+)/i,
-    /RazaoSocial[^>]*value="([^"]+)"/i,
-    /Nome[\/\s]*Raz[aã]o[^<]*<[^>]*>([^<]+)/i,
-  ];
-
-  for (const pattern of razaoPatterns) {
-    const match = html.match(pattern);
-    if (match && match[1] && match[1].trim()) {
-      razaoSocial = match[1].trim();
-      break;
-    }
-  }
-
-  // Also try to find any tabular data with labeled rows
-  // Pattern: <td>Label</td><td>Value</td>
-  const tdPattern = /<td[^>]*>[^<]*(?:Inscri|IE)[^<]*<\/td>\s*<td[^>]*>([^<]+)/gi;
+  // Try label-based extraction
   if (!ie) {
-    const tdMatch = tdPattern.exec(html);
-    if (tdMatch) ie = tdMatch[1].trim();
+    const ieLabelPatterns = [
+      /Inscri[çc][aã]o\s*Estadual[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
+      /Inscri[çc][aã]o\s*Estadual[:\s]*<[^>]*>\s*(\d[\d.\/-]+)/i,
+      /IE[:\s]+(\d{3}\.?\d{3}\.?\d{3})/i,
+    ];
+    for (const p of ieLabelPatterns) {
+      const m = clean.match(p);
+      if (m && m[1]?.trim()) { ie = m[1].trim(); break; }
+    }
   }
 
-  const situacaoTdPattern = /<td[^>]*>[^<]*(?:Situa)[^<]*<\/td>\s*<td[^>]*>([^<]+)/gi;
+  // Situação Cadastral
+  const situacaoIdPatterns = [
+    /id="[^"]*[Ss]ituacao[^"]*[Cc]adastral[^"]*"[^>]*>([^<]+)/i,
+    /id="[^"]*situacaoCadastral[^"]*"[^>]*>([^<]+)/i,
+  ];
+  for (const p of situacaoIdPatterns) {
+    const m = clean.match(p);
+    if (m && m[1]?.trim()) { situacao = m[1].trim(); break; }
+  }
+
   if (!situacao) {
-    const tdMatch = situacaoTdPattern.exec(html);
-    if (tdMatch) situacao = tdMatch[1].trim();
+    const situacaoLabelPatterns = [
+      /Situa[çc][aã]o\s*Cadastral[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
+      /Situa[çc][aã]o\s*Cadastral[:\s]*<[^>]*>\s*([^<]+)/i,
+      /Situa..o[:\s]*(Ativ[oa]|Baixad[oa]|Suspens[oa]|Cancel[ao]d[ao]|Inapt[ao]|Nul[ao])/i,
+    ];
+    for (const p of situacaoLabelPatterns) {
+      const m = clean.match(p);
+      if (m && m[1]?.trim()) { situacao = m[1].trim(); break; }
+    }
+  }
+
+  // Razão Social
+  const razaoPatterns = [
+    /id="[^"]*[Rr]azao[^"]*[Ss]ocial[^"]*"[^>]*>([^<]+)/i,
+    /Raz[aã]o\s*Social[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
+    /Nome[\/\s]*Raz[aã]o[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
+  ];
+  for (const p of razaoPatterns) {
+    const m = clean.match(p);
+    if (m) {
+      const val = (m[2] || m[1] || '').trim();
+      if (val) { razaoSocial = val; break; }
+    }
   }
 
   if (!ie && !situacao) {
-    // Return raw HTML snippet for debugging
+    // Extract a debug snippet - any panel content after the search form
+    const panelMatch = clean.match(/panel-body[\s\S]{0,5000}/i);
     return {
       success: false,
-      error: 'Não foi possível extrair dados do SAT/SC. Verifique os logs.',
+      error: 'Não foi possível extrair dados. Verifique os logs.',
+      debug_snippet: panelMatch ? panelMatch[0].substring(0, 1000) : clean.substring(0, 1000),
     };
   }
 
