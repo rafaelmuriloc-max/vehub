@@ -1,55 +1,44 @@
 
 
-# Retry com novo token de procurador ao receber 403
+# Excluir PDF base64 da análise de keywords
 
 ## Problema
 
-O fluxo de procuração funciona assim:
-1. `obtainProcuradorToken` busca o token no cache (`procurador_tokens`)
-2. Se encontra (dentro da validade de 24h), retorna direto
-3. O token é enviado no header `autenticar_procurador_token`
-4. SERPRO retorna 403 "AcessoNegado" mesmo com o token
-
-O problema: o token cacheado está inválido no lado do SERPRO (pode ter sido revogado ou expirado antes das 24h), mas o sistema não tenta obter um novo -- simplesmente retorna o erro 403.
+A linha 159 faz `JSON.stringify(responseData)` que inclui o campo PDF base64 (string enorme). Caracteres aleatórios do base64 podem coincidir com termos como "debito" ou "multa", gerando falsos positivos.
 
 ## Solução
 
-Adicionar retry no `supabase/functions/integra-contador/index.ts`: quando a API retorna 403 e o `procuradorToken` veio do cache, invalidar o cache, obter um novo token (re-assinar o XML), e repetir a chamada.
+Criar uma cópia do `responseData` sem os campos de PDF antes de stringificar para a busca de keywords. Também excluir strings longas (>500 chars) que são provavelmente blobs binários.
 
-### Mudanças em `supabase/functions/integra-contador/index.ts`
+### Mudança em `src/components/integra-contador/SituacaoFiscalTab.tsx` (linhas 158-159)
 
-1. **Após a chamada `callSerproApi`** (linha ~790): adicionar lógica de retry para 403 quando `procuradorToken` está presente:
-   - Deletar o token do cache (`procurador_tokens`)
-   - Re-executar `obtainProcuradorToken` (que agora não encontra cache e gera XML assinado fresco)
-   - Atualizar `procuradorToken` e repetir `callSerproApi`
-
-2. **Para isso funcionar**, as variáveis do certificado do cliente precisam estar acessíveis no escopo do retry. Atualmente o download/parse do certificado do cliente ocorre dentro do bloco `if (autorPedidoCpfCnpj !== contratanteCnpj)`. Basta manter referências dessas variáveis no escopo externo.
-
-Trecho aproximado da mudança (após linha 801):
-
+Substituir:
 ```typescript
-// Retry on 403 with procurador token (cached token may be stale)
-if (apiResponse.status === 403 && procuradorToken) {
-  console.log(`[integra-contador] 403 com procuradorToken — invalidando cache e re-obtendo token...`);
-  
-  // Delete stale cache
-  await serviceClient.from("procurador_tokens")
-    .delete()
-    .eq("contratante_cnpj", contratanteCnpj)
-    .eq("client_cnpj", clientCnpjClean);
-  
-  // Re-obtain procurador token (will sign XML fresh)
-  const freshToken = await obtainProcuradorToken(...);
-  if (typeof freshToken === "string" && freshToken.length > 0) {
-    procuradorToken = freshToken;
-    apiResponse = await callSerproApi(bearerToken, jwtToken);
-  }
-}
+const responseStr = JSON.stringify(responseData || '').toLowerCase();
 ```
 
-## Arquivos
+Por uma função que remove campos PDF/base64 antes de stringificar:
+```typescript
+// Strip PDF/base64 blobs before keyword search to avoid false positives
+const stripBinaryFields = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(stripBinaryFields);
+  const clean: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === 'pdf' || k === 'pdf_base64') continue;
+    if (typeof v === 'string' && v.length > 500) continue;
+    if (typeof v === 'object') {
+      clean[k] = stripBinaryFields(v);
+    } else {
+      clean[k] = v;
+    }
+  }
+  return clean;
+};
+const responseStr = JSON.stringify(stripBinaryFields(responseData) || '').toLowerCase();
+```
 
 | Arquivo | Mudança |
 |---------|--------|
-| `supabase/functions/integra-contador/index.ts` | Retry 403 invalidando cache do procurador e re-assinando XML |
+| `src/components/integra-contador/SituacaoFiscalTab.tsx` | Filtrar campos binários/PDF antes da busca por keywords |
 
