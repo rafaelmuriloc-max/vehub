@@ -47,19 +47,32 @@ Deno.serve(async (req) => {
     const viewStateGen = extractHiddenField(html, '__VIEWSTATEGENERATOR');
     const eventValidation = extractHiddenField(html, '__EVENTVALIDATION');
 
-    // Extract cookies from Set-Cookie headers
-    const cookies: string[] = [];
-    getRes.headers.forEach((value, key) => {
-      if (key.toLowerCase() === 'set-cookie') {
-        const cookieName = value.split(';')[0];
-        if (cookieName) cookies.push(cookieName.trim());
+    // Extract ALL cookies (multiple Set-Cookie headers)
+    const rawHeaders = postRes ? [] : []; // placeholder
+    const cookieParts: string[] = [];
+    // Deno's Headers.getSetCookie() returns all Set-Cookie values
+    const setCookies = (getRes.headers as any).getSetCookie?.() || [];
+    if (Array.isArray(setCookies)) {
+      for (const sc of setCookies) {
+        const name = sc.split(';')[0]?.trim();
+        if (name) cookieParts.push(name);
       }
-    });
-    const cookieStr = cookies.join('; ');
+    } else {
+      // fallback
+      const raw = getRes.headers.get('set-cookie') || '';
+      for (const part of raw.split(/,(?=\s*\w+=)/)) {
+        const name = part.split(';')[0]?.trim();
+        if (name) cookieParts.push(name);
+      }
+    }
+    const cookieStr = cookieParts.join('; ');
 
-    console.log('[SAT-SC] Tokens found - VS:', viewState.length, 'EVT:', eventValidation.length);
+    console.log('[SAT-SC] Tokens found - VS:', viewState.length, 'EVT:', eventValidation.length, 'Cookies:', cookieParts.length);
 
-    // Step 2: Regular POST (no async) to get full HTML result page
+    // Format CNPJ with mask for the MaskedField
+    const maskedCnpj = `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12)}`;
+
+    // Step 2: POST with __EVENTTARGET to trigger search button
     const formData = new URLSearchParams();
     formData.append('__VIEWSTATE', viewState);
     if (viewStateGen) formData.append('__VIEWSTATEGENERATOR', viewStateGen);
@@ -67,9 +80,9 @@ Deno.serve(async (req) => {
     formData.append('__EVENTTARGET', 'ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$btnBuscar');
     formData.append('__EVENTARGUMENT', '');
     formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$IdentificationTypeField', '2');
-    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$MaskedField', digits);
+    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$MaskedField', maskedCnpj);
 
-    console.log('[SAT-SC] Submitting CNPJ:', digits);
+    console.log('[SAT-SC] Submitting CNPJ:', maskedCnpj);
     const postRes = await fetch(pageUrl, {
       method: 'POST',
       headers: {
