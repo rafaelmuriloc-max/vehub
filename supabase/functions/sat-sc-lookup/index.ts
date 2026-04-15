@@ -48,7 +48,6 @@ Deno.serve(async (req) => {
     const eventValidation = extractHiddenField(html, '__EVENTVALIDATION');
 
     // Extract ALL cookies (multiple Set-Cookie headers)
-    const rawHeaders = postRes ? [] : []; // placeholder
     const cookieParts: string[] = [];
     // Deno's Headers.getSetCookie() returns all Set-Cookie values
     const setCookies = (getRes.headers as any).getSetCookie?.() || [];
