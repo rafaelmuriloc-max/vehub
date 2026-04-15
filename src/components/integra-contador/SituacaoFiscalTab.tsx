@@ -155,8 +155,24 @@ export default function SituacaoFiscalTab() {
 
       pdfBase64 = walkForPdf(parsedDados) || walkForPdf(responseData);
 
+      // Strip PDF/base64 blobs before keyword search to avoid false positives
+      const stripBinaryFields = (obj: any): any => {
+        if (!obj || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(stripBinaryFields);
+        const clean: any = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (k === 'pdf' || k === 'pdf_base64') continue;
+          if (typeof v === 'string' && v.length > 500) continue;
+          if (typeof v === 'object') {
+            clean[k] = stripBinaryFields(v);
+          } else {
+            clean[k] = v;
+          }
+        }
+        return clean;
+      };
       // Check for regular status - only if NO negative indicators found
-      const responseStr = JSON.stringify(responseData || '').toLowerCase();
+      const responseStr = JSON.stringify(stripBinaryFields(responseData) || '').toLowerCase();
       const negativeIndicators = [
         'irregular',
         'pendência', 'pendencia',
