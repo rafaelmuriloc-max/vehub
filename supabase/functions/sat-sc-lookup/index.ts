@@ -64,12 +64,10 @@ Deno.serve(async (req) => {
     formData.append('__VIEWSTATE', viewState);
     if (viewStateGen) formData.append('__VIEWSTATEGENERATOR', viewStateGen);
     formData.append('__EVENTVALIDATION', eventValidation);
-    formData.append('__EVENTTARGET', '');
+    formData.append('__EVENTTARGET', 'ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$btnBuscar');
     formData.append('__EVENTARGUMENT', '');
     formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$IdentificationTypeField', '2');
     formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$MaskedField', digits);
-    // Simulate clicking the search button
-    formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$btnBuscar', 'Buscar');
 
     console.log('[SAT-SC] Submitting CNPJ:', digits);
     const postRes = await fetch(pageUrl, {
