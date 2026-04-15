@@ -9,6 +9,36 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
+
+async function extractTextFromPdfBase64(base64: string): Promise<string> {
+  try {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+    const texts: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .map((item: any) => item.str)
+        .join(' ');
+      texts.push(pageText);
+    }
+    return texts.join(' ');
+  } catch (err) {
+    console.error('[SITFIS] Erro ao extrair texto do PDF:', err);
+    return '';
+  }
+}
 
 type ClientWithSitfis = {
   id: string;
@@ -155,6 +185,13 @@ export default function SituacaoFiscalTab() {
 
       pdfBase64 = walkForPdf(parsedDados) || walkForPdf(responseData);
 
+      // Extract text from PDF for keyword analysis
+      let pdfText = '';
+      if (pdfBase64) {
+        pdfText = await extractTextFromPdfBase64(pdfBase64);
+        console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500));
+      }
+
       // Strip PDF/base64 blobs before keyword search to avoid false positives
       const stripBinaryFields = (obj: any): any => {
         if (!obj || typeof obj !== 'object') return obj;
@@ -172,10 +209,14 @@ export default function SituacaoFiscalTab() {
         return clean;
       };
       // Check for regular status - only if NO negative indicators found
-      // Search in parsed dados (where fiscal info lives) AND in responseData metadata
+      // Search in parsed dados, responseData metadata, AND extracted PDF text
       const strippedDados = stripBinaryFields(parsedDados);
       const strippedResponse = stripBinaryFields(responseData);
-      const responseStr = (JSON.stringify(strippedDados || '') + JSON.stringify(strippedResponse || '')).toLowerCase();
+      const responseStr = (
+        JSON.stringify(strippedDados || '') +
+        JSON.stringify(strippedResponse || '') +
+        ' ' + pdfText
+      ).toLowerCase();
       const negativeIndicators = [
         'irregular',
         'pendência', 'pendencia',
