@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     }
 
     const pageUrl = 'https://sat.sef.sc.gov.br/tax.NET/Sat.Cadastro.Web/ComprovanteIE/Consulta.aspx';
+    const maskedCnpj = `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12)}`;
 
     // Step 1: GET the page to obtain ViewState, EventValidation and cookies
     console.log('[SAT-SC] Fetching initial page...');
@@ -42,52 +43,48 @@ Deno.serve(async (req) => {
     }
 
     const html = await getRes.text();
-
     const viewState = extractHiddenField(html, '__VIEWSTATE');
     const viewStateGen = extractHiddenField(html, '__VIEWSTATEGENERATOR');
     const eventValidation = extractHiddenField(html, '__EVENTVALIDATION');
 
-    // Extract ALL cookies (multiple Set-Cookie headers)
+    // Extract cookies
     const cookieParts: string[] = [];
-    // Deno's Headers.getSetCookie() returns all Set-Cookie values
     const setCookies = (getRes.headers as any).getSetCookie?.() || [];
-    if (Array.isArray(setCookies)) {
+    if (Array.isArray(setCookies) && setCookies.length > 0) {
       for (const sc of setCookies) {
         const name = sc.split(';')[0]?.trim();
-        if (name) cookieParts.push(name);
-      }
-    } else {
-      // fallback
-      const raw = getRes.headers.get('set-cookie') || '';
-      for (const part of raw.split(/,(?=\s*\w+=)/)) {
-        const name = part.split(';')[0]?.trim();
         if (name) cookieParts.push(name);
       }
     }
     const cookieStr = cookieParts.join('; ');
 
-    console.log('[SAT-SC] Tokens found - VS:', viewState.length, 'EVT:', eventValidation.length, 'Cookies:', cookieParts.length);
+    console.log('[SAT-SC] VS:', viewState.length, 'EVT:', eventValidation.length, 'Cookies:', cookieParts.length);
 
-    // Format CNPJ with mask for the MaskedField
-    const maskedCnpj = `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12)}`;
+    // Step 2: Async POST (ASP.NET UpdatePanel format)
+    const btnUniqueId = 'ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$btnBuscar';
+    const updatePanelId = 'ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$uppBusca';
 
-    // Step 2: POST with __EVENTTARGET to trigger search button
     const formData = new URLSearchParams();
+    // ScriptManager field tells ASP.NET which UpdatePanel triggered the postback
+    formData.append('ctl00$ctl00$ctl00$ScriptManager1', `${updatePanelId}|${btnUniqueId}`);
     formData.append('__VIEWSTATE', viewState);
     if (viewStateGen) formData.append('__VIEWSTATEGENERATOR', viewStateGen);
     formData.append('__EVENTVALIDATION', eventValidation);
-    formData.append('__EVENTTARGET', 'ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$btnBuscar');
+    formData.append('__EVENTTARGET', btnUniqueId);
     formData.append('__EVENTARGUMENT', '');
+    formData.append('__ASYNCPOST', 'true');
     formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$IdentificationTypeField', '2');
     formData.append('ctl00$ctl00$ctl00$Body$Main$Main$sepBusca$idnContribuinte$MaskedField', maskedCnpj);
 
-    console.log('[SAT-SC] Submitting CNPJ:', maskedCnpj);
+    console.log('[SAT-SC] Submitting async postback for:', maskedCnpj);
     const postRes = await fetch(pageUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Cookie': cookieStr,
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-MicrosoftAjax': 'Delta=true',
         'Referer': pageUrl,
         'Origin': 'https://sat.sef.sc.gov.br',
       },
@@ -95,20 +92,48 @@ Deno.serve(async (req) => {
       redirect: 'follow',
     });
 
-    const resultHtml = await postRes.text();
-    console.log('[SAT-SC] Response status:', postRes.status, 'length:', resultHtml.length);
+    const responseText = await postRes.text();
+    console.log('[SAT-SC] Response status:', postRes.status, 'length:', responseText.length);
+    console.log('[SAT-SC] Response first 2000:', responseText.substring(0, 2000));
 
-    // Log a meaningful snippet (skip scripts)
-    const bodyMatch = resultHtml.match(/<div[^>]*class="[^"]*sat-ui-page-content[^"]*"[^>]*>([\s\S]*?)<div[^>]*class="[^"]*sat-ui-page-footer/i);
-    if (bodyMatch) {
-      console.log('[SAT-SC] Page content:', bodyMatch[1].substring(0, 3000));
-    } else {
-      // Log parts that might contain the result data
-      const textOnly = resultHtml.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
-      console.log('[SAT-SC] Cleaned HTML (first 3000):', textOnly.substring(0, 3000));
+    // Check if it's a redirect (ASP.NET pageRedirect in async response)
+    if (responseText.includes('pageRedirect')) {
+      // Extract the redirect URL and follow it
+      const redirectMatch = responseText.match(/pageRedirect\|\|([^|]+)\|/);
+      if (redirectMatch) {
+        const redirectUrl = new URL(redirectMatch[1], pageUrl).toString();
+        console.log('[SAT-SC] Following redirect to:', redirectUrl);
+        
+        // Get the redirected page cookies
+        const postCookies = [...cookieParts];
+        const postSetCookies = (postRes.headers as any).getSetCookie?.() || [];
+        if (Array.isArray(postSetCookies)) {
+          for (const sc of postSetCookies) {
+            const name = sc.split(';')[0]?.trim();
+            if (name) postCookies.push(name);
+          }
+        }
+
+        const redirectRes = await fetch(redirectUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Cookie': postCookies.join('; '),
+            'Referer': pageUrl,
+          },
+          redirect: 'follow',
+        });
+        const redirectHtml = await redirectRes.text();
+        console.log('[SAT-SC] Redirect page length:', redirectHtml.length);
+        const result = parseHtmlResult(redirectHtml);
+        console.log('[SAT-SC] Result:', JSON.stringify(result));
+        return new Response(JSON.stringify(result), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
-    const result = parseResult(resultHtml);
+    // Parse the async response (pipe-delimited UpdatePanel format)
+    const result = parseAsyncResponse(responseText);
     console.log('[SAT-SC] Result:', JSON.stringify(result));
 
     return new Response(JSON.stringify(result), {
@@ -124,32 +149,77 @@ Deno.serve(async (req) => {
 });
 
 function extractHiddenField(html: string, name: string): string {
-  // Match: <input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="..." />
   const regex = new RegExp(`<input[^>]*name="${name}"[^>]*value="([^"]*)"`, 'i');
   const match = html.match(regex);
   if (match) return match[1];
-
-  // Also try id-based
   const regex2 = new RegExp(`<input[^>]*id="${name}"[^>]*value="([^"]*)"`, 'i');
   const match2 = html.match(regex2);
   return match2 ? match2[1] : '';
 }
 
-function parseResult(html: string): {
-  success: boolean;
-  ie?: string;
-  situacao?: string;
-  razao_social?: string;
-  error?: string;
-  debug_snippet?: string;
-} {
-  // Strip scripts to avoid matching JS content
+/**
+ * Parse ASP.NET UpdatePanel async response format:
+ * Each block is: length|type|id|content|
+ * Types: updatePanel, hiddenField, scriptBlock, etc.
+ */
+function parseAsyncResponse(text: string): any {
+  // Extract updatePanel blocks which contain the HTML
+  const panels: Record<string, string> = {};
+  let pos = 0;
+
+  while (pos < text.length) {
+    // Read length
+    const pipeIdx = text.indexOf('|', pos);
+    if (pipeIdx === -1) break;
+    const len = parseInt(text.substring(pos, pipeIdx), 10);
+    if (isNaN(len)) break;
+
+    pos = pipeIdx + 1;
+    // Read type
+    const typeEnd = text.indexOf('|', pos);
+    if (typeEnd === -1) break;
+    const type = text.substring(pos, typeEnd);
+
+    pos = typeEnd + 1;
+    // Read id
+    const idEnd = text.indexOf('|', pos);
+    if (idEnd === -1) break;
+    const id = text.substring(pos, idEnd);
+
+    pos = idEnd + 1;
+    // Read content (length bytes)
+    const content = text.substring(pos, pos + len);
+    pos = pos + len + 1; // +1 for trailing pipe
+
+    if (type === 'updatePanel') {
+      panels[id] = content;
+    }
+  }
+
+  console.log('[SAT-SC] Parsed panels:', Object.keys(panels));
+
+  // Combine all panel content and parse
+  const allContent = Object.values(panels).join('\n');
+  if (allContent) {
+    return parseHtmlResult(allContent);
+  }
+
+  // If no panels found, try parsing the raw text as HTML
+  return parseHtmlResult(text);
+}
+
+function parseHtmlResult(html: string): any {
+  // Strip scripts
   const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '');
 
-  // Check for "not found" messages
-  if (clean.includes('não foi encontrado') || clean.includes('Nenhum registro') || clean.includes('Contribuinte não encontrado')) {
+  // Check for errors
+  if (clean.includes('não foi possível completar') || clean.includes('erro inesperado')) {
+    return { success: false, error: 'Erro no servidor SAT/SC. Tente novamente.' };
+  }
+
+  if (clean.includes('não foi encontrado') || clean.includes('Nenhum registro') || clean.includes('não encontrado')) {
     return { success: false, error: 'Contribuinte não encontrado no SAT/SC' };
   }
 
@@ -157,79 +227,41 @@ function parseResult(html: string): {
   let situacao = '';
   let razaoSocial = '';
 
-  // The SAT/SC result page uses labeled fields in panels
-  // Pattern 1: span-based labels like <span>Inscrição Estadual</span>...<span>VALUE</span>
-  // Pattern 2: label/value in table cells
-  // Pattern 3: ASP.NET control IDs
-
-  // Try to find IE by known control ID patterns
-  const ieIdPatterns = [
-    /id="[^"]*InscricaoEstadual[^"]*"[^>]*>([^<]+)/i,
-    /id="[^"]*inscricao[^"]*estadual[^"]*"[^>]*>([^<]+)/i,
-    /id="[^"]*IE[^"]*"[^>]*>(\d[\d.]+)/i,
+  // Try ASP.NET control IDs
+  const patterns: Array<{ field: 'ie' | 'situacao' | 'razaoSocial'; regex: RegExp }> = [
+    // IE patterns
+    { field: 'ie', regex: /id="[^"]*[Ii]nscricao[^"]*[Ee]stadual[^"]*"[^>]*>([^<]+)/i },
+    { field: 'ie', regex: /id="[^"]*IE[^"]*"[^>]*>(\d[\d.]+)/i },
+    { field: 'ie', regex: /Inscri[çc][aã]o\s*Estadual[\s:]*<\/(?:label|span|td|div|th|b|strong)>\s*(?:<[^>]*>\s*)*([^<]+)/i },
+    { field: 'ie', regex: /Inscri..o Estadual[^<]*?(\d{3}\.?\d{3}\.?\d{3})/i },
+    // Situação patterns
+    { field: 'situacao', regex: /id="[^"]*[Ss]ituacao[^"]*"[^>]*>([^<]+)/i },
+    { field: 'situacao', regex: /Situa[çc][aã]o\s*Cadastral[\s:]*<\/(?:label|span|td|div|th|b|strong)>\s*(?:<[^>]*>\s*)*([^<]+)/i },
+    { field: 'situacao', regex: /Situa..o\s*Cadastral[^<]*?<[^>]*>\s*(Ativ[oa]|Baixad[oa]|Suspens[oa]|Inapt[oa]|Cancel[ao]d[ao])/i },
+    // Razão Social patterns
+    { field: 'razaoSocial', regex: /id="[^"]*[Rr]azao[^"]*[Ss]ocial[^"]*"[^>]*>([^<]+)/i },
+    { field: 'razaoSocial', regex: /Raz[aã]o\s*Social[\s:]*<\/(?:label|span|td|div|th|b|strong)>\s*(?:<[^>]*>\s*)*([^<]+)/i },
+    { field: 'razaoSocial', regex: /Nome[\/\s]*Raz[aã]o[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>\s*)*([^<]+)/i },
   ];
 
-  for (const p of ieIdPatterns) {
-    const m = clean.match(p);
-    if (m && m[1]?.trim()) { ie = m[1].trim(); break; }
-  }
-
-  // Try label-based extraction
-  if (!ie) {
-    const ieLabelPatterns = [
-      /Inscri[çc][aã]o\s*Estadual[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
-      /Inscri[çc][aã]o\s*Estadual[:\s]*<[^>]*>\s*(\d[\d.\/-]+)/i,
-      /IE[:\s]+(\d{3}\.?\d{3}\.?\d{3})/i,
-    ];
-    for (const p of ieLabelPatterns) {
-      const m = clean.match(p);
-      if (m && m[1]?.trim()) { ie = m[1].trim(); break; }
-    }
-  }
-
-  // Situação Cadastral
-  const situacaoIdPatterns = [
-    /id="[^"]*[Ss]ituacao[^"]*[Cc]adastral[^"]*"[^>]*>([^<]+)/i,
-    /id="[^"]*situacaoCadastral[^"]*"[^>]*>([^<]+)/i,
-  ];
-  for (const p of situacaoIdPatterns) {
-    const m = clean.match(p);
-    if (m && m[1]?.trim()) { situacao = m[1].trim(); break; }
-  }
-
-  if (!situacao) {
-    const situacaoLabelPatterns = [
-      /Situa[çc][aã]o\s*Cadastral[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
-      /Situa[çc][aã]o\s*Cadastral[:\s]*<[^>]*>\s*([^<]+)/i,
-      /Situa..o[:\s]*(Ativ[oa]|Baixad[oa]|Suspens[oa]|Cancel[ao]d[ao]|Inapt[ao]|Nul[ao])/i,
-    ];
-    for (const p of situacaoLabelPatterns) {
-      const m = clean.match(p);
-      if (m && m[1]?.trim()) { situacao = m[1].trim(); break; }
-    }
-  }
-
-  // Razão Social
-  const razaoPatterns = [
-    /id="[^"]*[Rr]azao[^"]*[Ss]ocial[^"]*"[^>]*>([^<]+)/i,
-    /Raz[aã]o\s*Social[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
-    /Nome[\/\s]*Raz[aã]o[^<]*<\/(?:label|span|td|div|th)>\s*(?:<[^>]*>)*\s*([^<]+)/i,
-  ];
-  for (const p of razaoPatterns) {
-    const m = clean.match(p);
+  for (const { field, regex } of patterns) {
+    const m = clean.match(regex);
     if (m) {
-      const val = (m[2] || m[1] || '').trim();
-      if (val) { razaoSocial = val; break; }
+      const val = m[1]?.trim();
+      if (val && val.length > 1) {
+        if (field === 'ie' && !ie) ie = val;
+        if (field === 'situacao' && !situacao) situacao = val;
+        if (field === 'razaoSocial' && !razaoSocial) razaoSocial = val;
+      }
     }
   }
 
   if (!ie && !situacao) {
-    // Extract a debug snippet - any panel content after the search form
-    const panelMatch = clean.match(/panel-body[\s\S]{0,5000}/i);
+    const snippet = clean.replace(/\s+/g, ' ').substring(0, 1500);
     return {
       success: false,
-      error: 'Não foi possível extrair dados. Verifique os logs.',
-      debug_snippet: panelMatch ? panelMatch[0].substring(0, 1000) : clean.substring(0, 1000),
+      error: 'Não foi possível extrair dados do SAT/SC.',
+      debug_snippet: snippet,
     };
   }
 
