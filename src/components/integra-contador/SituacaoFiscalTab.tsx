@@ -185,6 +185,13 @@ export default function SituacaoFiscalTab() {
 
       pdfBase64 = walkForPdf(parsedDados) || walkForPdf(responseData);
 
+      // Extract text from PDF for keyword analysis
+      let pdfText = '';
+      if (pdfBase64) {
+        pdfText = await extractTextFromPdfBase64(pdfBase64);
+        console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500));
+      }
+
       // Strip PDF/base64 blobs before keyword search to avoid false positives
       const stripBinaryFields = (obj: any): any => {
         if (!obj || typeof obj !== 'object') return obj;
@@ -202,10 +209,14 @@ export default function SituacaoFiscalTab() {
         return clean;
       };
       // Check for regular status - only if NO negative indicators found
-      // Search in parsed dados (where fiscal info lives) AND in responseData metadata
+      // Search in parsed dados, responseData metadata, AND extracted PDF text
       const strippedDados = stripBinaryFields(parsedDados);
       const strippedResponse = stripBinaryFields(responseData);
-      const responseStr = (JSON.stringify(strippedDados || '') + JSON.stringify(strippedResponse || '')).toLowerCase();
+      const responseStr = (
+        JSON.stringify(strippedDados || '') +
+        JSON.stringify(strippedResponse || '') +
+        ' ' + pdfText
+      ).toLowerCase();
       const negativeIndicators = [
         'irregular',
         'pendência', 'pendencia',
