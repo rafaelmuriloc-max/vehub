@@ -94,7 +94,13 @@ Deno.serve(async (req) => {
 
     const responseText = await postRes.text();
     console.log('[SAT-SC] Response status:', postRes.status, 'length:', responseText.length);
-    console.log('[SAT-SC] Response first 2000:', responseText.substring(0, 2000));
+    console.log('[SAT-SC] Response first 3000:', responseText.substring(0, 3000));
+    console.log('[SAT-SC] Response last 3000:', responseText.substring(Math.max(0, responseText.length - 3000)));
+    // Check for key content
+    console.log('[SAT-SC] Has pageRedirect:', responseText.includes('pageRedirect'));
+    console.log('[SAT-SC] Has updatePanel:', responseText.includes('updatePanel'));
+    console.log('[SAT-SC] Has error:', responseText.includes('erro') || responseText.includes('Erro'));
+    console.log('[SAT-SC] Has Inscri:', responseText.includes('Inscri'));
 
     // Check if it's a redirect (ASP.NET pageRedirect in async response)
     if (responseText.includes('pageRedirect')) {
