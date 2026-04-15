@@ -1,36 +1,44 @@
 
 
-# Corrigir detecção de status fiscal -- campo `dados` sendo descartado
+# Extrair texto do PDF para classificar situação fiscal
 
 ## Problema
-
-O campo `dados` da resposta SERPRO é uma string JSON longa (>500 caracteres) que contém as informações fiscais reais (pendências, débitos, etc.). A função `stripBinaryFields` remove qualquer string com mais de 500 caracteres, então o conteúdo fiscal inteiro está sendo descartado antes da busca por keywords. Resultado: a busca não encontra nenhum indicador negativo e marca tudo como "regular".
+A API SERPRO retorna apenas o PDF base64 no campo `dados`, sem texto estruturado no JSON. A informação fiscal (pendências, débitos, irregularidades) está dentro do conteúdo do PDF.
 
 ## Solução
+Usar `pdfjs-dist` (já incluído como dependência do `react-pdf`) para extrair o texto de todas as páginas do PDF base64 no browser, e rodar a busca por indicadores negativos sobre esse texto extraído.
 
-Modificar a lógica para buscar keywords no `parsedDados` (que já foi parseado de string para objeto) em vez de no `responseData` cru. Isso permite que o `stripBinaryFields` percorra os campos internos do objeto parsed, removendo apenas o PDF base64 e preservando os textos curtos com as informações fiscais.
+## Mudanças em `src/components/integra-contador/SituacaoFiscalTab.tsx`
 
-### Mudança em `SituacaoFiscalTab.tsx` (linhas 174-175)
+1. Importar `pdfjs-dist` e configurar o worker (mesmo padrão usado pelo `react-pdf` no projeto)
+2. Criar função `extractTextFromPdfBase64(base64: string): Promise<string>` que:
+   - Converte base64 para `Uint8Array`
+   - Carrega o documento com `pdfjsLib.getDocument()`
+   - Itera por todas as páginas, extraindo texto via `page.getTextContent()`
+   - Retorna todo o texto concatenado
+3. Na função `consultarSitfis`, após obter o `pdfBase64`:
+   - Se houver PDF, extrair texto com a nova função
+   - Concatenar o texto extraído do PDF com o `responseStr` existente
+   - A busca por indicadores negativos passa a cobrir tanto o JSON quanto o conteúdo real do PDF
+4. Manter o fallback atual (busca no JSON) caso o PDF não exista ou a extração falhe
 
-Substituir:
-```typescript
-const responseStr = JSON.stringify(stripBinaryFields(responseData) || '').toLowerCase();
+## Fluxo atualizado
+
+```text
+Resposta SERPRO
+  ├── JSON metadata (mensagens, status) → stripBinaryFields → keywords
+  └── PDF base64 → pdfjs extractText → keywords
+                         ↓
+              Combinar ambos textos
+                         ↓
+         Buscar indicadores negativos
+                         ↓
+         regular / irregular
 ```
 
-Por:
-```typescript
-// Search in parsed dados (where fiscal info lives) AND in responseData metadata
-const strippedDados = stripBinaryFields(parsedDados);
-const strippedResponse = stripBinaryFields(responseData);
-const responseStr = (JSON.stringify(strippedDados || '') + JSON.stringify(strippedResponse || '')).toLowerCase();
-```
-
-Isso garante que:
-1. O `parsedDados` (objeto com campos fiscais) é percorrido campo a campo -- strings curtas com "débito", "pendência" etc. são preservadas
-2. O PDF base64 continua sendo removido (é uma string >500 chars ou campo chamado "pdf")
-3. Os metadados do `responseData` (mensagens, status) também são incluídos na busca
+## Arquivo
 
 | Arquivo | Mudança |
 |---------|--------|
-| `src/components/integra-contador/SituacaoFiscalTab.tsx` | Buscar keywords no `parsedDados` em vez de apenas no `responseData` cru |
+| `src/components/integra-contador/SituacaoFiscalTab.tsx` | Adicionar extração de texto do PDF via pdfjs-dist e incluir na análise de keywords |
 
