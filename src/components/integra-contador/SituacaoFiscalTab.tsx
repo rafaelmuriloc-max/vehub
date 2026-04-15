@@ -172,7 +172,10 @@ export default function SituacaoFiscalTab() {
         return clean;
       };
       // Check for regular status - only if NO negative indicators found
-      const responseStr = JSON.stringify(stripBinaryFields(responseData) || '').toLowerCase();
+      // Search in parsed dados (where fiscal info lives) AND in responseData metadata
+      const strippedDados = stripBinaryFields(parsedDados);
+      const strippedResponse = stripBinaryFields(responseData);
+      const responseStr = (JSON.stringify(strippedDados || '') + JSON.stringify(strippedResponse || '')).toLowerCase();
       const negativeIndicators = [
         'irregular',
         'pendência', 'pendencia',
