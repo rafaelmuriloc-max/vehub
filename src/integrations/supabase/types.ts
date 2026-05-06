@@ -1475,6 +1475,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      recalc_obligation_instance_status: {
+        Args: { _instance_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       activity_type: "document" | "checklist" | "whatsapp" | "email"
