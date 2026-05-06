@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
 
-interface Department { id: string; name: string; description: string | null; smtp_email: string | null; smtp_password: string | null; }
+interface Department { id: string; name: string; description: string | null; smtp_email?: string | null; smtp_password?: string | null; }
 
 export function DepartmentsTab() {
   const { isAdmin: admin } = useAuth();
@@ -23,8 +23,12 @@ export function DepartmentsTab() {
   const [showPassword, setShowPassword] = useState(false);
 
   const fetch = async () => {
-    const { data } = await supabase.from('departments').select('*').order('name');
-    if (data) setItems(data as unknown as Department[]);
+    const { data: depts } = await supabase.from('departments').select('id, name, description').order('name');
+    if (!depts) return;
+    const { data: creds } = await supabase.from('department_credentials' as any).select('department_id, smtp_email, smtp_password');
+    const credMap = new Map<string, { smtp_email: string | null; smtp_password: string | null }>();
+    (creds as any[] | null)?.forEach(c => credMap.set(c.department_id, { smtp_email: c.smtp_email, smtp_password: c.smtp_password }));
+    setItems(depts.map(d => ({ ...d, smtp_email: credMap.get(d.id)?.smtp_email ?? null, smtp_password: credMap.get(d.id)?.smtp_password ?? null })) as Department[]);
   };
 
   useEffect(() => { fetch(); }, []);
@@ -33,11 +37,21 @@ export function DepartmentsTab() {
   const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '', smtp_email: d.smtp_email || '', smtp_password: d.smtp_password || '' }); setShowPassword(false); setOpen(true); };
 
   const handleSave = async () => {
-    const payload = { name: form.name, description: form.description || null, smtp_email: form.smtp_email || null, smtp_password: form.smtp_password || null };
-    const { error } = editing
-      ? await supabase.from('departments').update(payload).eq('id', editing.id)
-      : await supabase.from('departments').insert(payload);
-    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    const deptPayload = { name: form.name, description: form.description || null };
+    let deptId = editing?.id;
+    if (editing) {
+      const { error } = await supabase.from('departments').update(deptPayload).eq('id', editing.id);
+      if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    } else {
+      const { data, error } = await supabase.from('departments').insert(deptPayload).select('id').single();
+      if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+      deptId = data.id;
+    }
+    if (deptId) {
+      const credPayload = { department_id: deptId, smtp_email: form.smtp_email || null, smtp_password: form.smtp_password || null };
+      const { error: credError } = await supabase.from('department_credentials' as any).upsert(credPayload, { onConflict: 'department_id' });
+      if (credError) { toast({ title: 'Erro ao salvar SMTP', description: credError.message, variant: 'destructive' }); return; }
+    }
     toast({ title: editing ? 'Atualizado' : 'Criado' });
     setOpen(false);
     fetch();
