@@ -66,11 +66,17 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: dept, error: deptError } = await supabaseAdmin
+    const { data: deptRow, error: deptError } = await supabaseAdmin
       .from("departments")
-      .select("smtp_email, smtp_password, name")
+      .select("name")
       .eq("id", departmentId)
       .single();
+    const { data: credRow } = await supabaseAdmin
+      .from("department_credentials")
+      .select("smtp_email, smtp_password")
+      .eq("department_id", departmentId)
+      .maybeSingle();
+    const dept = deptRow && credRow ? { ...deptRow, ...credRow } : null;
 
     if (deptError || !dept) {
       return new Response(
