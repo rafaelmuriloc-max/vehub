@@ -488,30 +488,53 @@ export type Database = {
         }
         Relationships: []
       }
+      department_credentials: {
+        Row: {
+          department_id: string
+          smtp_email: string | null
+          smtp_password: string | null
+          updated_at: string
+        }
+        Insert: {
+          department_id: string
+          smtp_email?: string | null
+          smtp_password?: string | null
+          updated_at?: string
+        }
+        Update: {
+          department_id?: string
+          smtp_email?: string | null
+          smtp_password?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_credentials_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: true
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           created_at: string
           description: string | null
           id: string
           name: string
-          smtp_email: string | null
-          smtp_password: string | null
         }
         Insert: {
           created_at?: string
           description?: string | null
           id?: string
           name: string
-          smtp_email?: string | null
-          smtp_password?: string | null
         }
         Update: {
           created_at?: string
           description?: string | null
           id?: string
           name?: string
-          smtp_email?: string | null
-          smtp_password?: string | null
         }
         Relationships: []
       }
