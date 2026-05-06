@@ -142,21 +142,34 @@ export default function CalendarView() {
     const nextYear = m + 1 > 11 ? y + 1 : y;
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
-    const [instRes, oblRes, cliRes, deptRes, actRes, compRes] = await Promise.all([
+    const [instRes, oblRes, cliRes, deptRes, actRes] = await Promise.all([
       supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
-      supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url'),
     ]);
-    setInstances((instRes.data as Instance[]) || []);
+    const monthInstances = (instRes.data as Instance[]) || [];
+    setInstances(monthInstances);
     setObligations((oblRes.data as Obligation[]) || []);
     setClients((cliRes.data as Client[]) || []);
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
-    setCompletions((compRes.data as Completion[]) || []);
+    // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
+    const ids = monthInstances.map(i => i.id);
+    const allComps: Completion[] = [];
+    const CHUNK = 200;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      if (slice.length === 0) continue;
+      const { data } = await supabase
+        .from('obligation_activity_completions')
+        .select('id, instance_id, activity_id, completed, file_url')
+        .in('instance_id', slice);
+      if (data) allComps.push(...(data as Completion[]));
+    }
+    setCompletions(allComps);
   }, [currentDate]);
 
   useEffect(() => { loadData(); }, [loadData]);
