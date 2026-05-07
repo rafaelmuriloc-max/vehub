@@ -217,7 +217,10 @@ Deno.serve(async (req) => {
             continue;
           }
         }
-        const parsed = parseNfeEntry(entry, client_id);
+        const parsed = parseNfeEntry(entry, client_id, {
+          document: client.document,
+          company_name: client.company_name,
+        });
         if (parsed) invoicesToSave.push(parsed);
       }
 
@@ -375,17 +378,44 @@ function extractAccessKeyFromXml(xml: string): string | null {
   return extractTagContent(xml, "chNFe");
 }
 
-function parseNfeEntry(entry: DistEntry, clientId: string): Record<string, unknown> | null {
+function parseNfeEntry(
+  entry: DistEntry,
+  clientId: string,
+  clientInfo?: { document?: string | null; company_name?: string | null },
+): Record<string, unknown> | null {
   if (!entry.chAcesso) return null;
 
   const xml = entry.xmlContent || "";
-  const invoiceNumber = extractTagContent(xml, "nNF");
+  const isResumo = /<resNFe[\s>]/i.test(xml);
+
+  // Fallback: derive invoice number from access key (positions 26..34, 9 digits)
+  const invoiceNumberFromKey = entry.chAcesso.length === 44
+    ? entry.chAcesso.slice(25, 34).replace(/^0+/, "") || "0"
+    : null;
+
+  const invoiceNumber = extractTagContent(xml, "nNF") || invoiceNumberFromKey;
   const issueDate = extractTagContent(xml, "dhEmi")?.slice(0, 10) || extractTagContent(xml, "dEmi");
-  const emitterCnpj = extractInnerTag(xml, "emit", "CNPJ");
-  const emitterName = extractInnerTag(xml, "emit", "xNome") || extractInnerTag(xml, "emit", "xFant");
-  const recipientCnpj = extractInnerTag(xml, "dest", "CNPJ") || extractInnerTag(xml, "dest", "CPF");
-  const recipientName = extractInnerTag(xml, "dest", "xNome");
-  const totalValue = parseFloat(extractInnerTag(xml, "ICMSTot", "vNF") || extractTagContent(xml, "vNF") || "0");
+
+  // For resNFe (summary), emit fields are at the root, not inside <emit>
+  const emitterCnpj = extractInnerTag(xml, "emit", "CNPJ")
+    || (isResumo ? extractTagContent(xml, "CNPJ") : null);
+  const emitterName = extractInnerTag(xml, "emit", "xNome")
+    || extractInnerTag(xml, "emit", "xFant")
+    || (isResumo ? extractTagContent(xml, "xNome") : null);
+
+  // Destinatário: in resNFe is always the consultant (client). In full NFe, parse <dest>.
+  let recipientCnpj = extractInnerTag(xml, "dest", "CNPJ") || extractInnerTag(xml, "dest", "CPF");
+  let recipientName = extractInnerTag(xml, "dest", "xNome");
+  if (!recipientCnpj && clientInfo?.document) {
+    recipientCnpj = clientInfo.document.replace(/\D/g, "");
+  }
+  if (!recipientName && clientInfo?.company_name) {
+    recipientName = clientInfo.company_name;
+  }
+
+  const totalValue = parseFloat(
+    extractInnerTag(xml, "ICMSTot", "vNF") || extractTagContent(xml, "vNF") || "0",
+  );
 
   let status = "autorizada";
   if (entry.isEvent) {
