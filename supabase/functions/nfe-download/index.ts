@@ -175,10 +175,19 @@ Deno.serve(async (req) => {
       }
     }
     if (!fullXml) {
+      // SEFAZ retornou apenas o resumo (resNFe) — marca como aguardando ciência
+      // para que o fluxo de manifestação possa ser disparado.
+      await adminClient
+        .from("nfe_invoices")
+        .update({ status: "aguardando_ciencia" })
+        .eq("id", nfe_invoice_id);
       return jsonResponse({
-        error: "AN retornou apenas o resumo (resNFe), não o XML completo. Para baixar o nfeProc é obrigatório que a empresa destinatária faça a Manifestação do Destinatário (Ciência da Operação ou Confirmação) desta NF-e.",
+        success: true,
+        type: "summary_only",
         reason: "manifestacao_required",
-      }, 400);
+        status: "aguardando_ciencia",
+        message: "Apenas o resumo (resNFe) foi recebido. Aguardando Manifestação do Destinatário para baixar o XML completo.",
+      });
     }
     console.log(`[nfe-download] nfeProc length=${fullXml.length}`);
 
@@ -199,6 +208,7 @@ Deno.serve(async (req) => {
     const updatePayload: Record<string, unknown> = {
       xml_url: storagePath,
       raw_xml: fullXml,
+      status: "xml_baixado",
     };
     if (emitterCnpj) updatePayload.emitter_cnpj = emitterCnpj;
     if (emitterName) updatePayload.emitter_name = emitterName;
