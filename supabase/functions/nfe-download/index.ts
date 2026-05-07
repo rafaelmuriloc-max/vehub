@@ -142,6 +142,20 @@ Deno.serve(async (req) => {
     const fullXml = await decompressGzip(docZipMatch[1].trim());
     console.log(`[nfe-download] Decompressed XML length=${fullXml.length}`);
 
+    // SEFAZ only releases the full procNFe XML after Manifestação do Destinatário
+    // (Ciência da Operação - tpEvento 210210). Until then, consChNFe returns only
+    // the resumo (<resNFe>) which cannot be used to generate the DANFE.
+    const isResumo = /<resNFe[\s>]/i.test(fullXml);
+    if (isResumo) {
+      console.log(`[nfe-download] Got only resNFe (no manifestation event sent)`);
+      // Update raw_xml so we have the latest summary, but don't store as xml_url
+      await adminClient.from("nfe_invoices").update({ raw_xml: fullXml }).eq("id", nfe_invoice_id);
+      return jsonResponse({
+        error: "XML completo indisponível. É necessário registrar a Manifestação do Destinatário (Ciência da Operação) na SEFAZ para liberar o XML completo desta NF-e.",
+        reason: "manifestacao_required",
+      }, 400);
+    }
+
     // Save to storage
     const storagePath = `nfe/${invoice.client_id}/${invoice.access_key}.xml`;
     const xmlBlob = new Blob([fullXml], { type: "application/xml" });
