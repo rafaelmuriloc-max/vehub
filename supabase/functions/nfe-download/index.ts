@@ -7,9 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const AN_URL = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
-const AN_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe";
-const SOAP_ACTION = `${AN_NS}/nfeDistDFeInteresse`;
+const SEF_SC_URL = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
+const SEF_SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
+const SOAP_ACTION = `${SEF_SC_NS}/nfeDownloadContab`;
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
 const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
 
@@ -81,30 +81,43 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, type: "signed_url", url: signedData?.signedUrl || "" });
     }
 
-    // Need to fetch full XML via consChNFe
+    // Need to fetch full XML via SEF-SC NfeDownload (nfeDownloadContab)
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("id, document, digital_certificate_url, digital_certificate_password")
+      .select("id, document")
       .eq("id", invoice.client_id)
       .single();
     if (clientError || !client) return jsonResponse({ error: "Cliente não encontrado" }, 404);
-    if (!client.digital_certificate_url) return jsonResponse({ error: "Cliente sem certificado digital" }, 400);
+    if (!client.document) return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
+
+    // Load accountant (contador) certificate from company_settings
+    const { data: office } = await adminClient
+      .from("company_settings")
+      .select("accountant_certificate_url, accountant_certificate_password")
+      .limit(1)
+      .maybeSingle();
+    if (!office?.accountant_certificate_url) {
+      return jsonResponse({
+        error: "Certificado do contador não cadastrado. Vá em Configurações → Empresa para cadastrar.",
+        reason: "contador_cert_missing",
+      }, 400);
+    }
 
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
-      .download(client.digital_certificate_url);
-    if (certError || !certData) return jsonResponse({ error: "Erro ao baixar certificado" }, 500);
+      .download(office.accountant_certificate_url);
+    if (certError || !certData) return jsonResponse({ error: "Erro ao baixar certificado do contador" }, 500);
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const { certPem, keyPem } = await parsePfx(pfxBytes, client.digital_certificate_password || "");
-    const cnpj = (client.document || "").replace(/\D/g, "");
+    const { certPem, keyPem } = await parsePfx(pfxBytes, office.accountant_certificate_password || "");
+    const cnpjCliente = (client.document || "").replace(/\D/g, "");
 
-    // Build consChNFe SOAP request
-    const soapBody = buildConsChNFeRequest(cnpj, invoice.access_key);
-    console.log(`[nfe-download] Fetching full XML for chave=${invoice.access_key}`);
+    // Build SEF-SC nfeDownloadContab SOAP request
+    const soapBody = buildSefScDownloadRequest(cnpjCliente, invoice.access_key);
+    console.log(`[nfe-download] SEF-SC fetch chave=${invoice.access_key} CNPJ=${cnpjCliente}`);
 
     const response = await requestTextWithMTLS(
-      new URL(AN_URL),
+      new URL(SEF_SC_URL),
       {
         method: "POST",
         headers: {
@@ -120,8 +133,8 @@ Deno.serve(async (req) => {
 
     console.log(`[nfe-download] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
 
-    const retBody = extractTagContent(response.bodyText, "retDistDFeInt") ||
-      extractTagContent(response.bodyText, "retdistDFeInt") ||
+    const retBody = extractTagContent(response.bodyText, "retDistNFeSC") ||
+      extractTagContent(response.bodyText, "retdistNFeSC") ||
       response.bodyText;
 
     const cStat = extractTagContent(retBody, "cStat");
@@ -129,32 +142,28 @@ Deno.serve(async (req) => {
     console.log(`[nfe-download] cStat=${cStat}, xMotivo=${xMotivo}`);
 
     if (cStat !== "138") {
-      return jsonResponse({ error: `Erro AN: ${cStat} - ${xMotivo}`, cStat }, 400);
-    }
-
-    // Extract docZip
-    const loteXml = extractTagContent(retBody, "loteDistDFeInt") || retBody;
-    const docZipMatch = loteXml.match(/<docZip\s+[^>]*>([^<]+)<\/docZip>/i);
-    if (!docZipMatch) {
-      return jsonResponse({ error: "Nenhum documento retornado pelo AN" }, 400);
-    }
-
-    const fullXml = await decompressGzip(docZipMatch[1].trim());
-    console.log(`[nfe-download] Decompressed XML length=${fullXml.length}`);
-
-    // SEFAZ only releases the full procNFe XML after Manifestação do Destinatário
-    // (Ciência da Operação - tpEvento 210210). Until then, consChNFe returns only
-    // the resumo (<resNFe>) which cannot be used to generate the DANFE.
-    const isResumo = /<resNFe[\s>]/i.test(fullXml);
-    if (isResumo) {
-      console.log(`[nfe-download] Got only resNFe (no manifestation event sent)`);
-      // Update raw_xml so we have the latest summary, but don't store as xml_url
-      await adminClient.from("nfe_invoices").update({ raw_xml: fullXml }).eq("id", nfe_invoice_id);
+      const isAuth = ["280","281","282","283","284","285","286"].includes(cStat || "");
       return jsonResponse({
-        error: "XML completo indisponível. É necessário registrar a Manifestação do Destinatário (Ciência da Operação) na SEFAZ para liberar o XML completo desta NF-e.",
-        reason: "manifestacao_required",
+        error: `SEF-SC: ${cStat} - ${xMotivo}` + (isAuth ? " (verifique vínculo do contador no e-SAT/SC)" : ""),
+        cStat,
       }, 400);
     }
+
+    // Extract <loteDistComp> (base64 + gzip) and decompress -> <loteDistNFeSC>
+    const loteCompB64 = extractTagContent(retBody, "loteDistComp");
+    if (!loteCompB64) {
+      return jsonResponse({ error: "Nenhum documento retornado pela SEF-SC" }, 400);
+    }
+
+    const loteXml = await decompressGzip(loteCompB64.replace(/\s+/g, ""));
+    console.log(`[nfe-download] Decompressed loteDistNFeSC length=${loteXml.length}`);
+
+    // Inside <loteDistNFeSC><distNFeSC NSU=".." chAcesso=".."><nfeProc>...</nfeProc></distNFeSC>
+    const nfeProcMatch = loteXml.match(/<nfeProc[\s\S]*?<\/nfeProc>/i);
+    if (!nfeProcMatch) {
+      return jsonResponse({ error: "Resposta SEF-SC sem nfeProc (apenas evento ou vazio)" }, 400);
+    }
+    const fullXml = nfeProcMatch[0];
 
     // Save to storage
     const storagePath = `nfe/${invoice.client_id}/${invoice.access_key}.xml`;
