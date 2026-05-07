@@ -9,7 +9,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const AN_URL = "https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
+const AN_URL = "https://www1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
 const AN_WSDL_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
 const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
 const SOAP_ACTION = `${AN_WSDL_NS}/nfeRecepcaoEvento`;
@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`,
-        SOAPAction: `"${SOAP_ACTION}"`,
+        SOAPAction: SOAP_ACTION,
         Accept: "text/xml, application/xml, */*",
       },
       body: soapBody,
