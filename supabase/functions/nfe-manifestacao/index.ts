@@ -12,7 +12,9 @@ const corsHeaders = {
 const AN_URL = "https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
 const AN_WSDL_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
 const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
-const SOAP_ACTION = `${AN_WSDL_NS}/nfeRecepcaoEvento4`;
+// SEFAZ AN expects the WSDL operation name without the "4" suffix
+const SOAP_ACTION = `${AN_WSDL_NS}/nfeRecepcaoEvento`;
+const SOAP_CONTENT_TYPE = `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`;
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
 const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
 
@@ -163,7 +165,7 @@ Deno.serve(async (req) => {
     const response = await requestTextWithMTLS(new URL(AN_URL), {
       method: "POST",
       headers: {
-        "Content-Type": `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`,
+        "Content-Type": SOAP_CONTENT_TYPE,
         Accept: "application/soap+xml, text/xml, application/xml, */*",
       },
       body: soapBody,
@@ -246,6 +248,7 @@ async function requestTextWithMTLS(
           key_pem: keyPem,
           url: url.toString(),
           soap_action: init.headers?.SOAPAction || SOAP_ACTION,
+          content_type: init.headers?.["Content-Type"] || SOAP_CONTENT_TYPE,
         }),
       });
       const proxyData = await proxyResponse.json();
