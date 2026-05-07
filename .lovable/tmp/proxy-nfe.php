@@ -58,6 +58,7 @@ $certPem    = $data['cert_pem']    ?? null;
 $keyPem     = $data['key_pem']     ?? null;
 $targetUrl  = $data['url']         ?? null;
 $soapAction = $data['soap_action'] ?? null;
+$contentType = $data['content_type'] ?? null;
 
 if (!$soapBody || !$certPem || !$keyPem || !$targetUrl) {
     http_response_code(400);
@@ -76,12 +77,15 @@ try {
     // ===== cURL com mTLS =====
     $ch = curl_init();
 
+    $ctHeader = $contentType ?: 'text/xml; charset=utf-8';
     $headers = [
-        'Content-Type: text/xml; charset=utf-8',
-        'Accept: text/xml, application/xml, */*',
+        'Content-Type: ' . $ctHeader,
+        'Accept: application/soap+xml, text/xml, application/xml, */*',
         'User-Agent: VeHub-NFe-Proxy/1.0',
     ];
-    if ($soapAction) {
+    // SOAP 1.2 carries action in Content-Type; do not duplicate as SOAPAction header.
+    $isSoap12 = stripos($ctHeader, 'application/soap+xml') !== false;
+    if ($soapAction && !$isSoap12) {
         $headers[] = 'SOAPAction: "' . $soapAction . '"';
     }
 
