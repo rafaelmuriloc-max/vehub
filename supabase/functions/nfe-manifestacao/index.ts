@@ -150,21 +150,21 @@ Deno.serve(async (req) => {
 
     const soapBody =
       `<?xml version="1.0" encoding="UTF-8"?>` +
-      `<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">` +
-      `<soap12:Body>` +
+      `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">` +
+      `<soap:Body>` +
       `<nfeRecepcaoEvento xmlns="${AN_WSDL_NS}">` +
       `<nfeDadosMsg>${envEvento}</nfeDadosMsg>` +
       `</nfeRecepcaoEvento>` +
-      `</soap12:Body>` +
-      `</soap12:Envelope>`;
+      `</soap:Body>` +
+      `</soap:Envelope>`;
 
     console.log(`[nfe-manifestacao] chave=${chave} CNPJ=${cnpj} tpEvento=${tpEvento}`);
 
     const response = await requestTextWithMTLS(new URL(AN_URL), {
       method: "POST",
       headers: {
-        "Content-Type": `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`,
-        SOAPAction: SOAP_ACTION,
+        "Content-Type": "text/xml; charset=utf-8",
+        SOAPAction: `"${SOAP_ACTION}"`,
         Accept: "text/xml, application/xml, */*",
       },
       body: soapBody,
