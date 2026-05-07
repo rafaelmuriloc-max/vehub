@@ -217,7 +217,10 @@ Deno.serve(async (req) => {
             continue;
           }
         }
-        const parsed = parseNfeEntry(entry, client_id);
+        const parsed = parseNfeEntry(entry, client_id, {
+          document: client.document,
+          company_name: client.company_name,
+        });
         if (parsed) invoicesToSave.push(parsed);
       }
 
