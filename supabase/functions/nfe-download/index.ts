@@ -147,11 +147,27 @@ Deno.serve(async (req) => {
     const xmlBlob = new Blob([fullXml], { type: "application/xml" });
     await adminClient.storage.from("documents").upload(storagePath, xmlBlob, { upsert: true });
 
-    // Update invoice record
-    await adminClient.from("nfe_invoices").update({
+    // Extract structured fields from full XML
+    const emitterCnpj = extractInnerTag(fullXml, "emit", "CNPJ");
+    const emitterName = extractInnerTag(fullXml, "emit", "xNome") || extractInnerTag(fullXml, "emit", "xFant");
+    const recipientCnpj = extractInnerTag(fullXml, "dest", "CNPJ") || extractInnerTag(fullXml, "dest", "CPF");
+    const recipientName = extractInnerTag(fullXml, "dest", "xNome");
+    const invoiceNumber = extractTagContent(fullXml, "nNF");
+    const totalValueStr = extractInnerTag(fullXml, "ICMSTot", "vNF") || extractTagContent(fullXml, "vNF");
+    const totalValue = totalValueStr ? parseFloat(totalValueStr) : null;
+
+    const updatePayload: Record<string, unknown> = {
       xml_url: storagePath,
       raw_xml: fullXml,
-    }).eq("id", nfe_invoice_id);
+    };
+    if (emitterCnpj) updatePayload.emitter_cnpj = emitterCnpj;
+    if (emitterName) updatePayload.emitter_name = emitterName;
+    if (recipientCnpj) updatePayload.recipient_cnpj = recipientCnpj;
+    if (recipientName) updatePayload.recipient_name = recipientName;
+    if (invoiceNumber) updatePayload.invoice_number = invoiceNumber;
+    if (totalValue && !isNaN(totalValue)) updatePayload.total_value = totalValue;
+
+    await adminClient.from("nfe_invoices").update(updatePayload).eq("id", nfe_invoice_id);
 
     const { data: signedData } = await adminClient.storage.from("documents").createSignedUrl(storagePath, 600);
     return jsonResponse({ success: true, type: "signed_url", url: signedData?.signedUrl || "" });
@@ -186,6 +202,12 @@ function extractTagContent(xml: string, tagName: string): string | null {
   const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
   const match = xml.match(regex);
   return match ? match[1].trim() : null;
+}
+
+function extractInnerTag(xml: string, parentTag: string, childTag: string): string | null {
+  const parentContent = extractTagContent(xml, parentTag);
+  if (!parentContent) return null;
+  return extractTagContent(parentContent, childTag);
 }
 
 async function decompressGzip(base64Data: string): Promise<string> {
