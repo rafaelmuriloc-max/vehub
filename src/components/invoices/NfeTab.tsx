@@ -187,9 +187,19 @@ export default function NfeTab() {
     setDownloadingMap(prev => ({ ...prev, [key]: true }));
     const fetchToast = toast({ title: 'Buscando XML no Ambiente Nacional...', description: 'Pode demorar alguns segundos.' });
     try {
-      const tryDownload = () => supabase.functions.invoke('nfe-download', {
-        body: { nfe_invoice_id: inv.id, type: 'xml' },
-      });
+      const tryDownload = async () => {
+        const res = await supabase.functions.invoke('nfe-download', {
+          body: { nfe_invoice_id: inv.id, type: 'xml' },
+        });
+        // FunctionsHttpError: status >=400. Extract JSON body from error.context.
+        if (res.error && (res.error as any).context?.json) {
+          try {
+            const parsed = await (res.error as any).context.json();
+            return { data: parsed, error: null as any };
+          } catch { /* fall through */ }
+        }
+        return res;
+      };
       const triggerDownload = async (signedUrl: string) => {
         const resp = await fetch(signedUrl);
         const blob = await resp.blob();
@@ -218,9 +228,14 @@ export default function NfeTab() {
           title: 'Enviando Manifestação do Destinatário...',
           description: 'Ciência da Operação na SEFAZ.',
         });
-        const { data: manifData, error: manifError } = await supabase.functions.invoke('nfe-manifestacao', {
+        const manifRes = await supabase.functions.invoke('nfe-manifestacao', {
           body: { nfe_invoice_id: inv.id, tpEvento: '210210' },
         });
+        let manifData: any = manifRes.data;
+        let manifError: any = manifRes.error;
+        if (manifError && (manifError as any).context?.json) {
+          try { manifData = await (manifError as any).context.json(); manifError = null; } catch {}
+        }
         if (manifError || !manifData?.success) {
           const msg = manifData?.error || manifError?.message || 'Falha na manifestação';
           toast({ title: 'Não foi possível manifestar', description: msg, variant: 'destructive' });
