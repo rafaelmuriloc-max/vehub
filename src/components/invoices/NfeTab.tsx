@@ -187,16 +187,11 @@ export default function NfeTab() {
     setDownloadingMap(prev => ({ ...prev, [key]: true }));
     const fetchToast = toast({ title: 'Buscando XML no Ambiente Nacional...', description: 'Pode demorar alguns segundos.' });
     try {
-      // Try to get full XML via edge function
-      const { data, error } = await supabase.functions.invoke('nfe-download', {
+      const tryDownload = () => supabase.functions.invoke('nfe-download', {
         body: { nfe_invoice_id: inv.id, type: 'xml' },
       });
-
-      if (error) throw new Error(error.message || 'Erro ao baixar XML');
-
-      if (data?.type === 'signed_url' && data?.url) {
-        // Download from signed URL
-        const resp = await fetch(data.url);
+      const triggerDownload = async (signedUrl: string) => {
+        const resp = await fetch(signedUrl);
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -206,14 +201,55 @@ export default function NfeTab() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+      };
+
+      let { data, error } = await tryDownload();
+      if (error) throw new Error(error.message || 'Erro ao baixar XML');
+
+      if (data?.type === 'signed_url' && data?.url) {
+        await triggerDownload(data.url);
+        return;
+      }
+
+      // Auto-manifestação: AN só devolveu resumo → enviamos Ciência da Operação e tentamos novamente.
+      if (data?.reason === 'manifestacao_required' || data?.cStat === '137') {
+        fetchToast.update({
+          id: fetchToast.id,
+          title: 'Enviando Manifestação do Destinatário...',
+          description: 'Ciência da Operação na SEFAZ.',
+        });
+        const { data: manifData, error: manifError } = await supabase.functions.invoke('nfe-manifestacao', {
+          body: { nfe_invoice_id: inv.id, tpEvento: '210210' },
+        });
+        if (manifError || !manifData?.success) {
+          const msg = manifData?.error || manifError?.message || 'Falha na manifestação';
+          toast({ title: 'Não foi possível manifestar', description: msg, variant: 'destructive' });
+          return;
+        }
+
+        fetchToast.update({
+          id: fetchToast.id,
+          title: 'Manifestação registrada. Aguardando AN liberar o XML...',
+        });
+        await new Promise(r => setTimeout(r, 5000));
+        ({ data, error } = await tryDownload());
+        if (error) throw new Error(error.message || 'Erro ao baixar XML após manifestação');
+        if (data?.type === 'signed_url' && data?.url) {
+          await triggerDownload(data.url);
+          toast({ title: 'XML baixado', description: 'Manifestação realizada e XML obtido com sucesso.' });
+          return;
+        }
+        toast({
+          title: 'XML ainda não disponível',
+          description: 'Manifestação registrada, mas o AN ainda não liberou o XML. Tente novamente em alguns minutos.',
+          variant: 'destructive',
+        });
         return;
       }
 
       const desc = data?.reason === 'client_cert_missing'
         ? 'Cadastre o certificado A1 da empresa no cadastro do cliente (CRM → Empresa).'
-        : (data?.cStat === '137' || data?.reason === 'manifestacao_required')
-          ? 'NF-e ainda não disponível para download. Faça a Manifestação do Destinatário (Ciência da Operação) antes.'
-          : (data?.error || '');
+        : (data?.error || 'XML não disponível.');
       toast({ title: 'XML não disponível', description: desc, variant: 'destructive' });
     } catch (e) {
       toast({ title: 'Erro ao baixar XML', description: (e as Error).message, variant: 'destructive' });
