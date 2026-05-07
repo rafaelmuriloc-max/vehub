@@ -7,9 +7,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SEF_SC_URL = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
-const SEF_SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
-const SOAP_ACTION = `${SEF_SC_NS}/nfeDownloadContab`;
+const AN_URL = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
+const AN_WSDL_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe";
+const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
+const SOAP_ACTION = `${AN_WSDL_NS}/nfeDistDFeInteresse`;
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
 const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
 
@@ -81,47 +82,41 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, type: "signed_url", url: signedData?.signedUrl || "" });
     }
 
-    // Need to fetch full XML via SEF-SC NfeDownload (nfeDownloadContab)
+    // Need to fetch full XML via NFeDistribuicaoDFe (Ambiente Nacional)
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("id, document")
+      .select("id, document, digital_certificate_url, digital_certificate_password")
       .eq("id", invoice.client_id)
       .single();
     if (clientError || !client) return jsonResponse({ error: "Cliente não encontrado" }, 404);
     if (!client.document) return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
-
-    // Load accountant (contador) certificate from company_settings
-    const { data: office } = await adminClient
-      .from("company_settings")
-      .select("accountant_certificate_url, accountant_certificate_password")
-      .limit(1)
-      .maybeSingle();
-    if (!office?.accountant_certificate_url) {
+    if (!client.digital_certificate_url || !client.digital_certificate_password) {
       return jsonResponse({
-        error: "Certificado do contador não cadastrado. Vá em Configurações → Empresa para cadastrar.",
-        reason: "contador_cert_missing",
+        error: "Certificado A1 da empresa não cadastrado. Acesse o cadastro do cliente em CRM → Empresa para cadastrar.",
+        reason: "client_cert_missing",
       }, 400);
     }
 
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
-      .download(office.accountant_certificate_url);
-    if (certError || !certData) return jsonResponse({ error: "Erro ao baixar certificado do contador" }, 500);
+      .download(client.digital_certificate_url);
+    if (certError || !certData) return jsonResponse({ error: "Erro ao baixar certificado da empresa" }, 500);
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const { certPem, keyPem } = await parsePfx(pfxBytes, office.accountant_certificate_password || "");
+    const { certPem, keyPem } = await parsePfx(pfxBytes, client.digital_certificate_password || "");
     const cnpjCliente = (client.document || "").replace(/\D/g, "");
+    const cUF = (invoice.access_key || "").slice(0, 2);
 
-    // Build SEF-SC nfeDownloadContab SOAP request
-    const soapBody = buildSefScDownloadRequest(cnpjCliente, invoice.access_key);
-    console.log(`[nfe-download] SEF-SC fetch chave=${invoice.access_key} CNPJ=${cnpjCliente}`);
+    // Build NFeDistribuicaoDFe SOAP request (consulta por chave)
+    const soapBody = buildAnDistDFeRequest(cUF, cnpjCliente, invoice.access_key);
+    console.log(`[nfe-download] AN fetch chave=${invoice.access_key} CNPJ=${cnpjCliente} cUF=${cUF}`);
 
     const response = await requestTextWithMTLS(
-      new URL(SEF_SC_URL),
+      new URL(AN_URL),
       {
         method: "POST",
         headers: {
-          "Content-Type": "text/xml; charset=utf-8",
+          "Content-Type": `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`,
           SOAPAction: SOAP_ACTION,
           Accept: "text/xml, application/xml, */*",
         },
@@ -134,45 +129,55 @@ Deno.serve(async (req) => {
     console.log(`[nfe-download] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
     console.log(`[nfe-download] Body snippet: ${response.bodyText.slice(0, 1500)}`);
 
-    const retBody = extractTagContent(response.bodyText, "retDistNFeSC") ||
-      extractTagContent(response.bodyText, "retdistNFeSC") ||
-      response.bodyText;
+    const retBody = extractTagContent(response.bodyText, "retDistDFeInt") || response.bodyText;
 
     const cStat = extractTagContent(retBody, "cStat");
     const xMotivo = extractTagContent(retBody, "xMotivo");
     console.log(`[nfe-download] cStat=${cStat}, xMotivo=${xMotivo}`);
 
     if (cStat !== "138") {
-      const isAuth = ["280","281","282","283","284","285","286"].includes(cStat || "");
       // Try to surface SOAP fault for diagnosis
       const faultString = extractTagContent(response.bodyText, "faultstring")
         || extractTagContent(response.bodyText, "faultString")
         || extractTagContent(response.bodyText, "Message");
+      let hint = "";
+      if (cStat === "137") hint = " — Faça a Manifestação do Destinatário (Ciência da Operação) antes de baixar.";
+      else if (cStat === "656") hint = " — Consumo indevido: aguarde 1 hora antes de tentar novamente.";
+      else if (cStat === "108" || cStat === "109") hint = " — Serviço da Receita indisponível, tente novamente mais tarde.";
       return jsonResponse({
         error: cStat
-          ? `SEF-SC: ${cStat} - ${xMotivo}` + (isAuth ? " (verifique vínculo do contador no e-SAT/SC)" : "")
-          : `SEF-SC HTTP ${response.status}: ${faultString || response.bodyText.slice(0, 500)}`,
+          ? `AN: ${cStat} - ${xMotivo}${hint}`
+          : `AN HTTP ${response.status}: ${faultString || response.bodyText.slice(0, 500)}`,
         cStat,
         httpStatus: response.status,
         bodySnippet: response.bodyText.slice(0, 800),
       }, 400);
     }
 
-    // Extract <loteDistComp> (base64 + gzip) and decompress -> <loteDistNFeSC>
-    const loteCompB64 = extractTagContent(retBody, "loteDistComp");
-    if (!loteCompB64) {
-      return jsonResponse({ error: "Nenhum documento retornado pela SEF-SC" }, 400);
+    // Iterate <docZip> elements (base64 + gzip) and find one matching the chave/procNFe
+    const docZipRegex = /<docZip\b[^>]*>([\s\S]*?)<\/docZip>/gi;
+    let fullXml: string | null = null;
+    let docMatch: RegExpExecArray | null;
+    while ((docMatch = docZipRegex.exec(retBody)) !== null) {
+      const b64 = docMatch[1].replace(/\s+/g, "");
+      try {
+        const decoded = await decompressGzip(b64);
+        if (/<nfeProc[\s>]/i.test(decoded) && decoded.includes(invoice.access_key)) {
+          fullXml = (decoded.match(/<nfeProc[\s\S]*?<\/nfeProc>/i) || [])[0] || decoded;
+          break;
+        }
+        // Fallback: keep first procNFe found if specific chave isn't matched yet
+        if (!fullXml && /<nfeProc[\s>]/i.test(decoded)) {
+          fullXml = (decoded.match(/<nfeProc[\s\S]*?<\/nfeProc>/i) || [])[0] || decoded;
+        }
+      } catch (e) {
+        console.warn(`[nfe-download] Falha ao descompactar docZip:`, (e as Error).message);
+      }
     }
-
-    const loteXml = await decompressGzip(loteCompB64.replace(/\s+/g, ""));
-    console.log(`[nfe-download] Decompressed loteDistNFeSC length=${loteXml.length}`);
-
-    // Inside <loteDistNFeSC><distNFeSC NSU=".." chAcesso=".."><nfeProc>...</nfeProc></distNFeSC>
-    const nfeProcMatch = loteXml.match(/<nfeProc[\s\S]*?<\/nfeProc>/i);
-    if (!nfeProcMatch) {
-      return jsonResponse({ error: "Resposta SEF-SC sem nfeProc (apenas evento ou vazio)" }, 400);
+    if (!fullXml) {
+      return jsonResponse({ error: "Resposta AN sem nfeProc para esta chave (apenas eventos ou resumo)" }, 400);
     }
-    const fullXml = nfeProcMatch[0];
+    console.log(`[nfe-download] nfeProc length=${fullXml.length}`);
 
     // Save to storage
     const storagePath = `nfe/${invoice.client_id}/${invoice.access_key}.xml`;
@@ -210,26 +215,25 @@ Deno.serve(async (req) => {
   }
 });
 
-function buildSefScDownloadRequest(cnpjCliente: string, chAcesso: string): string {
-  // SEF-SC NfeDownload / nfeDownloadContab — schema distNFeSC_v2.00.xsd
+function buildAnDistDFeRequest(cUF: string, cnpjCliente: string, chAcesso: string): string {
+  // NFeDistribuicaoDFe / nfeDistDFeInteresse — SOAP 1.2
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SEF_SC_NS}">
-  <soap:Body>
-    <ns:nfeDownloadContab>
-      <ns:nfeDadosMsg>
-        <distNFeSC versao="2.00" xmlns="${SEF_SC_NS}">
+<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDistDFeInteresse xmlns="${AN_WSDL_NS}">
+      <nfeDadosMsg>
+        <distDFeInt versao="1.01" xmlns="${NFE_NS}">
           <tpAmb>1</tpAmb>
-          <verAplic>velocita 1.0</verAplic>
-          <cUF>42</cUF>
+          <cUFAutor>${cUF}</cUFAutor>
           <CNPJ>${cnpjCliente}</CNPJ>
-          <solDFe>
-            <chAcesso>${chAcesso}</chAcesso>
-          </solDFe>
-        </distNFeSC>
-      </ns:nfeDadosMsg>
-    </ns:nfeDownloadContab>
-  </soap:Body>
-</soap:Envelope>`;
+          <consChNFe>
+            <chNFe>${chAcesso}</chNFe>
+          </consChNFe>
+        </distDFeInt>
+      </nfeDadosMsg>
+    </nfeDistDFeInteresse>
+  </soap12:Body>
+</soap12:Envelope>`;
 }
 
 function extractTagContent(xml: string, tagName: string): string | null {

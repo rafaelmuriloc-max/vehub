@@ -185,7 +185,7 @@ export default function NfeTab() {
   async function handleDownloadXml(inv: NfeInvoice) {
     const key = `${inv.id}-xml`;
     setDownloadingMap(prev => ({ ...prev, [key]: true }));
-    const fetchToast = toast({ title: 'Buscando XML completo na SEF-SC...', description: 'Pode demorar alguns segundos.' });
+    const fetchToast = toast({ title: 'Buscando XML no Ambiente Nacional...', description: 'Pode demorar alguns segundos.' });
     try {
       // Try to get full XML via edge function
       const { data, error } = await supabase.functions.invoke('nfe-download', {
@@ -209,9 +209,11 @@ export default function NfeTab() {
         return;
       }
 
-      const desc = data?.reason === 'contador_cert_missing'
-        ? 'Cadastre o certificado do contador em Configurações → Empresa.'
-        : (data?.error || '');
+      const desc = data?.reason === 'client_cert_missing'
+        ? 'Cadastre o certificado A1 da empresa no cadastro do cliente (CRM → Empresa).'
+        : data?.cStat === '137'
+          ? 'NF-e ainda não disponível para download. Faça a Manifestação do Destinatário (Ciência da Operação) antes.'
+          : (data?.error || '');
       toast({ title: 'XML não disponível', description: desc, variant: 'destructive' });
     } catch (e) {
       toast({ title: 'Erro ao baixar XML', description: (e as Error).message, variant: 'destructive' });
