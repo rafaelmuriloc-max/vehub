@@ -1,64 +1,61 @@
-## Objetivo
+## Problema
 
-1. Corrigir as colunas **Número** e **Destinatário** na lista de NF-e Recebidas.
-2. Permitir baixar o **XML completo** (procNFe) sob demanda quando o usuário clicar em "Baixar XML" ou "Baixar DANFE".
+A `nfe-download` consulta o **Ambiente Nacional** (AN) com o certificado do cliente. O AN só libera `<nfeProc>` completo após Manifestação do Destinatário — sem isso, devolve apenas `<resNFe>` (sem itens, sem destinatário, sem `nNF`), inviabilizando o DANFE.
 
-## Contexto
+## Solução
 
-A consulta `distNSU` ao Ambiente Nacional retorna apenas resumos (`<resNFe>`) — sem itens, sem destinatário, sem `nNF`. O XML completo precisa ser obtido com uma segunda chamada `consChNFe` por chave de acesso.
+Usar o WS **`NfeDownload` / `nfeDownloadContab`** da SEF-SC (BT-SC-2021-001 v2.02), que entrega `<nfeProc>` completo para escritórios contábeis sem depender de manifestação. Autentica via mTLS com o **certificado do contador já cadastrado** em `company_settings.accountant_certificate_url` / `.accountant_certificate_password`.
 
 ## Mudanças
 
-### 1. `supabase/functions/nfe-query/index.ts` — corrigir parser
+### 1. `supabase/functions/nfe-download/index.ts` — Trocar AN por SEF-SC
 
-Em `parseNfeEntry`, detectar se o XML é `resNFe` (resumo) e, nesse caso:
-- Extrair `xNome` e `CNPJ` direto da raiz (não dentro de `<emit>`).
-- Derivar `invoice_number` dos dígitos 26–34 da chave de acesso (sem zeros à esquerda).
-- Preencher `recipient_cnpj` e `recipient_name` com os dados do **cliente** (CNPJ do certificado é sempre o destinatário). Passar `clientInfo` como argumento.
+Substituir o fluxo atual:
 
-Manter o caminho atual para XML completo (`<NFe>`/`<nfeProc>`) intacto.
+- Constantes:
+  ```ts
+  const SEF_SC_URL  = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
+  const SEF_SC_NS   = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
+  const SOAP_ACTION = `${SEF_SC_NS}/nfeDownloadContab`;
+  ```
+- Carregar certificado do contador:
+  ```ts
+  const { data: office } = await adminClient
+    .from("company_settings")
+    .select("accountant_certificate_url, accountant_certificate_password")
+    .limit(1).single();
+  ```
+  Se ausente → erro 400 (`reason: "contador_cert_missing"`, mensagem orientando Configurações → Empresa).
+- Buscar CNPJ do cliente (`clients.document`).
+- Montar SOAP envelope com payload SEF-SC:
+  ```xml
+  <distNFeSC versao="2.00" xmlns="http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2">
+    <tpAmb>1</tpAmb>
+    <verAplic>velocita 1.0</verAplic>
+    <cUF>42</cUF>
+    <CNPJ>{cnpjCliente}</CNPJ>
+    <solDFe><chAcesso>{chave44}</chAcesso></solDFe>
+  </distNFeSC>
+  ```
+- Enviar via `NFE_PROXY_URL` (Hostinger) com `certPem`/`keyPem` do contador.
+- Resposta: `<retDistNFeSC>` → `cStat=138` → `<loteDistComp>` (base64+gzip) → descompactar → `<loteDistNFeSC>` contendo `<distNFeSC><nfeProc>…</nfeProc></distNFeSC>`.
+- Extrair `<nfeProc>` interno como `fullXml`, salvar em `documents/nfe/{client_id}/{chave}.xml`, atualizar `nfe_invoices` (`xml_url`, `raw_xml`, `emitter_*`, `recipient_*`, `invoice_number`, `total_value`).
+- Retornar signed URL (10 min).
+- Mapear erros 282/283 (sem vínculo de contador no e-SAT/SC) com mensagem clara.
 
-### 2. `supabase/functions/nfe-download/index.ts` — buscar XML completo sob demanda
+### 2. UI — `src/components/invoices/NfeTab.tsx`
 
-Atualizar a função para:
-- Verificar se `raw_xml` salvo começa com `<resNFe` (resumo).
-- Se sim:
-  - Carregar certificado A1 do cliente (Storage `certificates`).
-  - Chamar `NFeDistribuicaoDFe` via `NFE_PROXY_URL` (Hostinger) com body SOAP `consChNFe` + `chNFe` da nota.
-  - Decompactar `docZip` (gzip+base64) → obter `<nfeProc>` completo.
-  - Atualizar `nfe_invoices`: `raw_xml` = XML completo, e refazer `emitter_*`, `recipient_*`, `invoice_number`, `total_value` com extração correta.
-- Retornar URL/conteúdo do XML completo (signed URL ou inline) para o frontend.
-
-A geração do DANFE (PDF) no `NfeTab.tsx` já usa esse fluxo — passa a funcionar automaticamente porque vai receber o XML completo na primeira chamada.
-
-### 3. Backfill dos registros existentes
-
-Migration SQL para corrigir as ~N notas já salvas como resumo:
-```sql
-UPDATE nfe_invoices ni
-SET 
-  invoice_number = COALESCE(invoice_number, ltrim(substring(access_key from 26 for 9), '0')),
-  recipient_cnpj = COALESCE(recipient_cnpj, regexp_replace(c.document, '\D', '', 'g')),
-  recipient_name = COALESCE(recipient_name, c.company_name),
-  emitter_name   = COALESCE(emitter_name, (regexp_match(raw_xml, '<xNome>([^<]+)</xNome>'))[1]),
-  emitter_cnpj   = COALESCE(emitter_cnpj, (regexp_match(raw_xml, '<CNPJ>(\d{14})</CNPJ>'))[1])
-FROM clients c
-WHERE c.id = ni.client_id
-  AND ni.access_key IS NOT NULL;
-```
-
-### 4. UI — feedback
-
-Em `NfeTab.tsx`, manter os botões existentes. Adicionar pequena mensagem no toast quando estiver baixando pela 1ª vez ("Buscando XML completo na SEFAZ...") já que vai demorar alguns segundos.
+- Toast "Buscando XML completo na SEF-SC…" antes do `invoke('nfe-download')`.
+- Tratar `reason: "contador_cert_missing"` com toast linkando Configurações.
 
 ## Validação
 
-- Recarregar `/invoices` aba NF-e → colunas Número e Destinatário preenchidas para todas as NF-e existentes.
-- Clicar "Baixar XML" em uma nota → retorna XML completo `<nfeProc>` com `<det>` (itens), `<dest>`, `<total>` etc.
-- Segunda vez no mesmo botão é instantâneo (XML já cacheado no banco).
-- Clicar "Baixar DANFE" → PDF gerado com todos os dados corretos.
+- Em `/invoices` → "Baixar XML" em uma NF-e SC → retorna `<nfeProc>` completo com `<det>`, `<dest>`, `<total>`.
+- "Baixar DANFE" → PDF gerado.
+- Logs do edge function: `cStat=138` e `loteDistComp` decompactado.
 
 ## Notas
 
-- Limite de 20 `consChNFe`/min por CNPJ (NT 2014/002) — como é sob demanda, dificilmente bate.
-- XML completo só fica disponível na SEFAZ por ~90 dias após emissão.
+- Limite 50 documentos por requisição.
+- WS atende somente NF-e de SC (cUF=42). Para outras UFs continua dependendo do AN + Manifestação (fora deste escopo).
+- Se SEF-SC retornar 282/283 etc., o contador não está vinculado ao CNPJ do cliente no e-SAT/SC — configuração externa.
