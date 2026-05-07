@@ -201,22 +201,24 @@ Deno.serve(async (req) => {
   }
 });
 
-function buildConsChNFeRequest(cnpj: string, chNFe: string): string {
+function buildSefScDownloadRequest(cnpjCliente: string, chAcesso: string): string {
+  // SEF-SC NfeDownload / nfeDownloadContab — schema distNFeSC_v2.00.xsd
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${AN_NS}">
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SEF_SC_NS}">
   <soap:Body>
-    <ns:nfeDistDFeInteresse>
+    <ns:nfeDownloadContab>
       <ns:nfeDadosMsg>
-        <distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
+        <distNFeSC versao="2.00" xmlns="${SEF_SC_NS}">
           <tpAmb>1</tpAmb>
-          <cUFAutor>42</cUFAutor>
-          <CNPJ>${cnpj}</CNPJ>
-          <consChNFe>
-            <chNFe>${chNFe}</chNFe>
-          </consChNFe>
-        </distDFeInt>
+          <verAplic>velocita 1.0</verAplic>
+          <cUF>42</cUF>
+          <CNPJ>${cnpjCliente}</CNPJ>
+          <solDFe>
+            <chAcesso>${chAcesso}</chAcesso>
+          </solDFe>
+        </distNFeSC>
       </ns:nfeDadosMsg>
-    </ns:nfeDistDFeInteresse>
+    </ns:nfeDownloadContab>
   </soap:Body>
 </soap:Envelope>`;
 }
