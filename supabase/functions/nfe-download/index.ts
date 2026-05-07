@@ -175,7 +175,10 @@ Deno.serve(async (req) => {
       }
     }
     if (!fullXml) {
-      return jsonResponse({ error: "Resposta AN sem nfeProc para esta chave (apenas eventos ou resumo)" }, 400);
+      return jsonResponse({
+        error: "AN retornou apenas o resumo (resNFe), não o XML completo. Para baixar o nfeProc é obrigatório que a empresa destinatária faça a Manifestação do Destinatário (Ciência da Operação ou Confirmação) desta NF-e.",
+        reason: "manifestacao_required",
+      }, 400);
     }
     console.log(`[nfe-download] nfeProc length=${fullXml.length}`);
 
