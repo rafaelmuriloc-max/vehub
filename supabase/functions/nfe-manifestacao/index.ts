@@ -9,8 +9,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const AN_URL = "https://www.nfe.fazenda.gov.br/RecepcaoEvento4/RecepcaoEvento4.asmx";
-const AN_WSDL_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/RecepcaoEvento4";
+const AN_URL = "https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
+const AN_WSDL_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
 const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
 const SOAP_ACTION = `${AN_WSDL_NS}/nfeRecepcaoEvento`;
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
@@ -150,21 +150,21 @@ Deno.serve(async (req) => {
 
     const soapBody =
       `<?xml version="1.0" encoding="UTF-8"?>` +
-      `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">` +
-      `<soap:Body>` +
+      `<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">` +
+      `<soap12:Body>` +
       `<nfeRecepcaoEvento xmlns="${AN_WSDL_NS}">` +
       `<nfeDadosMsg>${envEvento}</nfeDadosMsg>` +
       `</nfeRecepcaoEvento>` +
-      `</soap:Body>` +
-      `</soap:Envelope>`;
+      `</soap12:Body>` +
+      `</soap12:Envelope>`;
 
     console.log(`[nfe-manifestacao] chave=${chave} CNPJ=${cnpj} tpEvento=${tpEvento}`);
 
     const response = await requestTextWithMTLS(new URL(AN_URL), {
       method: "POST",
       headers: {
-        "Content-Type": "text/xml; charset=utf-8",
-        SOAPAction: `"${SOAP_ACTION}"`,
+        "Content-Type": `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`,
+        SOAPAction: SOAP_ACTION,
         Accept: "text/xml, application/xml, */*",
       },
       body: soapBody,
