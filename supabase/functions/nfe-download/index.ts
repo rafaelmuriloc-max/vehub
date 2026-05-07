@@ -132,6 +132,7 @@ Deno.serve(async (req) => {
     );
 
     console.log(`[nfe-download] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
+    console.log(`[nfe-download] Body snippet: ${response.bodyText.slice(0, 1500)}`);
 
     const retBody = extractTagContent(response.bodyText, "retDistNFeSC") ||
       extractTagContent(response.bodyText, "retdistNFeSC") ||
@@ -143,9 +144,17 @@ Deno.serve(async (req) => {
 
     if (cStat !== "138") {
       const isAuth = ["280","281","282","283","284","285","286"].includes(cStat || "");
+      // Try to surface SOAP fault for diagnosis
+      const faultString = extractTagContent(response.bodyText, "faultstring")
+        || extractTagContent(response.bodyText, "faultString")
+        || extractTagContent(response.bodyText, "Message");
       return jsonResponse({
-        error: `SEF-SC: ${cStat} - ${xMotivo}` + (isAuth ? " (verifique vínculo do contador no e-SAT/SC)" : ""),
+        error: cStat
+          ? `SEF-SC: ${cStat} - ${xMotivo}` + (isAuth ? " (verifique vínculo do contador no e-SAT/SC)" : "")
+          : `SEF-SC HTTP ${response.status}: ${faultString || response.bodyText.slice(0, 500)}`,
         cStat,
+        httpStatus: response.status,
+        bodySnippet: response.bodyText.slice(0, 800),
       }, 400);
     }
 
