@@ -47,11 +47,19 @@ function generateSerproProcuradorXML(params: {
   autorPedidoNome: string;
 }): { xml: string; termoId: string } {
   const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const dataAssinatura = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-  const vigencia = `${now.getFullYear()}1231`;
-
-  const termoId = `TERMO-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  // Calcular data no fuso de Brasília — SERPRO valida contra horário BRT
+  // e rejeita "data de assinatura posterior à data atual".
+  const brtParts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).formatToParts(now).map((p) => [p.type, p.value])
+  ) as Record<string, string>;
+  const dataAssinatura = `${brtParts.year}${brtParts.month}${brtParts.day}`;
+  const vigencia = `${brtParts.year}1231`;
+  const termoId = `TERMO-${dataAssinatura}${brtParts.hour}${brtParts.minute}${brtParts.second}`;
 
   // Textos EXATOS conforme documentação oficial SERPRO — incluindo acentos e caracteres especiais
   const termoTexto = `Autorizo a empresa CONTRATANTE, identificada neste termo de autorização como DESTINATÁRIO, a executar as requisições dos serviços web disponibilizados pela API INTEGRA CONTADOR, onde terei o papel de AUTOR PEDIDO DE DADOS no corpo da mensagem enviada na requisição do serviço web. Esse termo de autorização está assinado digitalmente com o certificado digital do PROCURADOR ou OUTORGADO DO CONTRIBUINTE responsável, identificado como AUTOR DO PEDIDO DE DADOS.`;

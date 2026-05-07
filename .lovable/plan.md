@@ -1,43 +1,37 @@
-# Sincronizar status das obrigações no front
+## Problem
 
-## Situação atual
+SERPRO rejeitou o termo de autorização com a mensagem:
 
-Verifiquei agora as 53 instâncias da Folha de Pagamento 04/2026 → todas continuam com `status = 'pending'` no banco, mesmo as que já têm as 5 atividades concluídas (JR FOOD SERVICE, EMPREITEIRA SCHMITZ, etc.). Ou seja, ainda não há nada que mantenha `obligation_instances.status` em sincronia com as `obligation_activity_completions`.
+> `[EntradaIncorreta-AUTENTICAPROCURADOR-018]` Layout do XML inválido: data de assinatura não deve ser posterior a data atual.
 
-Como várias telas (lista de obrigações, badges, métricas) leem `oi.status` direto, elas exibem "pendente" mesmo quando todas as atividades estão concluídas.
+No XML enviado, `dataAssinatura="20260507"`, mas o `responseDateTime` do SERPRO é `2026-05-06T22:38:42Z` — ou seja, no horário de Brasília (UTC-3) ainda era **06/05/2026**. O SERPRO valida a data contra o fuso de Brasília e rejeita qualquer data futura.
 
-## Plano
+## Causa
 
-### 1. Migration: trigger + backfill
-Criar uma única migration com:
+Em `supabase/functions/integra-contador/index.ts` (linhas 49–52), `dataAssinatura` é calculada com `new Date()` + `getFullYear/getMonth/getDate`. No runtime do Deno (Supabase Edge), `Date` opera em **UTC**, então quando o relógio UTC já virou para o dia seguinte (após 21h Brasília no horário padrão / 00h UTC), o XML é gerado com a data de "amanhã" segundo Brasília, e o SERPRO rejeita.
 
-**a) Função `recalc_obligation_instance_status(_instance_id uuid)`**  
-Conta atividades totais da obrigação vs. completions com `completed=true` daquela instância:
-- 0 concluídas → `pending`
-- todas concluídas → `done`
-- algumas → `in_progress`
+## Fix
 
-**b) Trigger `trg_oac_recalc_status`** em `obligation_activity_completions`  
-Dispara `AFTER INSERT/UPDATE/DELETE FOR EACH ROW` chamando a função acima.  
-SECURITY DEFINER, com `search_path = public`.
+Calcular `dataAssinatura` (e `vigencia`) usando o fuso `America/Sao_Paulo` via `Intl.DateTimeFormat`, garantindo que a data assinada nunca seja posterior ao "hoje" de Brasília.
 
-**c) Backfill one-shot**  
-Um `UPDATE` que percorre todas as `obligation_instances` existentes aplicando a mesma lógica. Corrige imediatamente as 53 instâncias da Folha 04/2026 e qualquer outra obrigação afetada pelo bug histórico.
+```ts
+const fmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+});
+const parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value]));
+const dataAssinatura = `${parts.year}${parts.month}${parts.day}`;
+const vigencia = `${parts.year}1231`;
+const termoId = `TERMO-${dataAssinatura}${...horários BRT...}`;
+```
 
-### 2. Verificação automática
-Após a migration, rodo `SELECT status, count(*)` na obrigação Folha 04/2026 para confirmar que as 53 viraram `done`/`in_progress`/`pending` corretamente.
+Também aplicar o mesmo cálculo (BRT) ao `termoId` para consistência.
 
-### 3. Front-end
-Não há mudança de UI necessária:
-- `Obligations.tsx`, `CalendarView.tsx`, `ClientObligationsTab.tsx` já leem `oi.status`.
-- A tela de calendário também recalcula a partir das completions, mas continuará funcionando.
+## Arquivos alterados
 
-Apenas garanto via reload (`loadAll()`) que o estado fresco seja buscado quando o usuário abre a tela — já é o comportamento atual.
+- `supabase/functions/integra-contador/index.ts` — função `generateSerproProcuradorXML` (linhas ~49–54).
 
-## Arquivos
+## Validação
 
-| Arquivo | Mudança |
-|---|---|
-| `supabase/migrations/<timestamp>_recalc_instance_status.sql` | função + trigger + backfill |
-
-Sem alterações em código TS/React.
+- Reexecutar a consulta PGDAS-D para o cliente ALECSANDRO THIAGO ACADEMIA. O SERPRO deve aceitar o termo (status 200) e retornar os dados.
+- Logs do edge function devem mostrar `dataAssinatura` igual à data atual de Brasília.
