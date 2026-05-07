@@ -211,7 +211,7 @@ export default function NfeTab() {
 
       const desc = data?.reason === 'client_cert_missing'
         ? 'Cadastre o certificado A1 da empresa no cadastro do cliente (CRM → Empresa).'
-        : data?.cStat === '137'
+        : (data?.cStat === '137' || data?.reason === 'manifestacao_required')
           ? 'NF-e ainda não disponível para download. Faça a Manifestação do Destinatário (Ciência da Operação) antes.'
           : (data?.error || '');
       toast({ title: 'XML não disponível', description: desc, variant: 'destructive' });
