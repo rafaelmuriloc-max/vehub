@@ -178,6 +178,15 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // 137 = Nenhum documento localizado / 656 = Consumo indevido (rate limit).
+      // Ambos são respostas esperadas quando não há (mais) documentos para baixar.
+      // Tratamos como fim do loop deste CNPJ, sem propagar erro para o cliente.
+      if (cStat === "137" || cStat === "656") {
+        console.log(`[NF-e] cStat=${cStat} (${xMotivo}) — encerrando loop deste CNPJ.`);
+        keepGoing = false;
+        break;
+      }
+
       if (cStat === "110") {
         console.log("[NF-e] Reprocessamento (110), continuando...");
         if (ultNSURet) lastNsu = ultNSURet;
