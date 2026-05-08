@@ -1,20 +1,33 @@
-## Problema
-O endpoint `nfe-download` hoje extrai apenas o trecho `<nfeProc>...</nfeProc>` do `docZip` retornado pelo Ambiente Nacional e salva esse fragmento no Storage. O arquivo resultante:
-- Não tem o prólogo `<?xml version="1.0" encoding="UTF-8"?>`.
-- Pode perder conteúdo quando o `docZip` traz dados adicionais.
-
-Por isso o XML baixado (tanto individual quanto em lote) não é o XML completo/oficial da NF-e.
+## Objetivo
+Exibir e baixar NF-e de saída (emitidas pelo próprio cliente) usando o mesmo `nfeDistribuicaoDFe` já em produção. O serviço entrega tanto entradas quanto saídas para o CNPJ interessado; hoje todas são salvas, mas a UI só mostra como "recebidas".
 
 ## Mudanças
 
-Tudo em `supabase/functions/nfe-download/index.ts`:
+### 1. Schema (migration)
+- Adicionar coluna `direction text not null default 'entrada'` em `nfe_invoices` (valores: `entrada` | `saida`).
+- Backfill: `update nfe_invoices set direction = 'saida' where regexp_replace(emitter_cnpj, '\\D', '', 'g') = (select regexp_replace(document, '\\D', '', 'g') from clients where clients.id = nfe_invoices.client_id);`
 
-1. **Preservar o XML inteiro do `docZip`**: após `decompressGzip(b64)`, validar que contém `<nfeProc` e a `chNFe` correta e usar o conteúdo decodificado **na íntegra** como `fullXml`, em vez de re-extrair via regex `match(/<nfeProc...>/)`.
-2. **Adicionar prólogo XML** quando ausente, antes de gravar em Storage e em `raw_xml`:
-   - `if (!/^\s*<\?xml/i.test(fullXml)) fullXml = '<?xml version="1.0" encoding="UTF-8"?>\n' + fullXml;`
-3. **Mesmo tratamento no caminho do cache** (`invoice.raw_xml` já contém `<nfeProc`): garantir prólogo antes do upload para Storage.
-4. **Redeploy** da edge function `nfe-download`.
+### 2. `supabase/functions/nfe-query/index.ts`
+- Em `parseNfeEntry`, calcular `direction`:
+  - Normalizar `emitterCnpj` e `clientDoc` (só dígitos).
+  - Se iguais → `direction = 'saida'`; caso contrário → `'entrada'`.
+- Incluir `direction` no payload de upsert.
+
+### 3. `supabase/functions/nfe-download/index.ts`
+- Já funciona para saídas (consulta por chave no AN). Sem alterações.
+
+### 4. `src/components/invoices/NfeTab.tsx`
+- Adicionar **abas** "Entradas" / "Saídas" (Tabs do shadcn) acima do filtro existente.
+- Estado `directionTab: 'entrada' | 'saida'` aplicado ao `filteredInvoices`.
+- Manter contadores nas abas (`Entradas (N)` / `Saídas (M)`).
+- Header "NF-e Recebidas" muda dinamicamente para "NF-e Emitidas" quando aba=saida.
+- Bulk download (XML/PDF) já respeita `filteredInvoices`, então funciona automaticamente para a aba ativa.
+- Coluna "Emitente" troca para "Destinatário" quando aba=saida (mostra `recipient_name` em vez de `emitter_name`).
+
+### 5. `src/integrations/supabase/types.ts`
+- Regenerado automaticamente após a migration.
 
 ## Resultado
-- Botão individual "Baixar XML" e botão em lote "Baixar XMLs" passam a entregar o XML autêntico/completo (`<?xml ... ?>` + `<nfeProc>` íntegro), pronto para importação em sistemas contábeis.
-- Nenhuma alteração necessária em `NfeTab.tsx`.
+- Sincronização única continua trazendo todas as NF-e do CNPJ; classificação automática entrada/saída.
+- UI com abas claras separando recebidas e emitidas.
+- Download individual e em lote funcionam para ambas.
