@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -39,6 +40,7 @@ type NfeInvoice = {
   xml_url: string | null;
   raw_xml: string | null;
   created_at: string;
+  direction?: string | null;
 };
 
 type NfeQueryResponse = {
@@ -69,6 +71,7 @@ export default function NfeTab() {
   const [page, setPage] = useState(0);
   const [bulkRunning, setBulkRunning] = useState<null | 'xml' | 'pdf'>(null);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+  const [directionTab, setDirectionTab] = useState<'entrada' | 'saida'>('entrada');
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
@@ -410,7 +413,15 @@ export default function NfeTab() {
     }
   }
 
-  let filteredInvoices = invoices;
+  const baseInvoices = invoices;
+  const entradaCount = baseInvoices.filter(i => (i.direction ?? 'entrada') !== 'saida').length;
+  const saidaCount = baseInvoices.filter(i => i.direction === 'saida').length;
+
+  let filteredInvoices = baseInvoices.filter(i =>
+    directionTab === 'saida'
+      ? i.direction === 'saida'
+      : (i.direction ?? 'entrada') !== 'saida'
+  );
   if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
   if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
   if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
@@ -420,7 +431,7 @@ export default function NfeTab() {
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [filterClient, datePeriod, filterDateFrom, filterDateTo]);
+  useEffect(() => { setPage(0); }, [filterClient, datePeriod, filterDateFrom, filterDateTo, directionTab]);
 
   return (
     <div className="space-y-6">
@@ -478,7 +489,15 @@ export default function NfeTab() {
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <CardTitle className="text-lg">NF-e Recebidas</CardTitle>
+            <CardTitle className="text-lg">
+              {directionTab === 'saida' ? 'NF-e Emitidas (Saídas)' : 'NF-e Recebidas (Entradas)'}
+            </CardTitle>
+            <Tabs value={directionTab} onValueChange={(v) => setDirectionTab(v as 'entrada' | 'saida')}>
+              <TabsList>
+                <TabsTrigger value="entrada">Entradas ({entradaCount})</TabsTrigger>
+                <TabsTrigger value="saida">Saídas ({saidaCount})</TabsTrigger>
+              </TabsList>
+            </Tabs>
             <div className="flex items-center gap-2 flex-wrap md:ml-auto">
               <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
                 <SelectTrigger className="w-full md:w-[180px]">
