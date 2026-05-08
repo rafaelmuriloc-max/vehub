@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     // For digest, the referenced element gets the inherited default xmlns
     const infEventoCanonForDigest = infEventoCanon.replace(
       `<infEvento Id="${idEvento}">`,
-      `<infEvento Id="${idEvento}" xmlns="${NFE_NS}">`,
+      `<infEvento xmlns="${NFE_NS}" Id="${idEvento}">`,
     );
 
     const digest = sha1Base64(infEventoCanonForDigest);
