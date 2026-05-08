@@ -13,7 +13,7 @@ const AN_URL = "https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEve
 const AN_WSDL_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
 const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
 // SEFAZ AN expects the WSDL operation name without the "4" suffix
-const SOAP_ACTION = `${AN_WSDL_NS}/nfeRecepcaoEvento4`;
+const SOAP_ACTION = `${AN_WSDL_NS}/nfeRecepcaoEvento`;
 const SOAP_CONTENT_TYPE = `application/soap+xml; charset=utf-8; action="${SOAP_ACTION}"`;
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
 const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
@@ -166,6 +166,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": SOAP_CONTENT_TYPE,
+        SOAPAction: SOAP_ACTION,
         Accept: "application/soap+xml, text/xml, application/xml, */*",
       },
       body: soapBody,
