@@ -1,24 +1,20 @@
-## Plano: Botões "Baixar Todos XML" e "Baixar Todos PDF" — NF-e
+## Problema
+O endpoint `nfe-download` hoje extrai apenas o trecho `<nfeProc>...</nfeProc>` do `docZip` retornado pelo Ambiente Nacional e salva esse fragmento no Storage. O arquivo resultante:
+- Não tem o prólogo `<?xml version="1.0" encoding="UTF-8"?>`.
+- Pode perder conteúdo quando o `docZip` traz dados adicionais.
 
-Adicionar dois botões no header da seção "NF-e Recebidas" (`src/components/invoices/NfeTab.tsx`) que respeitam os filtros ativos (cliente + período) e baixam todas as NF-e em um único arquivo `.zip`.
+Por isso o XML baixado (tanto individual quanto em lote) não é o XML completo/oficial da NF-e.
 
-### UI
-- Novos botões ao lado dos filtros, acima da tabela:
-  - "Baixar XMLs" (ícone `FileCode`)
-  - "Baixar PDFs" (ícone `FileText`)
-- Desabilitados se `filteredInvoices.length === 0` ou enquanto rodando.
-- Mostram contador de progresso no label: `Baixando 5/20...`.
-- Toast final com sucessos/erros.
+## Mudanças
 
-### Lógica
-- Reutiliza `filteredInvoices` (já reflete filtros).
-- Para cada NF-e, chama `nfe-download` (XML) — mesmo fluxo do `handleDownloadXml`, mas:
-  - Sem auto-manifestação em lote (puladas com erro silencioso para não travar).
-  - Para PDF: gera DANFE via `DANFe({ xml })` igual `handleDownloadPdf`.
-- Junta tudo num `JSZip`, gera blob, faz download como `nfe-xmls-YYYYMMDD.zip` / `nfe-pdfs-YYYYMMDD.zip`.
-- Concorrência limitada (5 paralelos) para não estourar.
-- `jszip` já está instalado.
+Tudo em `supabase/functions/nfe-download/index.ts`:
 
-### Tratamento de erros
-- NF-e sem XML disponível (precisa manifestação) → contabilizada como falha, segue com as demais.
-- Toast final: `15 baixados, 3 sem XML disponível`.
+1. **Preservar o XML inteiro do `docZip`**: após `decompressGzip(b64)`, validar que contém `<nfeProc` e a `chNFe` correta e usar o conteúdo decodificado **na íntegra** como `fullXml`, em vez de re-extrair via regex `match(/<nfeProc...>/)`.
+2. **Adicionar prólogo XML** quando ausente, antes de gravar em Storage e em `raw_xml`:
+   - `if (!/^\s*<\?xml/i.test(fullXml)) fullXml = '<?xml version="1.0" encoding="UTF-8"?>\n' + fullXml;`
+3. **Mesmo tratamento no caminho do cache** (`invoice.raw_xml` já contém `<nfeProc`): garantir prólogo antes do upload para Storage.
+4. **Redeploy** da edge function `nfe-download`.
+
+## Resultado
+- Botão individual "Baixar XML" e botão em lote "Baixar XMLs" passam a entregar o XML autêntico/completo (`<?xml ... ?>` + `<nfeProc>` íntegro), pronto para importação em sistemas contábeis.
+- Nenhuma alteração necessária em `NfeTab.tsx`.
