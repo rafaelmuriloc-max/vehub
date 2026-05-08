@@ -259,6 +259,10 @@ function extractTagContent(xml: string, tagName: string): string | null {
   return match ? match[1].trim() : null;
 }
 
+function ensureXmlProlog(xml: string): string {
+  return /^\s*<\?xml/i.test(xml) ? xml : `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
+}
+
 function extractInnerTag(xml: string, parentTag: string, childTag: string): string | null {
   const parentContent = extractTagContent(xml, parentTag);
   if (!parentContent) return null;
