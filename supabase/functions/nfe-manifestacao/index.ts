@@ -154,9 +154,7 @@ Deno.serve(async (req) => {
       `<?xml version="1.0" encoding="UTF-8"?>` +
       `<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">` +
       `<soap:Body>` +
-      `<nfeRecepcaoEvento xmlns="${AN_WSDL_NS}">` +
-      `<nfeDadosMsg>${envEvento}</nfeDadosMsg>` +
-      `</nfeRecepcaoEvento>` +
+      `<nfeDadosMsg xmlns="${AN_WSDL_NS}">${envEvento}</nfeDadosMsg>` +
       `</soap:Body>` +
       `</soap:Envelope>`;
 
