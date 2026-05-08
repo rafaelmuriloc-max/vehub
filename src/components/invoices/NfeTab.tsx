@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DANFe } from 'node-sped-pdf';
+import JSZip from 'jszip';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
@@ -66,6 +67,8 @@ export default function NfeTab() {
   const [filterDateTo, setFilterDateTo] = useState('');
   const [downloadingMap, setDownloadingMap] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(0);
+  const [bulkRunning, setBulkRunning] = useState<null | 'xml' | 'pdf'>(null);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
@@ -324,6 +327,89 @@ export default function NfeTab() {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
   }
 
+  async function fetchXmlContent(inv: NfeInvoice): Promise<string | null> {
+    const res = await supabase.functions.invoke('nfe-download', {
+      body: { nfe_invoice_id: inv.id, type: 'xml' },
+    });
+    let data: any = res.data;
+    if (res.error && (res.error as any).context?.json) {
+      try { data = await (res.error as any).context.json(); } catch { /* ignore */ }
+    } else if (res.error) {
+      return null;
+    }
+    if (data?.type === 'signed_url' && data?.url) {
+      const r = await fetch(data.url);
+      if (!r.ok) return null;
+      return await r.text();
+    }
+    return null;
+  }
+
+  async function runBulkDownload(kind: 'xml' | 'pdf') {
+    if (filteredInvoices.length === 0) return;
+    setBulkRunning(kind);
+    setBulkProgress({ done: 0, total: filteredInvoices.length });
+    const zip = new JSZip();
+    let success = 0;
+    let failed = 0;
+    const CONCURRENCY = 5;
+    let idx = 0;
+
+    async function worker() {
+      while (idx < filteredInvoices.length) {
+        const my = idx++;
+        const inv = filteredInvoices[my];
+        try {
+          const xml = await fetchXmlContent(inv);
+          if (!xml) { failed++; continue; }
+          const baseName = inv.access_key || inv.invoice_number || inv.id;
+          if (kind === 'xml') {
+            zip.file(`${baseName}.xml`, xml);
+          } else {
+            const pdfBytes = await DANFe({ xml });
+            zip.file(`${baseName}.pdf`, pdfBytes as Uint8Array);
+          }
+          success++;
+        } catch {
+          failed++;
+        } finally {
+          setBulkProgress(p => ({ ...p, done: p.done + 1 }));
+        }
+      }
+    }
+
+    try {
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, filteredInvoices.length) }, worker));
+
+      if (success === 0) {
+        toast({ title: 'Nenhum arquivo disponível', description: 'Não foi possível baixar XMLs (verifique manifestação).', variant: 'destructive' });
+        return;
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      a.href = url;
+      a.download = `nfe-${kind === 'xml' ? 'xmls' : 'pdfs'}-${stamp}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Download concluído',
+        description: `${success} baixado(s)${failed ? `, ${failed} sem XML disponível` : ''}.`,
+        variant: failed > 0 ? 'destructive' : 'default',
+      });
+    } catch (e) {
+      toast({ title: 'Erro no download em lote', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setBulkRunning(null);
+      setBulkProgress({ done: 0, total: 0 });
+    }
+  }
+
   let filteredInvoices = invoices;
   if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
   if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
@@ -430,6 +516,32 @@ export default function NfeTab() {
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => runBulkDownload('xml')}
+                disabled={bulkRunning !== null || filteredInvoices.length === 0}
+              >
+                {bulkRunning === 'xml'
+                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  : <FileCode className="h-4 w-4 mr-2" />}
+                {bulkRunning === 'xml'
+                  ? `Baixando ${bulkProgress.done}/${bulkProgress.total}...`
+                  : `Baixar XMLs (${filteredInvoices.length})`}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => runBulkDownload('pdf')}
+                disabled={bulkRunning !== null || filteredInvoices.length === 0}
+              >
+                {bulkRunning === 'pdf'
+                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  : <Download className="h-4 w-4 mr-2" />}
+                {bulkRunning === 'pdf'
+                  ? `Baixando ${bulkProgress.done}/${bulkProgress.total}...`
+                  : `Baixar PDFs (${filteredInvoices.length})`}
+              </Button>
             </div>
           </div>
         </CardHeader>
