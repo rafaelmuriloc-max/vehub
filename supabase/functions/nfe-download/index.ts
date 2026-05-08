@@ -74,7 +74,8 @@ Deno.serve(async (req) => {
     if (invoice.raw_xml && /<nfeProc/i.test(invoice.raw_xml)) {
       // Upload to storage and return
       const storagePath = `nfe/${invoice.client_id}/${invoice.access_key}.xml`;
-      const xmlBlob = new Blob([invoice.raw_xml], { type: "application/xml" });
+      const cachedXml = ensureXmlProlog(invoice.raw_xml);
+      const xmlBlob = new Blob([cachedXml], { type: "application/xml" });
       await adminClient.storage.from("documents").upload(storagePath, xmlBlob, { upsert: true });
       await adminClient.from("nfe_invoices").update({ xml_url: storagePath }).eq("id", nfe_invoice_id);
 
@@ -163,12 +164,12 @@ Deno.serve(async (req) => {
       try {
         const decoded = await decompressGzip(b64);
         if (/<nfeProc[\s>]/i.test(decoded) && decoded.includes(invoice.access_key)) {
-          fullXml = (decoded.match(/<nfeProc[\s\S]*?<\/nfeProc>/i) || [])[0] || decoded;
+          fullXml = decoded;
           break;
         }
         // Fallback: keep first procNFe found if specific chave isn't matched yet
         if (!fullXml && /<nfeProc[\s>]/i.test(decoded)) {
-          fullXml = (decoded.match(/<nfeProc[\s\S]*?<\/nfeProc>/i) || [])[0] || decoded;
+          fullXml = decoded;
         }
       } catch (e) {
         console.warn(`[nfe-download] Falha ao descompactar docZip:`, (e as Error).message);
@@ -190,6 +191,9 @@ Deno.serve(async (req) => {
       });
     }
     console.log(`[nfe-download] nfeProc length=${fullXml.length}`);
+
+    // Ensure XML declaration is present so the file is the complete, importable NFe XML
+    fullXml = ensureXmlProlog(fullXml);
 
     // Save to storage
     const storagePath = `nfe/${invoice.client_id}/${invoice.access_key}.xml`;
