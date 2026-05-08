@@ -845,6 +845,7 @@ export type Database = {
           access_key: string | null
           client_id: string
           created_at: string
+          direction: string
           emitter_cnpj: string | null
           emitter_name: string | null
           id: string
@@ -863,6 +864,7 @@ export type Database = {
           access_key?: string | null
           client_id: string
           created_at?: string
+          direction?: string
           emitter_cnpj?: string | null
           emitter_name?: string | null
           id?: string
@@ -881,6 +883,7 @@ export type Database = {
           access_key?: string | null
           client_id?: string
           created_at?: string
+          direction?: string
           emitter_cnpj?: string | null
           emitter_name?: string | null
           id?: string

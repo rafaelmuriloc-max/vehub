@@ -433,6 +433,13 @@ function parseNfeEntry(
     else status = `evento_${tpEvento || "desconhecido"}`;
   }
 
+  // Determine direction: if emitter CNPJ matches the client's CNPJ, it's an outgoing NF-e (saída).
+  const clientDocDigits = (clientInfo?.document || "").replace(/\D/g, "");
+  const emitterDigits = (emitterCnpj || "").replace(/\D/g, "");
+  const direction = clientDocDigits && emitterDigits && clientDocDigits === emitterDigits
+    ? "saida"
+    : "entrada";
+
   return {
     client_id: clientId,
     access_key: entry.chAcesso,
@@ -446,6 +453,7 @@ function parseNfeEntry(
     status,
     nsu: entry.nsu,
     raw_xml: entry.xmlContent,
+    direction,
   };
 }
 
