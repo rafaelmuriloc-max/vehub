@@ -1,33 +1,31 @@
-## Objetivo
-Exibir e baixar NF-e de saída (emitidas pelo próprio cliente) usando o mesmo `nfeDistribuicaoDFe` já em produção. O serviço entrega tanto entradas quanto saídas para o CNPJ interessado; hoje todas são salvas, mas a UI só mostra como "recebidas".
+## Adicionar seletor de período na busca de NF-e
 
-## Mudanças
+Atualmente o botão "Consultar" no card de sincronização (`NfeTab.tsx`) busca tudo via NSU sequencial, sem opção de período. O serviço `nfeDistribuicaoDFe` não filtra por data nativamente (só por NSU), então o período será aplicado ao salvar/parar o loop.
 
-### 1. Schema (migration)
-- Adicionar coluna `direction text not null default 'entrada'` em `nfe_invoices` (valores: `entrada` | `saida`).
-- Backfill: `update nfe_invoices set direction = 'saida' where regexp_replace(emitter_cnpj, '\\D', '', 'g') = (select regexp_replace(document, '\\D', '', 'g') from clients where clients.id = nfe_invoices.client_id);`
+### Mudanças
 
-### 2. `supabase/functions/nfe-query/index.ts`
-- Em `parseNfeEntry`, calcular `direction`:
-  - Normalizar `emitterCnpj` e `clientDoc` (só dígitos).
-  - Se iguais → `direction = 'saida'`; caso contrário → `'entrada'`.
-- Incluir `direction` no payload de upsert.
+**1. UI — `src/components/invoices/NfeTab.tsx` (Card "Consultar NF-e")**
 
-### 3. `supabase/functions/nfe-download/index.ts`
-- Já funciona para saídas (consulta por chave no AN). Sem alterações.
+Adicionar ao lado do seletor de cliente:
+- Select "Período de busca" com opções:
+  - Últimos 90 dias (padrão — limite máximo do AN)
+  - Este mês
+  - Mês anterior
+  - Personalizado (libera dois inputs `date`: De / Até)
 
-### 4. `src/components/invoices/NfeTab.tsx`
-- Adicionar **abas** "Entradas" / "Saídas" (Tabs do shadcn) acima do filtro existente.
-- Estado `directionTab: 'entrada' | 'saida'` aplicado ao `filteredInvoices`.
-- Manter contadores nas abas (`Entradas (N)` / `Saídas (M)`).
-- Header "NF-e Recebidas" muda dinamicamente para "NF-e Emitidas" quando aba=saida.
-- Bulk download (XML/PDF) já respeita `filteredInvoices`, então funciona automaticamente para a aba ativa.
-- Coluna "Emitente" troca para "Destinatário" quando aba=saida (mostra `recipient_name` em vez de `emitter_name`).
+Os valores `syncDateFrom` / `syncDateTo` são enviados ao edge function junto com `client_id`.
 
-### 5. `src/integrations/supabase/types.ts`
-- Regenerado automaticamente após a migration.
+**2. Edge function — `supabase/functions/nfe-query/index.ts`**
 
-## Resultado
-- Sincronização única continua trazendo todas as NF-e do CNPJ; classificação automática entrada/saída.
-- UI com abas claras separando recebidas e emitidas.
-- Download individual e em lote funcionam para ambas.
+- Aceitar `date_from` e `date_to` (YYYY-MM-DD) opcionais no body.
+- Quando `date_from` for informado, **iniciar o loop com `lastNsu = "0"`** (ignorar `last_nfe_nsu` salvo) para garantir varredura completa dentro do período.
+- Em `parseNfeEntry`, descartar entradas cuja `issue_date` esteja fora do intervalo (`< date_from` ou `> date_to`). Eventos (sem `issue_date`) continuam sendo salvos se a chave de acesso já existir.
+- Não atualizar `last_nfe_nsu` quando uma busca por período for executada (evita "perder" NSU para a próxima sync incremental sem filtro).
+- Encerrar o loop antecipadamente se todas as entradas do lote forem mais antigas que `date_from` E `ultNSU >= maxNSU - 0` (heurística: se já passamos do período, paramos).
+
+**3. Comportamento**
+
+- Sem período selecionado → comportamento atual (incremental por NSU).
+- Com período → varredura completa do AN filtrando por `issue_date`, sem mexer no cursor NSU.
+
+Sem mudanças de schema, sem nova migração.
