@@ -99,10 +99,13 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { client_id } = await req.json();
+    const { client_id, date_from, date_to } = await req.json();
     if (!client_id) {
       return jsonResponse({ error: "client_id é obrigatório" }, 400);
     }
+    const dateFrom: string | null = typeof date_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_from) ? date_from : null;
+    const dateTo: string | null = typeof date_to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_to) ? date_to : null;
+    const periodFilter = !!(dateFrom || dateTo);
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
@@ -134,7 +137,8 @@ Deno.serve(async (req) => {
     const { certPem, keyPem } = await parsePfx(pfxBytes, password);
 
     const cnpj = client.document.replace(/\D/g, "");
-    let lastNsu = client.last_nfe_nsu || "0";
+    // When a period filter is requested, scan from NSU 0 to ensure full coverage within the date range.
+    let lastNsu = periodFilter ? "0" : (client.last_nfe_nsu || "0");
     let totalSaved = 0;
     let loops = 0;
     let keepGoing = true;
@@ -230,7 +234,15 @@ Deno.serve(async (req) => {
           document: client.document,
           company_name: client.company_name,
         });
-        if (parsed) invoicesToSave.push(parsed);
+        if (!parsed) continue;
+        if (periodFilter) {
+          const issue = parsed.issue_date as string | null;
+          // Skip events without issue_date when filtering by period (they don't carry a date).
+          if (!issue) continue;
+          if (dateFrom && issue < dateFrom) continue;
+          if (dateTo && issue > dateTo) continue;
+        }
+        invoicesToSave.push(parsed);
       }
 
       if (invoicesToSave.length > 0) {
@@ -248,12 +260,14 @@ Deno.serve(async (req) => {
       }
 
       const newLastNsu = ultNSURet || lastNsu;
-      if (newLastNsu && newLastNsu !== "0") {
+      if (!periodFilter && newLastNsu && newLastNsu !== "0") {
         lastNsu = newLastNsu;
         await adminClient
           .from("clients")
           .update({ last_nfe_nsu: lastNsu })
           .eq("id", client_id);
+      } else if (periodFilter && newLastNsu) {
+        lastNsu = newLastNsu;
       }
 
       // Continue if ultNSU < maxNSU
