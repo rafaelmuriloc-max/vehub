@@ -72,6 +72,24 @@ export default function NfeTab() {
   const [bulkRunning, setBulkRunning] = useState<null | 'xml' | 'pdf'>(null);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
   const [directionTab, setDirectionTab] = useState<'entrada' | 'saida'>('entrada');
+  const [syncPeriod, setSyncPeriod] = useState<'last_90' | 'this_month' | 'last_month' | 'custom'>('last_90');
+  const [syncDateFrom, setSyncDateFrom] = useState('');
+  const [syncDateTo, setSyncDateTo] = useState('');
+
+  function computeSyncRange(period: typeof syncPeriod): { from: string; to: string } {
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    if (period === 'custom') return { from: syncDateFrom, to: syncDateTo };
+    if (period === 'this_month') {
+      return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0)) };
+    }
+    if (period === 'last_month') {
+      return { from: fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: fmt(new Date(now.getFullYear(), now.getMonth(), 0)) };
+    }
+    // last_90 (default)
+    const from = new Date(now); from.setDate(from.getDate() - 90);
+    return { from: fmt(from), to: fmt(now) };
+  }
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
@@ -139,8 +157,9 @@ export default function NfeTab() {
         setSyncProgress(clientIds.length > 1 ? `Consultando ${i + 1}/${clientIds.length} — ${clientName}` : `Consultando ${clientName}`);
 
         try {
+          const range = computeSyncRange(syncPeriod);
           const { data, error } = await supabase.functions.invoke('nfe-query', {
-            body: { client_id: clientIds[i] },
+            body: { client_id: clientIds[i], date_from: range.from || undefined, date_to: range.to || undefined },
           });
 
           const response = (data ?? null) as NfeQueryResponse | null;
@@ -460,6 +479,32 @@ export default function NfeTab() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="min-w-[180px]">
+                <Label>Período</Label>
+                <Select value={syncPeriod} onValueChange={(v) => setSyncPeriod(v as typeof syncPeriod)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="last_90">Últimos 90 dias</SelectItem>
+                    <SelectItem value="this_month">Este mês</SelectItem>
+                    <SelectItem value="last_month">Mês anterior</SelectItem>
+                    <SelectItem value="custom">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {syncPeriod === 'custom' && (
+                <>
+                  <div>
+                    <Label>De</Label>
+                    <Input type="date" value={syncDateFrom} onChange={e => setSyncDateFrom(e.target.value)} className="w-[160px]" />
+                  </div>
+                  <div>
+                    <Label>Até</Label>
+                    <Input type="date" value={syncDateTo} onChange={e => setSyncDateTo(e.target.value)} className="w-[160px]" />
+                  </div>
+                </>
+              )}
               <Button onClick={handleSync} disabled={syncing}>
                 {syncing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
                 {syncing ? (syncProgress || 'Consultando...') : 'Buscar NF-e'}
