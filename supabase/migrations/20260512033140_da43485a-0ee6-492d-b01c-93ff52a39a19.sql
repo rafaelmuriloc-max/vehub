@@ -1,0 +1,1 @@
+ALTER TABLE public.clients DROP COLUMN IF EXISTS last_sefazsc_nsu;
