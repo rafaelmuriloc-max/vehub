@@ -75,6 +75,7 @@ export default function NfeTab() {
   const [syncPeriod, setSyncPeriod] = useState<'last_90' | 'this_month' | 'last_month' | 'custom'>('last_90');
   const [syncDateFrom, setSyncDateFrom] = useState('');
   const [syncDateTo, setSyncDateTo] = useState('');
+  const [syncProvider, setSyncProvider] = useState<'an' | 'sefaz-sc'>('an');
 
   function computeSyncRange(period: typeof syncPeriod): { from: string; to: string } {
     const now = new Date();
@@ -159,7 +160,12 @@ export default function NfeTab() {
         try {
           const range = computeSyncRange(syncPeriod);
           const { data, error } = await supabase.functions.invoke('nfe-query', {
-            body: { client_id: clientIds[i], date_from: range.from || undefined, date_to: range.to || undefined },
+            body: {
+              client_id: clientIds[i],
+              date_from: range.from || undefined,
+              date_to: range.to || undefined,
+              provider: syncProvider,
+            },
           });
 
           const response = (data ?? null) as NfeQueryResponse | null;
@@ -183,7 +189,7 @@ export default function NfeTab() {
 
       if (infrastructureMessage) {
         toast({
-          title: 'Ambiente Nacional indisponível',
+          title: syncProvider === 'sefaz-sc' ? 'SEF-SC indisponível' : 'Ambiente Nacional indisponível',
           description: infrastructureMessage,
           variant: 'destructive',
         });
