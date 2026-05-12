@@ -12,6 +12,12 @@ const AN_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe";
 const SOAP_ACTION = `${AN_NS}/nfeDistDFeInteresse`;
 const MAX_LOOPS = 20;
 
+// SEF-SC nfeDownloadContab — distribui NF-e (entradas E saídas) para Empresas de Serviços Contábeis.
+// Boletim Técnico SC-2021-001. Requer e-CNPJ ICP-Brasil + procuração estadual SAT-SC do CNPJ consultado.
+const SC_URL = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
+const SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
+const SC_SOAP_ACTION = `${SC_NS}/nfeDownloadContab`;
+
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
 const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
 
@@ -99,17 +105,18 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { client_id, date_from, date_to } = await req.json();
+    const { client_id, date_from, date_to, provider: providerRaw } = await req.json();
     if (!client_id) {
       return jsonResponse({ error: "client_id é obrigatório" }, 400);
     }
+    const provider: "an" | "sefaz-sc" = providerRaw === "sefaz-sc" ? "sefaz-sc" : "an";
     const dateFrom: string | null = typeof date_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_from) ? date_from : null;
     const dateTo: string | null = typeof date_to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_to) ? date_to : null;
     const periodFilter = !!(dateFrom || dateTo);
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("id, company_name, document, last_nfe_nsu, digital_certificate_url, digital_certificate_password")
+      .select("id, company_name, document, last_nfe_nsu, last_sefazsc_nsu, digital_certificate_url, digital_certificate_password")
       .eq("id", client_id)
       .single();
 
@@ -121,22 +128,58 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
     }
 
-    if (!client.digital_certificate_url) {
-      return jsonResponse({ error: "Cliente sem certificado digital cadastrado" }, 400);
+    // Para SEF-SC, o requisitante é a Velocità (procuradora estadual no SAT-SC).
+    // Para o AN, é o próprio cliente (titular do CNPJ).
+    let certPath: string | null;
+    let certPassword: string;
+    if (provider === "sefaz-sc") {
+      const { data: officeRow, error: officeError } = await adminClient
+        .from("company_settings")
+        .select("digital_certificate_url, digital_certificate_password")
+        .limit(1)
+        .maybeSingle();
+      if (officeError || !officeRow?.digital_certificate_url) {
+        return jsonResponse({
+          error: "Certificado A1 da Velocità não cadastrado em Configurações → Empresa.",
+        }, 400);
+      }
+      certPath = officeRow.digital_certificate_url;
+      certPassword = officeRow.digital_certificate_password || "";
+    } else {
+      if (!client.digital_certificate_url) {
+        return jsonResponse({ error: "Cliente sem certificado digital cadastrado" }, 400);
+      }
+      certPath = client.digital_certificate_url;
+      certPassword = client.digital_certificate_password || "";
     }
 
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
-      .download(client.digital_certificate_url);
+      .download(certPath);
     if (certError || !certData) {
-      return jsonResponse({ error: "Erro ao baixar certificado do cliente: " + (certError?.message || "desconhecido") }, 500);
+      return jsonResponse({ error: "Erro ao baixar certificado: " + (certError?.message || "desconhecido") }, 500);
     }
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const password = client.digital_certificate_password || "";
+    const password = certPassword;
     const { certPem, keyPem } = await parsePfx(pfxBytes, password);
 
     const cnpj = client.document.replace(/\D/g, "");
+
+    if (provider === "sefaz-sc") {
+      return await runSefazScSync({
+        adminClient,
+        cnpj,
+        certPem,
+        keyPem,
+        clientRow: client,
+        clientId: client_id,
+        periodFilter,
+        dateFrom,
+        dateTo,
+      });
+    }
+
     // When a period filter is requested, scan from NSU 0 to ensure full coverage within the date range.
     let lastNsu = periodFilter ? "0" : (client.last_nfe_nsu || "0");
     let totalSaved = 0;
@@ -776,4 +819,190 @@ function normalizeLocalKeyId(value: unknown): string | null {
 
 function stringifyDN(dn: { attributes?: Array<{ shortName?: string; name?: string; value?: string }> }): string {
   return (dn.attributes || []).map((a) => `${a.shortName || a.name || "attr"}=${a.value || ""}`).join(",");
+}
+
+// ===================== SEF-SC nfeDownloadContab =====================
+
+type ScSyncArgs = {
+  adminClient: ReturnType<typeof createClient>;
+  cnpj: string;
+  certPem: string;
+  keyPem: string;
+  clientRow: { id: string; document: string | null; company_name: string | null; last_sefazsc_nsu: string | null };
+  clientId: string;
+  periodFilter: boolean;
+  dateFrom: string | null;
+  dateTo: string | null;
+};
+
+async function runSefazScSync(args: ScSyncArgs): Promise<Response> {
+  const { adminClient, cnpj, certPem, keyPem, clientRow, clientId, periodFilter, dateFrom, dateTo } = args;
+
+  let lastNsu = periodFilter ? "0" : (clientRow.last_sefazsc_nsu || "0");
+  let totalSaved = 0;
+  let loops = 0;
+  let keepGoing = true;
+
+  while (keepGoing && loops < MAX_LOOPS) {
+    loops++;
+    console.log(`[NF-e SC] Loop ${loops}, ultNuNSU=${lastNsu}, CNPJ=${cnpj}`);
+
+    const soapBody = buildScSoapRequest(cnpj, lastNsu);
+    const response = await requestTextWithMTLS(
+      new URL(SC_URL),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/xml; charset=utf-8",
+          SOAPAction: SC_SOAP_ACTION,
+          Accept: "text/xml, application/xml, */*",
+        },
+        body: soapBody,
+      },
+      certPem,
+      keyPem,
+    );
+
+    console.log(`[NF-e SC] Response status=${response.status}, bodyLen=${response.bodyText.length}`);
+
+    const retBody = extractTagContent(response.bodyText, "retDistNFeSC") || response.bodyText;
+    const cStat = extractTagContent(retBody, "cStat");
+    const xMotivo = extractTagContent(retBody, "xMotivo");
+    const ultNSURet = extractTagContent(retBody, "ultNSU") || extractTagContent(retBody, "ultNuNSU");
+    const maxNSU = extractTagContent(retBody, "maxNSU") || extractTagContent(retBody, "maxNuNSU");
+
+    console.log(`[NF-e SC] cStat=${cStat}, xMotivo=${xMotivo}, ultNSU=${ultNSURet}, maxNSU=${maxNSU}`);
+
+    // 137: nenhum DF-e localizado | 656: consumo indevido (rate limit) | 110: reprocessamento
+    if (cStat === "137" || cStat === "656" || cStat === "117") {
+      console.log(`[NF-e SC] cStat=${cStat} (${xMotivo}) — encerrando loop.`);
+      keepGoing = false;
+      break;
+    }
+    if (cStat === "110") {
+      if (ultNSURet) lastNsu = ultNSURet;
+      continue;
+    }
+    // 138 = documento(s) localizado(s) (mesma convenção do AN); SC pode usar 139 também
+    if (cStat !== "138" && cStat !== "139") {
+      if (totalSaved > 0) {
+        keepGoing = false;
+        break;
+      }
+      return jsonResponse({ error: `Erro SEF-SC: ${cStat} - ${xMotivo}`, cStat }, 400);
+    }
+
+    const loteXml = extractTagContent(retBody, "loteDistNFeSC") || retBody;
+    const entries = parseScDistEntries(loteXml);
+    console.log(`[NF-e SC] Parsed ${entries.length} distNFeSC entries`);
+
+    if (entries.length === 0) {
+      keepGoing = false;
+      break;
+    }
+
+    const invoicesToSave: Array<Record<string, unknown>> = [];
+    for (const entry of entries) {
+      const parsed = parseNfeEntry(entry, clientId, {
+        document: clientRow.document,
+        company_name: clientRow.company_name,
+      });
+      if (!parsed) continue;
+      if (periodFilter) {
+        const issue = parsed.issue_date as string | null;
+        if (!issue) continue;
+        if (dateFrom && issue < dateFrom) continue;
+        if (dateTo && issue > dateTo) continue;
+      }
+      invoicesToSave.push(parsed);
+    }
+
+    if (invoicesToSave.length > 0) {
+      const batchSize = 20;
+      for (let i = 0; i < invoicesToSave.length; i += batchSize) {
+        const batch = invoicesToSave.slice(i, i + batchSize);
+        const { error: upsertError } = await adminClient
+          .from("nfe_invoices")
+          .upsert(batch, { onConflict: "access_key", ignoreDuplicates: false });
+        if (upsertError) {
+          console.error("[NF-e SC] Upsert error:", upsertError.message);
+        }
+      }
+      totalSaved += invoicesToSave.length;
+    }
+
+    const newLastNsu = ultNSURet || lastNsu;
+    if (!periodFilter && newLastNsu && newLastNsu !== "0") {
+      lastNsu = newLastNsu;
+      await adminClient
+        .from("clients")
+        .update({ last_sefazsc_nsu: lastNsu })
+        .eq("id", clientId);
+    } else if (periodFilter && newLastNsu) {
+      lastNsu = newLastNsu;
+    }
+
+    keepGoing = !!(maxNSU && ultNSURet && Number(ultNSURet) < Number(maxNSU));
+  }
+
+  return jsonResponse({
+    success: true,
+    invoices_saved: totalSaved,
+    last_nsu: lastNsu,
+    loops,
+    provider: "sefaz-sc",
+  });
+}
+
+function buildScSoapRequest(cnpj: string, ultNSU: string): string {
+  // indAtor=9 → Emitente E Destinatário (entradas + saídas)
+  // indXML=1 → solicita XML completo do DF-e
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${SC_NS}">
+  <soap:Body>
+    <ns:nfeDownloadContab>
+      <ns:nfeDadosMsg>
+        <distNFeSC versao="2.00" xmlns="${SC_NS}">
+          <tpAmb>1</tpAmb>
+          <verAplic>VeHub-1.0</verAplic>
+          <cUF>42</cUF>
+          <CNPJ>${cnpj}</CNPJ>
+          <solRel>
+            <indXML>1</indXML>
+            <indAtor>9</indAtor>
+            <ultNuNSU>${ultNSU}</ultNuNSU>
+          </solRel>
+        </distNFeSC>
+      </ns:nfeDadosMsg>
+    </ns:nfeDownloadContab>
+  </soap:Body>
+</soap:Envelope>`;
+}
+
+/**
+ * Parse `<distNFeSC NSU=".." chAcesso="..">...</distNFeSC>` entries from SEF-SC response.
+ * Unlike the AN distDFe, SEF-SC returns the inner NF-e XML directly (no gzip/base64 docZip).
+ */
+function parseScDistEntries(loteXml: string): DistEntry[] {
+  const entries: DistEntry[] = [];
+  const regex = /<distNFeSC\s+([^>]*)>([\s\S]*?)<\/distNFeSC>/gi;
+  let match;
+  while ((match = regex.exec(loteXml)) !== null) {
+    const attrs = match[1];
+    const inner = match[2].trim();
+    const nsuMatch = attrs.match(/NSU\s*=\s*"([^"]+)"/i);
+    const chMatch = attrs.match(/chAcesso\s*=\s*"([^"]+)"/i);
+    const isEvent = /<procEventoNFe[\s>]/i.test(inner);
+    let chAcesso = chMatch?.[1] || null;
+    if (!chAcesso) {
+      chAcesso = extractAccessKeyFromXml(inner) || extractTagContent(inner, "chNFe");
+    }
+    entries.push({
+      nsu: nsuMatch ? nsuMatch[1] : null,
+      chAcesso,
+      xmlContent: inner,
+      isEvent,
+    });
+  }
+  return entries;
 }
