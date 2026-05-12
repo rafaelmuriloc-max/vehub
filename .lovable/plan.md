@@ -1,46 +1,28 @@
-## Reorganização das abas do Chat
+## Etiqueta do responsável nos chamados abertos
 
-Atualmente as 3 abas são: **Chat** (meus abertos), **Atendidos** (meus fechados) e **Todos**.
+Adicionar uma etiqueta (badge) em cada item da lista de conversas abertas indicando qual usuário está atribuído àquele chamado.
 
-Vou reconfigurá-las conforme solicitado:
+### Comportamento
 
-### 1. Aba "Chat" (`mine`)
-
-- Mantém: conversas com `status = 'open'` e `assigned_to = usuário logado`.
-- Sem alteração de lógica.
-
-### 2. Aba "Em andamento" (`in_progress`) — substitui "Atendidos"
-
-- Filtro: `status = 'open'` **e** `assigned_to <> usuário logado` (incluindo `assigned_to IS NULL`, que são chamados abertos ainda não atribuídos a ninguém).
-- Renomear o valor do tipo `ChatTab` de `'closed'` para `'in_progress'`.
-- Mostrar os chamados abertos atribuídos aos outros usuários 
-- Atualizar label da aba para **"Em andamento"**.
-
-### 3. Aba "Geral" (`all`)
-
-- Mantém: sem filtro (todo histórico — abertos e fechados).
-- Renomear label de "Todos" para **"Geral"**.
+- Exibir badge apenas quando `status = 'open'` e existir `assigned_to`.
+- Texto: primeiro nome do responsável (ex.: "Bruno"). Conversas sem responsável exibem badge "Não atribuído" em tom neutro.
+- Conversas fechadas (`closed`) não exibem etiqueta.
+- Visível nas três abas (Chat, Em andamento, Geral).
 
 ### Arquivos afetados
 
-`**src/pages/Chat.tsx**`
+**`src/pages/Chat.tsx`** (`loadConversations`)
+- Coletar `assigned_to` de cada conversa, buscar `full_name` em `profiles` (numa única query por `in`).
+- Adicionar campos `assignedToId` e `assignedToName` em cada item retornado.
 
-- Trocar o tipo `ChatTab` para `'mine' | 'in_progress' | 'all'`.
-- Em `loadConversations`, substituir o branch `closed` por:
-  ```ts
-  } else if (currentTab === 'in_progress') {
-    query = query
-      .eq('status', 'open')
-      .or(`assigned_to.neq.${user.id},assigned_to.is.null`);
-  }
-  ```
-
-`**src/components/chat/ConversationList.tsx**`
-
-- Atualizar o `TabsTrigger` com `value="closed"` → `value="in_progress"` e label "Em andamento".
-- Renomear o label da aba `all` de "Todos" para "Geral".
+**`src/components/chat/ConversationList.tsx`**
+- Estender a interface `ConversationItem` com `assignedToName?: string | null` e `status?: string`.
+- No item da lista, abaixo da última mensagem (ou ao lado do nome), renderizar um `Badge` pequeno:
+  - `status === 'open'` + nome → badge `secondary` com ícone `User` e o primeiro nome.
+  - `status === 'open'` + sem nome → badge `outline` "Não atribuído".
+- Usar tokens semânticos do design system (não cores fixas).
 
 ### Fora de escopo
 
-- Lógica de transferência, fechamento e reabertura de chamados (mantidas como estão).
-- Permissões/RLS (não há mudança de acesso, apenas filtragem do lado cliente).
+- Alterar atribuição/transferência (já existe diálogo de transferência).
+- Avatar do responsável (apenas texto+ícone para manter compacto).

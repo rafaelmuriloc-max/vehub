@@ -77,8 +77,10 @@ export default function Chat() {
     const clientMap = new Map((clientsResult.data || []).map(c => [c.id, c]));
 
     const otherUserIds = [...new Set((participantsResult.data || []).map(p => p.user_id))];
-    const profilesResult = otherUserIds.length > 0
-      ? await supabase.from('profiles').select('user_id, full_name').in('user_id', otherUserIds)
+    const assignedUserIds = [...new Set(convs.filter(c => c.assigned_to).map(c => c.assigned_to as string))];
+    const allProfileIds = [...new Set([...otherUserIds, ...assignedUserIds])];
+    const profilesResult = allProfileIds.length > 0
+      ? await supabase.from('profiles').select('user_id, full_name').in('user_id', allProfileIds)
       : { data: [] };
     const profileMap = new Map((profilesResult.data || []).map(p => [p.user_id, p.full_name || 'Usuário']));
     const participantMap = new Map((participantsResult.data || []).map(p => [p.conversation_id, p.user_id]));
@@ -147,6 +149,7 @@ export default function Chat() {
         companyNames: whatsappCompanyMap.get(conv.id) || [],
         whatsappPhone: conv.whatsapp_phone || undefined,
         status: (conv as any).status || 'open',
+        assignedToName: conv.assigned_to ? (profileMap.get(conv.assigned_to) || null) : null,
       };
     });
 
