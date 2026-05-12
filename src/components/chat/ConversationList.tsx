@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Search, MessageSquarePlus, ArrowLeft } from 'lucide-react';
+import { Search, MessageSquarePlus, ArrowLeft, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -20,6 +21,7 @@ export interface ConversationItem {
   companyNames?: string[];
   whatsappPhone?: string;
   status?: string;
+  assignedToName?: string | null;
 }
 
 interface ConversationListProps {
@@ -154,6 +156,20 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                     </span>
                   )}
                 </div>
+                {conv.status === 'open' && (
+                  <div className="mt-1">
+                    {conv.assignedToName ? (
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 gap-1 font-normal">
+                        <User className="h-2.5 w-2.5" />
+                        {conv.assignedToName.split(' ')[0]}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 font-normal">
+                        Não atribuído
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </button>
           ))
