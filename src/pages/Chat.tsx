@@ -266,8 +266,29 @@ export default function Chat() {
   const activeConv = conversations.find(c => c.id === activeConvId);
   const isClosed = activeConv?.status === 'closed';
 
+  const ensureAssignedToMe = async (convId: string) => {
+    if (!user) return;
+    await supabase
+      .from('chat_conversations')
+      .update({ assigned_to: user.id })
+      .eq('id', convId);
+    const { data: existing } = await supabase
+      .from('chat_participants')
+      .select('id')
+      .eq('conversation_id', convId)
+      .eq('user_id', user.id);
+    if (!existing || existing.length === 0) {
+      await supabase.from('chat_participants').insert({
+        conversation_id: convId,
+        user_id: user.id,
+      });
+    }
+  };
+
   const sendMessage = async (content: string) => {
     if (!user || !activeConvId || isClosed) return;
+
+    await ensureAssignedToMe(activeConvId);
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-text', {
@@ -295,6 +316,8 @@ export default function Chat() {
 
   const sendMedia = async (file: File, type: 'image' | 'video' | 'document') => {
     if (!user || !activeConvId || isClosed) return;
+
+    await ensureAssignedToMe(activeConvId);
 
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${activeConvId}/${Date.now()}_${sanitizedName}`;
@@ -333,6 +356,8 @@ export default function Chat() {
   const sendLocation = async (lat: number, lng: number) => {
     if (!user || !activeConvId || isClosed) return;
 
+    await ensureAssignedToMe(activeConvId);
+
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-media', {
         body: { conversationId: activeConvId, type: 'location', latitude: lat, longitude: lng, senderName: profile?.full_name || undefined },
@@ -353,6 +378,8 @@ export default function Chat() {
 
   const sendContact = async (name: string, phone: string) => {
     if (!user || !activeConvId || isClosed) return;
+
+    await ensureAssignedToMe(activeConvId);
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-media', {

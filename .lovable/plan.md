@@ -1,28 +1,23 @@
-## Etiqueta do responsável nos chamados abertos
+## Objetivo
+Quando o usuário logado enviar qualquer resposta (texto, imagem, vídeo, arquivo, localização ou contato) em uma conversa, o chamado deve ser automaticamente atribuído a ele — sempre, mesmo que já estivesse com outro responsável.
 
-Adicionar uma etiqueta (badge) em cada item da lista de conversas abertas indicando qual usuário está atribuído àquele chamado.
+## Implementação
 
-### Comportamento
+**Arquivo:** `src/pages/Chat.tsx`
 
-- Exibir badge apenas quando `status = 'open'` e existir `assigned_to`.
-- Texto: primeiro nome do responsável (ex.: "Bruno"). Conversas sem responsável exibem badge "Não atribuído" em tom neutro.
-- Conversas fechadas (`closed`) não exibem etiqueta.
-- Visível nas três abas (Chat, Em andamento, Geral).
+Criar um helper `ensureAssignedToMe(convId)` que:
+1. Faz `update` em `chat_conversations` setando `assigned_to = user.id` e `updated_at = now()` para o `id` informado.
+2. Garante que o usuário também esteja em `chat_participants` (insert se não existir), para não quebrar políticas RLS de update futuras.
 
-### Arquivos afetados
+Chamar esse helper no início de cada uma das 4 funções de envio:
+- `sendMessage`
+- `sendMedia`
+- `sendLocation`
+- `sendContact`
 
-**`src/pages/Chat.tsx`** (`loadConversations`)
-- Coletar `assigned_to` de cada conversa, buscar `full_name` em `profiles` (numa única query por `in`).
-- Adicionar campos `assignedToId` e `assignedToName` em cada item retornado.
+A chamada acontece antes do envio (Edge Function ou insert). Após o envio, `loadConversations()` já é disparado pelo realtime, atualizando a etiqueta de responsável na lista.
 
-**`src/components/chat/ConversationList.tsx`**
-- Estender a interface `ConversationItem` com `assignedToName?: string | null` e `status?: string`.
-- No item da lista, abaixo da última mensagem (ou ao lado do nome), renderizar um `Badge` pequeno:
-  - `status === 'open'` + nome → badge `secondary` com ícone `User` e o primeiro nome.
-  - `status === 'open'` + sem nome → badge `outline` "Não atribuído".
-- Usar tokens semânticos do design system (não cores fixas).
-
-### Fora de escopo
-
-- Alterar atribuição/transferência (já existe diálogo de transferência).
-- Avatar do responsável (apenas texto+ícone para manter compacto).
+**Observações:**
+- Não muda quando `status = 'closed'` porque o envio já é bloqueado nesse caso.
+- Mantém a lógica de transferência manual existente intacta.
+- Não toca em backend / edge functions / RLS (políticas atuais já permitem update por participante).
