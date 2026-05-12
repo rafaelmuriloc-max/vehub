@@ -216,6 +216,7 @@ Deno.serve(async (req) => {
               latitude,
               longitude,
               name: senderName || "Localização",
+              address: `${latitude}, ${longitude}`,
             }),
           }
         );
