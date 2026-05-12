@@ -76,6 +76,7 @@ Deno.serve(async (req) => {
     const hasOpenWindow = recentIncoming && recentIncoming.length > 0;
 
     let sendSuccess = false;
+    let sendErrorDetail = "";
     let messageContent = "";
     let messageType = "";
     let messageMediaUrl = mediaUrl || null;
@@ -83,6 +84,24 @@ Deno.serve(async (req) => {
     // Build content text with sender signature
     const VHUB_MARKER = "\u200B\u200B\u200B";
     const signPrefix = senderName ? `*${senderName}:*\n` : "";
+
+    // Helper: derive mimetype from fileName / type
+    const guessMime = (): string => {
+      const ext = (fileName || mediaUrl || "").split(".").pop()?.toLowerCase() || "";
+      const map: Record<string, string> = {
+        jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp",
+        mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+        pdf: "application/pdf", doc: "application/msword",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        xls: "application/vnd.ms-excel",
+        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        zip: "application/zip", txt: "text/plain",
+      };
+      if (map[ext]) return map[ext];
+      if (type === "image") return "image/jpeg";
+      if (type === "video") return "video/mp4";
+      return "application/octet-stream";
+    };
 
     if (type === "image" || type === "video" || type === "document") {
       messageType = `whatsapp_${type}`;
@@ -117,6 +136,7 @@ Deno.serve(async (req) => {
         sendSuccess = metaRes.ok;
         if (!sendSuccess) {
           const errText = await metaRes.text();
+          sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
           console.error("Meta API error:", errText);
         }
       } else if (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) {
@@ -132,6 +152,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
               number: toPhone,
               mediatype: type === "document" ? "document" : type,
+              mimetype: guessMime(),
               media: mediaUrl,
               fileName: fileName || undefined,
               caption: senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER,
@@ -141,8 +162,12 @@ Deno.serve(async (req) => {
         sendSuccess = evoRes.ok;
         if (!sendSuccess) {
           const errText = await evoRes.text();
+          sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
           console.error("Evolution API error:", errText);
         }
+      } else {
+        sendErrorDetail = "No send channel available (no 24h window and Evolution API not configured)";
+        console.error(sendErrorDetail);
       }
     } else if (type === "location") {
       messageType = "whatsapp_location";
@@ -172,6 +197,11 @@ Deno.serve(async (req) => {
           }
         );
         sendSuccess = metaRes.ok;
+        if (!sendSuccess) {
+          const errText = await metaRes.text();
+          sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
+          console.error("Meta location error:", errText);
+        }
       } else if (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) {
         const evoRes = await fetch(
           `${EVOLUTION_API_URL}/message/sendLocation/${EVOLUTION_INSTANCE_NAME}`,
@@ -190,6 +220,11 @@ Deno.serve(async (req) => {
           }
         );
         sendSuccess = evoRes.ok;
+        if (!sendSuccess) {
+          const errText = await evoRes.text();
+          sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
+          console.error("Evolution location error:", errText);
+        }
       }
     } else if (type === "contacts") {
       messageType = "whatsapp_contact";
@@ -222,6 +257,11 @@ Deno.serve(async (req) => {
           }
         );
         sendSuccess = metaRes.ok;
+        if (!sendSuccess) {
+          const errText = await metaRes.text();
+          sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
+          console.error("Meta contact error:", errText);
+        }
       } else if (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) {
         const evoRes = await fetch(
           `${EVOLUTION_API_URL}/message/sendContact/${EVOLUTION_INSTANCE_NAME}`,
@@ -243,11 +283,16 @@ Deno.serve(async (req) => {
           }
         );
         sendSuccess = evoRes.ok;
+        if (!sendSuccess) {
+          const errText = await evoRes.text();
+          sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
+          console.error("Evolution contact error:", errText);
+        }
       }
     }
 
     if (!sendSuccess) {
-      return new Response(JSON.stringify({ error: "Failed to send message" }), {
+      return new Response(JSON.stringify({ error: sendErrorDetail || "Failed to send message" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
