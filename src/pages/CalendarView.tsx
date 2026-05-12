@@ -19,6 +19,7 @@ import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
+import { sanitizeStorageName } from '@/lib/utils';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
@@ -389,7 +390,8 @@ export default function CalendarView() {
 
   async function handleFileUpload(activityId: string, file: File) {
     if (!detailInstanceId || !detailInstance || !detailObligation) return;
-    const path = `obligations/${detailInstanceId}/${activityId}/${file.name}`;
+    const safeName = sanitizeStorageName(file.name);
+    const path = `obligations/${detailInstanceId}/${activityId}/${safeName}`;
     const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
     if (upErr) { toast({ title: 'Erro ao enviar arquivo', description: upErr.message, variant: 'destructive' }); return; }
 
