@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 
-export type ChatTab = 'mine' | 'closed' | 'all';
+export type ChatTab = 'mine' | 'in_progress' | 'all';
 
 export default function Chat() {
   const { user, profile } = useAuth();
@@ -36,8 +36,10 @@ export default function Chat() {
 
     if (currentTab === 'mine') {
       query = query.eq('assigned_to', user.id).eq('status', 'open');
-    } else if (currentTab === 'closed') {
-      query = query.eq('assigned_to', user.id).eq('status', 'closed');
+    } else if (currentTab === 'in_progress') {
+      query = query
+        .eq('status', 'open')
+        .or(`assigned_to.neq.${user.id},assigned_to.is.null`);
     } else {
       // all: todas as conversas (abertas e fechadas)
       // sem filtro — admins veem tudo via RLS
