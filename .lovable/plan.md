@@ -1,30 +1,25 @@
-# Remover integração SEF-SC (não há WS oficial p/ saídas)
+## Problema
 
-O teste com o cliente EDSON JOSE KOSKUR (CNPJ 11.160.873/0001-88) confirmou que o endpoint `nfedownloadV2.asmx` da SEFAZ-SC **não expõe a operação `nfeDownloadContab`** (HTTP 500: *Server did not recognize the value of HTTP Header SOAPAction*). O caminho proposto não é viável — vamos limpar o código para não deixar opção quebrada na UI.
+Ao anexar `162_042026_ELITE MONTAGEM DE ESTRUTURA METALICA LTDA_Recibo de salário.pdf` na atividade "Recibos" da Folha de Pagamento, o Supabase Storage rejeita com `Invalid key`.
 
-## Mudanças
+Causa: o arquivo contém **espaços** e o caractere acentuado **á** (em "salário"). Em `src/pages/CalendarView.tsx:392` o path é montado direto com `file.name`, sem sanitização — violando a regra do projeto ("Always sanitize storage keys: replace spaces/accents with underscores, NFD normalization").
 
-**1. `supabase/functions/nfe-query/index.ts`**
-- Remover parâmetro `provider` do body e toda a ramificação `sefaz-sc`.
-- Remover constantes `SC_URL`, `SC_NS`, `SC_SOAP_ACTION`.
-- Remover função `parseScDistEntries` e o loop SEF-SC.
-- Remover leitura/atualização de `last_sefazsc_nsu`.
-- Voltar à leitura simples do certificado A1 do próprio cliente (caminho AN).
+## Mudança
 
-**2. `src/components/invoices/NfeTab.tsx`**
-- Remover state `syncProvider` e o `<Select>` de "Origem".
-- Remover o aviso sobre procuração SAT-SC.
-- Remover envio de `provider` na chamada de `supabase.functions.invoke('nfe-query', …)`.
-- Voltar texto do toast para o original ("Ambiente Nacional indisponível").
+**`src/lib/utils.ts`** — adicionar utilitário `sanitizeStorageName(name: string)`:
+- Separa basename + extensão
+- Aplica `.normalize('NFD').replace(/[\u0300-\u036f]/g, '')` para remover acentos
+- Substitui qualquer caractere que não seja `[A-Za-z0-9._-]` por `_`
+- Colapsa underscores repetidos
+- Reconstroi `basename.ext`
 
-**3. Migração de banco**
-- `ALTER TABLE public.clients DROP COLUMN IF EXISTS last_sefazsc_nsu;`
-- A coluna foi adicionada nesta semana e está sempre `NULL` — drop seguro.
-
-## Memória
-- Adicionar memória `constraint`: *"SEFAZ-SC não tem WS de NF-e de saída para contadores. `nfeDownloadContab` não existe. Para saídas em SC: scraping DFE-SC com login do cliente, ERP, ou upload manual."* — para não tentarmos de novo.
-- Atualizar a entrada de **NFe Management** para refletir que apenas AN/entradas é suportado.
+**`src/pages/CalendarView.tsx`** (linha 392) — usar o utilitário:
+```ts
+const safeName = sanitizeStorageName(file.name);
+const path = `obligations/${detailInstanceId}/${activityId}/${safeName}`;
+```
 
 ## Fora de escopo
-- Implementar scraping do portal DFE-SC (fica para outra rodada, se quisermos).
-- Mexer no `proxy-nfe.php` no Hostinger (não foi alterado para SC nesta rodada — nada a reverter lá).
+
+- Outros pontos de upload do app já existentes (não foi reportado problema lá).
+- Renomeação de arquivos antigos já no bucket.
