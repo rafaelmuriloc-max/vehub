@@ -12,6 +12,12 @@ const AN_NS = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe";
 const SOAP_ACTION = `${AN_NS}/nfeDistDFeInteresse`;
 const MAX_LOOPS = 20;
 
+// SEF-SC nfeDownloadContab — distribui NF-e (entradas E saídas) para Empresas de Serviços Contábeis.
+// Boletim Técnico SC-2021-001. Requer e-CNPJ ICP-Brasil + procuração estadual SAT-SC do CNPJ consultado.
+const SC_URL = "https://satnfe.sef.sc.gov.br/ws/distribuicao/nfedownloadV2.asmx";
+const SC_NS = "http://www.satnfe.sef.sc.gov.br/ws/distribuicao-v2";
+const SC_SOAP_ACTION = `${SC_NS}/nfeDownloadContab`;
+
 const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
 const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
 
@@ -99,17 +105,18 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { client_id, date_from, date_to } = await req.json();
+    const { client_id, date_from, date_to, provider: providerRaw } = await req.json();
     if (!client_id) {
       return jsonResponse({ error: "client_id é obrigatório" }, 400);
     }
+    const provider: "an" | "sefaz-sc" = providerRaw === "sefaz-sc" ? "sefaz-sc" : "an";
     const dateFrom: string | null = typeof date_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_from) ? date_from : null;
     const dateTo: string | null = typeof date_to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_to) ? date_to : null;
     const periodFilter = !!(dateFrom || dateTo);
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("id, company_name, document, last_nfe_nsu, digital_certificate_url, digital_certificate_password")
+      .select("id, company_name, document, last_nfe_nsu, last_sefazsc_nsu, digital_certificate_url, digital_certificate_password")
       .eq("id", client_id)
       .single();
 
@@ -121,22 +128,58 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
     }
 
-    if (!client.digital_certificate_url) {
-      return jsonResponse({ error: "Cliente sem certificado digital cadastrado" }, 400);
+    // Para SEF-SC, o requisitante é a Velocità (procuradora estadual no SAT-SC).
+    // Para o AN, é o próprio cliente (titular do CNPJ).
+    let certPath: string | null;
+    let certPassword: string;
+    if (provider === "sefaz-sc") {
+      const { data: officeRow, error: officeError } = await adminClient
+        .from("company_settings")
+        .select("digital_certificate_url, digital_certificate_password")
+        .limit(1)
+        .maybeSingle();
+      if (officeError || !officeRow?.digital_certificate_url) {
+        return jsonResponse({
+          error: "Certificado A1 da Velocità não cadastrado em Configurações → Empresa.",
+        }, 400);
+      }
+      certPath = officeRow.digital_certificate_url;
+      certPassword = officeRow.digital_certificate_password || "";
+    } else {
+      if (!client.digital_certificate_url) {
+        return jsonResponse({ error: "Cliente sem certificado digital cadastrado" }, 400);
+      }
+      certPath = client.digital_certificate_url;
+      certPassword = client.digital_certificate_password || "";
     }
 
     const { data: certData, error: certError } = await adminClient.storage
       .from("certificates")
-      .download(client.digital_certificate_url);
+      .download(certPath);
     if (certError || !certData) {
-      return jsonResponse({ error: "Erro ao baixar certificado do cliente: " + (certError?.message || "desconhecido") }, 500);
+      return jsonResponse({ error: "Erro ao baixar certificado: " + (certError?.message || "desconhecido") }, 500);
     }
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const password = client.digital_certificate_password || "";
+    const password = certPassword;
     const { certPem, keyPem } = await parsePfx(pfxBytes, password);
 
     const cnpj = client.document.replace(/\D/g, "");
+
+    if (provider === "sefaz-sc") {
+      return await runSefazScSync({
+        adminClient,
+        cnpj,
+        certPem,
+        keyPem,
+        clientRow: client,
+        clientId: client_id,
+        periodFilter,
+        dateFrom,
+        dateTo,
+      });
+    }
+
     // When a period filter is requested, scan from NSU 0 to ensure full coverage within the date range.
     let lastNsu = periodFilter ? "0" : (client.last_nfe_nsu || "0");
     let totalSaved = 0;
