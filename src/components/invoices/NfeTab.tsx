@@ -466,11 +466,23 @@ export default function NfeTab() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Search className="h-5 w-5" />
-              Consultar NF-e no Ambiente Nacional
+              Consultar NF-e
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap items-end gap-4">
+              <div className="min-w-[220px]">
+                <Label>Origem</Label>
+                <Select value={syncProvider} onValueChange={(v) => setSyncProvider(v as typeof syncProvider)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="an">Ambiente Nacional (entradas)</SelectItem>
+                    <SelectItem value="sefaz-sc">SEF-SC (entradas + saídas)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex-1 min-w-[200px]">
                 <Label>Cliente</Label>
                 <Select value={selectedClient} onValueChange={setSelectedClient}>
@@ -516,6 +528,12 @@ export default function NfeTab() {
                 {syncing ? (syncProgress || 'Consultando...') : 'Buscar NF-e'}
               </Button>
             </div>
+            {syncProvider === 'sefaz-sc' && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Usa o web service <code>nfeDownloadContab</code> da SEF-SC com o A1 da Velocità.
+                Requer procuração estadual ativa no SAT-SC do CNPJ consultado e cliente sediado em SC.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
