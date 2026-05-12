@@ -1,25 +1,46 @@
-## Problema
+## Reorganização das abas do Chat
 
-Ao anexar `162_042026_ELITE MONTAGEM DE ESTRUTURA METALICA LTDA_Recibo de salário.pdf` na atividade "Recibos" da Folha de Pagamento, o Supabase Storage rejeita com `Invalid key`.
+Atualmente as 3 abas são: **Chat** (meus abertos), **Atendidos** (meus fechados) e **Todos**.
 
-Causa: o arquivo contém **espaços** e o caractere acentuado **á** (em "salário"). Em `src/pages/CalendarView.tsx:392` o path é montado direto com `file.name`, sem sanitização — violando a regra do projeto ("Always sanitize storage keys: replace spaces/accents with underscores, NFD normalization").
+Vou reconfigurá-las conforme solicitado:
 
-## Mudança
+### 1. Aba "Chat" (`mine`)
 
-**`src/lib/utils.ts`** — adicionar utilitário `sanitizeStorageName(name: string)`:
-- Separa basename + extensão
-- Aplica `.normalize('NFD').replace(/[\u0300-\u036f]/g, '')` para remover acentos
-- Substitui qualquer caractere que não seja `[A-Za-z0-9._-]` por `_`
-- Colapsa underscores repetidos
-- Reconstroi `basename.ext`
+- Mantém: conversas com `status = 'open'` e `assigned_to = usuário logado`.
+- Sem alteração de lógica.
 
-**`src/pages/CalendarView.tsx`** (linha 392) — usar o utilitário:
-```ts
-const safeName = sanitizeStorageName(file.name);
-const path = `obligations/${detailInstanceId}/${activityId}/${safeName}`;
-```
+### 2. Aba "Em andamento" (`in_progress`) — substitui "Atendidos"
 
-## Fora de escopo
+- Filtro: `status = 'open'` **e** `assigned_to <> usuário logado` (incluindo `assigned_to IS NULL`, que são chamados abertos ainda não atribuídos a ninguém).
+- Renomear o valor do tipo `ChatTab` de `'closed'` para `'in_progress'`.
+- Mostrar os chamados abertos atribuídos aos outros usuários 
+- Atualizar label da aba para **"Em andamento"**.
 
-- Outros pontos de upload do app já existentes (não foi reportado problema lá).
-- Renomeação de arquivos antigos já no bucket.
+### 3. Aba "Geral" (`all`)
+
+- Mantém: sem filtro (todo histórico — abertos e fechados).
+- Renomear label de "Todos" para **"Geral"**.
+
+### Arquivos afetados
+
+`**src/pages/Chat.tsx**`
+
+- Trocar o tipo `ChatTab` para `'mine' | 'in_progress' | 'all'`.
+- Em `loadConversations`, substituir o branch `closed` por:
+  ```ts
+  } else if (currentTab === 'in_progress') {
+    query = query
+      .eq('status', 'open')
+      .or(`assigned_to.neq.${user.id},assigned_to.is.null`);
+  }
+  ```
+
+`**src/components/chat/ConversationList.tsx**`
+
+- Atualizar o `TabsTrigger` com `value="closed"` → `value="in_progress"` e label "Em andamento".
+- Renomear o label da aba `all` de "Todos" para "Geral".
+
+### Fora de escopo
+
+- Lógica de transferência, fechamento e reabertura de chamados (mantidas como estão).
+- Permissões/RLS (não há mudança de acesso, apenas filtragem do lado cliente).
