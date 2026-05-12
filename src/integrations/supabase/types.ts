@@ -300,7 +300,6 @@ export type Database = {
           id: string
           last_nfe_nsu: string | null
           last_nsu: string | null
-          last_sefazsc_nsu: string | null
           main_activity: string | null
           monthly_value: number | null
           municipal_registration: string | null
@@ -349,7 +348,6 @@ export type Database = {
           id?: string
           last_nfe_nsu?: string | null
           last_nsu?: string | null
-          last_sefazsc_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
@@ -398,7 +396,6 @@ export type Database = {
           id?: string
           last_nfe_nsu?: string | null
           last_nsu?: string | null
-          last_sefazsc_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null

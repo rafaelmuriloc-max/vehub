@@ -75,7 +75,6 @@ export default function NfeTab() {
   const [syncPeriod, setSyncPeriod] = useState<'last_90' | 'this_month' | 'last_month' | 'custom'>('last_90');
   const [syncDateFrom, setSyncDateFrom] = useState('');
   const [syncDateTo, setSyncDateTo] = useState('');
-  const [syncProvider, setSyncProvider] = useState<'an' | 'sefaz-sc'>('an');
 
   function computeSyncRange(period: typeof syncPeriod): { from: string; to: string } {
     const now = new Date();
@@ -164,7 +163,6 @@ export default function NfeTab() {
               client_id: clientIds[i],
               date_from: range.from || undefined,
               date_to: range.to || undefined,
-              provider: syncProvider,
             },
           });
 
@@ -189,7 +187,7 @@ export default function NfeTab() {
 
       if (infrastructureMessage) {
         toast({
-          title: syncProvider === 'sefaz-sc' ? 'SEF-SC indisponível' : 'Ambiente Nacional indisponível',
+          title: 'Ambiente Nacional indisponível',
           description: infrastructureMessage,
           variant: 'destructive',
         });
@@ -471,18 +469,6 @@ export default function NfeTab() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap items-end gap-4">
-              <div className="min-w-[220px]">
-                <Label>Origem</Label>
-                <Select value={syncProvider} onValueChange={(v) => setSyncProvider(v as typeof syncProvider)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="an">Ambiente Nacional (entradas)</SelectItem>
-                    <SelectItem value="sefaz-sc">SEF-SC (entradas + saídas)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="flex-1 min-w-[200px]">
                 <Label>Cliente</Label>
                 <Select value={selectedClient} onValueChange={setSelectedClient}>
@@ -528,12 +514,6 @@ export default function NfeTab() {
                 {syncing ? (syncProgress || 'Consultando...') : 'Buscar NF-e'}
               </Button>
             </div>
-            {syncProvider === 'sefaz-sc' && (
-              <p className="text-xs text-muted-foreground mt-3">
-                Usa o web service <code>nfeDownloadContab</code> da SEF-SC com o A1 da Velocità.
-                Requer procuração estadual ativa no SAT-SC do CNPJ consultado e cliente sediado em SC.
-              </p>
-            )}
           </CardContent>
         </Card>
       )}
