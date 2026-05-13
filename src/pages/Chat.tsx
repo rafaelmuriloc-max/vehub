@@ -335,11 +335,13 @@ export default function Chat() {
     const mediaUrl = urlData.publicUrl;
 
     if (activeConv?.whatsappPhone) {
-      const { error } = await supabase.functions.invoke('whatsapp-send-media', {
+      const { data: respData, error } = await supabase.functions.invoke('whatsapp-send-media', {
         body: { conversationId: activeConvId, type, mediaUrl, fileName: file.name, senderName: profile?.full_name || undefined, senderId: user.id },
       });
-      if (error) {
-        toast({ title: 'Erro ao enviar mídia', variant: 'destructive' });
+      if (error || (respData && (respData as any).error)) {
+        const detail = (respData as any)?.error || error?.message || '';
+        console.error('Erro envio mídia:', detail, error);
+        toast({ title: 'Erro ao enviar mídia', description: String(detail).slice(0, 200), variant: 'destructive' });
       }
     } else {
       await supabase.from('chat_messages').insert({
