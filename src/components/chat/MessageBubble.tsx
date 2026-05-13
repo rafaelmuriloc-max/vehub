@@ -1,8 +1,17 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCheck, MapPin, Contact } from 'lucide-react';
+import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X } from 'lucide-react';
 import { AudioMessage } from './AudioMessage';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
 
 interface MessageBubbleProps {
   content: string;
@@ -14,6 +23,12 @@ interface MessageBubbleProps {
   messageType?: string;
   mediaUrl?: string;
   avatarUrl?: string;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  isAdmin?: boolean;
+  onEdit?: (newContent: string) => void;
+  onDeleteForMe?: () => void;
+  onDeleteForAll?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -80,11 +95,18 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
   );
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
   const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
   const isOutgoing = messageType === 'whatsapp_outgoing' || messageType === 'whatsapp';
   const showOnRight = !isIncoming && (isOutgoing || isMine);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(content);
+
+  const isDeleted = !!deletedAt;
+  const canEdit = isMine && !isDeleted && (messageType === 'text' || messageType === 'whatsapp_outgoing' || messageType === 'whatsapp')
+    && (Date.now() - new Date(timestamp).getTime() < 15 * 60 * 1000);
+  const canDeleteForAll = (isMine || !!isAdmin) && !isDeleted;
 
   // Normalize media kind to support both incoming (whatsapp_incoming_audio) and outgoing (whatsapp_audio)
   const mediaKind = messageType?.replace(/^whatsapp_(incoming_)?/, '');
@@ -169,8 +191,56 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   // Don't show text for location/contact types (content is structured data)
   const hideTextContent = messageType === 'whatsapp_location' || messageType === 'whatsapp_contact' || mediaKind === 'audio';
 
+  if (isDeleted) {
+    return (
+      <div className={`flex ${showOnRight ? 'justify-end' : 'justify-start'} mb-1`}>
+        <div className={`relative max-w-[80%] sm:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm italic text-muted-foreground bg-zinc-200 dark:bg-zinc-800 ${showOnRight ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
+          <div className="flex items-center gap-1.5">
+            <Ban className="h-3.5 w-3.5" />
+            <span className="text-sm">Mensagem apagada</span>
+          </div>
+          <div className="flex items-center gap-1 justify-end mt-0.5">
+            <span className="text-[10px] leading-none">
+              {format(new Date(timestamp), 'HH:mm', { locale: ptBR })}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex ${showOnRight ? 'justify-end' : 'justify-start'} mb-1`}>
+      <div className="group relative flex items-start gap-1">
+      {showOnRight && (onEdit || onDeleteForMe || onDeleteForAll) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mt-1 rounded-full hover:bg-black/10">
+              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="left">
+            {canEdit && onEdit && (
+              <DropdownMenuItem onClick={() => { setDraft(content); setEditing(true); }}>
+                <Pencil className="h-4 w-4 mr-2" /> Editar
+              </DropdownMenuItem>
+            )}
+            {onDeleteForMe && (
+              <DropdownMenuItem onClick={onDeleteForMe}>
+                <Trash2 className="h-4 w-4 mr-2" /> Apagar só para mim
+              </DropdownMenuItem>
+            )}
+            {canDeleteForAll && onDeleteForAll && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onDeleteForAll} className="text-destructive focus:text-destructive">
+                  <Ban className="h-4 w-4 mr-2" /> Apagar para todos
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <div
         className={`relative max-w-[80%] sm:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm ${
           showOnRight
@@ -183,11 +253,32 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         )}
         {renderMedia()}
         {/* Show text content - skip for documents/location/contact */}
-        {content && !hideTextContent && mediaKind !== 'document' && (
-          <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
-        )}
+        {editing ? (
+          <div className="flex flex-col gap-1.5 min-w-[200px]">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={2}
+              className="text-sm bg-background"
+              autoFocus
+            />
+            <div className="flex justify-end gap-1">
+              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditing(false)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" className="h-7 px-2" onClick={() => { onEdit?.(draft); setEditing(false); }}>
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ) : content && !hideTextContent && mediaKind !== 'document' ? (
+          <p className="text-sm whitespace-pre-wrap break-words">
+            {content}
+            {editedAt && <span className="text-[10px] text-muted-foreground ml-1 italic">(editada)</span>}
+          </p>
+        ) : null}
         {/* For audio with no text, don't show empty paragraph */}
-        {!content && !mediaUrl && !hideTextContent && (
+        {!content && !mediaUrl && !hideTextContent && !editing && (
           <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
         )}
         <div className={`flex items-center gap-1 justify-end mt-0.5 ${isMine ? '-mr-1' : ''}`}>
@@ -198,6 +289,29 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             <CheckCheck className={`h-3.5 w-3.5 ${isRead ? 'text-blue-500' : 'text-muted-foreground'}`} />
           )}
         </div>
+      </div>
+      {!showOnRight && (onDeleteForMe) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mt-1 rounded-full hover:bg-black/10">
+              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right">
+            <DropdownMenuItem onClick={onDeleteForMe}>
+              <Trash2 className="h-4 w-4 mr-2" /> Apagar só para mim
+            </DropdownMenuItem>
+            {!!isAdmin && onDeleteForAll && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onDeleteForAll} className="text-destructive focus:text-destructive">
+                  <Ban className="h-4 w-4 mr-2" /> Apagar para todos
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       </div>
     </div>
   );
