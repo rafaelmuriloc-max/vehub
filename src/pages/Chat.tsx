@@ -516,7 +516,7 @@ export default function Chat() {
   const showMessages = isMobile ? !!activeConvId : true;
 
   return (
-    <div className="flex h-[100dvh] md:h-[calc(100vh-0px)] overflow-hidden md:rounded-lg md:border bg-background md:shadow-sm">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-background md:h-screen">
       {showList && (
         <div className={`${isMobile ? 'w-full' : 'w-[350px] shrink-0'}`}>
           <ConversationList
