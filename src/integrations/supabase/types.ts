@@ -81,6 +81,8 @@ export type Database = {
           message_type: string
           read_at: string | null
           sender_id: string
+          wa_message_id: string | null
+          wa_remote_jid: string | null
         }
         Insert: {
           channel?: string
@@ -95,6 +97,8 @@ export type Database = {
           message_type?: string
           read_at?: string | null
           sender_id: string
+          wa_message_id?: string | null
+          wa_remote_jid?: string | null
         }
         Update: {
           channel?: string
@@ -109,6 +113,8 @@ export type Database = {
           message_type?: string
           read_at?: string | null
           sender_id?: string
+          wa_message_id?: string | null
+          wa_remote_jid?: string | null
         }
         Relationships: [
           {
