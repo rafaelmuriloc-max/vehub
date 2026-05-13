@@ -16,38 +16,13 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const body = await req.json().catch(() => ({}));
-    const isTest = body.test === true;
-
-    const { data: settings, error: settingsError } = await supabase
+    const { data: settings } = await supabase
       .from("company_settings")
       .select("chat_alert_whatsapp_group_id")
       .limit(1)
       .maybeSingle();
 
-    if (settingsError) throw settingsError;
-
     const groupId = settings?.chat_alert_whatsapp_group_id?.trim();
-
-    if (isTest && groupId) {
-      const testText = `🧪 *Teste V-Hub*\n\nEste é um disparo de teste do alerta de atendimentos em espera. Se você recebeu, a integração está funcionando ✅`;
-      const res = await fetch(`${evolutionUrl}/message/sendText/${evolutionInstance}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: evolutionApiKey },
-        body: JSON.stringify({ number: groupId, text: testText }),
-      });
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => "");
-        return new Response(JSON.stringify({ error: `Evolution test failed: ${res.status}`, detail: errBody }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ ok: true, test: true, sent: 1 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     if (!groupId) {
       return new Response(JSON.stringify({ ok: true, skipped: "no_group_configured" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
