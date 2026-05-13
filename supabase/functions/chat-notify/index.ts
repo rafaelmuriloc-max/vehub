@@ -42,6 +42,18 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: 'outgoing' }), { headers: corsHeaders });
     }
 
+    // Incoming WhatsApp messages are stored with a "system" sender_id (admin placeholder).
+    // For those, do NOT exclude sender from recipients — the real author is the external client.
+    const isIncomingExternal =
+      typeof msg.message_type === 'string' && msg.message_type.startsWith('whatsapp_incoming');
+    console.log('[chat-notify] message', {
+      id: msg.id,
+      type: msg.message_type,
+      channel: msg.channel,
+      sender_id: msg.sender_id,
+      isIncomingExternal,
+    });
+
     const { data: conv } = await supabase
       .from('chat_conversations')
       .select('id, name, whatsapp_phone, assigned_to')
@@ -60,7 +72,10 @@ Deno.serve(async (req) => {
       .eq('role', 'admin');
     (admins || []).forEach((a: any) => recipientIds.add(a.user_id));
 
-    if (msg.sender_id) recipientIds.delete(msg.sender_id);
+    // Only exclude sender for internal/manually-sent messages (real author = sender_id)
+    if (msg.sender_id && !isIncomingExternal) recipientIds.delete(msg.sender_id);
+
+    console.log('[chat-notify] recipients', Array.from(recipientIds));
 
     if (recipientIds.size === 0) {
       return new Response(JSON.stringify({ sent: 0, skipped: 'no recipients' }), { headers: corsHeaders });
@@ -70,6 +85,8 @@ Deno.serve(async (req) => {
       .from('user_push_subscriptions')
       .select('id, user_id, endpoint, p256dh, auth')
       .in('user_id', Array.from(recipientIds));
+
+    console.log('[chat-notify] subscriptions found:', subs?.length || 0);
 
     const title = conv.name || conv.whatsapp_phone || 'Nova mensagem';
     const body = (msg.content || '').toString().slice(0, 120) || 'Nova mensagem';
