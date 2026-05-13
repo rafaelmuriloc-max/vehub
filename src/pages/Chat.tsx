@@ -173,11 +173,13 @@ export default function Chat() {
         .from('chat_messages')
         .select('id, content, sender_id, created_at, read_at, message_type, media_url')
         .eq('conversation_id', activeConvId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (!data) return;
 
-      const senderIds = [...new Set(data.map(m => m.sender_id))];
+      const ordered = [...data].reverse();
+      const senderIds = [...new Set(ordered.map(m => m.sender_id))];
       const { data: profiles } = await supabase
         .from('profiles')
         .select('user_id, full_name')
@@ -185,12 +187,12 @@ export default function Chat() {
 
       const nameMap = new Map(profiles?.map(p => [p.user_id, p.full_name || 'Usuário']) || []);
 
-      setMessages(data.map(m => ({
+      setMessages(ordered.map(m => ({
         ...m,
         sender_name: nameMap.get(m.sender_id) || 'Usuário',
       })));
 
-      const unreadIds = data
+      const unreadIds = ordered
         .filter(m => m.message_type !== 'text' && m.message_type !== 'whatsapp_outgoing' && !m.read_at)
         .map(m => m.id);
 
