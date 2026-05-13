@@ -143,6 +143,8 @@ Deno.serve(async (req) => {
       url: '/chat',
     });
 
+    console.log('[chat-notify] payload', { title, body, bodyLen: body.length });
+
     let sent = 0;
     let removed = 0;
     await Promise.all(
