@@ -328,7 +328,7 @@ export default function Chat() {
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-text', {
-        body: { conversationId: activeConvId, text: content, senderName: profile?.full_name || undefined },
+        body: { conversationId: activeConvId, text: content, senderName: profile?.full_name || undefined, senderId: user.id },
       });
 
       if (error) {

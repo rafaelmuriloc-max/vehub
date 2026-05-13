@@ -1,22 +1,20 @@
-## Bug
-Em `MessageArea.tsx`, mensagens de saída (`whatsapp_outgoing` / `whatsapp`) exibem sempre `currentUserName` (usuário logado) como assinatura, ignorando quem de fato enviou. Por isso, mensagens enviadas por colegas aparecem com o seu nome no seu lado da tela.
+## Causa raiz
+
+Toda mensagem WhatsApp enviada pelo chat é gravada em `chat_messages` com `sender_id = primeiro admin` (Márcio), independente de quem clicou em enviar. Por isso, no chat do app todas as conversas exibem "Márcio Macelan" na assinatura — enquanto no WhatsApp do destinatário o texto vai correto, pois o frontend prefixa `*Nome:*` no corpo da mensagem antes de mandar para a Meta/Evolution.
+
+- `supabase/functions/whatsapp-send-text/index.ts` (linhas 154–174): ignora o usuário e força `senderId = adminRoles[0].user_id`.
+- `supabase/functions/whatsapp-send-media/index.ts` já aceita `senderId` do frontend, mas o `whatsapp-send-text` não recebe nem usa.
 
 ## Correção
-Em `src/components/chat/MessageArea.tsx`, alterar a linha:
 
-```tsx
-senderName={showOnRight ? (isOutgoing ? currentUserName : msg.sender_name) : undefined}
-```
+1. **Frontend (`src/pages/Chat.tsx`, linha 331)**: incluir `senderId: user.id` no body da invocação de `whatsapp-send-text` (igual já é feito para `whatsapp-send-media`).
 
-para:
+2. **Edge Function `whatsapp-send-text`**:
+   - Ler `senderId` do body junto com `conversationId`, `text`, `senderName`.
+   - Usar esse `senderId` na inserção em `chat_messages`. Manter fallback para o primeiro admin caso não venha (compatibilidade).
 
-```tsx
-senderName={showOnRight ? msg.sender_name : undefined}
-```
+Sem mudanças no webhook (mensagens recebidas continuam com sender = admin sistema, mas aparecem à esquerda como `whatsapp_incoming` e não exibem assinatura). Sem mudanças no banco.
 
-Assim a assinatura sempre vem de `msg.sender_name`, que já é resolvido em `Chat.tsx` via lookup na tabela `profiles` pelo `sender_id` real da mensagem (tanto no carregamento inicial quanto no realtime). O fallback continua sendo `'Usuário'` quando o profile não é encontrado.
+## Validação
 
-## Escopo
-- Apenas alteração visual/presentacional em `MessageArea.tsx`.
-- Sem mudanças em backend, schema ou lógica de envio.
-- A prop `currentUserName` pode permanecer (não vou removê-la para evitar mexer em `Chat.tsx`), apenas deixa de ser usada para definir a assinatura.
+Após o deploy: enviar uma mensagem WhatsApp logado como outro usuário e confirmar que a assinatura no chat aparece com o nome correto, e que mensagens antigas continuam exibindo Márcio (são histórico, não retroativas).
