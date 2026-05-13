@@ -10,7 +10,13 @@ if ("serviceWorker" in navigator) {
   const isPreview = window.location.hostname.includes("lovableproject.com") || window.location.hostname.includes("id-preview--");
   if (!inIframe && !isPreview) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .then((reg) => {
+          // Force check for new sw.js on every page load
+          reg.update().catch(() => {});
+        })
+        .catch(() => {});
     });
   }
 }
