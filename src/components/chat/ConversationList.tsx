@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw, ExternalLink, Timer } from 'lucide-react';
+import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw, ExternalLink, Timer, Clock, Flame, MessageSquareMore } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -148,36 +148,45 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
       </div>
 
       {/* Tabs */}
-      <div className="px-2 pt-2 pb-1">
+      <div className="px-0 pt-0 pb-0">
         <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ChatTab)}>
-          <TabsList className="w-full bg-transparent border-b border-border/40 rounded-none h-auto p-0 gap-1 justify-stretch">
+          <TabsList className="w-full bg-transparent border-b border-border/40 rounded-none h-auto p-0 gap-0 justify-stretch">
             <TabsTrigger
-              value="mine"
-              className="flex-1 text-xs relative rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground py-2.5 transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2 data-[state=active]:after:h-2 data-[state=active]:after:rotate-45 data-[state=active]:after:bg-primary"
+              value="all"
+              className="flex-1 relative rounded-none border-b-2 border-transparent bg-transparent text-[#515252] py-2.5 transition-all hover:text-foreground data-[state=active]:border-[#146BFE] data-[state=active]:text-[#515252] font-['Source_Sans_Pro'] font-bold text-[14px] data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[4px] data-[state=active]:after:w-0 data-[state=active]:after:h-0 data-[state=active]:after:border-l-[4px] data-[state=active]:after:border-l-transparent data-[state=active]:after:border-r-[4px] data-[state=active]:after:border-r-transparent data-[state=active]:after:border-t-[4px] data-[state=active]:after:border-t-[#146BFE]"
             >
-              Chat
-              {totalUnread != null && totalUnread > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
-                  {totalUnread > 99 ? '99+' : totalUnread}
-                </span>
-              )}
+              <div className="flex flex-col items-center gap-1">
+                <Clock className="h-[18px] w-[18px] text-[#515252]" />
+                <span>Pendente</span>
+              </div>
             </TabsTrigger>
             <TabsTrigger
               value="in_progress"
-              className="flex-1 text-xs relative rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground py-2.5 transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2 data-[state=active]:after:h-2 data-[state=active]:after:rotate-45 data-[state=active]:after:bg-primary"
+              className="flex-1 relative rounded-none border-b-2 border-transparent bg-transparent text-[#515252] py-2.5 transition-all hover:text-foreground data-[state=active]:border-[#146BFE] data-[state=active]:text-[#515252] font-['Source_Sans_Pro'] font-bold text-[14px] data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[4px] data-[state=active]:after:w-0 data-[state=active]:after:h-0 data-[state=active]:after:border-l-[4px] data-[state=active]:after:border-l-transparent data-[state=active]:after:border-r-[4px] data-[state=active]:after:border-r-transparent data-[state=active]:after:border-t-[4px] data-[state=active]:after:border-t-[#146BFE]"
             >
-              Espera
-              {waitingCount != null && waitingCount > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
-                  {waitingCount > 99 ? '99+' : waitingCount}
-                </span>
-              )}
+              <div className="flex flex-col items-center gap-1">
+                <Flame className="h-[18px] w-[18px] text-[#FE9B0E]" />
+                <span>Espera</span>
+                {waitingCount != null && waitingCount > 0 && (
+                  <span className="absolute top-1 right-2 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
+                    {waitingCount > 99 ? '99+' : waitingCount}
+                  </span>
+                )}
+              </div>
             </TabsTrigger>
             <TabsTrigger
-              value="all"
-              className="flex-1 text-xs relative rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground py-2.5 transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2 data-[state=active]:after:h-2 data-[state=active]:after:rotate-45 data-[state=active]:after:bg-primary"
+              value="mine"
+              className="flex-1 relative rounded-none border-b-2 border-transparent bg-transparent text-[#515252] py-2.5 transition-all hover:text-foreground data-[state=active]:border-[#146BFE] data-[state=active]:text-[#515252] font-['Source_Sans_Pro'] font-bold text-[14px] data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[4px] data-[state=active]:after:w-0 data-[state=active]:after:h-0 data-[state=active]:after:border-l-[4px] data-[state=active]:after:border-l-transparent data-[state=active]:after:border-r-[4px] data-[state=active]:after:border-r-transparent data-[state=active]:after:border-t-[4px] data-[state=active]:after:border-t-[#146BFE]"
             >
-              Geral
+              <div className="flex flex-col items-center gap-1">
+                <MessageSquareMore className="h-[18px] w-[18px] text-[#146BFE]" />
+                <span>Atendimento</span>
+                {totalUnread != null && totalUnread > 0 && (
+                  <span className="absolute top-1 right-2 inline-flex items-center justify-center bg-[#25D366] text-white text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </span>
+                )}
+              </div>
             </TabsTrigger>
           </TabsList>
         </Tabs>
