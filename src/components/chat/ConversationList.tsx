@@ -99,7 +99,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => window.open('/chat/popup', 'chat_popup', 'width=1200,height=800,noopener=no')}
+              onClick={() => window.open('/chat/popup', 'chat_popup', 'popup=yes,width=1200,height=800,menubar=no,toolbar=no,location=no,status=no')}
               title="Abrir em nova janela"
               className="hidden sm:inline-flex"
             >

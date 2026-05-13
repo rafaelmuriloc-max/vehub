@@ -1,27 +1,32 @@
-## Adicionar contador de conversas em Espera
+# Abrir chat em janela popup isolada
 
-Mostrar um badge ao lado da aba "Espera" com o número de conversas WhatsApp aguardando atendimento (status `open` e sem atendente).
+## Diagnóstico
 
-### Mudanças
+A rota `/chat/popup` já está fora do `AppLayout` em `src/App.tsx`, então tecnicamente carrega só o `<Chat />` sem sidebar. O problema percebido vem de dois pontos no `window.open`:
 
-**1. `src/pages/Chat.tsx`**
-- Novo estado `waitingCount: number`.
-- Função `loadWaitingCount()` que executa:
-  ```ts
-  supabase.from('chat_conversations')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'open')
-    .is('assigned_to', null)
-    .not('whatsapp_phone', 'is', null);
+1. A string de features atual é `'width=1200,height=800,noopener=no'`. O parâmetro `noopener=no` não é uma feature válida e, em navegadores baseados em Chromium, a ausência da flag `popup=yes` (ou de uma combinação reconhecida) faz o navegador abrir uma **nova aba comum** em vez de uma janela popup. Numa aba normal, o usuário enxerga a aba como "o sistema inteiro" aberto, mesmo que o conteúdo seja só o chat.
+2. Mesmo abrindo na rota correta, faltam ajustes para reforçar o isolamento (sem barra de navegação, sem botão extra de "abrir em nova janela" duplicado etc.).
+
+## Mudanças
+
+### 1. `src/components/chat/ConversationList.tsx`
+- Trocar a string de features do `window.open` por uma que force janela popup real, sem chrome do navegador:
   ```
-- Chamar `loadWaitingCount()` junto com `loadConversations()` (no useEffect inicial e após eventos do realtime que já disparam reload).
-- Passar `waitingCount` como prop para `<ConversationList />`.
+  window.open(
+    '/chat/popup',
+    'chat_popup',
+    'popup=yes,width=1200,height=800,menubar=no,toolbar=no,location=no,status=no'
+  )
+  ```
+- Manter a condição `pathname !== '/chat/popup'` para não exibir o botão dentro do próprio popup.
 
-**2. `src/components/chat/ConversationList.tsx`**
-- Adicionar `waitingCount?: number` em `ConversationListProps`.
-- Na `TabsTrigger value="in_progress"`, renderizar um badge no mesmo padrão visual já usado em "Chat" (bg-destructive, arredondado, `99+` quando excede), exibido apenas quando `waitingCount > 0`.
+### 2. `src/pages/ChatPopup.tsx`
+- Manter como está (já renderiza apenas `<Chat />` em fullscreen, sem `AppLayout`).
+- Garantir que o botão "voltar" do `ConversationList` (`onNavigateBack`) não saia para `/` quando estiver no popup. Opção: passar uma prop opcional ou detectar `pathname === '/chat/popup'` no `Chat.tsx` e, nesse caso, usar `window.close()` em vez de `navigate('/')`.
 
-### Observações
-- Sem mudanças de schema/migrations.
-- O contador reflete todas as conversas em espera, mesmo quando o usuário está em outra aba.
-- RLS: admins já enxergam essas conversas (são participantes via webhook).
+### 3. `src/pages/Chat.tsx`
+- Em `onNavigateBack`, quando a rota for `/chat/popup`, chamar `window.close()` (fecha a janela popup) em vez de navegar para o dashboard. Em `/chat` normal, mantém o `navigate('/')`.
+
+## Resultado esperado
+
+Clicar no ícone de "Abrir em nova janela" abre uma janela popup limpa (sem barra de endereço, sem sidebar do sistema, sem header) contendo apenas a interface do chat. O botão "voltar" dentro dessa janela fecha o popup.

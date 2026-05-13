@@ -688,7 +688,13 @@ export default function Chat() {
             onTabChange={handleTabChange}
             totalUnread={mineCount}
             waitingCount={waitingCount}
-            onNavigateBack={() => navigate('/')}
+            onNavigateBack={() => {
+              if (window.location.pathname === '/chat/popup') {
+                window.close();
+              } else {
+                navigate('/');
+              }
+            }}
             onRefreshAvatars={handleRefreshAvatars}
             refreshingAvatars={refreshingAvatars}
           />
