@@ -26,7 +26,9 @@ export type Database = {
           is_group: boolean
           name: string | null
           status: string
+          total_wait_seconds: number
           updated_at: string
+          waiting_since: string | null
           whatsapp_phone: string | null
         }
         Insert: {
@@ -40,7 +42,9 @@ export type Database = {
           is_group?: boolean
           name?: string | null
           status?: string
+          total_wait_seconds?: number
           updated_at?: string
+          waiting_since?: string | null
           whatsapp_phone?: string | null
         }
         Update: {
@@ -54,7 +58,9 @@ export type Database = {
           is_group?: boolean
           name?: string | null
           status?: string
+          total_wait_seconds?: number
           updated_at?: string
+          waiting_since?: string | null
           whatsapp_phone?: string | null
         }
         Relationships: [
@@ -1558,8 +1564,10 @@ export type Database = {
           last_message_type: string
           name: string
           status: string
+          total_wait_seconds: number
           unread_count: number
           updated_at: string
+          waiting_since: string
           whatsapp_phone: string
         }[]
       }

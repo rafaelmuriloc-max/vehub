@@ -163,6 +163,8 @@ export default function Chat() {
         clientId: conv.client_id || null,
         status: conv.status || 'open',
         assignedToName: conv.assigned_to_name || null,
+        waitingSince: conv.waiting_since || null,
+        totalWaitSeconds: conv.total_wait_seconds || 0,
       };
     });
 
