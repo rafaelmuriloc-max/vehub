@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify(payload),
           }
         );
-        sendSuccess = metaRes.ok;
+        { const _err = await captureWaId(metaRes, "Meta API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await metaRes.text();
           sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
             }),
           }
         );
-        sendSuccess = evoRes.ok;
+        { const _err = await captureWaId(evoRes, "Evolution API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await evoRes.text();
           sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
             }),
           }
         );
-        sendSuccess = evoRes.ok;
+        { const _err = await captureWaId(evoRes, "Evolution API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await evoRes.text();
           sendErrorDetail = `Evolution audio ${evoRes.status}: ${errText}`;
@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify(payload),
           }
         );
-        sendSuccess = metaRes.ok;
+        { const _err = await captureWaId(metaRes, "Meta API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await metaRes.text();
           sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
             }),
           }
         );
-        sendSuccess = evoRes.ok;
+        { const _err = await captureWaId(evoRes, "Evolution API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await evoRes.text();
           sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify(payload),
           }
         );
-        sendSuccess = metaRes.ok;
+        { const _err = await captureWaId(metaRes, "Meta API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await metaRes.text();
           sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
@@ -313,7 +313,7 @@ Deno.serve(async (req) => {
             }),
           }
         );
-        sendSuccess = evoRes.ok;
+        { const _err = await captureWaId(evoRes, "Evolution API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await evoRes.text();
           sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
@@ -350,7 +350,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify(payload),
           }
         );
-        sendSuccess = metaRes.ok;
+        { const _err = await captureWaId(metaRes, "Meta API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await metaRes.text();
           sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
@@ -376,7 +376,7 @@ Deno.serve(async (req) => {
             }),
           }
         );
-        sendSuccess = evoRes.ok;
+        { const _err = await captureWaId(evoRes, "Evolution API"); sendSuccess = !_err; if (_err) sendErrorDetail = _err; }
         if (!sendSuccess) {
           const errText = await evoRes.text();
           sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
