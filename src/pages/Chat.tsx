@@ -336,7 +336,7 @@ export default function Chat() {
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: { conversationId: activeConvId, type, mediaUrl, fileName: file.name, senderName: profile?.full_name || undefined },
+        body: { conversationId: activeConvId, type, mediaUrl, fileName: file.name, senderName: profile?.full_name || undefined, senderId: user.id },
       });
       if (error) {
         toast({ title: 'Erro ao enviar mídia', variant: 'destructive' });
@@ -360,7 +360,7 @@ export default function Chat() {
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: { conversationId: activeConvId, type: 'location', latitude: lat, longitude: lng, senderName: profile?.full_name || undefined },
+        body: { conversationId: activeConvId, type: 'location', latitude: lat, longitude: lng, senderName: profile?.full_name || undefined, senderId: user.id },
       });
       if (error) {
         toast({ title: 'Erro ao enviar localização', variant: 'destructive' });
@@ -383,7 +383,7 @@ export default function Chat() {
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: { conversationId: activeConvId, type: 'contacts', contactName: name, contactPhone: phone, senderName: profile?.full_name || undefined },
+        body: { conversationId: activeConvId, type: 'contacts', contactName: name, contactPhone: phone, senderName: profile?.full_name || undefined, senderId: user.id },
       });
       if (error) {
         toast({ title: 'Erro ao enviar contato', variant: 'destructive' });
