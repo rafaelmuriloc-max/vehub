@@ -1,24 +1,21 @@
-## Objetivo
-Funcionários (role `employee`) não devem ver os menus **Dashboard** e **Financeiro**, e ao logar devem ir direto para `/calendar`. Admins continuam com acesso total e fluxo atual.
+## Resumo
+Substituir o iframe do Monitor Contábil na página Fiscal pela aba "Situação Fiscal" atualmente dentro do Integra Contador. Remover a aba de dentro do Integra Contador, simplificando-o.
 
-## Mudanças
+## Passos
 
-### 1. `src/components/AppSidebar.tsx`
-- Ler o role do usuário via `useAuth` (já expõe `profile`; verificar se há flag de admin — caso contrário, consultar `user_roles` ou usar helper existente).
-- Filtrar `menuItems`: se não for admin, remover entradas `Dashboard` (`/`) e `Financeiro` (`/financial`).
+### 1. `src/pages/Fiscal.tsx`
+- Remover todo o conteúdo do iframe do Monitor Contábil.
+- Importar e renderizar `SituacaoFiscalTab`.
+- Adicionar título e descrição da página.
 
-### 2. Redirecionamento pós-login
-- Em `src/pages/Auth.tsx`: após login bem-sucedido, se o usuário não for admin, navegar para `/calendar`; admin continua indo para `/`.
-- Em `src/App.tsx` (rota `/`) ou `AppLayout`: se um funcionário acessar `/` ou `/financial` diretamente (URL), redirecionar para `/calendar` para evitar bypass via URL.
+### 2. `src/pages/IntegraContador.tsx`
+- Remover a aba `sitfis` do `TabsList` e o `<TabsContent value="sitfis">`.
+- Como resta apenas a aba "Serviços", remover completamente o componente `Tabs` e deixar o conteúdo renderizado diretamente.
+- Remover o import do `SituacaoFiscalTab` e os ícones que deixam de ser usados (`Shield`).
 
-### 3. Proteção de rota (defesa em profundidade)
-- Em `AppLayout` (ou wrapper), bloquear renderização de `Dashboard` e `Financial` para não-admins, redirecionando para `/calendar`.
+### 3. `src/App.tsx`
+- Sem alterações nas rotas — `/fiscal` e `/integra-contador` continuam existindo.
 
-## Detalhes técnicos
-- Fonte da verdade do papel: `user_roles` via hook `useAuth` (verificar se já expõe `isAdmin`; se não, adicionar derivação simples consultando `has_role` ou a query atual de roles).
-- Nenhuma mudança de banco/RLS — somente UI e roteamento.
-- Sem alteração nos demais menus.
-
-## Fora de escopo
-- Permissões de outros menus (mantém comportamento atual).
-- Mudanças em RLS de `financial`/dashboards.
+## Detalhes Técnicos
+- O componente `SituacaoFiscalTab` é auto-suficiente: busca seus próprios dados no Supabase (`clients` + `sitfis_results`) e não depende de props ou contexto do `IntegraContador`.
+- A aba de Situação Fiscal dentro do Integra Contador usa `<SituacaoFiscalTab />` sem props — pode ser movida diretamente para `Fiscal.tsx`.
