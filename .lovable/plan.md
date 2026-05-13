@@ -1,57 +1,48 @@
-# Notificações de chat no celular (somente app/PWA)
+## Diagnóstico
 
-Apenas Web Push via PWA. Sem fallback WhatsApp. Destinatário: usuário **atribuído à conversa** + **admins** (grupo Velocitä interno).
+- ✅ Subscription do iPhone gravada em `user_push_subscriptions` (1 registro, Safari iOS 18).
+- ✅ Trigger `chat_messages_notify` existe e está ativo na tabela `chat_messages`.
+- ✅ Extensão `pg_net` instalada.
+- ❌ A função `trg_notify_chat_message` chama `extensions.http_post(...)`, mas no projeto a função do pg_net está no schema **`net`** (`net.http_post`). A chamada lança erro, que é silenciosamente engolido pelo `EXCEPTION WHEN OTHERS`. Resultado: a edge function `chat-notify` **nunca é invocada** (0 logs).
 
-## 1. PWA instalável
+## Correção (1 migração SQL)
 
-- `public/manifest.webmanifest` (nome "Velocitä", ícones 192/512, theme color navy `#0F172A`, `display: standalone`).
-- `public/sw.js` mínimo: só listeners `push` (mostra notificação) e `notificationclick` (abre `/chat`). Sem cache de HTML.
-- Registrar SW só fora do iframe/preview (registra apenas em produção).
-- Meta tags iOS + `<link rel="manifest">` em `index.html`.
+Recriar `public.trg_notify_chat_message` trocando `extensions.http_post` por `net.http_post` e ajustando o `search_path`:
 
-## 2. Subscription Web Push
+```sql
+CREATE OR REPLACE FUNCTION public.trg_notify_chat_message()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'net'
+AS $$
+DECLARE
+  fn_url text := 'https://ismgjjvarzzfsbdpthot.supabase.co/functions/v1/chat-notify';
+  anon_key text := '<anon key atual>';
+BEGIN
+  PERFORM net.http_post(
+    url := fn_url,
+    headers := jsonb_build_object(
+      'Content-Type','application/json',
+      'Authorization','Bearer ' || anon_key
+    ),
+    body := jsonb_build_object('message_id', NEW.id)
+  );
+  RETURN NEW;
+END;
+$$;
+```
 
-- Hook `useWebPush`: pede permissão, registra `PushSubscription` com chave VAPID pública e salva no Supabase. Detecta iOS standalone.
-- Banner "Ativar notificações" no topo de `/chat` (mobile) quando permissão != granted.
-- Card "Notificações no celular" em `Settings → Empresa` (ou nova aba "Meu perfil") listando dispositivos e botão remover.
+Observação: vou **remover o `EXCEPTION WHEN OTHERS`** para que erros futuros apareçam nos logs do Postgres (ou mantê-lo logando via `RAISE LOG` — me diga a preferência; padrão sugerido: remover, já que `net.http_post` é assíncrono e não bloqueia o INSERT).
 
-## 3. Tabela nova
+## Validação
 
-- `user_push_subscriptions` (id, user_id, endpoint UNIQUE, p256dh, auth, user_agent, created_at).
-- RLS: usuário gerencia só as próprias (SELECT/INSERT/DELETE por `auth.uid() = user_id`); service role lê tudo.
+1. Após aplicar, enviar uma mensagem de teste no chat.
+2. Verificar logs da função `chat-notify` (deve aparecer a invocação).
+3. Confirmar notificação chegando no iPhone instalado (PWA aberto via "Adicionar à Tela de Início").
 
-## 4. Disparo (edge function `chat-notify`)
+## Caso ainda não chegue após a correção
 
-- Recebe `{ message_id }`.
-- Lê mensagem + conversa.
-- Ignora se `message_type` for `text` enviado pelo próprio sistema, ou autor = destinatário.
-- Determina destinatários: `assigned_to` ∪ admins (`user_roles.role = 'admin'`).
-- Para cada usuário, busca `user_push_subscriptions` e envia Web Push (lib `npm:web-push@3` com VAPID).
-- Remove subscription em 404/410.
-
-## 5. Trigger de DB
-
-- Habilita extensão `pg_net`.
-- Trigger `AFTER INSERT` em `chat_messages` chama a edge function `chat-notify` via `net.http_post` passando `message_id`. Header com chave anon.
-
-## 6. Secrets necessários
-
-- `VAPID_PUBLIC_KEY` (gerada): `BKDn_tDoictqH6L-26JAeuCK7WflItbDHR9mVhw1PgCo1kfnQjRQgUne5J4_eKeQjKQQQJCS1mzKP7czMAz-VLc`
-- `VAPID_PRIVATE_KEY` (gerada): `55kyLvaXcy9kZb6W4wNwbBmRHOm1IP-jgk_lXg9C1so`
-- `VAPID_SUBJECT`: ex. `mailto:contato@velocita.com.br`
-
-A pública também vai como `VITE_VAPID_PUBLIC_KEY` no `.env` do frontend.
-
-## Limitações importantes
-
-- **iPhone**: precisa "Adicionar à Tela de Início" pelo Safari (iOS 16.4+). Sem isso, push não chega.
-- **Android**: funciona após permitir notificações no Chrome.
-- Service Worker só ativa na versão publicada (`vehub.lovable.app`), não no preview do editor.
-
-## Entregáveis
-
-1. Migration: tabela `user_push_subscriptions` + extensão `pg_net` + trigger em `chat_messages`.
-2. Edge function `chat-notify`.
-3. `public/manifest.webmanifest`, `public/sw.js`, ícones, meta tags em `index.html`.
-4. `src/hooks/useWebPush.ts` + `EnableNotificationsBanner` no topo do `/chat` mobile.
-5. Card "Notificações no celular" em Settings.
+- Conferir se Safari/iOS realmente concedeu permissão (banner sumiu = `permission === 'granted'`).
+- Conferir tabela `net._http_response` para resposta da chamada do trigger.
+- Inspecionar logs do `chat-notify` para erros do `web-push` (ex.: VAPID inválido).
