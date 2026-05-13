@@ -35,10 +35,14 @@ const cadastroSubItems = [
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isAdmin } = useAuth();
 
   const isCadastroActive = cadastroSubItems.some(item => location.pathname === item.path);
   const unreadCount = useUnreadCount();
+
+  const visibleMenuItems = isAdmin
+    ? menuItems
+    : menuItems.filter(i => i.path !== '/' && i.path !== '/financial');
 
   return (
     <Sidebar>
@@ -64,7 +68,7 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map(item => (
+              {visibleMenuItems.map(item => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     isActive={location.pathname === item.path}
