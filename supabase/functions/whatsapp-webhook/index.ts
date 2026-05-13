@@ -497,10 +497,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    await supabase
-      .from("chat_conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", conversationId);
+    const convUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (!isFromMe) {
+      convUpdate.status = "open";
+      convUpdate.closed_at = null;
+    }
+    await supabase.from("chat_conversations").update(convUpdate).eq("id", conversationId);
 
     console.log("Message saved successfully for conversation:", conversationId, "type:", messageType);
 
