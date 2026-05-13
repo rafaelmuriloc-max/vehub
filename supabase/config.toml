@@ -56,3 +56,9 @@ verify_jwt = false
 
 [functions.chat-notify]
 verify_jwt = false
+
+[functions.whatsapp-edit-message]
+verify_jwt = false
+
+[functions.whatsapp-delete-message]
+verify_jwt = false
