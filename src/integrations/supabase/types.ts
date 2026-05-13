@@ -24,6 +24,7 @@ export type Database = {
           created_by: string
           id: string
           is_group: boolean
+          last_wait_alert_at: string | null
           name: string | null
           status: string
           total_wait_seconds: number
@@ -40,6 +41,7 @@ export type Database = {
           created_by: string
           id?: string
           is_group?: boolean
+          last_wait_alert_at?: string | null
           name?: string | null
           status?: string
           total_wait_seconds?: number
@@ -56,6 +58,7 @@ export type Database = {
           created_by?: string
           id?: string
           is_group?: boolean
+          last_wait_alert_at?: string | null
           name?: string | null
           status?: string
           total_wait_seconds?: number
@@ -450,6 +453,7 @@ export type Database = {
           cert_responsible_name: string | null
           cert_responsible_phone: string | null
           cert_whatsapp_group_id: string | null
+          chat_alert_whatsapp_group_id: string | null
           cnpj: string | null
           company_name: string | null
           created_at: string
@@ -472,6 +476,7 @@ export type Database = {
           cert_responsible_name?: string | null
           cert_responsible_phone?: string | null
           cert_whatsapp_group_id?: string | null
+          chat_alert_whatsapp_group_id?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string
@@ -494,6 +499,7 @@ export type Database = {
           cert_responsible_name?: string | null
           cert_responsible_phone?: string | null
           cert_whatsapp_group_id?: string | null
+          chat_alert_whatsapp_group_id?: string | null
           cnpj?: string | null
           company_name?: string | null
           created_at?: string
