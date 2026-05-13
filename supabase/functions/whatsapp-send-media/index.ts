@@ -81,6 +81,16 @@ Deno.serve(async (req) => {
     let messageContent = "";
     let messageType = "";
     let messageMediaUrl = mediaUrl || null;
+    let waMessageId: string | null = null;
+
+    const captureWaId = async (res: Response, label: string): Promise<string> => {
+      const json = await res.json().catch(() => ({} as any));
+      if (res.ok) {
+        waMessageId = json?.key?.id ?? json?.messages?.[0]?.id ?? waMessageId;
+        return "";
+      }
+      return `${label} ${res.status}: ${JSON.stringify(json)}`;
+    };
 
     // Build content text with sender signature
     const VHUB_MARKER = "\u200B\u200B\u200B";
