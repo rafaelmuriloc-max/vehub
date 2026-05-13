@@ -24,6 +24,26 @@ export default function Chat() {
   const [activeConvName, setActiveConvName] = useState<string | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [activeTab, setActiveTab] = useState<ChatTab>('mine');
+  const [refreshingAvatars, setRefreshingAvatars] = useState(false);
+
+  const handleRefreshAvatars = async () => {
+    setRefreshingAvatars(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-refresh-avatars', {
+        body: { onlyMissing: false },
+      });
+      if (error) throw error;
+      toast({
+        title: 'Fotos atualizadas',
+        description: `${data?.updated ?? 0} atualizadas, ${data?.unchanged ?? 0} sem alteração, ${data?.failed ?? 0} falharam.`,
+      });
+      await loadConversations();
+    } catch (e: any) {
+      toast({ title: 'Erro ao atualizar fotos', description: e.message, variant: 'destructive' });
+    } finally {
+      setRefreshingAvatars(false);
+    }
+  };
 
   // Load conversations based on active tab
   const loadConversations = useCallback(async (tab?: ChatTab) => {
@@ -509,6 +529,8 @@ export default function Chat() {
             onTabChange={handleTabChange}
             totalUnread={conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
             onNavigateBack={() => navigate('/')}
+            onRefreshAvatars={handleRefreshAvatars}
+            refreshingAvatars={refreshingAvatars}
           />
         </div>
       )}
