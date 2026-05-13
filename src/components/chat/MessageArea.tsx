@@ -148,7 +148,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
               </span>
             </div>
             {group.msgs.map(msg => {
-              const isIncoming = msg.message_type === 'whatsapp_incoming' || msg.message_type === 'whatsapp_image' || msg.message_type === 'whatsapp_video' || msg.message_type === 'whatsapp_audio' || msg.message_type === 'whatsapp_document';
+              const isIncoming = msg.message_type === 'whatsapp_incoming';
               const isOutgoing = msg.message_type === 'whatsapp_outgoing' || msg.message_type === 'whatsapp';
               const showOnRight = isOutgoing || (msg.sender_id === currentUserId && !isIncoming);
               return (
