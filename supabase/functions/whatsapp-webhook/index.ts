@@ -115,6 +115,37 @@ Deno.serve(async (req) => {
     const VHUB_MARKER = "\u200B\u200B\u200B";
     if (isFromMe && text !== null && text.includes(VHUB_MARKER)) {
       console.log("Skipping vhub-originated message (marker detected)");
+      // Backfill wa_message_id with Evolution's key.id so edit/delete via Evolution works.
+      // (Sent via Meta API → stored Meta wamid, but Evolution only knows its own id.)
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const sb = createClient(supabaseUrl, serviceKey);
+        const cleanText = text.replaceAll(VHUB_MARKER, "");
+        const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
+        const { data: recent } = await sb
+          .from("chat_messages")
+          .select("id, conversation_id, chat_conversations!inner(whatsapp_phone)")
+          .eq("channel", "whatsapp")
+          .eq("message_type", "whatsapp_outgoing")
+          .eq("content", cleanText)
+          .gte("created_at", thirtySecsAgo)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        const phoneVars = getPhoneVariants(phoneRaw);
+        const match = (recent || []).find((r: any) =>
+          phoneVars.includes((r.chat_conversations?.whatsapp_phone || "").replace(/\D/g, ""))
+        );
+        if (match && key?.id) {
+          await sb
+            .from("chat_messages")
+            .update({ wa_message_id: key.id, wa_remote_jid: remoteJid })
+            .eq("id", match.id);
+          console.log("Backfilled wa_message_id for outgoing message:", match.id, "→", key.id);
+        }
+      } catch (e) {
+        console.error("Backfill wa_message_id failed:", e);
+      }
       return new Response(JSON.stringify({ ok: true, skipped: "vhub_origin" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
