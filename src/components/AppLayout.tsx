@@ -35,7 +35,7 @@ export function AppLayout() {
   const pageTitle = pageTitles[location.pathname] || '';
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <main className={location.pathname === '/chat' ? 'flex-1 h-[100dvh] overflow-hidden' : 'flex-1 overflow-auto'}>
