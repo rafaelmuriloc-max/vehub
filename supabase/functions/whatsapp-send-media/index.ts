@@ -381,6 +381,8 @@ Deno.serve(async (req) => {
         message_type: messageType,
         media_url: messageMediaUrl,
         channel: "whatsapp",
+        wa_message_id: waMessageId,
+        wa_remote_jid: `${toPhone}@s.whatsapp.net`,
       })
       .select()
       .single();
