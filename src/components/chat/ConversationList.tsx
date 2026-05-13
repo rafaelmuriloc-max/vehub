@@ -246,9 +246,9 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                     )}
                   </div>
                 )}
-                {activeTab === 'in_progress' && conv.waitingSince && (
+                {activeTab === 'in_progress' && (conv.waitingSince || conv.lastMessageAt) && (
                   <div className="mt-1">
-                    <WaitingBadge since={conv.waitingSince} />
+                    <WaitingBadge since={conv.waitingSince || conv.lastMessageAt} />
                   </div>
                 )}
               </div>
