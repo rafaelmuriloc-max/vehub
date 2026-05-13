@@ -11,6 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { AttachFromObligationDialog } from '@/components/chat/AttachFromObligationDialog';
+import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -557,7 +558,9 @@ export default function Chat() {
   const showMessages = isMobile ? !!activeConvId : true;
 
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-background md:h-screen">
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-background md:h-screen">
+      <EnableNotificationsBanner />
+      <div className="flex flex-1 min-h-0 w-full overflow-hidden">
       {showList && (
         <div className={`${isMobile ? 'w-full' : 'w-[350px] shrink-0'}`}>
           <ConversationList
@@ -599,6 +602,7 @@ export default function Chat() {
           />
         </div>
       )}
+      </div>
 
       {/* Transfer Dialog */}
       <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>

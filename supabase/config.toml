@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.sat-sc-lookup]
 verify_jwt = false
+
+[functions.chat-notify]
+verify_jwt = false
