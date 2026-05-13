@@ -1,29 +1,28 @@
-const SW_VERSION = 'v3';
+const SW_VERSION = 'v4';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('push', (event) => {
-  let data = {};
-  if (event.data) {
+  event.waitUntil((async () => {
+    let data = {};
     try {
-      data = event.data.json();
+      data = event.data ? event.data.json() : {};
     } catch (_) {
       try { data = JSON.parse(event.data.text()); } catch (_) { data = {}; }
     }
-  }
-  const title = data.title || 'Nova mensagem';
-  const body = data.body || '';
-  const options = {
-    body,
-    icon: '/icon-512.png',
-    badge: '/icon-512.png',
-    tag: data.tag || 'chat',
-    data: { url: data.url || '/chat' },
-    renotify: true,
-    requireInteraction: false,
-  };
-  event.waitUntil(self.registration.showNotification(title, options));
+    const title = (data.title && String(data.title).trim()) || 'Nova mensagem';
+    const body = (data.body && String(data.body).trim()) || ' ';
+    await self.registration.showNotification(title, {
+      body,
+      icon: '/icon-512.png',
+      badge: '/icon-512.png',
+      tag: data.tag || 'chat',
+      data: { url: data.url || '/chat' },
+      renotify: true,
+      requireInteraction: false,
+    });
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
