@@ -602,6 +602,7 @@ export default function Chat() {
           />
         </div>
       )}
+      </div>
 
       {/* Transfer Dialog */}
       <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
