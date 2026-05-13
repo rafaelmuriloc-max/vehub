@@ -152,7 +152,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
       <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={(e) => handleFileSelect(e, 'audio')} />
       <input ref={fileInputRef} type="file" accept="*" className="hidden" onChange={(e) => handleFileSelect(e, 'document')} />
 
-      <div className="flex items-end gap-2 p-2 bg-[#F0F0F0] dark:bg-zinc-800 border-t pb-[env(safe-area-inset-bottom,2px)]">
+      <div className="flex items-end gap-2 p-2 bg-[#F0F0F0] dark:bg-zinc-800 border-t pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
         {recording ? (
           <>
             <Button
