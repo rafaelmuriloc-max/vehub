@@ -1,21 +1,24 @@
-## Problema
+## Melhorias de layout no diálogo "Anexar arquivo de obrigação"
 
-No diálogo "Anexar arquivo de obrigação", quando a conversa já tem um `clientId` definido, apenas essa única empresa aparece. Contatos (telefone do WhatsApp) costumam estar vinculados a várias empresas via `client_department_contacts`, e nenhuma das outras é listada.
+Problema: nomes longos de arquivos vazam, botões do rodapé estouram a largura e ficam cortados, e o nome da empresa fica truncado.
 
-Hoje o `useEffect` de carregamento de empresas faz:
-```ts
-if (conversationClientId) clientIds = [conversationClientId];
-else if (whatsappPhone) ... busca por telefone
-```
-O `else` impede a busca por telefone quando já existe um clientId.
+### Mudanças em `src/components/chat/AttachFromObligationDialog.tsx`
 
-## Solução
+1. **Aumentar largura do diálogo** — trocar `sm:max-w-md` por `sm:max-w-lg` no `DialogContent` para acomodar nomes mais longos.
 
-Editar `src/components/chat/AttachFromObligationDialog.tsx`:
+2. **Garantir truncamento nos triggers de Empresa e Obrigação** — adicionar `min-w-0` nos containers e manter `truncate` no `<span>` interno para evitar overflow horizontal.
 
-1. Sempre que `whatsappPhone` existir, consultar `client_department_contacts` filtrando pelos últimos 8 dígitos do telefone e coletar todos `client_id` vinculados.
-2. Unir esse conjunto com `conversationClientId` (se houver), de modo que a empresa "principal" da conversa nunca suma e as demais empresas do contato também apareçam.
-3. Manter dedupe via `Set<string>` e `order('company_name')` na consulta a `clients`.
-4. Manter o auto-select quando houver apenas uma empresa; quando houver várias, não pré-selecionar nenhuma (o usuário escolhe).
+3. **Lista de arquivos**
+   - Adicionar `min-w-0` no wrapper para o `truncate` funcionar corretamente.
+   - Aumentar `max-h-48` para `max-h-56` e manter `overflow-y-auto`.
+   - Mostrar nome do arquivo com `break-all` em uma linha apenas se necessário, ou usar `truncate` com `title={fileName}` para exibir o nome completo no hover.
 
-Nenhuma outra mudança de UI/regra de negócio. Sem mudanças em `Chat.tsx`.
+4. **Rodapé responsivo**
+   - Trocar a ordem para `flex-col-reverse sm:flex-row sm:justify-end` (já é o default do `DialogFooter`).
+   - Adicionar `flex-wrap` para permitir quebra dos botões quando o espaço for insuficiente.
+   - Encurtar rótulos: "Enviar todos (N)" mantém; "Enviar selecionados (N)" passa a "Enviar selecionados" sem o sufixo redundante quando count = 0; manter contador quando > 0.
+   - Garantir que cada botão tenha `whitespace-nowrap` (já é padrão do Button) e `min-w-0` no container.
+
+5. **Header de "Selecionar todos"** — manter, mas com `text-sm` e padding consistente.
+
+Sem mudanças de lógica/negócio. Apenas ajustes de classes Tailwind.
