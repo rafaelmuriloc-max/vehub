@@ -1,33 +1,32 @@
-## Responsividade: corrigir overflow do diálogo de anexar e padronizar diálogos/telas
+## Problema
 
-### Problema imediato (visível no screenshot)
-No diálogo "Anexar arquivo de obrigação", a lista de arquivos vaza para fora da caixa: nomes longos não truncam e o container `border rounded-md` se estende além do `DialogContent`. Causa: falta `overflow-hidden`/`min-w-0` no container da lista; o `truncate` interno não tem efeito porque o pai cresce com o conteúdo.
+Quando Dorothea abre uma conversa atribuída ao Rafael e envia uma mensagem, a função `ensureAssignedToMe` em `src/pages/Chat.tsx` (linhas 291–308) faz **primeiro** o `UPDATE chat_conversations SET assigned_to = user.id` e **depois** insere o participante.
 
-### Mudanças
+Como a política RLS de UPDATE em `chat_conversations` exige que o usuário já seja participante:
 
-1. **`src/components/chat/AttachFromObligationDialog.tsx`**
-   - Container de arquivos: adicionar `overflow-hidden` no wrapper `border rounded-md`.
-   - Garantir `min-w-0` em toda a coluna `space-y-3` e nos `<label>` de cada arquivo.
-   - Span do nome: manter `truncate flex-1 min-w-0` e `block` para forçar truncamento.
-   - DialogContent: usar `w-[calc(100vw-2rem)] sm:max-w-lg` e `max-h-[90dvh] overflow-hidden flex flex-col`, com a área de conteúdo `flex-1 overflow-y-auto` para evitar estouro vertical em telas pequenas.
+```
+USING (EXISTS (SELECT 1 FROM chat_participants
+               WHERE conversation_id = chat_conversations.id
+                 AND user_id = auth.uid()))
+```
 
-2. **Auditoria rápida de outros diálogos críticos** (somente correções pontuais quando houver overflow real):
-   - `src/components/chat/NewConversationDialog.tsx`
-   - `src/components/EmailComposeDialog.tsx`
-   - `src/components/CertificateImportDialog.tsx`
-   - `src/components/DocumentReviewDialog.tsx`
-   
-   Padrão aplicado a cada um, se ainda não estiver:
-   - `DialogContent` com `w-[calc(100vw-2rem)] sm:max-w-...` e `max-h-[90dvh] overflow-hidden flex flex-col`.
-   - Conteúdo principal com `flex-1 overflow-y-auto`.
-   - Triggers/itens com `min-w-0` + `truncate` onde houver textos longos (nomes de empresas/arquivos).
-   - Footers com `flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end gap-2`.
+…o UPDATE é silenciosamente ignorado quando a Dorothea ainda não é participante da conversa do Rafael Murilo. A conversa continua atribuída ao Rafael mesmo depois da mensagem enviada.
 
-3. **Sem alterações em telas/páginas de listagem ou em lógica de negócio** — escopo limitado a diálogos com overflow conhecido.
+## Correção
 
-### Fora do escopo desta entrega
-- Reformular layouts de páginas inteiras (Clientes, Tarefas, Fiscal, etc.) — caso queira incluir, basta indicar quais.
+Inverter a ordem em `ensureAssignedToMe`:
 
-### Detalhes técnicos
-- Uso de `dvh` para evitar problemas com a barra de URL no mobile (já é convenção do projeto).
-- `min-w-0` é necessário em flex items para que `truncate` funcione (caso clássico em flex containers).
+1. Verificar/inserir o usuário atual em `chat_participants`.
+2. Só depois executar o `UPDATE assigned_to = user.id`.
+3. Tratar erro do update e exibir toast em caso de falha (para deixar de falhar silenciosamente no futuro).
+4. Após o sucesso, recarregar a lista de conversas para refletir o novo responsável imediatamente na UI.
+
+## Arquivo
+
+- `src/pages/Chat.tsx` — reescrever `ensureAssignedToMe` (≈linhas 291–308).
+
+## Fora de escopo
+
+- Adicionar botão explícito "Puxar conversa".
+- Reatribuir automaticamente ao abrir a conversa.
+- Mudanças nas políticas RLS (a regra atual continua válida; o bug é apenas a ordem das operações no cliente).

@@ -290,10 +290,8 @@ export default function Chat() {
 
   const ensureAssignedToMe = async (convId: string) => {
     if (!user) return;
-    await supabase
-      .from('chat_conversations')
-      .update({ assigned_to: user.id })
-      .eq('id', convId);
+    // 1) Garantir que o usuário é participante ANTES do UPDATE
+    //    (a RLS de UPDATE em chat_conversations exige ser participante).
     const { data: existing } = await supabase
       .from('chat_participants')
       .select('id')
@@ -305,6 +303,21 @@ export default function Chat() {
         user_id: user.id,
       });
     }
+    // 2) Agora reatribuir a conversa ao usuário atual
+    const { error: updErr } = await supabase
+      .from('chat_conversations')
+      .update({ assigned_to: user.id })
+      .eq('id', convId);
+    if (updErr) {
+      toast({
+        title: 'Erro ao assumir a conversa',
+        description: updErr.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+    // 3) Refletir a nova atribuição na lista
+    loadConversations();
   };
 
   const sendMessage = async (content: string) => {
