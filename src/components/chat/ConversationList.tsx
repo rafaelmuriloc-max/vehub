@@ -184,7 +184,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 {conv.status === 'open' && (
                   <div className="mt-1">
                     {conv.assignedToName ? (
-                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 gap-1 font-normal">
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 gap-1 font-normal bg-amber-600 text-slate-50">
                         <User className="h-2.5 w-2.5" />
                         {conv.assignedToName.split(' ')[0]}
                       </Badge>
