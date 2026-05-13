@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown, Loader2, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
@@ -50,15 +51,16 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [filePath, setFilePath] = useState<string>('');
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
+  const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Reset on close
   useEffect(() => {
     if (!open) {
       setCompanyId('');
       setInstanceId('');
-      setFilePath('');
+      setSelectedPaths(new Set());
       setObligations([]);
       setFiles([]);
     }
@@ -114,7 +116,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
       setLoadingObligations(true);
       setInstanceId('');
       setFiles([]);
-      setFilePath('');
+      setSelectedPaths(new Set());
       try {
         // 1) Get all instances for the client
         const { data: instances } = await supabase
@@ -169,7 +171,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
     let cancelled = false;
     (async () => {
       setLoadingFiles(true);
-      setFilePath('');
+      setSelectedPaths(new Set());
       try {
         const [docsRes, compsRes] = await Promise.all([
           supabase.from('documents')
@@ -207,30 +209,63 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
     return () => { cancelled = true; };
   }, [instanceId, companyId]);
 
-  const selectedFile = useMemo(() => files.find(f => f.path === filePath), [files, filePath]);
   const selectedObligation = useMemo(() => obligations.find(o => o.instanceId === instanceId), [obligations, instanceId]);
   const selectedCompany = useMemo(() => companies.find(c => c.id === companyId), [companies, companyId]);
 
-  const handleSend = async () => {
-    if (!selectedFile) return;
-    setSending(true);
-    try {
-      // Generate signed URL from documents bucket (private)
-      const { data: signed, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(selectedFile.path, 60 * 60 * 24 * 7);
-      if (error || !signed?.signedUrl) {
-        throw error || new Error('Falha ao gerar link do arquivo');
-      }
-      const type = detectType(selectedFile.fileName);
-      await onSend(signed.signedUrl, selectedFile.fileName, type);
-      onOpenChange(false);
-    } catch (e: any) {
-      toast({ title: 'Erro ao enviar arquivo', description: e?.message || 'Tente novamente.', variant: 'destructive' });
-    } finally {
-      setSending(false);
-    }
+  const allSelected = files.length > 0 && selectedPaths.size === files.length;
+  const someSelected = selectedPaths.size > 0 && !allSelected;
+
+  const togglePath = (path: string) => {
+    setSelectedPaths(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
   };
+
+  const toggleAll = () => {
+    if (allSelected) setSelectedPaths(new Set());
+    else setSelectedPaths(new Set(files.map(f => f.path)));
+  };
+
+  const sendFiles = async (toSend: FileItem[]) => {
+    if (toSend.length === 0) return;
+    setSending(true);
+    setSendProgress({ current: 0, total: toSend.length });
+    let success = 0;
+    let failed = 0;
+    for (let i = 0; i < toSend.length; i++) {
+      const f = toSend[i];
+      setSendProgress({ current: i + 1, total: toSend.length });
+      try {
+        const { data: signed, error } = await supabase.storage
+          .from('documents')
+          .createSignedUrl(f.path, 60 * 60 * 24 * 7);
+        if (error || !signed?.signedUrl) throw error || new Error('Falha ao gerar link');
+        await onSend(signed.signedUrl, f.fileName, detectType(f.fileName));
+        success++;
+      } catch (e) {
+        failed++;
+        console.error('Falha ao enviar arquivo da obrigação:', f.fileName, e);
+      }
+    }
+    setSending(false);
+    setSendProgress(null);
+    if (failed === 0) {
+      toast({ title: `${success} arquivo(s) enviado(s)` });
+    } else {
+      toast({
+        title: 'Envio concluído com falhas',
+        description: `${success} enviado(s), ${failed} com erro.`,
+        variant: 'destructive',
+      });
+    }
+    onOpenChange(false);
+  };
+
+  const handleSendSelected = () => sendFiles(files.filter(f => selectedPaths.has(f.path)));
+  const handleSendAll = () => sendFiles(files);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -315,7 +350,12 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
 
           {/* Arquivo */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Arquivo</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">Arquivos</label>
+              {files.length > 0 && (
+                <span className="text-xs text-muted-foreground">{selectedPaths.size} de {files.length} selecionado(s)</span>
+              )}
+            </div>
             {!instanceId ? (
               <p className="text-sm text-muted-foreground py-2">Selecione uma obrigação primeiro.</p>
             ) : loadingFiles ? (
@@ -325,32 +365,52 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
             ) : files.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">Nenhum arquivo encontrado.</p>
             ) : (
-              <div className="max-h-48 overflow-y-auto space-y-1 border rounded-md p-1">
-                {files.map(f => (
-                  <button
-                    key={f.path}
-                    type="button"
-                    onClick={() => setFilePath(f.path)}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-2 py-2 rounded text-left text-sm hover:bg-accent transition-colors',
-                      filePath === f.path && 'bg-accent'
-                    )}
-                  >
-                    <FileText className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="truncate flex-1">{f.fileName}</span>
-                    {filePath === f.path && <Check className="h-4 w-4 text-primary shrink-0" />}
-                  </button>
-                ))}
+              <div className="border rounded-md">
+                {files.length > 1 && (
+                  <label className="flex items-center gap-2 px-3 py-2 border-b cursor-pointer hover:bg-accent/50 text-sm">
+                    <Checkbox
+                      checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                      onCheckedChange={toggleAll}
+                    />
+                    <span className="font-medium">Selecionar todos</span>
+                  </label>
+                )}
+                <div className="max-h-48 overflow-y-auto p-1">
+                  {files.map(f => {
+                    const checked = selectedPaths.has(f.path);
+                    return (
+                      <label
+                        key={f.path}
+                        className={cn(
+                          'flex items-center gap-2 px-2 py-2 rounded text-left text-sm hover:bg-accent transition-colors cursor-pointer',
+                          checked && 'bg-accent'
+                        )}
+                      >
+                        <Checkbox checked={checked} onCheckedChange={() => togglePath(f.path)} />
+                        <FileText className="h-4 w-4 shrink-0 text-primary" />
+                        <span className="truncate flex-1">{f.fileName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>Cancelar</Button>
-          <Button onClick={handleSend} disabled={!filePath || sending}>
+          {files.length > 1 && (
+            <Button variant="secondary" onClick={handleSendAll} disabled={sending || files.length === 0}>
+              {sending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Enviar todos ({files.length})
+            </Button>
+          )}
+          <Button onClick={handleSendSelected} disabled={selectedPaths.size === 0 || sending}>
             {sending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Enviar
+            {sending && sendProgress
+              ? `Enviando ${sendProgress.current}/${sendProgress.total}...`
+              : `Enviar selecionados${selectedPaths.size > 0 ? ` (${selectedPaths.size})` : ''}`}
           </Button>
         </DialogFooter>
       </DialogContent>
