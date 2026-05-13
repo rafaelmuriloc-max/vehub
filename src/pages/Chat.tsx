@@ -54,20 +54,11 @@ export default function Chat() {
 
     setLoadingConversations(true);
 
-    let query = supabase.from('chat_conversations').select('*');
-
-    if (currentTab === 'mine') {
-      query = query.eq('assigned_to', user.id).eq('status', 'open');
-    } else if (currentTab === 'in_progress') {
-      query = query
-        .eq('status', 'open')
-        .or(`assigned_to.neq.${user.id},assigned_to.is.null`);
-    } else {
-      // all: todas as conversas (abertas e fechadas)
-      // sem filtro — admins veem tudo via RLS
-    }
-
-    const { data: convs } = await query.order('updated_at', { ascending: false });
+    const { data: convs, error: rpcErr } = await supabase.rpc('get_chat_inbox', {
+      p_user: user.id,
+      p_tab: currentTab,
+    });
+    if (rpcErr) console.error('get_chat_inbox error:', rpcErr);
 
     if (!convs || convs.length === 0) {
       setConversations([]);
@@ -75,22 +66,17 @@ export default function Chat() {
       return;
     }
 
-    const convIds = convs.map(c => c.id);
-    const allClientIds = [...new Set(convs.filter(c => c.client_id).map(c => c.client_id!))];
+    const allClientIds = [...new Set(convs.filter((c: any) => c.client_id).map((c: any) => c.client_id as string))];
     const oneToOneConvIds = convs.filter(c => !c.is_group && !c.client_id).map(c => c.id);
-    const whatsappConvs = convs.filter(c => c.whatsapp_phone);
+    const whatsappConvs = convs.filter((c: any) => c.whatsapp_phone);
 
-    const [clientsResult, participantsResult, allMessagesResult, whatsappContactsResult] = await Promise.all([
+    const [clientsResult, participantsResult, whatsappContactsResult] = await Promise.all([
       allClientIds.length > 0
         ? supabase.from('clients').select('id, contact_name, company_name').in('id', allClientIds)
         : Promise.resolve({ data: [] }),
       oneToOneConvIds.length > 0
         ? supabase.from('chat_participants').select('conversation_id, user_id').in('conversation_id', oneToOneConvIds).neq('user_id', user.id)
         : Promise.resolve({ data: [] }),
-      supabase.from('chat_messages')
-        .select('conversation_id, content, created_at, sender_id, read_at, message_type')
-        .in('conversation_id', convIds)
-        .order('created_at', { ascending: false }),
       whatsappConvs.length > 0
         ? supabase.from('client_department_contacts').select('client_id, contact_phone')
         : Promise.resolve({ data: [] }),
@@ -99,27 +85,11 @@ export default function Chat() {
     const clientMap = new Map((clientsResult.data || []).map(c => [c.id, c]));
 
     const otherUserIds = [...new Set((participantsResult.data || []).map(p => p.user_id))];
-    const assignedUserIds = [...new Set(convs.filter(c => c.assigned_to).map(c => c.assigned_to as string))];
-    const allProfileIds = [...new Set([...otherUserIds, ...assignedUserIds])];
-    const profilesResult = allProfileIds.length > 0
-      ? await supabase.from('profiles').select('user_id, full_name').in('user_id', allProfileIds)
+    const profilesResult = otherUserIds.length > 0
+      ? await supabase.from('profiles').select('user_id, full_name').in('user_id', otherUserIds)
       : { data: [] };
     const profileMap = new Map((profilesResult.data || []).map(p => [p.user_id, p.full_name || 'Usuário']));
     const participantMap = new Map((participantsResult.data || []).map(p => [p.conversation_id, p.user_id]));
-
-    const lastMsgMap = new Map<string, { content: string; created_at: string; sender_id: string; read_at: string | null }>();
-    for (const msg of (allMessagesResult.data || [])) {
-      if (!lastMsgMap.has(msg.conversation_id)) {
-        lastMsgMap.set(msg.conversation_id, msg);
-      }
-    }
-
-    const unreadMap = new Map<string, number>();
-    for (const msg of (allMessagesResult.data || [])) {
-      if (msg.message_type !== 'text' && msg.message_type !== 'whatsapp_outgoing' && !msg.read_at) {
-        unreadMap.set(msg.conversation_id, (unreadMap.get(msg.conversation_id) || 0) + 1);
-      }
-    }
 
     const allContacts = whatsappContactsResult.data || [];
     const whatsappCompanyMap = new Map<string, string[]>();
@@ -131,7 +101,7 @@ export default function Chat() {
       const contactClientMap = new Map((contactClients || []).map(c => [c.id, c.company_name]));
 
       for (const conv of whatsappConvs) {
-        const digits = conv.whatsapp_phone!.replace(/\D/g, '');
+        const digits = (conv as any).whatsapp_phone.replace(/\D/g, '');
         const searchPhone = digits.length > 4 ? digits.slice(-8) : digits;
         const matchedClientIds = [...new Set(
           allContacts
@@ -139,11 +109,11 @@ export default function Chat() {
             .map(c => c.client_id)
         )];
         const names = matchedClientIds.map(id => contactClientMap.get(id)).filter(Boolean) as string[];
-        if (names.length > 0) whatsappCompanyMap.set(conv.id, names);
+        if (names.length > 0) whatsappCompanyMap.set((conv as any).id, names);
       }
     }
 
-    const items: ConversationItem[] = convs.map(conv => {
+    const items: ConversationItem[] = convs.map((conv: any) => {
       let name = conv.name || 'Conversa';
 
       if (conv.whatsapp_phone && conv.name) {
@@ -158,21 +128,19 @@ export default function Chat() {
         }
       }
 
-      const lastMsg = lastMsgMap.get(conv.id);
-
       return {
         id: conv.id,
         name,
-        lastMessage: lastMsg?.content || '',
-        lastMessageAt: lastMsg?.created_at || conv.created_at,
-        unreadCount: unreadMap.get(conv.id) || 0,
+        lastMessage: conv.last_message || '',
+        lastMessageAt: conv.last_message_at || conv.created_at,
+        unreadCount: conv.unread_count || 0,
         isGroup: conv.is_group,
         avatarUrl: conv.avatar_url || undefined,
         companyNames: whatsappCompanyMap.get(conv.id) || [],
         whatsappPhone: conv.whatsapp_phone || undefined,
         clientId: conv.client_id || null,
-        status: (conv as any).status || 'open',
-        assignedToName: conv.assigned_to ? (profileMap.get(conv.assigned_to) || null) : null,
+        status: conv.status || 'open',
+        assignedToName: conv.assigned_to_name || null,
       };
     });
 
