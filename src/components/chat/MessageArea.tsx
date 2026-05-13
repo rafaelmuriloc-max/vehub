@@ -148,9 +148,9 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
               </span>
             </div>
             {group.msgs.map(msg => {
-              const isIncoming = msg.message_type === 'whatsapp_incoming';
+              const isIncoming = msg.message_type === 'whatsapp_incoming' || (msg.message_type?.startsWith('whatsapp_incoming_') ?? false);
               const isOutgoing = msg.message_type === 'whatsapp_outgoing' || msg.message_type === 'whatsapp';
-              const showOnRight = isOutgoing || (msg.sender_id === currentUserId && !isIncoming);
+              const showOnRight = !isIncoming && (isOutgoing || msg.sender_id === currentUserId);
               return (
                 <MessageBubble
                   key={msg.id}

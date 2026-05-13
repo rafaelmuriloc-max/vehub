@@ -174,13 +174,42 @@ Deno.serve(async (req) => {
       messageType = "whatsapp_audio";
       messageContent = fileName || "audio";
 
-      if (hasOpenWindow) {
+      // Prefer Evolution API for audio: Meta API rejects audio/webm;codecs=opus
+      // produced by browser MediaRecorder. Evolution converts to PTT-compatible ogg.
+      const audioExt = (fileName || mediaUrl || "").split(".").pop()?.toLowerCase() || "";
+      const isMetaCompatible = ["ogg", "mp3", "m4a", "aac", "amr"].includes(audioExt);
+      const useEvolutionForAudio = !!(EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) && !isMetaCompatible;
+
+      if (useEvolutionForAudio) {
+        console.log("Sending audio via Evolution API (browser format)");
+        const evoRes = await fetch(
+          `${EVOLUTION_API_URL}/message/sendWhatsAppAudio/${EVOLUTION_INSTANCE_NAME}`,
+          {
+            method: "POST",
+            headers: {
+              apikey: EVOLUTION_API_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              number: toPhone,
+              audio: mediaUrl,
+            }),
+          }
+        );
+        sendSuccess = evoRes.ok;
+        if (!sendSuccess) {
+          const errText = await evoRes.text();
+          sendErrorDetail = `Evolution audio ${evoRes.status}: ${errText}`;
+          console.error("Evolution audio error:", errText);
+        }
+      } else if (hasOpenWindow) {
         const payload = {
           messaging_product: "whatsapp",
           to: toPhone,
           type: "audio",
           audio: { link: mediaUrl },
         };
+        console.log("Sending audio via Meta API");
         const metaRes = await fetch(
           `https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
           {

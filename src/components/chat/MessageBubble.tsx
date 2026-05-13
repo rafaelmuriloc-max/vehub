@@ -95,9 +95,12 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
 
 export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
-  const isIncoming = messageType === 'whatsapp_incoming';
+  const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
   const isOutgoing = messageType === 'whatsapp_outgoing' || messageType === 'whatsapp';
-  const showOnRight = isOutgoing || (isMine && !isIncoming);
+  const showOnRight = !isIncoming && (isOutgoing || isMine);
+
+  // Normalize media kind to support both incoming (whatsapp_incoming_audio) and outgoing (whatsapp_audio)
+  const mediaKind = messageType?.replace(/^whatsapp_(incoming_)?/, '');
 
   const renderMedia = () => {
     if (messageType === 'whatsapp_location') {
@@ -140,8 +143,8 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
     if (!mediaUrl) return null;
 
-    switch (messageType) {
-      case 'whatsapp_image':
+    switch (mediaKind) {
+      case 'image':
         return (
           <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
             <img
@@ -152,7 +155,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             />
           </a>
         );
-      case 'whatsapp_video':
+      case 'video':
         return (
           <video
             src={mediaUrl}
@@ -161,7 +164,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             preload="metadata"
           />
         );
-      case 'whatsapp_audio':
+      case 'audio':
         return (
           <AudioMessage
             mediaUrl={mediaUrl}
@@ -169,7 +172,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             tint={showOnRight ? 'green' : 'white'}
           />
         );
-      case 'whatsapp_document':
+      case 'document':
         return <DocumentMessage mediaUrl={mediaUrl} fileName={content || 'Documento'} />;
       default:
         return null;
@@ -177,7 +180,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   };
 
   // Don't show text for location/contact types (content is structured data)
-  const hideTextContent = messageType === 'whatsapp_location' || messageType === 'whatsapp_contact' || messageType === 'whatsapp_audio';
+  const hideTextContent = messageType === 'whatsapp_location' || messageType === 'whatsapp_contact' || mediaKind === 'audio';
 
   return (
     <div className={`flex ${showOnRight ? 'justify-end' : 'justify-start'} mb-1`}>
@@ -193,7 +196,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         )}
         {renderMedia()}
         {/* Show text content - skip for documents/location/contact */}
-        {content && !hideTextContent && messageType !== 'whatsapp_document' && (
+        {content && !hideTextContent && mediaKind !== 'document' && (
           <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
         )}
         {/* For audio with no text, don't show empty paragraph */}
