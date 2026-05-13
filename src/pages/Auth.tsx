@@ -12,7 +12,7 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 60;
 
 export default function Auth() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +45,7 @@ export default function Auth() {
   const isLockedOut = lockoutUntil !== null && Date.now() < lockoutUntil;
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p>Carregando...</p></div>;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={isAdmin ? '/' : '/calendar'} replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
