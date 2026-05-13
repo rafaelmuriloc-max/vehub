@@ -28,6 +28,7 @@ export default function Chat() {
   const [activeTab, setActiveTab] = useState<ChatTab>('mine');
   const [refreshingAvatars, setRefreshingAvatars] = useState(false);
   const [waitingCount, setWaitingCount] = useState(0);
+  const [mineCount, setMineCount] = useState(0);
 
   const loadWaitingCount = useCallback(async () => {
     const { count } = await supabase
@@ -38,6 +39,16 @@ export default function Chat() {
       .not('whatsapp_phone', 'is', null);
     setWaitingCount(count || 0);
   }, []);
+
+  const loadMineCount = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('chat_conversations')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'open')
+      .eq('assigned_to', user.id);
+    setMineCount(count || 0);
+  }, [user]);
 
   const handleRefreshAvatars = async () => {
     setRefreshingAvatars(true);
@@ -163,7 +174,27 @@ export default function Chat() {
   useEffect(() => {
     loadConversations();
     loadWaitingCount();
-  }, [loadConversations, loadWaitingCount]);
+    loadMineCount();
+  }, [loadConversations, loadWaitingCount, loadMineCount]);
+
+  // Realtime: atualiza contadores quando conversas mudam (atribuição/status)
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('chat-conversations-counters')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chat_conversations' },
+        () => {
+          loadWaitingCount();
+          loadMineCount();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, loadWaitingCount, loadMineCount]);
 
   const handleTabChange = (tab: ChatTab) => {
     setActiveTab(tab);
@@ -655,7 +686,7 @@ export default function Chat() {
             loading={loadingConversations}
             activeTab={activeTab}
             onTabChange={handleTabChange}
-            totalUnread={conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
+            totalUnread={mineCount}
             waitingCount={waitingCount}
             onNavigateBack={() => navigate('/')}
             onRefreshAvatars={handleRefreshAvatars}
