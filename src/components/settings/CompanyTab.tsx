@@ -33,6 +33,23 @@ export function CompanyTab() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const sendTest = async () => {
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('chat-waiting-alert', {
+        body: { test: true }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: 'Mensagem de teste enviada' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar teste', description: err.message, variant: 'destructive' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const [uploading, setUploading] = useState(false);
   const [uploadingAccountant, setUploadingAccountant] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -447,9 +464,16 @@ function ChatAlertCard({
               </select>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" disabled={saving || loadingGroups} onClick={() => save(selected || null)}>
-                {saving ? 'Salvando...' : 'Salvar'}
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" disabled={saving || loadingGroups} onClick={() => save(selected || null)}>
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </Button>
+                {currentGroupId && (
+                  <Button variant="outline" size="sm" disabled={testing} onClick={sendTest}>
+                    {testing ? 'Enviando...' : 'Enviar Teste'}
+                  </Button>
+                )}
+              </div>
               <Button variant="outline" size="sm" disabled={loadingGroups} onClick={loadGroups}>
                 {loadingGroups ? 'Carregando...' : 'Recarregar grupos'}
               </Button>
