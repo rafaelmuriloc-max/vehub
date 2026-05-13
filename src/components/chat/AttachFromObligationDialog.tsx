@@ -269,7 +269,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-w-[calc(100vw-2rem)]">
         <DialogHeader>
           <DialogTitle>Anexar arquivo de obrigação</DialogTitle>
         </DialogHeader>
@@ -280,8 +280,8 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
             <label className="text-xs font-medium text-muted-foreground">Empresa</label>
             <Popover open={companyOpen} onOpenChange={setCompanyOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" className="w-full justify-between font-normal" disabled={loadingCompanies || companies.length === 0}>
-                  <span className="truncate text-left">
+                <Button variant="outline" role="combobox" className="w-full justify-between font-normal min-w-0" disabled={loadingCompanies || companies.length === 0}>
+                  <span className="truncate text-left flex-1 min-w-0">
                     {loadingCompanies ? 'Carregando...' : (selectedCompany?.company_name || (companies.length === 0 ? 'Nenhuma empresa vinculada' : 'Selecione a empresa'))}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -311,8 +311,8 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
             <label className="text-xs font-medium text-muted-foreground">Obrigação</label>
             <Popover open={obligationOpen} onOpenChange={setObligationOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" className="w-full justify-between font-normal" disabled={!companyId || loadingObligations || obligations.length === 0}>
-                  <span className="truncate text-left">
+                <Button variant="outline" role="combobox" className="w-full justify-between font-normal min-w-0" disabled={!companyId || loadingObligations || obligations.length === 0}>
+                  <span className="truncate text-left flex-1 min-w-0">
                     {loadingObligations
                       ? 'Carregando...'
                       : !companyId
@@ -375,20 +375,21 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
                     <span className="font-medium">Selecionar todos</span>
                   </label>
                 )}
-                <div className="max-h-48 overflow-y-auto p-1">
+                <div className="max-h-56 overflow-y-auto p-1">
                   {files.map(f => {
                     const checked = selectedPaths.has(f.path);
                     return (
                       <label
                         key={f.path}
+                        title={f.fileName}
                         className={cn(
-                          'flex items-center gap-2 px-2 py-2 rounded text-left text-sm hover:bg-accent transition-colors cursor-pointer',
+                          'flex items-center gap-2 px-2 py-2 rounded text-left text-sm hover:bg-accent transition-colors cursor-pointer min-w-0',
                           checked && 'bg-accent'
                         )}
                       >
                         <Checkbox checked={checked} onCheckedChange={() => togglePath(f.path)} />
                         <FileText className="h-4 w-4 shrink-0 text-primary" />
-                        <span className="truncate flex-1">{f.fileName}</span>
+                        <span className="truncate flex-1 min-w-0">{f.fileName}</span>
                       </label>
                     );
                   })}
@@ -398,7 +399,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+        <DialogFooter className="gap-2 flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>Cancelar</Button>
           {files.length > 1 && (
             <Button variant="secondary" onClick={handleSendAll} disabled={sending || files.length === 0}>
@@ -410,7 +411,9 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
             {sending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {sending && sendProgress
               ? `Enviando ${sendProgress.current}/${sendProgress.total}...`
-              : `Enviar selecionados${selectedPaths.size > 0 ? ` (${selectedPaths.size})` : ''}`}
+              : selectedPaths.size > 0
+                ? `Enviar (${selectedPaths.size})`
+                : 'Enviar selecionados'}
           </Button>
         </DialogFooter>
       </DialogContent>
