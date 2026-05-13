@@ -34,6 +34,7 @@ interface ConversationListProps {
   activeTab: ChatTab;
   onTabChange: (tab: ChatTab) => void;
   totalUnread?: number;
+  waitingCount?: number;
   onNavigateBack?: () => void;
   onRefreshAvatars?: () => void;
   refreshingAvatars?: boolean;
@@ -61,7 +62,7 @@ function ConversationSkeleton() {
   );
 }
 
-export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange, totalUnread, onNavigateBack, onRefreshAvatars, refreshingAvatars }: ConversationListProps) {
+export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange, totalUnread, waitingCount, onNavigateBack, onRefreshAvatars, refreshingAvatars }: ConversationListProps) {
   const [search, setSearch] = useState('');
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
@@ -112,8 +113,13 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="in_progress" className="flex-1 text-xs">
+            <TabsTrigger value="in_progress" className="flex-1 text-xs relative">
               Espera
+              {waitingCount != null && waitingCount > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
+                  {waitingCount > 99 ? '99+' : waitingCount}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="all" className="flex-1 text-xs">Geral</TabsTrigger>
           </TabsList>

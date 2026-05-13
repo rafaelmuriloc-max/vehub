@@ -27,6 +27,17 @@ export default function Chat() {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [activeTab, setActiveTab] = useState<ChatTab>('mine');
   const [refreshingAvatars, setRefreshingAvatars] = useState(false);
+  const [waitingCount, setWaitingCount] = useState(0);
+
+  const loadWaitingCount = useCallback(async () => {
+    const { count } = await supabase
+      .from('chat_conversations')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'open')
+      .is('assigned_to', null)
+      .not('whatsapp_phone', 'is', null);
+    setWaitingCount(count || 0);
+  }, []);
 
   const handleRefreshAvatars = async () => {
     setRefreshingAvatars(true);
@@ -151,7 +162,8 @@ export default function Chat() {
 
   useEffect(() => {
     loadConversations();
-  }, [loadConversations]);
+    loadWaitingCount();
+  }, [loadConversations, loadWaitingCount]);
 
   const handleTabChange = (tab: ChatTab) => {
     setActiveTab(tab);
@@ -644,6 +656,7 @@ export default function Chat() {
             activeTab={activeTab}
             onTabChange={handleTabChange}
             totalUnread={conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
+            waitingCount={waitingCount}
             onNavigateBack={() => navigate('/')}
             onRefreshAvatars={handleRefreshAvatars}
             refreshingAvatars={refreshingAvatars}
