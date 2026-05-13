@@ -28,6 +28,7 @@ interface MessageAreaProps {
   onSendMedia?: (file: File, type: 'image' | 'video' | 'document' | 'audio') => void;
   onSendLocation?: (lat: number, lng: number, name?: string) => void;
   onSendContact?: (name: string, phone: string) => void;
+  onPickFromObligation?: () => void;
   isGroup?: boolean;
   avatarUrl?: string;
   currentUserName?: string;
@@ -47,7 +48,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -188,6 +189,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           onSendMedia={onSendMedia}
           onSendLocation={onSendLocation}
           onSendContact={onSendContact}
+          onPickFromObligation={onPickFromObligation}
         />
       )}
     </div>
