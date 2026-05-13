@@ -1505,6 +1505,10 @@ export type Database = {
         Args: { _instance_id: string }
         Returns: undefined
       }
+      user_can_access_department: {
+        Args: { _department_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       activity_type: "document" | "checklist" | "whatsapp" | "email"
