@@ -43,6 +43,13 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // Meta wamid is not editable via Evolution. The webhook backfills the Evolution id within seconds —
+    // ask the user to retry shortly.
+    if (msg.wa_message_id.startsWith("wamid.")) {
+      return new Response(JSON.stringify({ error: "Aguarde alguns segundos para o WhatsApp confirmar a mensagem antes de editar." }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const ageMin = (Date.now() - new Date(msg.created_at).getTime()) / 60000;
     if (ageMin > 15) {
       return new Response(JSON.stringify({ error: "Limite de 15 minutos para edição no WhatsApp expirado" }), {

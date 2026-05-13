@@ -43,6 +43,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (msg.wa_message_id.startsWith("wamid.")) {
+      return new Response(JSON.stringify({ error: "Aguarde alguns segundos para o WhatsApp confirmar a mensagem antes de apagar." }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const fromMe = msg.message_type === "whatsapp_outgoing";
 
