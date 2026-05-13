@@ -152,7 +152,19 @@ Deno.serve(async (req) => {
     }
 
     // Use caller's user_id when provided; fallback to first admin
-    let senderId: string = senderIdInput || "";
+    // Priority: JWT (auth.uid) > body senderId > first admin
+    let senderId = "";
+    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const jwt = authHeader.replace("Bearer ", "");
+        const { data: userData } = await supabase.auth.getUser(jwt);
+        if (userData?.user?.id) senderId = userData.user.id;
+      } catch (e) {
+        console.error("getUser failed:", e);
+      }
+    }
+    if (!senderId) senderId = senderIdInput || "";
     if (!senderId) {
       const { data: adminRoles } = await supabase
         .from("user_roles")
@@ -167,6 +179,7 @@ Deno.serve(async (req) => {
         });
       }
     }
+    console.log("Resolved senderId:", senderId);
 
     // Insert message into chat_messages
     const { data: insertedMsg, error: msgErr } = await supabase

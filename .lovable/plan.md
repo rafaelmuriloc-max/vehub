@@ -1,20 +1,27 @@
-## Causa raiz
+## Diagnóstico
 
-Toda mensagem WhatsApp enviada pelo chat é gravada em `chat_messages` com `sender_id = primeiro admin` (Márcio), independente de quem clicou em enviar. Por isso, no chat do app todas as conversas exibem "Márcio Macelan" na assinatura — enquanto no WhatsApp do destinatário o texto vai correto, pois o frontend prefixa `*Nome:*` no corpo da mensagem antes de mandar para a Meta/Evolution.
+Logs do edge function `whatsapp-send-text` mostram que mensagens recentes (18:45) ainda foram gravadas com `sender_id` do Márcio. Como o código atual já lê `senderId` do body e cai no admin como fallback, isso significa que o body chegou **sem** `senderId` — ou seja, o navegador do Bruno ainda está usando o frontend antigo (cache do PWA / service worker), antes do fix `senderId: user.id` em `src/pages/Chat.tsx`.
 
-- `supabase/functions/whatsapp-send-text/index.ts` (linhas 154–174): ignora o usuário e força `senderId = adminRoles[0].user_id`.
-- `supabase/functions/whatsapp-send-media/index.ts` já aceita `senderId` do frontend, mas o `whatsapp-send-text` não recebe nem usa.
+Há duas frentes para resolver de forma definitiva, sem depender do cache do navegador:
 
 ## Correção
 
-1. **Frontend (`src/pages/Chat.tsx`, linha 331)**: incluir `senderId: user.id` no body da invocação de `whatsapp-send-text` (igual já é feito para `whatsapp-send-media`).
+1. **Derivar `senderId` do JWT da requisição na edge function** (fonte da verdade do servidor):
+   - Em `whatsapp-send-text/index.ts` e `whatsapp-send-media/index.ts`, ler o header `Authorization`, extrair o token e chamar `supabase.auth.getUser(token)` para obter o `auth.uid()` real do chamador.
+   - Usar essa ordem de prioridade: `senderId` extraído do JWT → `senderIdInput` do body → primeiro admin.
+   - Logar o `senderId` final escolhido para facilitar futura depuração.
 
-2. **Edge Function `whatsapp-send-text`**:
-   - Ler `senderId` do body junto com `conversationId`, `text`, `senderName`.
-   - Usar esse `senderId` na inserção em `chat_messages`. Manter fallback para o primeiro admin caso não venha (compatibilidade).
-
-Sem mudanças no webhook (mensagens recebidas continuam com sender = admin sistema, mas aparecem à esquerda como `whatsapp_incoming` e não exibem assinatura). Sem mudanças no banco.
+2. **Forçar invalidação de cache no Bruno** (após item 1, o problema some mesmo com cache, mas vale garantir):
+   - Atualizar a versão do `public/sw.js` (bump de cache name) para invalidar o service worker e forçar o navegador do Bruno a baixar o frontend novo.
 
 ## Validação
 
-Após o deploy: enviar uma mensagem WhatsApp logado como outro usuário e confirmar que a assinatura no chat aparece com o nome correto, e que mensagens antigas continuam exibindo Márcio (são histórico, não retroativas).
+- Após deploy: pedir ao Bruno para enviar uma mensagem nova; verificar nos logs do edge function que `senderId` extraído do JWT corresponde ao id do Bruno (`5cddbc26-…`).
+- Conferir no banco: a próxima mensagem `whatsapp_outgoing` deve ter `sender_id = 5cddbc26-…` e aparecer assinada como "Bruno Reinert".
+- Mensagens antigas continuam históricas com Márcio (não retroativas).
+
+## Detalhes técnicos
+
+- O JWT do usuário chega no header `Authorization: Bearer <token>` toda vez que o frontend chama `supabase.functions.invoke(...)` (com a sessão ativa).
+- `createClient(SUPABASE_URL, SERVICE_ROLE_KEY)` permite chamar `supabase.auth.getUser(jwt)` para validar e obter `data.user.id` sem precisar de `verify_jwt`.
+- Não muda schema, RLS, nem comportamento do webhook de entrada.
