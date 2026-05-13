@@ -10,6 +10,7 @@ import { ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { AttachFromObligationDialog } from '@/components/chat/AttachFromObligationDialog';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -168,6 +169,7 @@ export default function Chat() {
         avatarUrl: conv.avatar_url || undefined,
         companyNames: whatsappCompanyMap.get(conv.id) || [],
         whatsappPhone: conv.whatsapp_phone || undefined,
+        clientId: conv.client_id || null,
         status: (conv as any).status || 'open',
         assignedToName: conv.assigned_to ? (profileMap.get(conv.assigned_to) || null) : null,
       };
@@ -375,6 +377,32 @@ export default function Chat() {
     }
   };
 
+  const sendExistingMedia = async (mediaUrl: string, fileName: string, type: 'image' | 'video' | 'document' | 'audio') => {
+    if (!user || !activeConvId || isClosed) return;
+    await ensureAssignedToMe(activeConvId);
+
+    if (activeConv?.whatsappPhone) {
+      const { data: respData, error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: { conversationId: activeConvId, type, mediaUrl, fileName, senderName: profile?.full_name || undefined, senderId: user.id },
+      });
+      if (error || (respData && (respData as any).error)) {
+        const detail = (respData as any)?.error || error?.message || '';
+        toast({ title: 'Erro ao enviar mídia', description: String(detail).slice(0, 200), variant: 'destructive' });
+      }
+    } else {
+      await supabase.from('chat_messages').insert({
+        conversation_id: activeConvId,
+        sender_id: user.id,
+        content: fileName,
+        message_type: `whatsapp_${type}`,
+        media_url: mediaUrl,
+      });
+      await supabase.from('chat_conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConvId);
+    }
+  };
+
+  const [attachObligationOpen, setAttachObligationOpen] = useState(false);
+
   const sendLocation = async (lat: number, lng: number) => {
     if (!user || !activeConvId || isClosed) return;
 
@@ -544,6 +572,7 @@ export default function Chat() {
             onSendMedia={sendMedia}
             onSendLocation={sendLocation}
             onSendContact={sendContact}
+            onPickFromObligation={() => setAttachObligationOpen(true)}
             isGroup={activeConv?.isGroup}
             avatarUrl={activeConv?.avatarUrl}
             currentUserName={profile?.full_name || undefined}
@@ -590,6 +619,14 @@ export default function Chat() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AttachFromObligationDialog
+        open={attachObligationOpen}
+        onOpenChange={setAttachObligationOpen}
+        conversationClientId={activeConv?.clientId || null}
+        whatsappPhone={activeConv?.whatsappPhone || null}
+        onSend={sendExistingMedia}
+      />
     </div>
   );
 }
