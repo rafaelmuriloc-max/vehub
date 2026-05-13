@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw } from 'lucide-react';
+import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw, ExternalLink } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -93,6 +93,17 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
               className="hidden sm:inline-flex"
             >
               <RefreshCw className={`h-5 w-5 ${refreshingAvatars ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
+          {window.location.pathname !== '/chat/popup' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => window.open('/chat/popup', 'chat_popup', 'width=1200,height=800,noopener=no')}
+              title="Abrir em nova janela"
+              className="hidden sm:inline-flex"
+            >
+              <ExternalLink className="h-5 w-5" />
             </Button>
           )}
           <Button variant="ghost" size="icon" onClick={() => setNewDialogOpen(true)}>
