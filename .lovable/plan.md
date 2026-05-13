@@ -1,27 +1,49 @@
-## Alerta WhatsApp para conversas em Espera (>10 min)
+## Configuração de horário e agente de atendimento
 
-### Comportamento
-- Verifica a cada 1 minuto as conversas com `status='open'`, `assigned_to IS NULL` e `waiting_since` há mais de 10 minutos.
-- Envia mensagem ao grupo configurado (Evolution API) com nome do contato/grupo, telefone, tempo de espera e link para a conversa.
-- Reenvia a cada 10 min enquanto continuar sem atendimento (1º aviso aos 10', 2º aos 20', etc.).
-- Quando a conversa for atribuída, o trigger existente já zera `waiting_since` e os alertas param.
+### 1. Banco — `company_settings` (nova migration)
+Adicionar colunas:
+- `service_hours_enabled boolean default false`
+- `service_open_time time` (ex.: 08:00)
+- `service_close_time time` (ex.: 18:00)
+- `service_lunch_start time` (opcional)
+- `service_lunch_end time` (opcional)
+- `service_timezone text default 'America/Sao_Paulo'`
+- `agent_name text` — nome exibido como assinatura do agente automático
+- `agent_offhours_message text` — mensagem enviada fora do horário
+- `agent_offhours_last_sent jsonb default '{}'` — para deduplicar resposta automática por contato (chave = phone, valor = timestamp ISO)
 
-### Banco
-1. **`company_settings`** — adicionar coluna `chat_alert_whatsapp_group_id text` para guardar o JID do grupo escolhido nas Configurações.
-2. **`chat_conversations`** — adicionar coluna `last_wait_alert_at timestamptz` para controlar quando foi enviado o último alerta (base para o reforço a cada 10 min).
-3. **CRON** — `pg_cron` chamando uma Edge Function a cada 1 minuto.
+Sem alteração de RLS (já é admin-only para update).
 
-### Edge Function `chat-waiting-alert`
-- Lê `company_settings.chat_alert_whatsapp_group_id`. Se vazio → no-op.
-- Busca conversas `open` + `assigned_to IS NULL` + `waiting_since <= now() - 10 min` + (`last_wait_alert_at IS NULL` OR `last_wait_alert_at <= now() - 10 min`).
-- Para cada uma: monta texto (`⚠️ Conversa aguardando atendimento há X minutos — Nome (telefone)`) e envia via Evolution API `/message/sendText/{instance}` para o JID do grupo.
-- Atualiza `last_wait_alert_at = now()`.
+### 2. UI — `src/components/settings/CompanyTab.tsx`
+Novo card **"Horário de Atendimento e Agente Virtual"**, abaixo do card de Alertas de Chat:
 
-### UI — Configurações → Empresa
-Novo bloco "Alertas de Chat" com Combobox que lista grupos via `evolution-list-groups` (já existente) e salva o JID em `chat_alert_whatsapp_group_id`. Botão para limpar (desativa o alerta).
+- Switch *Ativar resposta automática fora do horário*.
+- Inputs `time`: Abertura, Fechamento.
+- Inputs `time` opcionais: Início do almoço, Fim do almoço (com checkbox "Tem pausa de almoço").
+- Texto fixo: "Aplicado de segunda a sexta. Sábados, domingos e feriados nacionais ficam como fora do horário."
+- Input `Nome do agente` (ex.: "Atendimento Velocitä").
+- Textarea `Mensagem fora do horário` com placeholder e dica das variáveis disponíveis: `{nome_agente}`, `{horario}`.
+- Botão Salvar (admin-only).
 
-### Detalhes técnicos
-- Reaproveita secrets `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`.
-- Cron via `pg_cron` + `pg_net.http_post` (mesmo padrão do `trg_notify_chat_message`).
-- `verify_jwt = false` para a função (chamada por cron, sem usuário).
-- Sem alteração nos triggers existentes de `waiting_since`.
+### 3. Edge Function — `whatsapp-webhook` (responder fora do horário)
+Após inserir a mensagem recebida (linha ~490), e somente quando:
+- `message.message_type` é de entrada (não `whatsapp_outgoing` / `text`),
+- conversa está `status='open'` e `assigned_to IS NULL`,
+- `company_settings.service_hours_enabled = true` e `agent_offhours_message` está preenchido,
+- horário atual em `service_timezone` cai fora do intervalo configurado (fora do dia útil seg–sex, antes da abertura, depois do fechamento, ou dentro da pausa de almoço, ou em feriado nacional via `src/lib/holidays.ts` portado para Deno),
+- e `agent_offhours_last_sent[phone]` é nulo ou tem mais de 6 h (anti-spam),
+
+→ enviar via Meta API (`whatsapp-send-text` / mesmo helper já usado) o texto:
+```
+{agent_offhours_message com {nome_agente} e {horario} substituídos}
+```
+com o sufixo VHUB_MARKER (`\u200B\u200B\u200B`) para evitar eco, atualizar `agent_offhours_last_sent`, e registrar em `whatsapp_logs`.
+
+Sem CRON novo — a checagem acontece no próprio webhook quando a mensagem chega.
+
+### 4. Tipos
+`src/integrations/supabase/types.ts` é regenerado automaticamente após a migration.
+
+### Resumo do comportamento
+Dentro do horário: sistema não responde sozinho (deixa para o atendente).
+Fora do horário (incluindo almoço, fim de semana e feriados): primeira mensagem do contato recebe a resposta cadastrada, assinada com o nome do agente. Repetições do mesmo contato dentro de 6 h não disparam nova resposta automática.
