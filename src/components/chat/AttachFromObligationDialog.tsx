@@ -269,12 +269,12 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-w-[calc(100vw-2rem)]">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90dvh] overflow-hidden flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Anexar arquivo de obrigação</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-3 flex-1 overflow-y-auto min-w-0 -mx-1 px-1">
           {/* Empresa */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Empresa</label>
@@ -365,7 +365,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
             ) : files.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">Nenhum arquivo encontrado.</p>
             ) : (
-              <div className="border rounded-md">
+              <div className="border rounded-md overflow-hidden min-w-0">
                 {files.length > 1 && (
                   <label className="flex items-center gap-2 px-3 py-2 border-b cursor-pointer hover:bg-accent/50 text-sm">
                     <Checkbox
@@ -375,7 +375,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
                     <span className="font-medium">Selecionar todos</span>
                   </label>
                 )}
-                <div className="max-h-56 overflow-y-auto p-1">
+                <div className="max-h-56 overflow-y-auto p-1 min-w-0">
                   {files.map(f => {
                     const checked = selectedPaths.has(f.path);
                     return (
@@ -383,13 +383,13 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
                         key={f.path}
                         title={f.fileName}
                         className={cn(
-                          'flex items-center gap-2 px-2 py-2 rounded text-left text-sm hover:bg-accent transition-colors cursor-pointer min-w-0',
+                          'flex items-center gap-2 px-2 py-2 rounded text-left text-sm hover:bg-accent transition-colors cursor-pointer min-w-0 w-full',
                           checked && 'bg-accent'
                         )}
                       >
                         <Checkbox checked={checked} onCheckedChange={() => togglePath(f.path)} />
                         <FileText className="h-4 w-4 shrink-0 text-primary" />
-                        <span className="truncate flex-1 min-w-0">{f.fileName}</span>
+                        <span className="truncate flex-1 min-w-0 block">{f.fileName}</span>
                       </label>
                     );
                   })}
