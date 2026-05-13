@@ -206,7 +206,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-0 mx-[6px] bg-[#F5F6F6] dark:bg-zinc-900/50">
         {loading ? (
           <>
             {Array.from({ length: 6 }).map((_, i) => (
@@ -220,37 +220,45 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-              className={`w-full flex items-center gap-3 px-2 py-2.5 md:px-3 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-border/30 border-solid shadow-lg ${
+              className={`w-full px-2 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-[#F0F2F5] border-solid shadow-lg md:px-[12px] mx-0 my-0 flex-row flex items-start justify-start gap-[12px] text-left ${
                 activeId === conv.id ? 'bg-[#F0F2F5] dark:bg-zinc-800' : ''
               }`}
             >
-              <Avatar className="h-11 w-11 md:h-12 md:w-12 shrink-0">
+              <Avatar className="h-[49px] w-[49px] shrink-0 rounded-full">
                 {conv.avatarUrl && <AvatarImage src={conv.avatarUrl} alt={conv.name} />}
                 <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                   {conv.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium truncate">{conv.name}</span>
+              <div className="flex-1 min-w-0 flex flex-col items-start justify-center gap-1 self-stretch">
+                <div className="flex justify-between items-center mb-0 w-full">
+                  <span className="font-semibold truncate text-[#111B21] dark:text-[#E9EDEF] text-[17px] leading-[21px]">{conv.name}</span>
                   {conv.lastMessageAt && (
-                    <span className={`text-[11px] shrink-0 ${conv.unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                    <span className="text-xs text-[#667781] dark:text-[#8696A0] whitespace-nowrap text-[12px] leading-[14px] shrink-0">
                       {formatTime(conv.lastMessageAt)}
                     </span>
                   )}
                 </div>
-                {conv.companyNames && conv.companyNames.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                    {conv.companyNames.join(' • ')}
-                  </p>
-                )}
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-xs text-muted-foreground truncate">{conv.lastMessage || 'Sem mensagens'}</span>
-                  {conv.unreadCount > 0 && (
-                    <span className="ml-2 shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
-                      {conv.unreadCount}
-                    </span>
-                  )}
+                <div className="flex-1 min-w-0 overflow-hidden w-full flex items-center">
+                  <div className="flex-1 flex flex-col min-w-0 py-0">
+                    {conv.companyNames && conv.companyNames.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {conv.companyNames.join(' • ')}
+                      </p>
+                    )}
+                    <div className="flex justify-between items-center w-full">
+                      <span className="text-sm text-[#667781] dark:text-[#8696A0] truncate pr-2 text-[14px] leading-[20px] flex-1">
+                        {conv.lastMessage || 'Sem mensagens'}
+                      </span>
+                      <div className="flex flex-col items-end gap-1 shrink-0 h-full justify-between pb-1">
+                        {conv.unreadCount > 0 && (
+                          <span className="flex items-center justify-center min-w-[20px] h-5 bg-[#25D366] text-white text-[11px] font-bold rounded-full px-1.5 shrink-0">
+                            {conv.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 {conv.status === 'open' && (
                   <div className="mt-1">
