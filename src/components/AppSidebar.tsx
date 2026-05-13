@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarFooter, SidebarMenu, SidebarMenuItem,
   SidebarMenuButton, SidebarGroup, SidebarGroupLabel, SidebarGroupContent,
-  SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton,
+  SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton, useSidebar,
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
@@ -36,6 +36,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, signOut, isAdmin } = useAuth();
+  const { setOpen, isMobile } = useSidebar();
 
   const isCadastroActive = cadastroSubItems.some(item => location.pathname === item.path);
   const unreadCount = useUnreadCount();
@@ -45,7 +46,11 @@ export function AppSidebar() {
     : menuItems.filter(i => i.path !== '/' && i.path !== '/financial');
 
   return (
-    <Sidebar>
+    <Sidebar
+      collapsible="icon"
+      onMouseEnter={() => { if (!isMobile) setOpen(true); }}
+      onMouseLeave={() => { if (!isMobile) setOpen(false); }}
+    >
       <SidebarHeader className="p-5">
         <div className="flex items-center gap-3">
           {/* Velocitä logo mark – stylized bars */}
