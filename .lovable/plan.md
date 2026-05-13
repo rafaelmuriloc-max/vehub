@@ -1,50 +1,53 @@
 ## Objetivo
-Permitir gravar e enviar mensagens de áudio no chat (estilo WhatsApp), além de também aceitar upload de arquivos de áudio existentes.
+Estilizar mensagens de **áudio** e **documento** no chat para imitar o visual do WhatsApp mostrado no screenshot.
 
-## UI — `src/components/chat/ChatInput.tsx`
+## Áudio — novo componente `src/components/chat/AudioMessage.tsx`
 
-1. Adicionar botão de microfone ao lado do botão de enviar:
-   - Quando o campo de texto estiver **vazio**, exibe ícone `Mic` (gravar).
-   - Quando há texto digitado, mantém o ícone `Send` atual.
-2. Ao clicar no microfone, inicia gravação via `MediaRecorder` (`navigator.mediaDevices.getUserMedia({ audio: true })`):
-   - Mostra barra de gravação no lugar do textarea: ícone vermelho pulsante, timer `mm:ss`, botão ✖ (cancelar) e botão ✓ (enviar).
-   - Formato preferido: `audio/webm;codecs=opus` (fallback `audio/mp4`).
-3. Ao confirmar, gera `File` (`audio_<timestamp>.webm`) e chama `onSendMedia(file, 'audio')`.
-4. Adicionar opção "Áudio" no popover de anexos (ícone `Mic`) para upload de arquivo de áudio existente (`accept="audio/*"`).
+Player customizado dentro da bolha:
 
-## Tipos / fluxo — `src/components/chat/ChatInput.tsx`, `MessageArea.tsx`, `src/pages/Chat.tsx`
+```
+[avatar redondo com mic badge]  [▶/⏸]  ▮▮▮·▮▮▮·▮▮▮▮▮▮▮  0:04
+```
 
-Estender o tipo de `onSendMedia` de `'image' | 'video' | 'document'` para incluir `'audio'` em todos os pontos da cadeia.
+- Botão play/pause à esquerda (triângulo / pause), 28px, cor do tema (emerald/zinc).
+- "Waveform" estática gerada por seed do `mediaUrl` (~40 barras finas com alturas pseudo-aleatórias). A parte já reproduzida fica colorida (primary), o restante muted. Um ponto colorido (4px) marca a posição atual.
+- Tempo abaixo do waveform: enquanto parado mostra duração total; durante reprodução mostra tempo decorrido.
+- Avatar circular (40px) com pequeno badge de microfone laranja no canto inferior.
+  - Para mensagens recebidas (`!showOnRight`): avatar do contato (`avatarUrl`).
+  - Para enviadas (`showOnRight`): avatar do remetente (passar `senderAvatarUrl`); fallback para iniciais.
+- Áudio HTML5 oculto (`<audio>` com ref) controla play/pause, `timeupdate` e `loadedmetadata`.
+- Sem texto adicional na bolha (já era o caso).
 
-## Upload — `src/pages/Chat.tsx` (`sendMedia`)
+Props: `mediaUrl`, `avatarUrl?`, `tint` ('green' | 'white').
 
-Lógica atual de upload para o bucket `chat-media` já cobre qualquer mídia. Apenas:
-- Mapear `type='audio'` para `messageType='whatsapp_audio'` ao chamar a edge function.
-- Sanitizar nome do arquivo (já há padrão no projeto).
+## Documento — refatorar branch `whatsapp_document` em `MessageBubble.tsx`
 
-## Backend — `supabase/functions/whatsapp-send-media/index.ts`
+Layout estilo WhatsApp:
 
-Adicionar branch `audio` no envio:
+```
+[PDF/DOC/XLS badge]  Nome do arquivo (até 2 linhas, bold)
+                     185 KB · pdf
+```
 
-- **Meta API (janela 24h aberta):**
-  ```json
-  { "messaging_product":"whatsapp", "to":<phone>, "type":"audio", "audio":{ "link": <mediaUrl> } }
-  ```
-  (áudio na Meta API não suporta caption.)
-- **Evolution API (fora da janela):** endpoint `POST /message/sendWhatsAppAudio/{instance}` com payload:
-  ```json
-  { "number": <phone>, "audio": <mediaUrl> }
-  ```
-- Para inclusão na tabela `chat_messages`: `message_type='whatsapp_audio'`, `media_url=<url do bucket>`, `content='audio'`.
+- Badge à esquerda, 44x44, cor por extensão:
+  - pdf → vermelho
+  - doc/docx → azul
+  - xls/xlsx → verde
+  - default → cinza
+  - Texto da extensão (uppercase) dentro do badge.
+- Título: nome do arquivo, `font-medium`, `line-clamp-2`, sem cor primary (igual ao screenshot — preto).
+- Subtítulo: `tamanho · extensão`. Tamanho calculado via `HEAD` request (`Content-Length`) ao montar; enquanto carrega exibe só `extensão`.
+- Click → mantém download via blob (lógica atual).
+- Bolha mantém estilo padrão (verde para enviados / branco para recebidos).
 
-## Renderização
+## Integração
 
-`MessageBubble.tsx` já trata `whatsapp_audio` com tag `<audio controls>`. Sem mudanças.
-
-## Permissões
-
-A gravação exige permissão de microfone do navegador. Se negada, exibir toast "Permita o acesso ao microfone".
+- `MessageBubble.tsx`:
+  - `case 'whatsapp_audio'` passa a renderizar `<AudioMessage mediaUrl={...} avatarUrl={...} tint={showOnRight ? 'green' : 'white'} />` no lugar do `<audio controls>`.
+  - `case 'whatsapp_document'` passa a renderizar o novo layout descrito acima.
+  - Ajustar a bolha de áudio para padding menor (a "bolha" do screenshot é praticamente o próprio player).
+- `MessageArea.tsx`: passar `avatarUrl` do contato para `MessageBubble` quando o tipo for áudio (já existe a prop).
 
 ## Não muda
-- RLS, schema do banco e bucket `chat-media` (já público) permanecem como estão.
-- Lógica de auto-atribuição (`ensureAssignedToMe`) já cobre `sendMedia`.
+- Backend, banco, RLS, lógica de envio.
+- Imagem, vídeo, localização, contato — permanecem como estão.
