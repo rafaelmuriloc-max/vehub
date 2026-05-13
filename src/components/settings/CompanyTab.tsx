@@ -25,6 +25,7 @@ interface CompanyData {
   accountant_certificate_password?: string | null;
   accountant_certificate_expiry?: string | null;
   accountant_cpf?: string | null;
+  chat_alert_whatsapp_group_id?: string | null;
 }
 
 export function CompanyTab() {
