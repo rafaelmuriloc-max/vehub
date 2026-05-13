@@ -129,15 +129,16 @@ Deno.serve(async (req) => {
       whatsapp_incoming_sticker: '🖼️ Sticker',
     };
     const rawContent = (msg.content || '').toString().trim();
-    let body = rawContent.slice(0, 140);
+    let body = rawContent.slice(0, 100);
     if (!body) {
       body = mediaLabels[msg.message_type as string] || 'Nova mensagem';
     } else if (mediaLabels[msg.message_type as string]) {
-      body = `${mediaLabels[msg.message_type as string]} — ${body}`;
+      body = `${mediaLabels[msg.message_type as string]} — ${body}`.slice(0, 100);
     }
+    const safeTitle = (title && title.trim()) || 'Nova mensagem';
 
     const payload = JSON.stringify({
-      title,
+      title: safeTitle,
       body,
       tag: `conv-${conv.id}`,
       url: '/chat',
