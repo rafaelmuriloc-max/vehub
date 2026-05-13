@@ -1,40 +1,27 @@
-## Problema
+## Adicionar contador de conversas em Espera
 
-A aba **Espera** (filtro `status='open' AND assigned_to IS NULL`) não mostra a conversa do Rafael porque ela está com `status='closed'`. Quando o cliente envia nova mensagem, o webhook só atualiza o `updated_at` — não reabre a conversa.
+Mostrar um badge ao lado da aba "Espera" com o número de conversas WhatsApp aguardando atendimento (status `open` e sem atendente).
 
-Confirmado no banco: `chat_conversations` "Rafael Murilo" → `status='closed'`, `assigned_to=NULL`.
+### Mudanças
 
-## Solução
+**1. `src/pages/Chat.tsx`**
+- Novo estado `waitingCount: number`.
+- Função `loadWaitingCount()` que executa:
+  ```ts
+  supabase.from('chat_conversations')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'open')
+    .is('assigned_to', null)
+    .not('whatsapp_phone', 'is', null);
+  ```
+- Chamar `loadWaitingCount()` junto com `loadConversations()` (no useEffect inicial e após eventos do realtime que já disparam reload).
+- Passar `waitingCount` como prop para `<ConversationList />`.
 
-No `supabase/functions/whatsapp-webhook/index.ts`, ao processar mensagem **incoming** (`!isFromMe`), reabrir a conversa se ela estiver fechada:
+**2. `src/components/chat/ConversationList.tsx`**
+- Adicionar `waitingCount?: number` em `ConversationListProps`.
+- Na `TabsTrigger value="in_progress"`, renderizar um badge no mesmo padrão visual já usado em "Chat" (bg-destructive, arredondado, `99+` quando excede), exibido apenas quando `waitingCount > 0`.
 
-- Quando inserir a mensagem, se `!isFromMe`, atualizar `chat_conversations` com `status='open'` e `closed_at=null` (mantendo `assigned_to` como está, ou seja, continua `null` para casos como o Rafael — então cai naturalmente em "Espera").
-- Mensagens `fromMe` (eco do nosso painel) NÃO devem reabrir, para não tirar conversas que o atendente acabou de fechar.
-
-### Alteração pontual
-
-Substituir no final do webhook:
-
-```ts
-await supabase
-  .from("chat_conversations")
-  .update({ updated_at: new Date().toISOString() })
-  .eq("id", conversationId);
-```
-
-por:
-
-```ts
-const convUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
-if (!isFromMe) {
-  convUpdate.status = "open";
-  convUpdate.closed_at = null;
-}
-await supabase.from("chat_conversations").update(convUpdate).eq("id", conversationId);
-```
-
-## Resultado esperado
-
-- Cliente envia mensagem → conversa reabre automaticamente.
-- Como `assigned_to` continua `null`, ela aparece imediatamente na aba **Espera**.
-- Se já estivesse atribuída a alguém, voltaria para a aba "Chat" daquele atendente.
+### Observações
+- Sem mudanças de schema/migrations.
+- O contador reflete todas as conversas em espera, mesmo quando o usuário está em outra aba.
+- RLS: admins já enxergam essas conversas (são participantes via webhook).
