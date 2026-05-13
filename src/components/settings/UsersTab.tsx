@@ -30,10 +30,10 @@ export function UsersTab() {
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [editForm, setEditForm] = useState({ full_name: '', job_title: '', role: 'employee', department_id: '' });
 
-  // Invite dialog
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', job_title: '', role: 'employee', department_id: 'none' });
-  const [inviting, setInviting] = useState(false);
+  // Create dialog
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_id: 'none' });
+  const [creating, setCreating] = useState(false);
 
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
@@ -83,36 +83,40 @@ export function UsersTab() {
     fetchData();
   };
 
-  // --- INVITE ---
-  const handleInvite = async () => {
-    if (!inviteForm.email) {
-      toast({ title: 'Erro', description: 'Email é obrigatório', variant: 'destructive' });
+  // --- CREATE ---
+  const handleCreate = async () => {
+    if (!createForm.email || !createForm.password) {
+      toast({ title: 'Erro', description: 'E-mail e senha são obrigatórios', variant: 'destructive' });
       return;
     }
-    setInviting(true);
+    if (createForm.password.length < 6) {
+      toast({ title: 'Erro', description: 'A senha deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      return;
+    }
+    setCreating(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke('manage-user', {
         body: {
-          action: 'invite',
-          email: inviteForm.email,
-          full_name: inviteForm.full_name || undefined,
-          job_title: inviteForm.job_title || undefined,
-          department_id: inviteForm.department_id === 'none' ? undefined : inviteForm.department_id,
-          role: inviteForm.role,
+          action: 'create',
+          email: createForm.email,
+          password: createForm.password,
+          full_name: createForm.full_name || undefined,
+          job_title: createForm.job_title || undefined,
+          department_id: createForm.department_id === 'none' ? undefined : createForm.department_id,
+          role: createForm.role,
         },
       });
       if (res.error || res.data?.error) {
-        throw new Error(res.data?.error || res.error?.message || 'Erro ao convidar');
+        throw new Error(res.data?.error || res.error?.message || 'Erro ao criar usuário');
       }
-      toast({ title: 'Convite enviado', description: `Email de convite enviado para ${inviteForm.email}` });
-      setInviteOpen(false);
-      setInviteForm({ email: '', full_name: '', job_title: '', role: 'employee', department_id: 'none' });
+      toast({ title: 'Usuário criado', description: createForm.email });
+      setCreateOpen(false);
+      setCreateForm({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_id: 'none' });
       fetchData();
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
-      setInviting(false);
+      setCreating(false);
     }
   };
 
@@ -144,8 +148,8 @@ export function UsersTab() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Usuários</CardTitle>
         {admin && (
-          <Button onClick={() => setInviteOpen(true)} size="sm">
-            <UserPlus className="h-4 w-4 mr-2" />Convidar Usuário
+          <Button onClick={() => setCreateOpen(true)} size="sm">
+            <UserPlus className="h-4 w-4 mr-2" />Novo Usuário
           </Button>
         )}
       </CardHeader>
@@ -220,17 +224,25 @@ export function UsersTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Invite Dialog */}
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+      {/* Create Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Convidar Usuário</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Novo Usuário</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>Email *</Label><Input type="email" value={inviteForm.email} onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })} placeholder="usuario@email.com" /></div>
-            <div><Label>Nome</Label><Input value={inviteForm.full_name} onChange={e => setInviteForm({ ...inviteForm, full_name: e.target.value })} /></div>
-            <div><Label>Cargo</Label><Input value={inviteForm.job_title} onChange={e => setInviteForm({ ...inviteForm, job_title: e.target.value })} /></div>
+            <div>
+              <Label>E-mail (login) *</Label>
+              <Input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} placeholder="usuario@empresa.local" />
+              <p className="text-xs text-muted-foreground mt-1">Pode ser fictício — será usado apenas para login (formato de e-mail válido).</p>
+            </div>
+            <div>
+              <Label>Senha *</Label>
+              <Input type="password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" />
+            </div>
+            <div><Label>Nome</Label><Input value={createForm.full_name} onChange={e => setCreateForm({ ...createForm, full_name: e.target.value })} /></div>
+            <div><Label>Cargo</Label><Input value={createForm.job_title} onChange={e => setCreateForm({ ...createForm, job_title: e.target.value })} /></div>
             <div>
               <Label>Departamento</Label>
-              <Select value={inviteForm.department_id} onValueChange={v => setInviteForm({ ...inviteForm, department_id: v })}>
+              <Select value={createForm.department_id} onValueChange={v => setCreateForm({ ...createForm, department_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
@@ -240,7 +252,7 @@ export function UsersTab() {
             </div>
             <div>
               <Label>Permissão</Label>
-              <Select value={inviteForm.role} onValueChange={v => setInviteForm({ ...inviteForm, role: v })}>
+              <Select value={createForm.role} onValueChange={v => setCreateForm({ ...createForm, role: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
@@ -249,7 +261,7 @@ export function UsersTab() {
               </Select>
             </div>
           </div>
-          <DialogFooter><Button onClick={handleInvite} disabled={inviting}>{inviting ? 'Enviando...' : 'Enviar Convite'}</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleCreate} disabled={creating}>{creating ? 'Criando...' : 'Criar Usuário'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
