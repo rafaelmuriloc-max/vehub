@@ -20,6 +20,7 @@ import InvoiceEmit from "./pages/InvoiceEmit";
 import Fiscal from "./pages/Fiscal";
 import IntegraContador from "./pages/IntegraContador";
 import Chat from "./pages/Chat";
+import ChatPopup from "./pages/ChatPopup";
 import Email from "./pages/Email";
 import NotFound from "./pages/NotFound";
 
@@ -34,6 +35,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/chat/popup" element={<ChatPopup />} />
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/clients" element={<Clients />} />
