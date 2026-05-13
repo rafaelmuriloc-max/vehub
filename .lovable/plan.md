@@ -1,30 +1,28 @@
-## Diagnóstico
+## Objetivo
 
-Investiguei o banco e o webhook do WhatsApp:
+Mostrar, na lista de conversas, as empresas vinculadas ao contato logo abaixo do nome — igual ao que já aparece no header do chat aberto.
 
-- 24 conversas têm `avatar_url` NULL (ex: Drika, Marcelo Cananea, Angela Portella). O webhook só busca a foto quando uma conversa é criada ou quando recebe mensagem nova com avatar vazio — conversas antigas anteriores a esse código nunca foram atualizadas.
-- As URLs do WhatsApp (`pps.whatsapp.net/...?oe=...`) **expiram** após alguns dias. Conversas com URL salva mas vencida (ex: Rafael Murilo, com `oe=` apontando para abril/2026) deixam de exibir a foto.
+## Contexto
 
-Ou seja: o `<AvatarFallback>` aparece tanto por URL ausente quanto por URL expirada (404).
+- `ConversationItem` já carrega `companyNames?: string[]` (populado em `Chat.tsx` via `whatsappCompanyMap`).
+- Hoje esse dado só é exibido no `MessageArea` (header do chat).
+- Na lista (`ConversationList.tsx`), nada é renderizado abaixo do nome.
 
-## Plano
+## Mudança
 
-### 1. Edge Function `whatsapp-refresh-avatars` (nova)
+Editar apenas `src/components/chat/ConversationList.tsx`:
 
-- Lista todas as `chat_conversations` com `whatsapp_phone IS NOT NULL`.
-- Para cada uma, chama `POST /chat/fetchProfilePictureUrl/{instance}` na Evolution API com o número.
-- Atualiza `avatar_url` quando retornar uma URL válida; mantém o valor existente se a Evolution não retornar nada.
-- Aceita parâmetro opcional `onlyMissing=true` para rodar apenas nas conversas sem foto.
-- Retorna contagem de atualizadas / falhas.
+1. Logo abaixo da linha do nome + horário, antes da linha de "última mensagem", inserir uma linha discreta com as empresas vinculadas quando `conv.companyNames?.length > 0`.
+2. Estilo: texto pequeno (`text-[11px]`), cor `text-muted-foreground`, `truncate` em uma linha, empresas separadas por `•` (ou `|` para manter padrão do header).
+3. Não exibir nada quando a lista estiver vazia (contatos sem vínculo continuam como hoje).
 
-### 2. CRON diário
+Sem mudanças em backend, tipos ou em `Chat.tsx` — os dados já chegam prontos.
 
-- Agendar a função para rodar uma vez por dia (madrugada) renovando todas as URLs antes de expirarem.
+## Resultado visual esperado
 
-### 4. Ajuste no webhook
-
-- No bloco que reaproveita conversa existente, refazer o fetch da foto também quando a URL atual contiver `oe=` expirado (parse simples do timestamp hex). Garante atualização passiva conforme as conversas recebem mensagem.
-
-## Observação
-
-Alguns contatos realmente não têm foto pública no WhatsApp (privacidade). Nesses casos o fallback com inicial continuará aparecendo — comportamento esperado.
+```text
+[avatar]  Rafael Murilo                           21:44
+          RJ Climatização • Outra Empresa
+          RJ CLIMATIZAÇÃO FGTS 042026.pdf
+          [badge status]
+```

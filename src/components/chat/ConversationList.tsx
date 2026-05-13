@@ -163,6 +163,11 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                     </span>
                   )}
                 </div>
+                {conv.companyNames && conv.companyNames.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                    {conv.companyNames.join(' • ')}
+                  </p>
+                )}
                 <div className="flex items-center justify-between mt-0.5">
                   <span className="text-xs text-muted-foreground truncate">{conv.lastMessage || 'Sem mensagens'}</span>
                   {conv.unreadCount > 0 && (
