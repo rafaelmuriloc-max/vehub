@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
     const { data: conv } = await supabase
       .from('chat_conversations')
-      .select('id, name, whatsapp_phone, assigned_to')
+      .select('id, name, whatsapp_phone, assigned_to, client_id')
       .eq('id', msg.conversation_id)
       .maybeSingle();
 
@@ -88,8 +88,54 @@ Deno.serve(async (req) => {
 
     console.log('[chat-notify] subscriptions found:', subs?.length || 0);
 
-    const title = conv.name || conv.whatsapp_phone || 'Nova mensagem';
-    const body = (msg.content || '').toString().slice(0, 120) || 'Nova mensagem';
+    // Build title: "Contato · Empresa"
+    let companyName: string | null = null;
+    let contactName: string | null = conv.name || null;
+    if (conv.client_id) {
+      const { data: client } = await supabase
+        .from('clients')
+        .select('company_name, contact_name')
+        .eq('id', conv.client_id)
+        .maybeSingle();
+      if (client) {
+        companyName = client.company_name || null;
+        if (!contactName) contactName = client.contact_name || null;
+      }
+    }
+
+    const formatPhone = (p: string | null | undefined) => {
+      if (!p) return '';
+      const d = p.replace(/\D/g, '');
+      if (d.length === 13 && d.startsWith('55')) {
+        return `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+      }
+      if (d.length === 11) {
+        return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+      }
+      return p;
+    };
+
+    const contact = contactName || formatPhone(conv.whatsapp_phone) || 'Nova mensagem';
+    const title = companyName && companyName !== contact
+      ? `${contact} · ${companyName}`
+      : contact;
+
+    // Build body: message preview or media label
+    const mediaLabels: Record<string, string> = {
+      whatsapp_incoming_image: '📷 Imagem',
+      whatsapp_incoming_video: '🎬 Vídeo',
+      whatsapp_incoming_audio: '🎙️ Áudio',
+      whatsapp_incoming_document: '📎 Documento',
+      whatsapp_incoming_sticker: '🖼️ Sticker',
+    };
+    const rawContent = (msg.content || '').toString().trim();
+    let body = rawContent.slice(0, 140);
+    if (!body) {
+      body = mediaLabels[msg.message_type as string] || 'Nova mensagem';
+    } else if (mediaLabels[msg.message_type as string]) {
+      body = `${mediaLabels[msg.message_type as string]} — ${body}`;
+    }
+
     const payload = JSON.stringify({
       title,
       body,
