@@ -1,76 +1,54 @@
-## Diagnóstico
+## Objetivo
 
-A Edge Function `chat-notify` está enviando o payload correto (confirmado nos logs):
+Adicionar contador de tempo de espera nas conversas da aba "Espera" (status `open` e sem `assigned_to`), que:
+- Roda em tempo real enquanto a conversa estiver aguardando atribuição
+- Para e zera quando a conversa for atribuída a um usuário
+- Persiste o tempo total de espera para uso futuro em estatísticas
 
-```
-title: "Cezar · SONHOS DE PENHA LTDA"
-body: "Perfeito muito obrigado e dessculpa a hr"
-```
+## Mudanças no banco
 
-Mas o iPhone mostra apenas `Velocità · Notificação`. Isso é o **texto genérico que o iOS exibe quando o Service Worker não consegue exibir o conteúdo do payload**. As causas mais prováveis:
+Adicionar duas colunas em `chat_conversations`:
+- `waiting_since` (timestamptz) — momento em que a conversa entrou em espera (recebeu mensagem do cliente sem responsável). Fica `NULL` quando atribuída.
+- `total_wait_seconds` (integer, default 0) — soma acumulada do tempo aguardando atribuição em todas as ocorrências (suporta estatísticas mesmo se a conversa voltar para fila).
 
-1. **SW antigo cacheado no PWA instalado** — o iPhone instalou o app quando o `sw.js` tinha outra versão (ou estava silencioso). O `SW_VERSION = 'v3'` atual não foi suficiente para forçar atualização em todos os dispositivos.
-2. **Parsing do payload falhando silenciosamente** — `event.data.json()` pode lançar exceção em iOS se o conteúdo estiver com encoding diferente. O `try/catch` atual cai num `{}` vazio, e aí `title = 'Nova mensagem'` deveria aparecer — mas se o `showNotification` não for chamado dentro do `event.waitUntil()` corretamente, o iOS substitui por "Notificação".
-3. **Falta de `event.waitUntil` cobrindo todo o trabalho assíncrono** — qualquer await fora dele faz iOS abortar e mostrar notificação default.
+Atualizar `get_chat_inbox` para retornar `waiting_since` e `total_wait_seconds`.
 
-## Mudanças
+Criar trigger em `chat_conversations` (BEFORE UPDATE):
+- Quando `assigned_to` muda de NULL para um valor: somar `now() - waiting_since` em `total_wait_seconds` e zerar `waiting_since`.
+- Quando `assigned_to` muda de valor para NULL (devolução à fila): setar `waiting_since = now()`.
 
-### 1. `public/sw.js` — Robustecer o handler de push
+Criar trigger em `chat_messages` (AFTER INSERT):
+- Quando chega mensagem de entrada (cliente) e a conversa está `open` sem `assigned_to` e sem `waiting_since`: setar `waiting_since = NEW.created_at`.
 
-- Bumpar `SW_VERSION` para `'v4'` para forçar reinstalação em todos os dispositivos.
-- Reorganizar o `push` listener para envolver TODO o trabalho assíncrono em `event.waitUntil(async () => {...}())`.
-- Garantir parsing defensivo do payload (texto cru → JSON), com `console.log` para debug.
-- Sempre passar `body` não-vazio (fallback `'Nova mensagem'`).
-- Adicionar `image` opcional e `data.message_id` para futuro deep-link por conversa.
+Backfill: para conversas atualmente `open` sem `assigned_to`, setar `waiting_since = updated_at`.
 
-```js
-const SW_VERSION = 'v4';
+## Mudanças no frontend
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+**`ConversationList.tsx`** — quando `activeTab === 'in_progress'`:
+- Mostrar badge com cronômetro ao lado do horário, formato `mm:ss` até 1h, depois `Hh mm`.
+- Tick a cada 1s via `setInterval` em estado local; cor muda conforme o tempo (verde <5min, âmbar 5–15min, vermelho >15min).
+- Calcula a partir de `waiting_since`.
 
-self.addEventListener('push', (event) => {
-  event.waitUntil((async () => {
-    let data = {};
-    try {
-      data = event.data ? event.data.json() : {};
-    } catch (_) {
-      try { data = JSON.parse(event.data.text()); } catch (_) {}
-    }
-    const title = (data.title && String(data.title).trim()) || 'Nova mensagem';
-    const body  = (data.body  && String(data.body).trim())  || ' ';
-    await self.registration.showNotification(title, {
-      body,
-      icon: '/icon-512.png',
-      badge: '/icon-512.png',
-      tag: data.tag || 'chat',
-      data: { url: data.url || '/chat' },
-      renotify: true,
-    });
-  })());
-});
+**`ConversationItem` interface** — adicionar `waitingSince?: string | null` e `totalWaitSeconds?: number`.
+
+**`Chat.tsx`** — propagar os novos campos do `get_chat_inbox` para o componente.
+
+## Detalhes técnicos
+
+```text
+chat_conversations
+├── waiting_since        timestamptz NULL
+└── total_wait_seconds   integer DEFAULT 0
 ```
 
-### 2. `supabase/functions/chat-notify/index.ts` — Diagnóstico e robustez
+Funções/triggers:
+- `trg_chat_conv_assignment()` BEFORE UPDATE em `chat_conversations`
+- `trg_chat_msg_waiting()` AFTER INSERT em `chat_messages` (apenas para mensagens vindas do cliente — `message_type IN ('whatsapp_incoming', ...)`, não outgoing)
 
-- Truncar body para 100 chars (iOS corta mesmo, e payloads grandes podem falhar criptografia).
-- Garantir que `title` nunca seja vazio (fallback "Nova mensagem").
-- Manter logs já existentes.
+Critério de "mensagem de cliente": `message_type` diferente de `'text'` e `'whatsapp_outgoing'` (mesma lógica já usada em `unread_count` no `get_chat_inbox`).
 
-### 3. Orientação ao usuário (não é código)
+Render do contador: hook leve `useTick(1000)` que força re-render, evitando setInterval por item.
 
-Para o iPhone aplicar o novo SW, o usuário precisa:
-- Abrir o PWA instalado uma vez (com internet) → o navegador busca o `sw.js` novo.
-- Fechar e abrir de novo para o SW assumir.
-- Em casos extremos (iOS é teimoso): remover o app da tela inicial e adicionar de novo via Safari → Compartilhar → Adicionar à Tela de Início.
+## Estatísticas futuras
 
-## Resultado esperado
-
-Próxima mensagem recebida no chat aparece no lock screen do iPhone como:
-
-```
-Cezar · SONHOS DE PENHA LTDA
-Perfeito muito obrigado...
-```
-
-em vez do genérico "Velocità · Notificação".
+Com `total_wait_seconds` por conversa, fica trivial calcular tempo médio/máximo de resposta por período, por responsável (após atribuição) etc. — sem mudanças adicionais nesta entrega.
