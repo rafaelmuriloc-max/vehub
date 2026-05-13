@@ -162,6 +162,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   isGroup={isGroup}
                   messageType={msg.message_type}
                   mediaUrl={msg.media_url}
+                  avatarUrl={avatarUrl}
                 />
               );
             })}
