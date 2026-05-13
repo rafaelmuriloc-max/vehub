@@ -20,6 +20,7 @@ export interface ConversationItem {
   avatarUrl?: string;
   companyNames?: string[];
   whatsappPhone?: string;
+  clientId?: string | null;
   status?: string;
   assignedToName?: string | null;
 }
