@@ -147,8 +147,21 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
         </div>
       </div>
 
+      {/* Search */}
+      <div className="px-2 pt-2 pb-0">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Pesquisar conversa"
+            className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg bg-[#F0F2F5] dark:bg-zinc-800 border-0 focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      </div>
+
       {/* Tabs */}
-      <div className="px-0 pt-0 pb-0">
+      <div className="px-0 pt-2 pb-0">
         <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ChatTab)}>
           <TabsList className="w-full bg-transparent border-b border-border/40 rounded-none h-auto p-0 gap-0 justify-stretch">
             <TabsTrigger
@@ -190,19 +203,6 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             </TabsTrigger>
           </TabsList>
         </Tabs>
-      </div>
-
-      {/* Search */}
-      <div className="p-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Pesquisar conversa"
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-[#F0F2F5] dark:bg-zinc-800 border-0 focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
       </div>
 
       {/* List */}
