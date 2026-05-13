@@ -91,23 +91,23 @@ Deno.serve(async (req) => {
       text = messageObj.extendedTextMessage.text;
     } else if (messageObj.imageMessage) {
       text = messageObj.imageMessage.caption || "";
-      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_image";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_incoming_image";
       mediaKey = "imageMessage";
     } else if (messageObj.videoMessage) {
       text = messageObj.videoMessage.caption || "";
-      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_video";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_incoming_video";
       mediaKey = "videoMessage";
     } else if (messageObj.audioMessage) {
       text = "";
-      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_audio";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_incoming_audio";
       mediaKey = "audioMessage";
     } else if (messageObj.documentMessage) {
       text = messageObj.documentMessage.caption || messageObj.documentMessage.fileName || "";
-      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_document";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_incoming_document";
       mediaKey = "documentMessage";
     } else if (messageObj.stickerMessage) {
       text = "";
-      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_image";
+      messageType = isFromMe ? "whatsapp_outgoing" : "whatsapp_incoming_image";
       mediaKey = "stickerMessage";
     }
 
