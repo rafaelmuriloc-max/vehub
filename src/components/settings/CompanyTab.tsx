@@ -25,6 +25,7 @@ interface CompanyData {
   accountant_certificate_password?: string | null;
   accountant_certificate_expiry?: string | null;
   accountant_cpf?: string | null;
+  chat_alert_whatsapp_group_id?: string | null;
 }
 
 export function CompanyTab() {
@@ -355,6 +356,112 @@ export function CompanyTab() {
           </div>
         ) : null,
       )}
+
+      <ChatAlertCard
+        admin={admin}
+        companyId={data.id}
+        currentGroupId={data.chat_alert_whatsapp_group_id || ''}
+        onSaved={(gid) => setData(prev => ({ ...prev, chat_alert_whatsapp_group_id: gid }))}
+      />
     </div>
+  );
+}
+
+function ChatAlertCard({
+  admin,
+  companyId,
+  currentGroupId,
+  onSaved,
+}: {
+  admin: boolean;
+  companyId?: string;
+  currentGroupId: string;
+  onSaved: (gid: string | null) => void;
+}) {
+  const { toast } = useToast();
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [selected, setSelected] = useState(currentGroupId);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setSelected(currentGroupId); }, [currentGroupId]);
+
+  const loadGroups = async () => {
+    setLoadingGroups(true);
+    const { data, error } = await supabase.functions.invoke('evolution-list-groups');
+    setLoadingGroups(false);
+    if (error) {
+      toast({ title: 'Erro ao carregar grupos', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setGroups(Array.isArray(data) ? data : []);
+  };
+
+  useEffect(() => { loadGroups(); }, []);
+
+  const save = async (gid: string | null) => {
+    if (!companyId) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('company_settings')
+      .update({ chat_alert_whatsapp_group_id: gid })
+      .eq('id', companyId);
+    setSaving(false);
+    if (error) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    onSaved(gid);
+    toast({ title: gid ? 'Grupo de alertas configurado' : 'Alertas desativados' });
+  };
+
+  const currentName = groups.find(g => g.id === currentGroupId)?.name;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Alertas de Chat</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Quando uma conversa ficar mais de 10 minutos sem atendimento, um aviso será enviado para o grupo selecionado no WhatsApp. Reforços a cada 10 minutos enquanto não houver atribuição.
+        </p>
+        {currentGroupId && (
+          <div className="text-sm">
+            <span className="text-muted-foreground">Grupo atual: </span>
+            <span className="font-medium">{currentName || currentGroupId}</span>
+          </div>
+        )}
+        {admin && (
+          <>
+            <div className="space-y-1">
+              <Label>Selecionar grupo do WhatsApp</Label>
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                disabled={loadingGroups}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              >
+                <option value="">— Nenhum (alertas desativados) —</option>
+                {groups.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={saving || loadingGroups} onClick={() => save(selected || null)}>
+                {saving ? 'Salvando...' : 'Salvar'}
+              </Button>
+              <Button variant="outline" size="sm" disabled={loadingGroups} onClick={loadGroups}>
+                {loadingGroups ? 'Carregando...' : 'Recarregar grupos'}
+              </Button>
+              {currentGroupId && (
+                <Button variant="ghost" size="sm" disabled={saving} onClick={() => save(null)}>
+                  Desativar
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

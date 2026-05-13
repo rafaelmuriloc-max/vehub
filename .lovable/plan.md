@@ -1,33 +1,27 @@
-## Mudança visual nas abas (Chat / Espera / Geral)
+## Alerta WhatsApp para conversas em Espera (>10 min)
 
-Aplicar um estilo moderno na aba selecionada em `src/components/chat/ConversationList.tsx`:
+### Comportamento
+- Verifica a cada 1 minuto as conversas com `status='open'`, `assigned_to IS NULL` e `waiting_since` há mais de 10 minutos.
+- Envia mensagem ao grupo configurado (Evolution API) com nome do contato/grupo, telefone, tempo de espera e link para a conversa.
+- Reenvia a cada 10 min enquanto continuar sem atendimento (1º aviso aos 10', 2º aos 20', etc.).
+- Quando a conversa for atribuída, o trigger existente já zera `waiting_since` e os alertas param.
 
-- **Aba ativa**: fundo branco com borda inferior azul (`border-b-2 border-primary`), texto azul/escuro em negrito, sombra suave
-- **Indicador de seta**: pequeno triângulo azul apontando para baixo, centralizado abaixo da aba ativa (via pseudo-elemento `after:` com rotação 45° + fundo primary)
-- **Abas inativas**: texto cinza, sem borda, hover suave
-- **TabsList**: fundo transparente para destacar a aba ativa
+### Banco
+1. **`company_settings`** — adicionar coluna `chat_alert_whatsapp_group_id text` para guardar o JID do grupo escolhido nas Configurações.
+2. **`chat_conversations`** — adicionar coluna `last_wait_alert_at timestamptz` para controlar quando foi enviado o último alerta (base para o reforço a cada 10 min).
+3. **CRON** — `pg_cron` chamando uma Edge Function a cada 1 minuto.
 
-### Implementação
+### Edge Function `chat-waiting-alert`
+- Lê `company_settings.chat_alert_whatsapp_group_id`. Se vazio → no-op.
+- Busca conversas `open` + `assigned_to IS NULL` + `waiting_since <= now() - 10 min` + (`last_wait_alert_at IS NULL` OR `last_wait_alert_at <= now() - 10 min`).
+- Para cada uma: monta texto (`⚠️ Conversa aguardando atendimento há X minutos — Nome (telefone)`) e envia via Evolution API `/message/sendText/{instance}` para o JID do grupo.
+- Atualiza `last_wait_alert_at = now()`.
 
-Sobrescrever as classes de cada `TabsTrigger` usando modificadores `data-[state=active]:` do Radix:
+### UI — Configurações → Empresa
+Novo bloco "Alertas de Chat" com Combobox que lista grupos via `evolution-list-groups` (já existente) e salva o JID em `chat_alert_whatsapp_group_id`. Botão para limpar (desativa o alerta).
 
-```tsx
-<TabsList className="w-full bg-transparent border-b border-border/40 rounded-none h-auto p-0 gap-1">
-  <TabsTrigger
-    value="..."
-    className="flex-1 text-sm relative rounded-none border-b-2 border-transparent
-               data-[state=active]:border-primary data-[state=active]:bg-background
-               data-[state=active]:text-primary data-[state=active]:font-semibold
-               data-[state=active]:shadow-sm
-               data-[state=active]:after:content-[''] data-[state=active]:after:absolute
-               data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2
-               data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2
-               data-[state=active]:after:h-2 data-[state=active]:after:rotate-45
-               data-[state=active]:after:bg-primary
-               transition-all"
-  >
-```
-
-Aplicado nas três abas: `mine` (Chat), `in_progress` (Espera) e `all` (Geral). Mantém os badges de contagem existentes.
-
-Nenhuma mudança em lógica, apenas classes Tailwind usando tokens semânticos (`primary`, `background`, `border`).
+### Detalhes técnicos
+- Reaproveita secrets `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`.
+- Cron via `pg_cron` + `pg_net.http_post` (mesmo padrão do `trg_notify_chat_message`).
+- `verify_jwt = false` para a função (chamada por cron, sem usuário).
+- Sem alteração nos triggers existentes de `waiting_since`.
