@@ -171,7 +171,7 @@ export default function Chat() {
     const loadMessages = async () => {
       const { data } = await supabase
         .from('chat_messages')
-        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for')
+        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for, channel, wa_message_id, wa_remote_jid')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -470,6 +470,24 @@ export default function Chat() {
 
   const editMessage = async (id: string, newContent: string) => {
     if (!newContent.trim()) return;
+    const msg = messages.find(m => m.id === id) as any;
+    const isWhatsAppOutgoing = msg?.channel === 'whatsapp' && msg?.message_type === 'whatsapp_outgoing';
+    if (isWhatsAppOutgoing) {
+      const { data, error } = await supabase.functions.invoke('whatsapp-edit-message', {
+        body: { messageId: id, newText: newContent.trim() },
+      });
+      if (error || (data as any)?.error) {
+        const reason = (data as any)?.error || error?.message || 'Falha desconhecida';
+        toast({
+          title: 'Não foi possível editar no WhatsApp',
+          description: reason,
+          variant: 'destructive',
+        });
+        return;
+      }
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, content: newContent.trim(), edited_at: new Date().toISOString() } : m));
+      return;
+    }
     const { error } = await supabase
       .from('chat_messages')
       .update({ content: newContent.trim(), edited_at: new Date().toISOString() } as any)
@@ -500,6 +518,21 @@ export default function Chat() {
 
   const deleteMessageForAll = async (id: string) => {
     const msg = messages.find(m => m.id === id);
+    const isWhatsApp = (msg as any)?.channel === 'whatsapp' && !!(msg as any)?.wa_message_id;
+    if (isWhatsApp) {
+      const { data, error } = await supabase.functions.invoke('whatsapp-delete-message', {
+        body: { messageId: id },
+      });
+      if (error || (data as any)?.error) {
+        const reason = (data as any)?.error || error?.message || 'Falha desconhecida';
+        toast({
+          title: 'Não foi possível apagar no WhatsApp',
+          description: reason,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     // Try to remove media file from storage
     if (msg?.media_url) {
       try {

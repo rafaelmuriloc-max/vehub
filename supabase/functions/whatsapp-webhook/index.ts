@@ -449,6 +449,8 @@ Deno.serve(async (req) => {
       content: text || "",
       message_type: messageType,
       channel: "whatsapp",
+      wa_message_id: key?.id || null,
+      wa_remote_jid: remoteJid || null,
     };
     if (mediaUrl) {
       insertData.media_url = mediaUrl;
