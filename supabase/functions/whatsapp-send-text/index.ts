@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
 
   try {
     const VHUB_MARKER = "\u200B\u200B\u200B";
-    const { conversationId, text, senderName } = await req.json();
+    const { conversationId, text, senderName, senderId: senderIdInput } = await req.json();
     const signedText = senderName ? `*${senderName}:*\n${text}${VHUB_MARKER}` : `${text}${VHUB_MARKER}`;
 
     if (!conversationId || !text) {
@@ -151,19 +151,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get the sender (first admin user)
-    const { data: adminRoles } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "admin")
-      .limit(1);
-
-    const senderId = adminRoles?.[0]?.user_id;
+    // Use caller's user_id when provided; fallback to first admin
+    let senderId: string = senderIdInput || "";
     if (!senderId) {
-      return new Response(JSON.stringify({ error: "No admin user found" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { data: adminRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin")
+        .limit(1);
+      senderId = adminRoles?.[0]?.user_id || "";
+      if (!senderId) {
+        return new Response(JSON.stringify({ error: "No admin user found" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Insert message into chat_messages
