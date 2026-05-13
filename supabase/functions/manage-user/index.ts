@@ -40,21 +40,27 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    if (action === "invite") {
-      const { email, full_name, job_title, department_id, role } = body;
-      if (!email) {
-        return new Response(JSON.stringify({ error: "Email is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (action === "create" || action === "invite") {
+      const { email, password, full_name, job_title, department_id, role } = body;
+      if (!email || !password) {
+        return new Response(JSON.stringify({ error: "Email e senha são obrigatórios" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (typeof password !== "string" || password.length < 6) {
+        return new Response(JSON.stringify({ error: "A senha deve ter pelo menos 6 caracteres" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const { data: invited, error: invErr } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        data: { full_name: full_name || email },
+      const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: full_name || email },
       });
 
-      if (invErr) {
-        return new Response(JSON.stringify({ error: invErr.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (createErr) {
+        return new Response(JSON.stringify({ error: createErr.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const userId = invited.user.id;
+      const userId = created.user.id;
 
       // Update profile (created by trigger handle_new_user)
       if (job_title || department_id) {
