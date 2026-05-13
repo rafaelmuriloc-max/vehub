@@ -113,8 +113,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
               )}
             </TabsTrigger>
             <TabsTrigger value="in_progress" className="flex-1 text-xs">
-              <span className="md:hidden">Andamento</span>
-              <span className="hidden md:inline">Em andamento</span>
+              Espera
             </TabsTrigger>
             <TabsTrigger value="all" className="flex-1 text-xs">Geral</TabsTrigger>
           </TabsList>
