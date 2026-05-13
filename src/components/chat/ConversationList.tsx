@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw, ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw, ExternalLink, Timer } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,8 @@ export interface ConversationItem {
   clientId?: string | null;
   status?: string;
   assignedToName?: string | null;
+  waitingSince?: string | null;
+  totalWaitSeconds?: number;
 }
 
 interface ConversationListProps {
@@ -45,6 +47,39 @@ function formatTime(dateStr: string) {
   if (isToday(d)) return format(d, 'HH:mm');
   if (isYesterday(d)) return 'Ontem';
   return format(d, 'dd/MM/yy', { locale: ptBR });
+}
+
+function formatWaitDuration(seconds: number) {
+  if (seconds < 0) seconds = 0;
+  if (seconds < 3600) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${m.toString().padStart(2, '0')}m`;
+}
+
+function waitColorClass(seconds: number) {
+  if (seconds < 5 * 60) return 'bg-emerald-600 text-white';
+  if (seconds < 15 * 60) return 'bg-amber-500 text-white';
+  return 'bg-destructive text-destructive-foreground';
+}
+
+function WaitingBadge({ since }: { since: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - new Date(since).getTime()) / 1000));
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded px-1.5 py-0.5 ${waitColorClass(seconds)}`}>
+      <Timer className="h-2.5 w-2.5" />
+      {formatWaitDuration(seconds)}
+    </span>
+  );
 }
 
 function ConversationSkeleton() {
@@ -209,6 +244,11 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                         Não atribuído
                       </Badge>
                     )}
+                  </div>
+                )}
+                {activeTab === 'in_progress' && conv.waitingSince && (
+                  <div className="mt-1">
+                    <WaitingBadge since={conv.waitingSince} />
                   </div>
                 )}
               </div>
