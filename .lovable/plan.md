@@ -1,24 +1,27 @@
-## Cadastro direto de usuários (e-mail + senha)
+## Funcionários veem todas as conversas (igual admin)
 
-Substituir o fluxo atual de "Convidar Usuário" (que envia e-mail de convite) por um cadastro direto, onde o admin define o e-mail (pode ser fictício) e a senha do novo usuário no momento da criação.
+Hoje a RLS de `chat_conversations` libera SELECT só para: admin, conversas com `status='open'`, ou participante. Conversas **fechadas** ficam ocultas para funcionários, e mensagens/participantes seguem regras restritas. Vamos abrir a leitura para qualquer usuário autenticado.
 
-### Mudanças
+### Migração de RLS
 
-**1. Edge function `supabase/functions/manage-user/index.ts`**
-- Trocar action `invite` por `create`.
-- Em vez de `auth.admin.inviteUserByEmail`, usar `auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name } })` — isso cria o usuário já confirmado, sem envio de e-mail.
-- Manter a atualização de `profiles` (job_title, department_id) e `user_roles` (admin/employee) após a criação.
-- Validação: e-mail e senha obrigatórios; senha com mínimo de 6 caracteres.
+**`chat_conversations`**
+- Remover policies de SELECT existentes ("Admins can view all conversations", "Authenticated users can view all open conversations", "Users can view conversations they participate in").
+- Criar uma única policy: `authenticated` pode `SELECT` (`USING true`).
+- Manter as policies de INSERT/UPDATE como estão (admin/participante).
 
-**2. `src/components/settings/UsersTab.tsx`**
-- Renomear botão "Convidar Usuário" → "Novo Usuário" (ícone `UserPlus` permanece).
-- Renomear estado `inviteOpen`/`inviteForm`/`handleInvite` → `createOpen`/`createForm`/`handleCreate`.
-- Adicionar campo **Senha** (input type="password") no diálogo, abaixo do e-mail. Adicionar microcopy: "O e-mail pode ser fictício e será usado apenas para login."
-- Título do diálogo: "Novo Usuário". Botão: "Criar Usuário".
-- Chamar a edge function com `action: 'create'` enviando `email`, `password`, `full_name`, `job_title`, `department_id`, `role`.
-- Toast de sucesso: "Usuário criado".
+**`chat_messages`**
+- Substituir o SELECT atual (somente participantes) por: `authenticated` pode `SELECT` (`USING true`).
+- Substituir o INSERT atual (precisa ser participante) por: `sender_id = auth.uid()` — qualquer autenticado pode mandar mensagem na conversa que está vendo.
+- Manter UPDATE para participantes.
 
-### Observações técnicas
-- Como o Supabase exige formato de e-mail válido, e-mails "fictícios" precisam ter sintaxe válida (ex.: `joao@empresa.local`). Vou deixar isso explícito na microcopy.
-- `email_confirm: true` evita que o Supabase tente enviar e-mail de confirmação para endereços fictícios.
-- Nenhuma migração de banco é necessária — o trigger `handle_new_user` já cria `profile` e `user_roles` automaticamente.
+**`chat_participants`**
+- Substituir o SELECT atual (`user_id = auth.uid()`) por: `authenticated` pode `SELECT` (`USING true`) — necessário para o app montar nomes/avatares dos participantes em conversas que o usuário não criou.
+- Manter INSERT como está.
+
+### Observações
+- Nenhuma alteração de código frontend é necessária — assim que a RLS abrir, as 149 conversas WhatsApp em aberto + as 28 fechadas passam a aparecer para todos os funcionários nas abas "Aguardando" e "Todas".
+- A aba padrão "Minhas" continua vazia para usuários sem conversas atribuídas — isso é o comportamento esperado dessa aba.
+- Trade-off de privacidade: qualquer funcionário poderá ler qualquer mensagem de qualquer conversa (interna ou WhatsApp). Foi o que você pediu ao escolher "igual admin".
+
+### Memória
+- Atualizar `mem://features/chat/whatsapp-visibility` para refletir que a visibilidade universal vale para **todos os usuários autenticados**, não só admins.
