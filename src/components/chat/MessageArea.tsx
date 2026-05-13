@@ -25,7 +25,7 @@ interface MessageAreaProps {
   messages: ChatMessage[];
   currentUserId: string;
   onSend: (message: string) => void;
-  onSendMedia?: (file: File, type: 'image' | 'video' | 'document') => void;
+  onSendMedia?: (file: File, type: 'image' | 'video' | 'document' | 'audio') => void;
   onSendLocation?: (lat: number, lng: number, name?: string) => void;
   onSendContact?: (name: string, phone: string) => void;
   isGroup?: boolean;

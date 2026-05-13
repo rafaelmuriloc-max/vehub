@@ -169,6 +169,59 @@ Deno.serve(async (req) => {
         sendErrorDetail = "No send channel available (no 24h window and Evolution API not configured)";
         console.error(sendErrorDetail);
       }
+    } else if (type === "audio") {
+      messageType = "whatsapp_audio";
+      messageContent = fileName || "audio";
+
+      if (hasOpenWindow) {
+        const payload = {
+          messaging_product: "whatsapp",
+          to: toPhone,
+          type: "audio",
+          audio: { link: mediaUrl },
+        };
+        const metaRes = await fetch(
+          `https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        sendSuccess = metaRes.ok;
+        if (!sendSuccess) {
+          const errText = await metaRes.text();
+          sendErrorDetail = `Meta API ${metaRes.status}: ${errText}`;
+          console.error("Meta audio error:", errText);
+        }
+      } else if (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) {
+        const evoRes = await fetch(
+          `${EVOLUTION_API_URL}/message/sendWhatsAppAudio/${EVOLUTION_INSTANCE_NAME}`,
+          {
+            method: "POST",
+            headers: {
+              apikey: EVOLUTION_API_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              number: toPhone,
+              audio: mediaUrl,
+            }),
+          }
+        );
+        sendSuccess = evoRes.ok;
+        if (!sendSuccess) {
+          const errText = await evoRes.text();
+          sendErrorDetail = `Evolution API ${evoRes.status}: ${errText}`;
+          console.error("Evolution audio error:", errText);
+        }
+      } else {
+        sendErrorDetail = "No send channel available for audio";
+        console.error(sendErrorDetail);
+      }
     } else if (type === "location") {
       messageType = "whatsapp_location";
       messageContent = `${latitude},${longitude}`;

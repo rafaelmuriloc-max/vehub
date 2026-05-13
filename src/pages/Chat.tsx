@@ -314,7 +314,7 @@ export default function Chat() {
     }
   };
 
-  const sendMedia = async (file: File, type: 'image' | 'video' | 'document') => {
+  const sendMedia = async (file: File, type: 'image' | 'video' | 'document' | 'audio') => {
     if (!user || !activeConvId || isClosed) return;
 
     await ensureAssignedToMe(activeConvId);
