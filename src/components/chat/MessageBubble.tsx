@@ -56,21 +56,8 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
     return () => { cancelled = true; };
   }, [mediaUrl]);
 
-  const handleClick = async () => {
-    try {
-      const res = await fetch(mediaUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName || 'documento';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      window.open(mediaUrl, '_blank');
-    }
+  const handleClick = () => {
+    window.open(mediaUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
