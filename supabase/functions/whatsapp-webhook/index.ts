@@ -357,8 +357,19 @@ Deno.serve(async (req) => {
         .eq("id", conversationId)
         .single();
 
-      // Fetch avatar if missing
-      if (existingConvData && !existingConvData.avatar_url) {
+      // Detect expired WhatsApp avatar URL (oe= unix-hex param past now)
+      const isAvatarExpired = (url: string | null | undefined): boolean => {
+        if (!url) return false;
+        const m = url.match(/[?&]oe=([0-9A-Fa-f]+)/);
+        if (!m) return false;
+        const exp = parseInt(m[1], 16);
+        if (!exp) return false;
+        // refresh if expires within 24h
+        return exp * 1000 < Date.now() + 24 * 60 * 60 * 1000;
+      };
+
+      // Fetch avatar if missing or expired
+      if (existingConvData && (!existingConvData.avatar_url || isAvatarExpired(existingConvData.avatar_url))) {
         try {
           const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
           const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
