@@ -148,10 +148,13 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
       </div>
 
       {/* Tabs */}
-      <div className="px-2 pt-2">
+      <div className="px-2 pt-2 pb-1">
         <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ChatTab)}>
-          <TabsList className="w-full">
-            <TabsTrigger value="mine" className="flex-1 text-xs relative">
+          <TabsList className="w-full bg-transparent border-b border-border/40 rounded-none h-auto p-0 gap-1 justify-stretch">
+            <TabsTrigger
+              value="mine"
+              className="flex-1 text-xs relative rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground py-2.5 transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2 data-[state=active]:after:h-2 data-[state=active]:after:rotate-45 data-[state=active]:after:bg-primary"
+            >
               Chat
               {totalUnread != null && totalUnread > 0 && (
                 <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
@@ -159,7 +162,10 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="in_progress" className="flex-1 text-xs relative">
+            <TabsTrigger
+              value="in_progress"
+              className="flex-1 text-xs relative rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground py-2.5 transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2 data-[state=active]:after:h-2 data-[state=active]:after:rotate-45 data-[state=active]:after:bg-primary"
+            >
               Espera
               {waitingCount != null && waitingCount > 0 && (
                 <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
@@ -167,7 +173,12 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="all" className="flex-1 text-xs">Geral</TabsTrigger>
+            <TabsTrigger
+              value="all"
+              className="flex-1 text-xs relative rounded-none border-b-2 border-transparent bg-transparent text-muted-foreground py-2.5 transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2 data-[state=active]:after:h-2 data-[state=active]:after:rotate-45 data-[state=active]:after:bg-primary"
+            >
+              Geral
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
