@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
       contactName,
       contactPhone,
       senderName,
+      senderId: senderIdInput,
     } = await req.json();
 
     if (!conversationId || !type) {
@@ -352,15 +353,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find admin user for sender_id
-    const { data: adminRole } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "admin")
-      .limit(1)
-      .single();
-
-    const senderId = adminRole?.user_id || "00000000-0000-0000-0000-000000000000";
+    // Use caller's user_id when provided; fallback to first admin
+    let senderId: string = senderIdInput || "";
+    if (!senderId) {
+      const { data: adminRole } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin")
+        .limit(1)
+        .single();
+      senderId = adminRole?.user_id || "00000000-0000-0000-0000-000000000000";
+    }
 
     // Insert chat message
     const { data: insertedMsg, error: insertErr } = await supabase
