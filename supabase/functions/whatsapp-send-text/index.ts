@@ -60,6 +60,8 @@ Deno.serve(async (req) => {
     const hasOpenWindow = recentIncoming && recentIncoming.length > 0;
     let sendSuccess = false;
     let sendError: string | null = null;
+    let waMessageId: string | null = null;
+    let metaPhoneDigits = "";
 
     if (hasOpenWindow) {
       // Send via Meta API (official) - free text within 24h window
@@ -79,6 +81,7 @@ Deno.serve(async (req) => {
       if (!metaPhone.startsWith("55")) {
         metaPhone = "55" + metaPhone;
       }
+      metaPhoneDigits = metaPhone;
 
       const metaRes = await fetch(
         `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
@@ -97,12 +100,13 @@ Deno.serve(async (req) => {
         }
       );
 
+      const metaJson = await metaRes.json().catch(() => ({} as any));
       if (metaRes.ok) {
         sendSuccess = true;
-        console.log("Meta API send success");
+        waMessageId = metaJson?.messages?.[0]?.id ?? null;
+        console.log("Meta API send success, wamid:", waMessageId);
       } else {
-        const errData = await metaRes.text();
-        sendError = `Meta API error: ${metaRes.status} ${errData}`;
+        sendError = `Meta API error: ${metaRes.status} ${JSON.stringify(metaJson)}`;
         console.error(sendError);
       }
     } else {
@@ -119,6 +123,10 @@ Deno.serve(async (req) => {
         });
       }
 
+      let evoPhone = phone.replace(/\D/g, "");
+      if (!evoPhone.startsWith("55")) evoPhone = "55" + evoPhone;
+      metaPhoneDigits = evoPhone;
+
       const evoRes = await fetch(
         `${evolutionUrl}/message/sendText/${evolutionInstance}`,
         {
@@ -134,12 +142,13 @@ Deno.serve(async (req) => {
         }
       );
 
+      const evoJson = await evoRes.json().catch(() => ({} as any));
       if (evoRes.ok) {
         sendSuccess = true;
-        console.log("Evolution API send success");
+        waMessageId = evoJson?.key?.id ?? null;
+        console.log("Evolution API send success, key.id:", waMessageId);
       } else {
-        const errData = await evoRes.text();
-        sendError = `Evolution API error: ${evoRes.status} ${errData}`;
+        sendError = `Evolution API error: ${evoRes.status} ${JSON.stringify(evoJson)}`;
         console.error(sendError);
       }
     }
@@ -190,6 +199,8 @@ Deno.serve(async (req) => {
         content: text,
         message_type: "whatsapp_outgoing",
         channel: "whatsapp",
+        wa_message_id: waMessageId,
+        wa_remote_jid: metaPhoneDigits ? `${metaPhoneDigits}@s.whatsapp.net` : null,
       })
       .select("id, content, sender_id, created_at, read_at, message_type, media_url, channel")
       .single();
