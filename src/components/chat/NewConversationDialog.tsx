@@ -101,7 +101,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Nova Conversa</DialogTitle>
           <DialogDescription>Selecione um usuário para iniciar uma conversa.</DialogDescription>

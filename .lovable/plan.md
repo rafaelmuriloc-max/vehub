@@ -1,24 +1,33 @@
-## Melhorias de layout no diálogo "Anexar arquivo de obrigação"
+## Responsividade: corrigir overflow do diálogo de anexar e padronizar diálogos/telas
 
-Problema: nomes longos de arquivos vazam, botões do rodapé estouram a largura e ficam cortados, e o nome da empresa fica truncado.
+### Problema imediato (visível no screenshot)
+No diálogo "Anexar arquivo de obrigação", a lista de arquivos vaza para fora da caixa: nomes longos não truncam e o container `border rounded-md` se estende além do `DialogContent`. Causa: falta `overflow-hidden`/`min-w-0` no container da lista; o `truncate` interno não tem efeito porque o pai cresce com o conteúdo.
 
-### Mudanças em `src/components/chat/AttachFromObligationDialog.tsx`
+### Mudanças
 
-1. **Aumentar largura do diálogo** — trocar `sm:max-w-md` por `sm:max-w-lg` no `DialogContent` para acomodar nomes mais longos.
+1. **`src/components/chat/AttachFromObligationDialog.tsx`**
+   - Container de arquivos: adicionar `overflow-hidden` no wrapper `border rounded-md`.
+   - Garantir `min-w-0` em toda a coluna `space-y-3` e nos `<label>` de cada arquivo.
+   - Span do nome: manter `truncate flex-1 min-w-0` e `block` para forçar truncamento.
+   - DialogContent: usar `w-[calc(100vw-2rem)] sm:max-w-lg` e `max-h-[90dvh] overflow-hidden flex flex-col`, com a área de conteúdo `flex-1 overflow-y-auto` para evitar estouro vertical em telas pequenas.
 
-2. **Garantir truncamento nos triggers de Empresa e Obrigação** — adicionar `min-w-0` nos containers e manter `truncate` no `<span>` interno para evitar overflow horizontal.
+2. **Auditoria rápida de outros diálogos críticos** (somente correções pontuais quando houver overflow real):
+   - `src/components/chat/NewConversationDialog.tsx`
+   - `src/components/EmailComposeDialog.tsx`
+   - `src/components/CertificateImportDialog.tsx`
+   - `src/components/DocumentReviewDialog.tsx`
+   
+   Padrão aplicado a cada um, se ainda não estiver:
+   - `DialogContent` com `w-[calc(100vw-2rem)] sm:max-w-...` e `max-h-[90dvh] overflow-hidden flex flex-col`.
+   - Conteúdo principal com `flex-1 overflow-y-auto`.
+   - Triggers/itens com `min-w-0` + `truncate` onde houver textos longos (nomes de empresas/arquivos).
+   - Footers com `flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end gap-2`.
 
-3. **Lista de arquivos**
-   - Adicionar `min-w-0` no wrapper para o `truncate` funcionar corretamente.
-   - Aumentar `max-h-48` para `max-h-56` e manter `overflow-y-auto`.
-   - Mostrar nome do arquivo com `break-all` em uma linha apenas se necessário, ou usar `truncate` com `title={fileName}` para exibir o nome completo no hover.
+3. **Sem alterações em telas/páginas de listagem ou em lógica de negócio** — escopo limitado a diálogos com overflow conhecido.
 
-4. **Rodapé responsivo**
-   - Trocar a ordem para `flex-col-reverse sm:flex-row sm:justify-end` (já é o default do `DialogFooter`).
-   - Adicionar `flex-wrap` para permitir quebra dos botões quando o espaço for insuficiente.
-   - Encurtar rótulos: "Enviar todos (N)" mantém; "Enviar selecionados (N)" passa a "Enviar selecionados" sem o sufixo redundante quando count = 0; manter contador quando > 0.
-   - Garantir que cada botão tenha `whitespace-nowrap` (já é padrão do Button) e `min-w-0` no container.
+### Fora do escopo desta entrega
+- Reformular layouts de páginas inteiras (Clientes, Tarefas, Fiscal, etc.) — caso queira incluir, basta indicar quais.
 
-5. **Header de "Selecionar todos"** — manter, mas com `text-sm` e padding consistente.
-
-Sem mudanças de lógica/negócio. Apenas ajustes de classes Tailwind.
+### Detalhes técnicos
+- Uso de `dvh` para evitar problemas com a barra de URL no mobile (já é convenção do projeto).
+- `min-w-0` é necessário em flex items para que `truncate` funcione (caso clássico em flex containers).
