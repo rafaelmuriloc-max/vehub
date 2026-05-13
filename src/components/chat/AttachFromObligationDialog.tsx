@@ -73,19 +73,19 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
     (async () => {
       setLoadingCompanies(true);
       try {
-        let clientIds: string[] = [];
-        if (conversationClientId) {
-          clientIds = [conversationClientId];
-        } else if (whatsappPhone) {
+        const idsSet = new Set<string>();
+        if (conversationClientId) idsSet.add(conversationClientId);
+        if (whatsappPhone) {
           const digits = whatsappPhone.replace(/\D/g, '');
           const searchPhone = digits.length > 4 ? digits.slice(-8) : digits;
           const { data: contacts } = await supabase
             .from('client_department_contacts')
             .select('client_id, contact_phone');
-          clientIds = [...new Set((contacts || [])
-            .filter(c => c.contact_phone && c.contact_phone.includes(searchPhone))
-            .map(c => c.client_id))];
+          (contacts || [])
+            .filter(c => c.contact_phone && c.contact_phone.replace(/\D/g, '').includes(searchPhone))
+            .forEach(c => idsSet.add(c.client_id));
         }
+        const clientIds = [...idsSet];
         if (clientIds.length === 0) {
           if (!cancelled) setCompanies([]);
           return;
