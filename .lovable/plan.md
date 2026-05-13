@@ -1,14 +1,33 @@
-## Diagnóstico
+## Mudança visual nas abas (Chat / Espera / Geral)
 
-A coluna `waiting_since` da única conversa em espera está `NULL`, então o badge não aparece (ele só renderiza quando `waitingSince` existe). O trigger só preenche em novas mensagens de cliente; o backfill anterior não cobriu a linha atual.
+Aplicar um estilo moderno na aba selecionada em `src/components/chat/ConversationList.tsx`:
 
-## Correção
+- **Aba ativa**: fundo branco com borda inferior azul (`border-b-2 border-primary`), texto azul/escuro em negrito, sombra suave
+- **Indicador de seta**: pequeno triângulo azul apontando para baixo, centralizado abaixo da aba ativa (via pseudo-elemento `after:` com rotação 45° + fundo primary)
+- **Abas inativas**: texto cinza, sem borda, hover suave
+- **TabsList**: fundo transparente para destacar a aba ativa
 
-1. **Backfill imediato** — rodar `UPDATE chat_conversations SET waiting_since = COALESCE(waiting_since, updated_at) WHERE status='open' AND assigned_to IS NULL`.
+### Implementação
 
-2. **Fallback no frontend** — em `ConversationList.tsx`, na aba "Espera" exibir o cronômetro mesmo quando `waitingSince` for null, usando `lastMessageAt` como base. Assim qualquer conversa em espera sempre mostra um timer aproximado, mesmo se o trigger não tiver disparado por algum motivo.
+Sobrescrever as classes de cada `TabsTrigger` usando modificadores `data-[state=active]:` do Radix:
 
-## Detalhes técnicos
+```tsx
+<TabsList className="w-full bg-transparent border-b border-border/40 rounded-none h-auto p-0 gap-1">
+  <TabsTrigger
+    value="..."
+    className="flex-1 text-sm relative rounded-none border-b-2 border-transparent
+               data-[state=active]:border-primary data-[state=active]:bg-background
+               data-[state=active]:text-primary data-[state=active]:font-semibold
+               data-[state=active]:shadow-sm
+               data-[state=active]:after:content-[''] data-[state=active]:after:absolute
+               data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2
+               data-[state=active]:after:-bottom-[5px] data-[state=active]:after:w-2
+               data-[state=active]:after:h-2 data-[state=active]:after:rotate-45
+               data-[state=active]:after:bg-primary
+               transition-all"
+  >
+```
 
-- Migration de dados (UPDATE) em `chat_conversations`.
-- Mudança de UI: `<WaitingBadge since={conv.waitingSince || conv.lastMessageAt} />` quando `activeTab === 'in_progress'` e a conversa não tem responsável.
+Aplicado nas três abas: `mine` (Chat), `in_progress` (Espera) e `all` (Geral). Mantém os badges de contagem existentes.
+
+Nenhuma mudança em lógica, apenas classes Tailwind usando tokens semânticos (`primary`, `background`, `border`).
