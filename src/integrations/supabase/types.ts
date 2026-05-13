@@ -1524,6 +1524,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_chat_inbox: {
+        Args: { p_tab: string; p_user: string }
+        Returns: {
+          assigned_to: string
+          assigned_to_name: string
+          avatar_url: string
+          client_id: string
+          created_at: string
+          id: string
+          is_group: boolean
+          last_message: string
+          last_message_at: string
+          last_message_type: string
+          name: string
+          status: string
+          unread_count: number
+          updated_at: string
+          whatsapp_phone: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
