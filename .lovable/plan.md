@@ -1,28 +1,18 @@
-## Objetivo
+## Ajuste
 
-Mostrar, na lista de conversas, as empresas vinculadas ao contato logo abaixo do nome — igual ao que já aparece no header do chat aberto.
+Aumentar a margem inferior da caixa de mensagem no chat para ela não ficar colada ao fim da tela em dispositivos móveis.
 
-## Contexto
+### Mudança
 
-- `ConversationItem` já carrega `companyNames?: string[]` (populado em `Chat.tsx` via `whatsappCompanyMap`).
-- Hoje esse dado só é exibido no `MessageArea` (header do chat).
-- Na lista (`ConversationList.tsx`), nada é renderizado abaixo do nome.
+**`src/components/chat/ChatInput.tsx`** (linha 155)
 
-## Mudança
+Substituir o padding inferior do container do input:
 
-Editar apenas `src/components/chat/ConversationList.tsx`:
+- De: `pb-[env(safe-area-inset-bottom,2px)]`
+- Para: `pb-[calc(env(safe-area-inset-bottom,0px)+16px)]`
 
-1. Logo abaixo da linha do nome + horário, antes da linha de "última mensagem", inserir uma linha discreta com as empresas vinculadas quando `conv.companyNames?.length > 0`.
-2. Estilo: texto pequeno (`text-[11px]`), cor `text-muted-foreground`, `truncate` em uma linha, empresas separadas por `•` (ou `|` para manter padrão do header).
-3. Não exibir nada quando a lista estiver vazia (contatos sem vínculo continuam como hoje).
+Isso mantém o respeito à safe-area do iOS e adiciona ~16px extras de respiro abaixo do campo de texto e dos botões.
 
-Sem mudanças em backend, tipos ou em `Chat.tsx` — os dados já chegam prontos.
+### Verificação
 
-## Resultado visual esperado
-
-```text
-[avatar]  Rafael Murilo                           21:44
-          RJ Climatização • Outra Empresa
-          RJ CLIMATIZAÇÃO FGTS 042026.pdf
-          [badge status]
-```
+Recarregar a tela do chat no preview mobile (402×632) e confirmar que a caixa "Digite uma mensagem" aparece com mais espaço abaixo, sem cortar conteúdo nem cobrir mensagens.
