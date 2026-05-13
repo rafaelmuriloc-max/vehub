@@ -17,7 +17,7 @@ import { EnableNotificationsBanner } from '@/components/chat/EnableNotifications
 export type ChatTab = 'mine' | 'in_progress' | 'all';
 
 export default function Chat() {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -171,14 +171,15 @@ export default function Chat() {
     const loadMessages = async () => {
       const { data } = await supabase
         .from('chat_messages')
-        .select('id, content, sender_id, created_at, read_at, message_type, media_url')
+        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: false })
         .limit(100);
 
       if (!data) return;
 
-      const ordered = [...data].reverse();
+      const filtered = (data as any[]).filter(m => !(m.deleted_for || []).includes(user.id));
+      const ordered = [...filtered].reverse();
       const senderIds = [...new Set(ordered.map(m => m.sender_id))];
       const { data: profiles } = await supabase
         .from('profiles')
@@ -467,6 +468,74 @@ export default function Chat() {
     loadConversations();
   };
 
+  const editMessage = async (id: string, newContent: string) => {
+    if (!newContent.trim()) return;
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ content: newContent.trim(), edited_at: new Date().toISOString() } as any)
+      .eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao editar mensagem', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, content: newContent.trim(), edited_at: new Date().toISOString() } : m));
+  };
+
+  const deleteMessageForMe = async (id: string) => {
+    if (!user) return;
+    const msg = messages.find(m => m.id === id);
+    const current: string[] = (msg as any)?.deleted_for || [];
+    if (current.includes(user.id)) return;
+    const next = [...current, user.id];
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ deleted_for: next } as any)
+      .eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao apagar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setMessages(prev => prev.filter(m => m.id !== id));
+  };
+
+  const deleteMessageForAll = async (id: string) => {
+    const msg = messages.find(m => m.id === id);
+    // Try to remove media file from storage
+    if (msg?.media_url) {
+      try {
+        const idx = msg.media_url.indexOf('/chat-media/');
+        if (idx >= 0) {
+          const path = msg.media_url.substring(idx + '/chat-media/'.length).split('?')[0];
+          await supabase.storage.from('chat-media').remove([decodeURIComponent(path)]);
+        }
+      } catch (e) { console.warn('Falha ao remover mídia:', e); }
+    }
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ content: '', media_url: null, deleted_at: new Date().toISOString() } as any)
+      .eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao apagar mensagem', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, content: '', media_url: undefined, deleted_at: new Date().toISOString() } as any : m));
+    loadConversations();
+  };
+
+  const deleteConversation = async () => {
+    if (!activeConvId) return;
+    const { error } = await supabase.rpc('delete_conversation_cascade' as any, { p_id: activeConvId });
+    if (error) {
+      toast({ title: 'Erro ao excluir conversa', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Conversa excluída' });
+    setActiveConvId(null);
+    setActiveConvName(null);
+    setMessages([]);
+    loadConversations();
+  };
+
   // Transfer ticket
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [teamMembers, setTeamMembers] = useState<{ user_id: string; full_name: string; job_title: string | null }[]>([]);
@@ -569,6 +638,11 @@ export default function Chat() {
             onTransferTicket={openTransferDialog}
             whatsappPhone={activeConv?.whatsappPhone}
             onBack={isMobile ? () => setActiveConvId(null) : undefined}
+            isAdmin={isAdmin}
+            onEditMessage={editMessage}
+            onDeleteMessageForMe={deleteMessageForMe}
+            onDeleteMessageForAll={deleteMessageForAll}
+            onDeleteConversation={deleteConversation}
           />
         </div>
       )}

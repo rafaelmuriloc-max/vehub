@@ -3,9 +3,14 @@ import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { MessageCircle, CheckCircle2, UserRoundPlus, Phone, ArrowLeft } from 'lucide-react';
+import { MessageCircle, CheckCircle2, UserRoundPlus, Phone, ArrowLeft, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -18,6 +23,8 @@ export interface ChatMessage {
   sender_name?: string;
   message_type?: string;
   media_url?: string;
+  edited_at?: string | null;
+  deleted_at?: string | null;
 }
 
 interface MessageAreaProps {
@@ -39,6 +46,11 @@ interface MessageAreaProps {
   onTransferTicket?: () => void;
   whatsappPhone?: string;
   onBack?: () => void;
+  isAdmin?: boolean;
+  onEditMessage?: (id: string, newContent: string) => void;
+  onDeleteMessageForMe?: (id: string) => void;
+  onDeleteMessageForAll?: (id: string) => void;
+  onDeleteConversation?: () => void;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -48,7 +60,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -134,6 +146,38 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             <span className="hidden md:inline text-sm">Reabrir Chamado</span>
           </Button>
         )}
+        {isAdmin && onDeleteConversation && (
+          <AlertDialog>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir conversa
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir conversa?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação é permanente. Todas as mensagens, mídias e participantes serão removidos.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={onDeleteConversation} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {/* Messages */}
@@ -164,6 +208,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   messageType={msg.message_type}
                   mediaUrl={msg.media_url}
                   avatarUrl={avatarUrl}
+                  editedAt={msg.edited_at}
+                  deletedAt={msg.deleted_at}
+                  isAdmin={isAdmin}
+                  onEdit={onEditMessage ? (text) => onEditMessage(msg.id, text) : undefined}
+                  onDeleteForMe={onDeleteMessageForMe ? () => onDeleteMessageForMe(msg.id) : undefined}
+                  onDeleteForAll={onDeleteMessageForAll ? () => onDeleteMessageForAll(msg.id) : undefined}
                 />
               );
             })}

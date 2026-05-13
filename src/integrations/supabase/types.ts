@@ -73,6 +73,9 @@ export type Database = {
           content: string
           conversation_id: string
           created_at: string
+          deleted_at: string | null
+          deleted_for: string[]
+          edited_at: string | null
           id: string
           media_url: string | null
           message_type: string
@@ -84,6 +87,9 @@ export type Database = {
           content: string
           conversation_id: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_for?: string[]
+          edited_at?: string | null
           id?: string
           media_url?: string | null
           message_type?: string
@@ -95,6 +101,9 @@ export type Database = {
           content?: string
           conversation_id?: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_for?: string[]
+          edited_at?: string | null
           id?: string
           media_url?: string | null
           message_type?: string
@@ -1524,6 +1533,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_conversation_cascade: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       get_chat_inbox: {
         Args: { p_tab: string; p_user: string }
         Returns: {
