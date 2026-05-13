@@ -71,14 +71,14 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
   return (
     <div className="flex flex-col h-full border-r bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-muted border-b">
+      <div className="flex items-center justify-between p-2 md:p-3 bg-muted border-b">
         <div className="flex items-center gap-1">
           {onNavigateBack && (
             <Button variant="ghost" size="icon" onClick={onNavigateBack} className="h-8 w-8 md:hidden">
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
-          <h2 className="text-base font-semibold text-foreground">Conversas</h2>
+          <h2 className="text-sm md:text-base font-semibold text-foreground">Conversas</h2>
         </div>
         <div className="flex items-center gap-1">
           {onRefreshAvatars && (
@@ -88,6 +88,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
               onClick={onRefreshAvatars}
               disabled={refreshingAvatars}
               title="Atualizar fotos"
+              className="hidden sm:inline-flex"
             >
               <RefreshCw className={`h-5 w-5 ${refreshingAvatars ? 'animate-spin' : ''}`} />
             </Button>
@@ -110,7 +111,10 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="in_progress" className="flex-1 text-xs">Em andamento</TabsTrigger>
+            <TabsTrigger value="in_progress" className="flex-1 text-xs">
+              <span className="md:hidden">Andamento</span>
+              <span className="hidden md:inline">Em andamento</span>
+            </TabsTrigger>
             <TabsTrigger value="all" className="flex-1 text-xs">Geral</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -144,11 +148,11 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-              className={`w-full flex items-center gap-3 px-3 py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-border/30 ${
+              className={`w-full flex items-center gap-3 px-2 py-2.5 md:px-3 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-border/30 ${
                 activeId === conv.id ? 'bg-[#F0F2F5] dark:bg-zinc-800' : ''
               }`}
             >
-              <Avatar className="h-12 w-12 shrink-0">
+              <Avatar className="h-11 w-11 md:h-12 md:w-12 shrink-0">
                 {conv.avatarUrl && <AvatarImage src={conv.avatarUrl} alt={conv.name} />}
                 <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                   {conv.name.charAt(0).toUpperCase()}
