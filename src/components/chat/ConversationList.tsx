@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MessageSquarePlus, ArrowLeft, User } from 'lucide-react';
+import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,8 @@ interface ConversationListProps {
   onTabChange: (tab: ChatTab) => void;
   totalUnread?: number;
   onNavigateBack?: () => void;
+  onRefreshAvatars?: () => void;
+  refreshingAvatars?: boolean;
 }
 
 function formatTime(dateStr: string) {
@@ -58,7 +60,7 @@ function ConversationSkeleton() {
   );
 }
 
-export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange, totalUnread, onNavigateBack }: ConversationListProps) {
+export function ConversationList({ conversations, activeId, onSelect, onCreated, loading, activeTab, onTabChange, totalUnread, onNavigateBack, onRefreshAvatars, refreshingAvatars }: ConversationListProps) {
   const [search, setSearch] = useState('');
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
@@ -78,9 +80,22 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
           )}
           <h2 className="text-base font-semibold text-foreground">Conversas</h2>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setNewDialogOpen(true)}>
-          <MessageSquarePlus className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {onRefreshAvatars && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onRefreshAvatars}
+              disabled={refreshingAvatars}
+              title="Atualizar fotos"
+            >
+              <RefreshCw className={`h-5 w-5 ${refreshingAvatars ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" onClick={() => setNewDialogOpen(true)}>
+            <MessageSquarePlus className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
