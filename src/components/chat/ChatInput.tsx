@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check } from 'lucide-react';
+import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -12,10 +12,11 @@ interface ChatInputProps {
   onSendMedia?: (file: File, type: 'image' | 'video' | 'document' | 'audio') => void;
   onSendLocation?: (lat: number, lng: number, name?: string) => void;
   onSendContact?: (name: string, phone: string) => void;
+  onPickFromObligation?: () => void;
   disabled?: boolean;
 }
 
-export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
@@ -141,6 +142,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
     { icon: Video, label: 'Vídeo', onClick: () => { setPopoverOpen(false); videoInputRef.current?.click(); } },
     { icon: Mic, label: 'Áudio', onClick: () => { setPopoverOpen(false); audioInputRef.current?.click(); } },
     { icon: FileText, label: 'Arquivo', onClick: () => { setPopoverOpen(false); fileInputRef.current?.click(); } },
+    ...(onPickFromObligation ? [{ icon: FolderOpen, label: 'Anexar de obrigação', onClick: () => { setPopoverOpen(false); onPickFromObligation(); } }] : []),
     { icon: MapPin, label: 'Localização', onClick: handleLocationClick },
     { icon: Contact, label: 'Contato', onClick: () => { setPopoverOpen(false); setContactDialogOpen(true); } },
   ];
