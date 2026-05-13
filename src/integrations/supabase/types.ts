@@ -1533,6 +1533,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_conversation_cascade: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       get_chat_inbox: {
         Args: { p_tab: string; p_user: string }
         Returns: {
