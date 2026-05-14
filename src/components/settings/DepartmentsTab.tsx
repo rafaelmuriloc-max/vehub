@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
 
-interface Department { id: string; name: string; description: string | null; smtp_email?: string | null; smtp_password?: string | null; }
+interface Department { id: string; name: string; description: string | null; triage_keywords?: string | null; smtp_email?: string | null; smtp_password?: string | null; }
 
 export function DepartmentsTab() {
   const { isAdmin: admin } = useAuth();
@@ -19,25 +19,25 @@ export function DepartmentsTab() {
   const [items, setItems] = useState<Department[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', smtp_email: '', smtp_password: '' });
+  const [form, setForm] = useState({ name: '', description: '', triage_keywords: '', smtp_email: '', smtp_password: '' });
   const [showPassword, setShowPassword] = useState(false);
 
   const fetch = async () => {
-    const { data: depts } = await supabase.from('departments').select('id, name, description').order('name');
+    const { data: depts } = await supabase.from('departments').select('id, name, description, triage_keywords').order('name');
     if (!depts) return;
     const { data: creds } = await supabase.from('department_credentials' as any).select('department_id, smtp_email, smtp_password');
     const credMap = new Map<string, { smtp_email: string | null; smtp_password: string | null }>();
     (creds as any[] | null)?.forEach(c => credMap.set(c.department_id, { smtp_email: c.smtp_email, smtp_password: c.smtp_password }));
-    setItems(depts.map(d => ({ ...d, smtp_email: credMap.get(d.id)?.smtp_email ?? null, smtp_password: credMap.get(d.id)?.smtp_password ?? null })) as Department[]);
+    setItems((depts as any[]).map(d => ({ ...d, smtp_email: credMap.get(d.id)?.smtp_email ?? null, smtp_password: credMap.get(d.id)?.smtp_password ?? null })) as Department[]);
   };
 
   useEffect(() => { fetch(); }, []);
 
-  const openNew = () => { setEditing(null); setForm({ name: '', description: '', smtp_email: '', smtp_password: '' }); setShowPassword(false); setOpen(true); };
-  const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '', smtp_email: d.smtp_email || '', smtp_password: d.smtp_password || '' }); setShowPassword(false); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ name: '', description: '', triage_keywords: '', smtp_email: '', smtp_password: '' }); setShowPassword(false); setOpen(true); };
+  const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '', triage_keywords: d.triage_keywords || '', smtp_email: d.smtp_email || '', smtp_password: d.smtp_password || '' }); setShowPassword(false); setOpen(true); };
 
   const handleSave = async () => {
-    const deptPayload = { name: form.name, description: form.description || null };
+    const deptPayload: any = { name: form.name, description: form.description || null, triage_keywords: form.triage_keywords || null };
     let deptId = editing?.id;
     if (editing) {
       const { error } = await supabase.from('departments').update(deptPayload).eq('id', editing.id);
@@ -103,6 +103,18 @@ export function DepartmentsTab() {
           <div className="space-y-3">
             <div><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
             <div><Label>Descrição</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
+            <div>
+              <Label>Palavras-chave para triagem por IA</Label>
+              <Textarea
+                value={form.triage_keywords}
+                onChange={e => setForm({ ...form, triage_keywords: e.target.value })}
+                rows={2}
+                placeholder="Ex.: notas fiscais, NFe, NFSe, ICMS, impostos, escrituração fiscal"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                A IA usa essas palavras para decidir quando rotear conversas para este departamento.
+              </p>
+            </div>
             <div><Label>E-mail SMTP</Label><Input type="email" placeholder="departamento@escritorio.com" value={form.smtp_email} onChange={e => setForm({ ...form, smtp_email: e.target.value })} /></div>
             <div>
               <Label>Senha de App (Gmail)</Label>
