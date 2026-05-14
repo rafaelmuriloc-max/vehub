@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
+import { Phone } from 'lucide-react';
 
 interface Contact {
   phone: string;          // normalized digits
@@ -106,6 +107,12 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
     );
   });
 
+  const searchDigits = search.replace(/\D/g, '');
+  const showPhoneOption =
+    searchDigits.length >= 10 &&
+    searchDigits.length <= 15 &&
+    !contacts.some(c => c.phone === searchDigits);
+
   const startConversation = async (contact: Contact) => {
     if (!user || creating) return;
     setCreating(true);
@@ -160,12 +167,36 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
           <DialogDescription>Selecione um contato para iniciar uma conversa no WhatsApp.</DialogDescription>
         </DialogHeader>
         <Input
-          placeholder="Buscar por nome, empresa ou telefone..."
+          placeholder="Buscar por nome, empresa ou digite um telefone..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="max-h-64 overflow-y-auto space-y-1 mt-2">
-          {filtered.length === 0 && (
+          {showPhoneOption && (
+            <button
+              onClick={() =>
+                startConversation({
+                  phone: searchDigits,
+                  displayPhone: searchDigits,
+                  name: `+${searchDigits}`,
+                  source: 'whatsapp',
+                })
+              }
+              disabled={creating}
+              className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors text-left border border-dashed border-primary/40"
+            >
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  <Phone className="h-5 w-5" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">Enviar mensagem para +{searchDigits}</p>
+                <p className="text-xs text-muted-foreground truncate">Novo contato WhatsApp</p>
+              </div>
+            </button>
+          )}
+          {filtered.length === 0 && !showPhoneOption && (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum contato encontrado</p>
           )}
           {filtered.map(c => (
