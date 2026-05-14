@@ -319,6 +319,15 @@ export default function Chat() {
           debouncedReloadConversations();
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated.conversation_id !== activeConvId) return;
+          setMessages(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)));
+        }
+      )
       .subscribe();
 
     return () => {

@@ -328,6 +328,33 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
           </button>
         )}
         {renderMedia()}
+        {mediaKind === 'audio' && (transcriptionStatus || transcription) && (
+          <div className={`mt-1 mb-1 text-xs rounded-md px-2 py-1.5 ${showOnRight ? 'bg-emerald-100/70 dark:bg-emerald-900/40' : 'bg-black/5 dark:bg-white/10'}`}>
+            {transcriptionStatus === 'processing' && (
+              <div className="flex items-center gap-1.5 text-muted-foreground italic">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Transcrevendo áudio…</span>
+              </div>
+            )}
+            {transcriptionStatus === 'done' && transcription && (
+              <div className="flex items-start gap-1.5">
+                <Sparkles className="h-3 w-3 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <p className="whitespace-pre-wrap break-words leading-snug">{transcription}</p>
+              </div>
+            )}
+            {transcriptionStatus === 'failed' && (
+              <button
+                type="button"
+                onClick={retryTranscription}
+                disabled={retrying}
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                <span>Falha ao transcrever — tentar novamente</span>
+              </button>
+            )}
+          </div>
+        )}
         {/* Show text content - skip for documents/location/contact */}
          {editing ? (
           <div className="flex flex-col gap-1.5 min-w-[200px]">
