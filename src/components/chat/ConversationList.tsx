@@ -235,13 +235,13 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                   )}
                 </div>
                 {conv.companyNames && conv.companyNames.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground truncate mt-0.5 px-[4px] border-0 border-none rounded-none text-cyan-950 font-medium py-[2px] bg-inherit shadow-none">
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5 border-0 border-none rounded-none text-cyan-950 font-medium py-[2px] bg-inherit shadow-none text-left mx-0 my-0 px-[4px]">
                     {conv.companyNames.join(' • ')}
                   </p>
                 )}
                 {conv.unreadCount > 0 && (
                   <div className="flex items-center justify-end mt-0.5">
-                    <span className="shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
+                    <span className="shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center bg-green-600 py-0 px-[6px] mx-0 my-0">
                       {conv.unreadCount}
                     </span>
                   </div>
