@@ -211,11 +211,11 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma conversa</p>
         ) : (
-          filtered.map(conv => (
+          filtered.map((conv, idx) => (
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-              className={`w-full gap-3 px-2 py-2.5 md:px-3 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-border/30 flex items-start justify-start shadow-sm border-dashed ${
+              className={`w-full gap-3 pl-2 md:pl-3 pr-0 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors flex items-start justify-start ${
                 activeId === conv.id ? 'bg-[#F0F2F5] dark:bg-zinc-800' : ''
               }`}
             >
@@ -225,7 +225,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                   {conv.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0 text-left">
+              <div className={`flex-1 min-w-0 text-left pr-2 md:pr-3 ${idx < filtered.length - 1 ? 'border-b border-border/60 pb-2.5 md:pb-3' : ''}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium truncate">{conv.name}</span>
                   {conv.lastMessageAt && (
