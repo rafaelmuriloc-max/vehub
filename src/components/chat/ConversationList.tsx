@@ -241,7 +241,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 )}
                 {conv.unreadCount > 0 && (
                   <div className="flex items-center justify-end mt-0.5">
-                    <span className="shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center bg-green-600 py-0 px-[6px] mx-0 my-0">
+                    <span className="shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center py-0 px-[6px] mx-0 my-0 bg-lime-600">
                       {conv.unreadCount}
                     </span>
                   </div>
