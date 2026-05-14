@@ -8,7 +8,7 @@ import {
   SidebarMenuButton, SidebarGroup, SidebarGroupLabel, SidebarGroupContent,
   SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton, useSidebar,
 } from '@/components/ui/sidebar';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 
@@ -133,11 +133,6 @@ export function AppSidebar() {
       <SidebarFooter className="p-4">
         <Separator className="bg-sidebar-border mb-4" />
         <div className="flex items-center gap-3">
-          <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/60">
-            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-semibold text-sm text-left mx-0 px-0 rounded-none">
-              {profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-            </AvatarFallback>
-          </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate text-sidebar-foreground">{profile?.full_name || 'Usuário'}</p>
             <p className="text-xs text-sidebar-foreground/50 truncate">{profile?.job_title || 'Funcionário'}</p>
