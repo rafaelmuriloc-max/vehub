@@ -15,9 +15,51 @@ import { Pencil, Trash2, UserPlus } from 'lucide-react';
 
 interface UserRow {
   id: string; user_id: string; full_name: string | null; job_title: string | null;
-  department_id: string | null; role: string;
+  department_id: string | null; role: string; tag_color: string | null;
 }
 interface Dept { id: string; name: string; }
+
+const TAG_COLOR_PRESETS = [
+  '#D97706', '#DC2626', '#DB2777', '#7C3AED',
+  '#2563EB', '#0891B2', '#059669', '#65A30D',
+  '#475569', '#0F172A',
+];
+
+function ColorPickerField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value || '#D97706'}
+          onChange={e => onChange(e.target.value)}
+          className="h-9 w-14 rounded border bg-background cursor-pointer"
+        />
+        <Input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="#D97706"
+          className="flex-1 font-mono text-sm"
+        />
+        {value && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange('')}>Limpar</Button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {TAG_COLOR_PRESETS.map(c => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(c)}
+            className="h-6 w-6 rounded-full border border-border hover:scale-110 transition-transform"
+            style={{ backgroundColor: c }}
+            title={c}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function UsersTab() {
   const { isAdmin: admin, user } = useAuth();
@@ -28,11 +70,11 @@ export function UsersTab() {
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
-  const [editForm, setEditForm] = useState({ full_name: '', job_title: '', role: 'employee', department_id: '' });
+  const [editForm, setEditForm] = useState({ full_name: '', job_title: '', role: 'employee', department_id: '', tag_color: '' });
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_id: 'none' });
+  const [createForm, setCreateForm] = useState({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_id: 'none', tag_color: '' });
   const [creating, setCreating] = useState(false);
 
   // Delete dialog
@@ -49,6 +91,7 @@ export function UsersTab() {
       setUsers((profiles as any[]).map(p => ({
         id: p.id, user_id: p.user_id, full_name: p.full_name, job_title: p.job_title,
         department_id: p.department_id, role: roleMap.get(p.user_id) || 'employee',
+        tag_color: p.tag_color ?? null,
       })));
     }
   };
@@ -58,7 +101,7 @@ export function UsersTab() {
   // --- EDIT ---
   const openEdit = (u: UserRow) => {
     setEditing(u);
-    setEditForm({ full_name: u.full_name || '', job_title: u.job_title || '', role: u.role, department_id: u.department_id || 'none' });
+    setEditForm({ full_name: u.full_name || '', job_title: u.job_title || '', role: u.role, department_id: u.department_id || 'none', tag_color: u.tag_color || '' });
     setEditOpen(true);
   };
 
@@ -68,6 +111,7 @@ export function UsersTab() {
       full_name: editForm.full_name || null,
       job_title: editForm.job_title || null,
       department_id: editForm.department_id === 'none' ? null : editForm.department_id || null,
+      tag_color: editForm.tag_color || null,
     }).eq('id', editing.id);
 
     const { error: rErr } = await supabase.from('user_roles').update({
@@ -104,6 +148,7 @@ export function UsersTab() {
           job_title: createForm.job_title || undefined,
           department_id: createForm.department_id === 'none' ? undefined : createForm.department_id,
           role: createForm.role,
+          tag_color: createForm.tag_color || undefined,
         },
       });
       if (res.error || res.data?.error) {
@@ -111,7 +156,7 @@ export function UsersTab() {
       }
       toast({ title: 'Usuário criado', description: createForm.email });
       setCreateOpen(false);
-      setCreateForm({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_id: 'none' });
+      setCreateForm({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_id: 'none', tag_color: '' });
       fetchData();
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
@@ -161,6 +206,7 @@ export function UsersTab() {
               <TableHead>Cargo</TableHead>
               <TableHead>Departamento</TableHead>
               <TableHead>Permissão</TableHead>
+              <TableHead>Cor</TableHead>
               {admin && <TableHead className="w-24">Ações</TableHead>}
             </TableRow>
           </TableHeader>
@@ -171,6 +217,13 @@ export function UsersTab() {
                 <TableCell>{u.job_title || '—'}</TableCell>
                 <TableCell>{deptName(u.department_id)}</TableCell>
                 <TableCell><Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>{u.role === 'admin' ? 'Admin' : 'Funcionário'}</Badge></TableCell>
+                <TableCell>
+                  {u.tag_color ? (
+                    <span className="inline-block h-5 w-5 rounded-full border border-border" style={{ backgroundColor: u.tag_color }} title={u.tag_color} />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 {admin && (
                   <TableCell className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
@@ -186,7 +239,7 @@ export function UsersTab() {
               </TableRow>
             ))}
             {users.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -218,6 +271,10 @@ export function UsersTab() {
                   <SelectItem value="employee">Funcionário</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Cor da tag (chat)</Label>
+              <ColorPickerField value={editForm.tag_color} onChange={v => setEditForm({ ...editForm, tag_color: v })} />
             </div>
           </div>
           <DialogFooter><Button onClick={handleSave}>Salvar</Button></DialogFooter>
@@ -259,6 +316,10 @@ export function UsersTab() {
                   <SelectItem value="employee">Funcionário</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Cor da tag (chat)</Label>
+              <ColorPickerField value={createForm.tag_color} onChange={v => setCreateForm({ ...createForm, tag_color: v })} />
             </div>
           </div>
           <DialogFooter><Button onClick={handleCreate} disabled={creating}>{creating ? 'Criando...' : 'Criar Usuário'}</Button></DialogFooter>
