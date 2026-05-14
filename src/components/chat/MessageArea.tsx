@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { MessageCircle, CheckCircle2, UserRoundPlus, Phone, ArrowLeft, MoreVertical, Trash2 } from 'lucide-react';
+import { MessageCircle, CheckCircle2, UserRoundPlus, Phone, ArrowLeft, MoreVertical, Trash2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -11,6 +11,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -51,6 +55,7 @@ interface MessageAreaProps {
   onDeleteMessageForMe?: (id: string) => void;
   onDeleteMessageForAll?: (id: string) => void;
   onDeleteConversation?: () => void;
+  onRenameConversation?: (newName: string) => void;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -60,8 +65,10 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,6 +125,17 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold truncate">{conversationName}</p>
+            {onRenameConversation && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                title="Renomear contato"
+                onClick={() => { setRenameValue(conversationName || ''); setRenameOpen(true); }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {isClosed && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Fechado</Badge>
             )}
@@ -242,6 +260,40 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           onPickFromObligation={onPickFromObligation}
         />
       )}
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Renomear contato</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder="Nome do contato"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && renameValue.trim()) {
+                onRenameConversation?.(renameValue.trim());
+                setRenameOpen(false);
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (renameValue.trim()) {
+                  onRenameConversation?.(renameValue.trim());
+                  setRenameOpen(false);
+                }
+              }}
+              disabled={!renameValue.trim()}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

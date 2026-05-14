@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_conversations ADD COLUMN IF NOT EXISTS name_locked boolean NOT NULL DEFAULT false;

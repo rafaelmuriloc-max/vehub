@@ -26,6 +26,7 @@ export type Database = {
           is_group: boolean
           last_wait_alert_at: string | null
           name: string | null
+          name_locked: boolean
           status: string
           total_wait_seconds: number
           updated_at: string
@@ -43,6 +44,7 @@ export type Database = {
           is_group?: boolean
           last_wait_alert_at?: string | null
           name?: string | null
+          name_locked?: boolean
           status?: string
           total_wait_seconds?: number
           updated_at?: string
@@ -60,6 +62,7 @@ export type Database = {
           is_group?: boolean
           last_wait_alert_at?: string | null
           name?: string | null
+          name_locked?: boolean
           status?: string
           total_wait_seconds?: number
           updated_at?: string
