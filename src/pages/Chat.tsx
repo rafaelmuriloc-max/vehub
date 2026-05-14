@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { AttachFromObligationDialog } from '@/components/chat/AttachFromObligationDialog';
 import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
+import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -747,6 +748,7 @@ export default function Chat() {
             onDeleteMessageForAll={deleteMessageForAll}
             onDeleteConversation={deleteConversation}
             onRenameConversation={renameConversation}
+            onRegisterContact={() => setRegisterContactOpen(true)}
           />
         </div>
       )}
@@ -791,6 +793,15 @@ export default function Chat() {
         conversationClientId={activeConv?.clientId || null}
         whatsappPhone={activeConv?.whatsappPhone || null}
         onSend={sendExistingMedia}
+      />
+
+      <RegisterContactDialog
+        open={registerContactOpen}
+        onOpenChange={setRegisterContactOpen}
+        conversationId={activeConvId}
+        initialName={activeConvName}
+        initialPhone={activeConv?.whatsappPhone || null}
+        onSaved={() => { void loadConversations?.(); }}
       />
     </div>
   );
