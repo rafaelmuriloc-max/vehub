@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent, ClipboardEvent } from 'react';
-import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile } from 'lucide-react';
+import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile, Reply } from 'lucide-react';
 import EmojiPicker, { EmojiStyle, type EmojiClickData } from 'emoji-picker-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -19,9 +19,18 @@ interface ChatInputProps {
   onAddPendingFiles?: (files: File[]) => void;
   onRemovePendingFile?: (index: number) => void;
   onClearPendingFiles?: () => void;
+  replyingTo?: {
+    id: string;
+    sender_name?: string;
+    content?: string;
+    message_type?: string;
+    media_url?: string | null;
+    isMine?: boolean;
+  } | null;
+  onCancelReply?: () => void;
 }
 
-export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles }: ChatInputProps) {
+export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles, replyingTo, onCancelReply }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -40,6 +49,10 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (replyingTo) inputRef.current?.focus();
+  }, [replyingTo]);
 
   const detectFileType = (file: File): 'image' | 'video' | 'document' | 'audio' => {
     if (file.type.startsWith('image/')) return 'image';
