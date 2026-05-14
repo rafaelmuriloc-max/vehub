@@ -82,7 +82,7 @@ export function AudioMessage({ mediaUrl, avatarUrl, tint = 'white' }: AudioMessa
   const baseBar = 'bg-zinc-400/60';
 
   return (
-    <div className="flex items-center gap-3 py-1 min-w-[240px] sm:min-w-[260px]">
+    <div className="flex items-center gap-2 sm:gap-3 py-1 w-full min-w-0 sm:min-w-[260px] max-w-full">
       {/* Avatar with mic badge */}
       <div className="relative shrink-0">
         <div className="h-10 w-10 rounded-full overflow-hidden bg-muted flex items-center justify-center">
