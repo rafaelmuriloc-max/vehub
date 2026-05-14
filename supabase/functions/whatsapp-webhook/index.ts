@@ -611,7 +611,28 @@ Deno.serve(async (req) => {
 
     console.log("Message saved successfully for conversation:", conversationId, "type:", messageType);
 
-    // ===== Auto-reply outside business hours =====
+    // ===== Triagem automática (Gisele) =====
+    if (!isFromMe) {
+      try {
+        // Trigger triage if conversation has no agent and is in pending/in_progress state
+        const { data: conv } = await supabase
+          .from("chat_conversations")
+          .select("assigned_to, triage_status, is_group")
+          .eq("id", conversationId)
+          .maybeSingle();
+        if (conv && !conv.assigned_to && !conv.is_group && (conv.triage_status === "pending" || conv.triage_status === "in_progress")) {
+          fetch(`${supabaseUrl}/functions/v1/chat-triage-agent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ conversation_id: conversationId }),
+          }).catch((e) => console.error("triage trigger failed:", e));
+        }
+      } catch (e) {
+        console.error("triage check failed:", e);
+      }
+    }
+
+    // ===== Auto-reply outside business hours (fallback when triage disabled) =====
     if (!isFromMe) {
       try {
         await maybeSendOffHoursReply(supabase, {
