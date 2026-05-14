@@ -1,70 +1,52 @@
-## Diagnóstico
+## Aviso de chamado inativo + fechamento automático
 
-- A conversa da Géssica está com `waiting_since = 2026-05-14 03:40:30+00`, por isso o badge mostra cerca de 15h.
-- As últimas mensagens recebidas do cliente foram hoje às `15:56` (horário de São Paulo / `18:56 UTC`).
-- O banco não tem trigger ativo em `chat_messages`; por isso o `waiting_since` não é atualizado quando novas mensagens chegam.
-- Todas as datas no banco são `timestamptz` (instantes absolutos). O cálculo do tempo já é correto independente de fuso, mas qualquer formatação ou comparação por "dia" deve usar `America/Sao_Paulo`.
+Adicionar um novo monitor que avisa, no mesmo grupo de alertas (`chat_alert_whatsapp_group_id`), quando um chamado em atendimento ficar 30 minutos sem qualquer mensagem nova, e fecha automaticamente o chamado 5 minutos depois — apenas se continuar inativo.
 
-## Plano de correção
+### Regras
 
-1. Migration no Supabase para restaurar o trigger em `chat_messages` e atualizar a função `trg_chat_msg_start_waiting()`, fazendo com que toda nova mensagem recebida (não enviada por nós) reinicie `waiting_since` para o horário daquela mensagem, quando a conversa estiver aberta e sem responsável.
-2. Recalcular `waiting_since` das conversas abertas e não atribuídas com base na última mensagem recebida do cliente.
-3. Garantir que toda exibição de horário/data relacionada ao tempo de espera (badge, aviso, logs do alerta) use o fuso `America/Sao_Paulo`.
-4. Preservar o comportamento atual de zerar/acumular `total_wait_seconds` quando a conversa for atribuída a alguém.
+- **Escopo**: conversas com `status = 'open'` **e** `assigned_to IS NOT NULL`.
+- **Inatividade**: tempo desde a última mensagem da conversa (qualquer remetente) ≥ 30 min.
+- **Anti-spam**: cada chamado só recebe um aviso por ciclo de inatividade. Reusa o campo existente `chat_conversations.last_wait_alert_at` (já usado pelo alerta de espera). Para diferenciar os dois tipos, criamos um novo campo `last_inactivity_alert_at`.
+- **Fechamento automático**: 5 minutos após o aviso, se a `última mensagem` ainda for anterior ao aviso (sem nova interação), atualiza `status = 'closed'` e `closed_at = now()`. Se houver nova mensagem nesse intervalo, cancela e zera `last_inactivity_alert_at` para permitir novo ciclo futuro.
 
-## Detalhes técnicos
+### Mensagem postada no grupo
 
-Migration:
+```
+*Chamado sem atividade*
 
-```sql
-CREATE OR REPLACE FUNCTION public.trg_chat_msg_start_waiting()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-BEGIN
-  IF NEW.message_type IN ('text','whatsapp_outgoing') THEN
-    RETURN NEW;
-  END IF;
+👤 Atendente: {full_name}
+📞 Contato: {contact_name ou whatsapp_phone}
+🏢 Empresa: {client.company_name ou "—"}
+⏱️ Inatividade: {minutos} min
 
-  UPDATE public.chat_conversations
-     SET waiting_since = NEW.created_at,
-         updated_at = GREATEST(updated_at, NEW.created_at)
-   WHERE id = NEW.conversation_id
-     AND status = 'open'
-     AND assigned_to IS NULL;
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS chat_msg_start_waiting ON public.chat_messages;
-CREATE TRIGGER chat_msg_start_waiting
-AFTER INSERT ON public.chat_messages
-FOR EACH ROW
-EXECUTE FUNCTION public.trg_chat_msg_start_waiting();
-
--- Recalcular conversas em espera com base na última mensagem do cliente
-UPDATE public.chat_conversations c
-SET waiting_since = latest.last_incoming_at
-FROM (
-  SELECT conversation_id, max(created_at) AS last_incoming_at
-  FROM public.chat_messages
-  WHERE message_type NOT IN ('text','whatsapp_outgoing')
-    AND deleted_at IS NULL
-  GROUP BY conversation_id
-) latest
-WHERE c.id = latest.conversation_id
-  AND c.status = 'open'
-  AND c.assigned_to IS NULL
-  AND c.waiting_since IS DISTINCT FROM latest.last_incoming_at;
+Seu chamado será fechado por tempo de inatividade.
 ```
 
-Frontend: o `WaitingBadge` continua usando diferença de timestamps absolutos (correto em qualquer fuso). Para qualquer formatação textual de horário relacionada à espera, usar `America/Sao_Paulo` (`formatInTimeZone` do `date-fns-tz`).
+### Implementação
 
-## Resultado esperado
+1. **Migração** (`supabase--migration`):
+  - `ALTER TABLE chat_conversations ADD COLUMN last_inactivity_alert_at timestamptz;`
+2. **Edge Function** `chat-inactivity-monitor` (`supabase/functions/chat-inactivity-monitor/index.ts`):
+  - Lê `company_settings.chat_alert_whatsapp_group_id`.
+  - Modo padrão (sem param): varre conversas `open` + `assigned_to IS NOT NULL`. Para cada uma, busca a última `chat_messages.created_at`.
+    - Se `now - last_msg >= 30 min` E (`last_inactivity_alert_at IS NULL` OR `last_inactivity_alert_at < last_msg`):
+      - Envia mensagem ao grupo via Evolution API (`/message/sendText`).
+      - Salva `last_inactivity_alert_at = now()`.
+  - Modo `?action=close-check` (chamado pelo cron a cada minuto também): para conversas com `last_inactivity_alert_at` entre 5 e 10 min atrás:
+    - Se a última mensagem ainda for anterior a `last_inactivity_alert_at` → fecha (`status='closed'`, `closed_at=now()`).
+    - Caso contrário → zera `last_inactivity_alert_at`.
+3. **Cron** (via `supabase--read_query` com `cron.schedule`, fora de migration por conter URL/anon):
+  - `*/1 * * * *` chamando `chat-inactivity-monitor` (faz alerta + close-check no mesmo run).
 
-- A conversa da Géssica passará a contar o tempo desde a mensagem das 15:56 (horário de São Paulo).
-- Novas mensagens recebidas reiniciam o cronômetro automaticamente.
-- Qualquer rótulo de horário aparece sempre no fuso de São Paulo.
+### Arquivos afetados
+
+- **Novo**: `supabase/functions/chat-inactivity-monitor/index.ts`
+- **Migration nova**: adiciona `last_inactivity_alert_at` em `chat_conversations`
+- **Cron**: agendamento via `pg_cron` (insert separado)
+- **Memória**: nova entrada `mem://features/chat/inactivity-auto-close` + atualização do `index.md`
+
+### Observações
+
+- Não envia nada ao cliente diretamente — tudo fica no grupo de alertas, conforme escolhido.
+- Não afeta o monitor de espera existente (`chat-waiting-alert`), que usa `waiting_since` e `last_wait_alert_at`.
+- Respeita horário comercial?  **Sim, deve enviar somrente em horário comercial, caso esteja fora do horário feche o chamado sem enviar aviso**
