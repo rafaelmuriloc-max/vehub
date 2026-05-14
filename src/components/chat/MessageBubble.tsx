@@ -1,7 +1,8 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X, Reply } from 'lucide-react';
+import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { AudioMessage } from './AudioMessage';
 import {
   DropdownMenu,
@@ -41,6 +42,9 @@ interface MessageBubbleProps {
   onJumpToReply?: (id: string) => void;
   bubbleRef?: (el: HTMLDivElement | null) => void;
   highlight?: boolean;
+  transcription?: string | null;
+  transcriptionStatus?: string | null;
+  messageId?: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -122,13 +126,24 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
   );
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
    const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
    const isWhatsAppOutgoing = !isIncoming && (messageType === 'whatsapp' || messageType?.startsWith('whatsapp_'));
    const showOnRight = isWhatsAppOutgoing || (!isIncoming && isMine);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
+  const [retrying, setRetrying] = useState(false);
+
+  const retryTranscription = async () => {
+    if (!messageId || retrying) return;
+    setRetrying(true);
+    try {
+      await supabase.functions.invoke('whatsapp-transcribe-audio', { body: { message_id: messageId } });
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const isDeleted = !!deletedAt;
   const canEdit = isMine && !isDeleted && (messageType === 'text' || messageType === 'whatsapp_outgoing' || messageType === 'whatsapp')
@@ -313,6 +328,33 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
           </button>
         )}
         {renderMedia()}
+        {mediaKind === 'audio' && (transcriptionStatus || transcription) && (
+          <div className={`mt-1 mb-1 text-xs rounded-md px-2 py-1.5 ${showOnRight ? 'bg-emerald-100/70 dark:bg-emerald-900/40' : 'bg-black/5 dark:bg-white/10'}`}>
+            {transcriptionStatus === 'processing' && (
+              <div className="flex items-center gap-1.5 text-muted-foreground italic">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Transcrevendo áudio…</span>
+              </div>
+            )}
+            {transcriptionStatus === 'done' && transcription && (
+              <div className="flex items-start gap-1.5">
+                <Sparkles className="h-3 w-3 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <p className="whitespace-pre-wrap break-words leading-snug">{transcription}</p>
+              </div>
+            )}
+            {transcriptionStatus === 'failed' && (
+              <button
+                type="button"
+                onClick={retryTranscription}
+                disabled={retrying}
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                <span>Falha ao transcrever — tentar novamente</span>
+              </button>
+            )}
+          </div>
+        )}
         {/* Show text content - skip for documents/location/contact */}
          {editing ? (
           <div className="flex flex-col gap-1.5 min-w-[200px]">

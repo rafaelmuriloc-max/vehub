@@ -572,7 +572,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { error: msgErr } = await supabase.from("chat_messages").insert(insertData);
+    const { data: insertedMsg, error: msgErr } = await supabase
+      .from("chat_messages")
+      .insert(insertData)
+      .select("id")
+      .single();
 
     if (msgErr) {
       console.error("Error inserting message:", msgErr);
@@ -580,6 +584,22 @@ Deno.serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Fire-and-forget audio transcription
+    if (insertedMsg?.id && (messageType === "whatsapp_incoming_audio" || messageType === "whatsapp_outgoing_audio") && mediaUrl) {
+      try {
+        fetch(`${supabaseUrl}/functions/v1/whatsapp-transcribe-audio`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ message_id: insertedMsg.id }),
+        }).catch((e) => console.error("transcribe trigger failed:", e));
+      } catch (e) {
+        console.error("transcribe trigger sync error:", e);
+      }
     }
 
     const convUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };

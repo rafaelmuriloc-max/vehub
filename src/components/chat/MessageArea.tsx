@@ -38,6 +38,8 @@ export interface ChatMessage {
     message_type?: string | null;
     media_url?: string | null;
   } | null;
+  transcription?: string | null;
+  transcription_status?: string | null;
 }
 
 interface MessageAreaProps {
@@ -315,6 +317,9 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   replySnapshot={msg.reply_to_snapshot || undefined}
                   replyToId={msg.reply_to_id || undefined}
                   onJumpToReply={jumpToMessage}
+                  transcription={msg.transcription || undefined}
+                  transcriptionStatus={msg.transcription_status || undefined}
+                  messageId={msg.id}
                   bubbleRef={(el) => {
                     if (el) bubbleRefs.current.set(msg.id, el);
                     else bubbleRefs.current.delete(msg.id);

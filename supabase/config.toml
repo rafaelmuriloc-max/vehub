@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.chat-waiting-alert]
 verify_jwt = false
+
+[functions.whatsapp-transcribe-audio]
+verify_jwt = false
