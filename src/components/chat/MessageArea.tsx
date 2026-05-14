@@ -125,6 +125,17 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold truncate">{conversationName}</p>
+            {onRenameConversation && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                title="Renomear contato"
+                onClick={() => { setRenameValue(conversationName || ''); setRenameOpen(true); }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {isClosed && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Fechado</Badge>
             )}
