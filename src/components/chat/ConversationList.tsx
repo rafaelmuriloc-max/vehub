@@ -76,7 +76,7 @@ function WaitingBadge({ since }: { since: string }) {
   }, []);
   const seconds = Math.max(0, Math.floor((now - new Date(since).getTime()) / 1000));
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded px-1.5 py-0.5 ${waitColorClass(seconds)}>
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded px-1.5 py-0.5 ${waitColorClass(seconds)}`}>
       <Timer className="h-2.5 w-2.5" />
       {formatWaitDuration(seconds)}
     </span>
