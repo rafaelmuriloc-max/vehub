@@ -139,9 +139,9 @@ Deno.serve(async (req) => {
         if (match && key?.id) {
           await sb
             .from("chat_messages")
-            .update({ wa_message_id: key.id, wa_remote_jid: remoteJid })
+            .update({ wa_evolution_id: key.id, wa_remote_jid: remoteJid })
             .eq("id", match.id);
-          console.log("Backfilled wa_message_id for outgoing message:", match.id, "→", key.id);
+          console.log("Backfilled wa_evolution_id for outgoing message:", match.id, "→", key.id);
         }
       } catch (e) {
         console.error("Backfill wa_message_id failed:", e);
@@ -481,6 +481,7 @@ Deno.serve(async (req) => {
       message_type: messageType,
       channel: "whatsapp",
       wa_message_id: key?.id || null,
+      wa_evolution_id: key?.id || null,
       wa_remote_jid: remoteJid || null,
     };
     if (mediaUrl) {
@@ -503,7 +504,7 @@ Deno.serve(async (req) => {
           .from("chat_messages")
           .select("id, sender_id, content, message_type, media_url")
           .eq("conversation_id", conversationId)
-          .eq("wa_message_id", quotedStanzaId)
+          .eq("wa_evolution_id", quotedStanzaId)
           .maybeSingle();
         if (original) {
           insertData.reply_to_id = original.id;
