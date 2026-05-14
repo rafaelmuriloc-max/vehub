@@ -210,7 +210,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   }
 
   return (
-     <div className={`flex ${showOnRight ? 'justify-end pr-[42px]' : 'justify-start pl-[42px]'} mb-1`}>
+     <div className={`${showOnRight ? 'flex items-center justify-end pr-[42px]' : 'flex justify-start pl-[42px]'} mb-1`}>
        <div className={`group relative flex items-start gap-1 ${showOnRight ? 'flex-row-reverse' : 'flex-row'}`}>
       {showOnRight && (onEdit || onDeleteForMe || onDeleteForAll) && (
         <DropdownMenu>
