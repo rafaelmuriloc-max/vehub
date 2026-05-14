@@ -160,10 +160,6 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     const sharedComponents = buildSharedComponents(recipient.name);
     const recipientPhone = recipient.phone;
 
-    if (false) {
-    // placeholder; legacy block follows below
-    }
-
     if (needsMultiSend) {
       const errors: string[] = [];
       for (const doc of attachedDocs!) {
@@ -227,10 +223,6 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
   if (!anySuccess) {
     return { success: false, error: allErrors.join('; ') || 'Falha ao enviar' };
-  }
-
-  if (false) {
-  // legacy block (unused)
   }
 
   // Mark activity as completed
