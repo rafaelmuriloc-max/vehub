@@ -1,28 +1,47 @@
-## Mover o menu de ações (3 pontinhos) para dentro da bolha
+## Diagnóstico
 
-Hoje o `DropdownMenu` com Editar/Apagar fica **fora** da bolha (irmão da `<div>` do balão). O usuário quer ele **dentro** da bolha, no canto superior direito.
+O sintoma "tela do chat piscando" + "Transferir/Reabrir não funcionam" tem uma causa única: **um loop de re-render** em `src/pages/Chat.tsx` que recarrega mensagens e conversas continuamente, derrubando os cliques antes de serem registrados.
 
-## Alterações em `src/components/chat/MessageBubble.tsx`
+O loop é:
 
-1. Remover o bloco `{showOnRight && (onEdit || onDeleteForMe || onDeleteForAll) && (<DropdownMenu>…)}` que está fora do balão (linhas 215-243) e o equivalente do lado esquerdo (linhas 293-314).
-2. Remover o wrapper `<div className="group relative flex items-start gap-1 …">` que existia só para acomodar o botão ao lado, deixando a `<div>` da bolha como filha direta.
-3. Acrescentar o `group` na própria bolha (`<div className="relative group …">`).
-4. Dentro da bolha, no topo, posicionar o botão dos 3 pontinhos absoluto no canto superior direito:
-   ```tsx
-   <DropdownMenu>
-     <DropdownMenuTrigger asChild>
-       <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10">
-         <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-       </button>
-     </DropdownMenuTrigger>
-     <DropdownMenuContent align="end" side="bottom">…itens condicionais…</DropdownMenuContent>
-   </DropdownMenu>
-   ```
-5. Itens do menu — exibir conforme contexto (mesma lógica atual):
-   - `Editar` se `canEdit && onEdit` (apenas em mensagens próprias).
-   - `Apagar só para mim` se `onDeleteForMe`.
-   - `Apagar para todos` se `canDeleteForAll && onDeleteForAll` (próprias ou admin).
-6. Renderizar o menu **somente** quando houver pelo menos uma ação disponível.
-7. Pequeno padding-right extra no `senderName` (ou no container do header da bolha) só quando o menu existir, para o nome não ficar atrás do ícone.
+```text
+useEffect "Load messages"  (deps: activeConvId, user, conversations)
+   └─ chama loadMessages()
+        └─ se há não-lidas, chama loadConversations()
+             └─ setConversations(...) muda a referência
+                  └─ dispara o mesmo useEffect novamente → reinicia
+```
 
-Não há mudanças em `MessageArea.tsx`, banco ou edge functions.
+Soma-se a isso a subscription realtime (`chat-messages-realtime`) que chama `loadConversations()` a cada INSERT, e o canal `chat-conversations-counters` que chama `loadConversations()` a cada UPDATE em `chat_conversations`. Em Windows/Chrome (latência de WebSocket Realtime é ligeiramente maior e o profile do v8 difere), o intervalo entre re-renders fica curto o bastante para o React desmontar/remontar `MessageArea` antes do `onClick` dos botões disparar — o usuário vê "piscando" e cliques aparentemente sem efeito.
+
+Outros agravantes detectados:
+- `setActiveConvName(conv?.name)` está dentro do mesmo effect de carregar mensagens — qualquer mudança em `conversations` (vinda do realtime) re-roda **tudo**, inclusive um novo `SELECT` de 100 mensagens.
+- `loadMessages` faz UPDATE de `read_at` mesmo quando `unreadIds.length === 0` está OK, mas quando há mensagens novas chegando via realtime, cada INSERT marca read e chama `loadConversations()` outra vez → reforça o loop.
+- A query de mensagens não depende de `conversations`, então não há motivo para esse array estar nas deps.
+
+## Mudanças
+
+Arquivo único: `src/pages/Chat.tsx`.
+
+1. **Quebrar o effect de mensagens em dois**:
+   - Effect A (`[activeConvId, user]`): apenas carrega mensagens da conversa ativa.
+   - Effect B (`[activeConvId, conversations]`): apenas atualiza `activeConvName` a partir da lista atual.
+   
+   Isso elimina a recarga completa de mensagens quando a lista lateral muda.
+
+2. **Remover a chamada `loadConversations()` de dentro de `loadMessages`** após marcar não-lidas. O badge de não-lidas será atualizado pelo canal realtime de `chat_conversations` que já existe (e pelo próprio UPDATE em `chat_messages` que dispara recálculo no servidor — caso necessário, fazer um único `loadConversations()` debounced).
+
+3. **Tirar `loadConversations` das deps da subscription realtime de mensagens** usando uma `ref` para a função (`loadConversationsRef.current()`), para que a subscription não seja recriada a cada render.
+
+4. **Debouncing leve (250 ms) em `loadConversations`** disparado por realtime, para evitar rajadas de refresh quando muitas mensagens entram em sequência.
+
+5. **Garantir estabilidade dos handlers** `reopenTicket` / `openTransferDialog` envolvendo-os em `useCallback` — não muda comportamento, mas evita que `MessageArea` receba props novas a cada render durante o loop residual.
+
+Sem alterações em banco, edge functions, RLS, ou outros arquivos. Sem mudanças visuais.
+
+## Validação
+
+Após aplicar:
+- Abrir `/chat`, abrir uma conversa com WhatsApp ativa, observar console — não deve haver chamadas repetidas para `get_chat_inbox` enquanto a conversa estiver aberta e ociosa.
+- Clicar em **Transferir** e em **Reabrir Chamado** — devem abrir o diálogo / executar a ação na primeira tentativa.
+- Enviar 3 mensagens rápidas via outro cliente — a lista lateral deve atualizar sem "piscar" o painel direito.
