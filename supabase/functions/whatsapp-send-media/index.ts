@@ -49,15 +49,19 @@ Deno.serve(async (req) => {
 
     // Reply target lookup
     let replySnapshot: any = null;
-    let replyWaMessageId: string | null = null;
+    let replyMetaWamid: string | null = null;
+    let replyEvolutionId: string | null = null;
     if (replyToMessageId) {
       const { data: replyMsg } = await supabase
         .from("chat_messages")
-        .select("id, sender_id, content, message_type, media_url, wa_message_id")
+        .select("id, sender_id, content, message_type, media_url, wa_message_id, wa_evolution_id")
         .eq("id", replyToMessageId)
         .maybeSingle();
       if (replyMsg) {
-        replyWaMessageId = replyMsg.wa_message_id || null;
+        const wamid = replyMsg.wa_message_id || null;
+        replyMetaWamid = wamid && wamid.startsWith("wamid.") ? wamid : null;
+        replyEvolutionId = replyMsg.wa_evolution_id
+          || (wamid && !wamid.startsWith("wamid.") ? wamid : null);
         let senderFullName = "";
         if (replyMsg.sender_id) {
           const { data: prof } = await supabase
@@ -73,8 +77,7 @@ Deno.serve(async (req) => {
         };
       }
     }
-    const metaContext = replyWaMessageId ? { context: { message_id: replyWaMessageId } } : {};
-    const evoQuoted = replyWaMessageId ? { quoted: { key: { id: replyWaMessageId } } } : {};
+    const metaContext = replyMetaWamid ? { context: { message_id: replyMetaWamid } } : {};
 
     // Get conversation
     const { data: conv, error: convErr } = await supabase
@@ -92,6 +95,9 @@ Deno.serve(async (req) => {
 
     const rawPhone = conv.whatsapp_phone.replace(/\D/g, "");
     const toPhone = rawPhone.startsWith("55") ? rawPhone : `55${rawPhone}`;
+    const evoQuoted = replyEvolutionId
+      ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${toPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } }
+      : {};
 
     // Check 24h window
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -105,6 +111,9 @@ Deno.serve(async (req) => {
       .limit(1);
 
     const hasOpenWindow = recentIncoming && recentIncoming.length > 0;
+    // If reply target lacks a Meta wamid, force Evolution path so the quote
+    // appears on the contact's WhatsApp.
+    const forceEvolutionForReply = !!(replyToMessageId && !replyMetaWamid && replyEvolutionId);
 
     let sendSuccess = false;
     let sendErrorDetail = "";
@@ -148,7 +157,7 @@ Deno.serve(async (req) => {
       messageType = `whatsapp_${type}`;
       messageContent = fileName || type;
 
-      if (hasOpenWindow) {
+      if (hasOpenWindow && !forceEvolutionForReply) {
         // Meta API
         const payload: any = {
           messaging_product: "whatsapp",
