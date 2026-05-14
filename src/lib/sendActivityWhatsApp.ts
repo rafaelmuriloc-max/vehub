@@ -197,6 +197,9 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
           templateLanguage: 'pt_BR',
           ...(components.length > 0 ? { templateParams: components } : {}),
           ...(chatPreview ? { chatPreview } : {}),
+          mediaUrl: signedData.signedUrl,
+          mediaType: 'document',
+          mediaFilename: fileName,
         };
         const { data, error } = await supabase.functions.invoke('whatsapp-send', { body: msgBody });
         if (error) errors.push(error.message);

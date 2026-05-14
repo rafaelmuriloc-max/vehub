@@ -60,7 +60,7 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-    const { to, type, templateName, templateLanguage, templateParams, text, chatPreview, clientId, obligationId, instanceId } = await req.json();
+    const { to, type, templateName, templateLanguage, templateParams, text, chatPreview, clientId, obligationId, instanceId, mediaUrl, mediaType, mediaFilename } = await req.json();
 
     if (!to) {
       return new Response(JSON.stringify({ error: "Campo 'to' é obrigatório" }), {
@@ -279,11 +279,13 @@ serve(async (req) => {
           }
         }
 
+        const hasMedia = !!(mediaUrl && mediaType);
         await supabaseService.from("chat_messages").insert({
           conversation_id: conversationId,
           sender_id: userId,
-          content: messageContent,
-          message_type: "whatsapp",
+          content: hasMedia ? (mediaFilename || messageContent) : messageContent,
+          message_type: hasMedia ? `whatsapp_${mediaType}` : "whatsapp",
+          media_url: hasMedia ? mediaUrl : null,
           channel: "whatsapp",
         });
 
