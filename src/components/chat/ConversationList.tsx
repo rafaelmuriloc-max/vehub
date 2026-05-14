@@ -131,7 +131,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
               title="Atualizar fotos"
               className="hidden sm:inline-flex"
             >
-              <RefreshCw className={`h-5 w-5 ${refreshingAvatars ? 'animate-spin' : ''} />
+              <RefreshCw className={`h-5 w-5 ${refreshingAvatars ? 'animate-spin' : ''}`} />
             </Button>
           )}
           {window.location.pathname !== '/chat/popup' && (
@@ -223,7 +223,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                   {conv.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className={`flex-1 min-w-0 text-left pr-2 md:pr-3 ${idx < filtered.length - 1 ? 'border-b border-border/60 pb-2.5 md:pb-3' : ''}>
+              <div className={`flex-1 min-w-0 text-left pr-2 md:pr-3 ${idx < filtered.length - 1 ? 'border-b border-border/60 pb-2.5 md:pb-3' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium truncate block">{conv.name}</span>
@@ -235,7 +235,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     {conv.lastMessageAt && (
-                      <span className={`text-[11px] ${conv.unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}>
+                      <span className={`text-[11px] ${conv.unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
                         {formatTime(conv.lastMessageAt)}
                       </span>
                     )}
