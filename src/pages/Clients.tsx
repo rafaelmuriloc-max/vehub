@@ -166,7 +166,7 @@ export default function Clients() {
   const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
   const [pendingCertFile, setPendingCertFile] = useState<File | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact>>({});
+  const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact[]>>({});
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
@@ -312,20 +312,24 @@ export default function Clients() {
       .from('client_department_contacts')
       .select('department_id, contact_name, contact_phone, contact_email')
       .eq('client_id', clientId);
-    const contacts: Record<string, DeptContact> = {};
+    const contacts: Record<string, DeptContact[]> = {};
     for (const dep of deps) {
-      const existing = (data || []).find((d: any) => d.department_id === dep.id);
-      contacts[dep.id] = existing
-        ? { contact_name: existing.contact_name || '', contact_phone: existing.contact_phone || '', contact_email: existing.contact_email || '' }
-        : { contact_name: '', contact_phone: '', contact_email: '' };
+      const rows = (data || [])
+        .filter((d: any) => d.department_id === dep.id)
+        .map((d: any) => ({
+          contact_name: d.contact_name || '',
+          contact_phone: d.contact_phone || '',
+          contact_email: d.contact_email || '',
+        }));
+      contacts[dep.id] = rows.length > 0 ? rows : [{ contact_name: '', contact_phone: '', contact_email: '' }];
     }
     setDeptContacts(contacts);
   }
 
   function initEmptyDeptContacts(deps: Department[]) {
-    const contacts: Record<string, DeptContact> = {};
+    const contacts: Record<string, DeptContact[]> = {};
     for (const dep of deps) {
-      contacts[dep.id] = { contact_name: '', contact_phone: '', contact_email: '' };
+      contacts[dep.id] = [{ contact_name: '', contact_phone: '', contact_email: '' }];
     }
     setDeptContacts(contacts);
   }
@@ -864,20 +868,24 @@ export default function Clients() {
       return;
     }
 
-    if (clientId && Object.keys(deptContacts).length > 0) {
-      const contactRows = Object.entries(deptContacts)
-        .filter(([, c]) => c.contact_name || c.contact_phone || c.contact_email)
-        .map(([depId, c]) => ({
-          client_id: clientId,
-          department_id: depId,
-          contact_name: c.contact_name || null,
-          contact_phone: c.contact_phone || null,
-          contact_email: c.contact_email || null,
-        }));
+    if (clientId) {
+      // Replace all department contacts for this client
+      await (supabase as any).from('client_department_contacts').delete().eq('client_id', clientId);
+      const contactRows = Object.entries(deptContacts).flatMap(([depId, list]) =>
+        (list || [])
+          .filter(c => c.contact_name || c.contact_phone || c.contact_email)
+          .map(c => ({
+            client_id: clientId,
+            department_id: depId,
+            contact_name: c.contact_name || null,
+            contact_phone: c.contact_phone || null,
+            contact_email: c.contact_email || null,
+          }))
+      );
       if (contactRows.length > 0) {
         const { error: contactError } = await (supabase as any)
           .from('client_department_contacts')
-          .upsert(contactRows, { onConflict: 'client_id,department_id' });
+          .insert(contactRows);
         if (contactError) {
           toast({ title: 'Erro ao salvar contatos', description: contactError.message, variant: 'destructive' });
         }
