@@ -740,10 +740,12 @@ async function maybeSendOffHoursReply(
 ) {
   const { data: settings } = await supabase
     .from("company_settings")
-    .select("id, service_hours_enabled, service_open_time, service_close_time, service_lunch_start, service_lunch_end, service_timezone, agent_name, agent_offhours_message, agent_offhours_last_sent")
+    .select("id, service_hours_enabled, service_open_time, service_close_time, service_lunch_start, service_lunch_end, service_timezone, agent_name, agent_offhours_message, agent_offhours_last_sent, triage_enabled")
     .limit(1)
     .maybeSingle();
 
+  // If triage is enabled, the AI agent handles first contact — skip generic off-hours reply.
+  if (settings?.triage_enabled) return;
   if (!settings?.service_hours_enabled) return;
   if (!settings.service_open_time || !settings.service_close_time) return;
   if (!settings.agent_offhours_message) return;
