@@ -164,7 +164,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
     { icon: Video, label: 'Vídeo', onClick: () => { setPopoverOpen(false); videoInputRef.current?.click(); } },
     { icon: Mic, label: 'Áudio', onClick: () => { setPopoverOpen(false); audioInputRef.current?.click(); } },
     { icon: FileText, label: 'Arquivo', onClick: () => { setPopoverOpen(false); fileInputRef.current?.click(); } },
-    ...(onPickFromObligation ? [{ icon: FolderOpen, label: 'Anexar de obrigação', onClick: () => { setPopoverOpen(false); onPickFromObligation(); } }] : []),
+    ...(onPickFromObligation ? [{ icon: FolderOpen, label: 'Anexar do sistema', onClick: () => { setPopoverOpen(false); onPickFromObligation(); } }] : []),
     { icon: MapPin, label: 'Localização', onClick: handleLocationClick },
     { icon: Contact, label: 'Contato', onClick: () => { setPopoverOpen(false); setContactDialogOpen(true); } },
   ];
