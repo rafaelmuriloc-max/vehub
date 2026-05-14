@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Upload } from 'lucide-react';
 
 export interface ChatMessage {
   id: string;
@@ -70,6 +71,47 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   const endRef = useRef<HTMLDivElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const detectFileType = (file: File): 'image' | 'video' | 'audio' | 'document' => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('video/')) return 'video';
+    if (file.type.startsWith('audio/')) return 'audio';
+    return 'document';
+  };
+
+  const dropEnabled = !!conversationName && !isClosed && !!onSendMedia;
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!dropEnabled) return;
+    if (!Array.from(e.dataTransfer.types || []).includes('Files')) return;
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    setIsDragging(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!dropEnabled) return;
+    if (!Array.from(e.dataTransfer.types || []).includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!dropEnabled) return;
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+    }
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (!dropEnabled) return;
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    files.forEach((file) => onSendMedia?.(file, detectFileType(file)));
+  };
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -97,7 +139,21 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div
+      className="flex-1 flex flex-col h-full overflow-hidden relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-sm border-4 border-dashed border-primary pointer-events-none">
+          <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-lg px-6 py-4 flex items-center gap-3">
+            <Upload className="h-6 w-6 text-primary" />
+            <span className="text-sm font-medium">Solte o arquivo para enviar</span>
+          </div>
+        </div>
+      )}
       {/* Header */}
        <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-4 py-2 border-b shrink-0 bg-white">
         {onBack && (
