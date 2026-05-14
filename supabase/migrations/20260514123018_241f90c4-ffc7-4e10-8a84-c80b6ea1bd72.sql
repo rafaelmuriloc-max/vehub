@@ -1,0 +1,1 @@
+UPDATE public.chat_messages SET read_at = now() WHERE read_at IS NULL;
