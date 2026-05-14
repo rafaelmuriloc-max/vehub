@@ -260,6 +260,40 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           onPickFromObligation={onPickFromObligation}
         />
       )}
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Renomear contato</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder="Nome do contato"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && renameValue.trim()) {
+                onRenameConversation?.(renameValue.trim());
+                setRenameOpen(false);
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (renameValue.trim()) {
+                  onRenameConversation?.(renameValue.trim());
+                  setRenameOpen(false);
+                }
+              }}
+              disabled={!renameValue.trim()}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
