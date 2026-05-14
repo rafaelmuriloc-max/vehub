@@ -614,18 +614,33 @@ Deno.serve(async (req) => {
     // ===== Triagem automática (Gisele) =====
     if (!isFromMe) {
       try {
-        // Trigger triage if conversation has no agent and is in pending/in_progress state
-        const { data: conv } = await supabase
-          .from("chat_conversations")
-          .select("assigned_to, triage_status, is_group")
-          .eq("id", conversationId)
+        const { data: triageSettings } = await supabase
+          .from("company_settings")
+          .select("triage_enabled")
+          .limit(1)
           .maybeSingle();
-        if (conv && !conv.assigned_to && !conv.is_group && (conv.triage_status === "pending" || conv.triage_status === "in_progress")) {
-          fetch(`${supabaseUrl}/functions/v1/chat-triage-agent`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-            body: JSON.stringify({ conversation_id: conversationId }),
-          }).catch((e) => console.error("triage trigger failed:", e));
+        if (triageSettings?.triage_enabled) {
+          const { data: conv } = await supabase
+            .from("chat_conversations")
+            .select("assigned_to, triage_status, is_group")
+            .eq("id", conversationId)
+            .maybeSingle();
+          // Re-triar também conversas marcadas como 'skipped' (legado da migration)
+          // ou já 'done' sem atendente (cliente voltou após triagem antiga).
+          const eligibleStatuses = ["pending", "in_progress", "skipped", "done"];
+          if (
+            conv && !conv.assigned_to && !conv.is_group &&
+            eligibleStatuses.includes(conv.triage_status)
+          ) {
+            console.log("[triage] firing for conversation", conversationId, "status:", conv.triage_status);
+            fetch(`${supabaseUrl}/functions/v1/chat-triage-agent`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+              body: JSON.stringify({ conversation_id: conversationId }),
+            }).catch((e) => console.error("triage trigger failed:", e));
+          } else {
+            console.log("[triage] not eligible", { hasConv: !!conv, assigned: conv?.assigned_to, group: conv?.is_group, status: conv?.triage_status });
+          }
         }
       } catch (e) {
         console.error("triage check failed:", e);

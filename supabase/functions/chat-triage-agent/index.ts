@@ -32,12 +32,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Atomic claim — prevents two webhook events from triggering double replies
+    // Atomic claim — prevents two webhook events from triggering double replies.
+    // Also accepts 'skipped' (legado da migration) e 'done' (cliente voltou) desde que
+    // não exista atendente atribuído.
     const { data: claim, error: claimErr } = await supabase
       .from("chat_conversations")
-      .update({ triage_status: "in_progress" })
+      .update({ triage_status: "in_progress", triage_turns: 0 })
       .eq("id", conversation_id)
-      .in("triage_status", ["pending", "in_progress"])
+      .in("triage_status", ["pending", "in_progress", "skipped", "done"])
       .is("assigned_to", null)
       .select("id, triage_turns, is_group, whatsapp_phone")
       .maybeSingle();
