@@ -290,6 +290,7 @@ Deno.serve(async (req) => {
         message_type: "whatsapp_outgoing",
         channel: "whatsapp",
         wa_message_id: waMessageId,
+        wa_evolution_id: waMessageId && !waMessageId.startsWith("wamid.") ? waMessageId : null,
         wa_remote_jid: metaPhoneDigits ? `${metaPhoneDigits}@s.whatsapp.net` : null,
         reply_to_id: replyToMessageId || null,
         reply_to_snapshot: replySnapshot,
