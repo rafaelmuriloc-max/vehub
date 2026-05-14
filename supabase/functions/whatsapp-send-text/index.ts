@@ -32,15 +32,19 @@ Deno.serve(async (req) => {
 
     // Look up reply target (for Meta context.message_id and snapshot)
     let replySnapshot: any = null;
-    let replyWaMessageId: string | null = null;
+    let replyMetaWamid: string | null = null;
+    let replyEvolutionId: string | null = null;
     if (replyToMessageId) {
       const { data: replyMsg } = await supabase
         .from("chat_messages")
-        .select("id, sender_id, content, message_type, media_url, wa_message_id")
+        .select("id, sender_id, content, message_type, media_url, wa_message_id, wa_evolution_id")
         .eq("id", replyToMessageId)
         .maybeSingle();
       if (replyMsg) {
-        replyWaMessageId = replyMsg.wa_message_id || null;
+        const wamid = replyMsg.wa_message_id || null;
+        replyMetaWamid = wamid && wamid.startsWith("wamid.") ? wamid : null;
+        replyEvolutionId = replyMsg.wa_evolution_id
+          || (wamid && !wamid.startsWith("wamid.") ? wamid : null);
         let senderFullName = "";
         if (replyMsg.sender_id) {
           const { data: prof } = await supabase
@@ -127,7 +131,7 @@ Deno.serve(async (req) => {
               to: metaPhone,
               type: "text",
               text: { body: signedText },
-              ...(replyWaMessageId ? { context: { message_id: replyWaMessageId } } : {}),
+              ...(replyMetaWamid ? { context: { message_id: replyMetaWamid } } : {}),
             }),
           }
         );
@@ -149,9 +153,9 @@ Deno.serve(async (req) => {
         sendSuccess = true;
         waMessageId = metaJson?.messages?.[0]?.id ?? null;
         console.log("Meta API send success, wamid:", waMessageId);
-      } else if (isTransient(metaRes.status, metaJson)) {
+      } else if (isTransient(metaRes.status, metaJson) || (replyToMessageId && !replyMetaWamid && replyEvolutionId)) {
         // Fallback to Evolution API on transient failures
-        console.warn("Meta still failing, falling back to Evolution API");
+        console.warn("Meta failing or reply needs Evolution quoted; falling back to Evolution API");
         const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
         const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
         const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
@@ -164,7 +168,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                 number: metaPhone,
                 text: signedText,
-                ...(replyWaMessageId ? { quoted: { key: { id: replyWaMessageId } } } : {}),
+                ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${metaPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
               }),
             }
           );
@@ -214,7 +218,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             number: evoPhone,
             text: signedText,
-            ...(replyWaMessageId ? { quoted: { key: { id: replyWaMessageId } } } : {}),
+            ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
           }),
         }
       );
