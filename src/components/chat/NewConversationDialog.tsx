@@ -6,11 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 
-interface Profile {
-  user_id: string;
-  full_name: string | null;
-  job_title: string | null;
+interface Contact {
+  phone: string;          // normalized digits
+  displayPhone: string;   // original
+  name: string;
+  companyName?: string;
+  clientId?: string;
+  source: 'client' | 'department' | 'whatsapp';
 }
+
+const normalizePhone = (p?: string | null) => (p || '').replace(/\D/g, '');
 
 interface NewConversationDialogProps {
   open: boolean;
@@ -21,73 +26,121 @@ interface NewConversationDialogProps {
 export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConversationDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [users, setUsers] = useState<Profile[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!open || !user) return;
-    supabase
-      .from('profiles')
-      .select('user_id, full_name, job_title')
-      .neq('user_id', user.id)
-      .then(({ data }) => setUsers(data || []));
+    (async () => {
+      const [clientsRes, deptRes, convRes] = await Promise.all([
+        supabase
+          .from('clients')
+          .select('id, company_name, contact_name, contact_phone')
+          .not('contact_phone', 'is', null),
+        supabase
+          .from('client_department_contacts')
+          .select('contact_name, contact_phone, client_id, clients(company_name)')
+          .not('contact_phone', 'is', null),
+        supabase
+          .from('chat_conversations')
+          .select('name, whatsapp_phone, client_id')
+          .not('whatsapp_phone', 'is', null)
+          .is('client_id', null),
+      ]);
+
+      const map = new Map<string, Contact>();
+
+      // Priority: client > department > whatsapp. Insert clients last to override.
+      for (const c of (convRes.data || []) as any[]) {
+        const phone = normalizePhone(c.whatsapp_phone);
+        if (!phone) continue;
+        if (!map.has(phone)) {
+          map.set(phone, {
+            phone,
+            displayPhone: c.whatsapp_phone,
+            name: c.name || c.whatsapp_phone,
+            source: 'whatsapp',
+          });
+        }
+      }
+      for (const d of (deptRes.data || []) as any[]) {
+        const phone = normalizePhone(d.contact_phone);
+        if (!phone) continue;
+        const existing = map.get(phone);
+        if (!existing || existing.source === 'whatsapp') {
+          map.set(phone, {
+            phone,
+            displayPhone: d.contact_phone,
+            name: d.contact_name || d.contact_phone,
+            companyName: d.clients?.company_name,
+            clientId: d.client_id,
+            source: 'department',
+          });
+        }
+      }
+      for (const c of (clientsRes.data || []) as any[]) {
+        const phone = normalizePhone(c.contact_phone);
+        if (!phone) continue;
+        map.set(phone, {
+          phone,
+          displayPhone: c.contact_phone,
+          name: c.contact_name || c.company_name,
+          companyName: c.company_name,
+          clientId: c.id,
+          source: 'client',
+        });
+      }
+
+      const list = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+      setContacts(list);
+    })();
   }, [open, user]);
 
-  const filtered = users.filter(u =>
-    u.full_name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = contacts.filter(c => {
+    const q = search.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.phone.includes(search.replace(/\D/g, '')) ||
+      (c.companyName?.toLowerCase().includes(q) ?? false)
+    );
+  });
 
-  const startConversation = async (otherUserId: string, otherName: string) => {
+  const startConversation = async (contact: Contact) => {
     if (!user || creating) return;
     setCreating(true);
     try {
-      // Check if 1:1 conversation already exists
-      const { data: myParticipations } = await supabase
-        .from('chat_participants')
-        .select('conversation_id')
-        .eq('user_id', user.id);
-
-      if (myParticipations && myParticipations.length > 0) {
-        const convIds = myParticipations.map(p => p.conversation_id);
-        const { data: otherParticipations } = await supabase
-          .from('chat_participants')
-          .select('conversation_id')
-          .eq('user_id', otherUserId)
-          .in('conversation_id', convIds);
-
-        if (otherParticipations && otherParticipations.length > 0) {
-          // Check if any is a 1:1 (not group)
-          for (const op of otherParticipations) {
-            const { data: conv } = await supabase
-              .from('chat_conversations')
-              .select('id, is_group')
-              .eq('id', op.conversation_id)
-              .eq('is_group', false)
-              .single();
-            if (conv) {
-              onCreated(conv.id);
-              onOpenChange(false);
-              setCreating(false);
-              return;
-            }
-          }
-        }
+      // Look for existing WhatsApp conversation by normalized phone
+      const { data: existing } = await supabase
+        .from('chat_conversations')
+        .select('id, whatsapp_phone');
+      const found = (existing || []).find(
+        (c: any) => normalizePhone(c.whatsapp_phone) === contact.phone,
+      );
+      if (found) {
+        onCreated(found.id);
+        onOpenChange(false);
+        setCreating(false);
+        return;
       }
 
-      // Create new conversation
       const { data: conv, error } = await supabase
         .from('chat_conversations')
-        .insert({ name: otherName, created_by: user.id, is_group: false, assigned_to: user.id } as any)
+        .insert({
+          name: contact.name,
+          created_by: user.id,
+          is_group: false,
+          assigned_to: user.id,
+          whatsapp_phone: contact.displayPhone,
+          client_id: contact.clientId ?? null,
+        } as any)
         .select('id')
         .single();
 
       if (error || !conv) throw error;
 
-      // Add both participants
       await supabase.from('chat_participants').insert([
         { conversation_id: conv.id, user_id: user.id },
-        { conversation_id: conv.id, user_id: otherUserId },
       ]);
 
       onCreated(conv.id);
@@ -104,32 +157,34 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Nova Conversa</DialogTitle>
-          <DialogDescription>Selecione um usuário para iniciar uma conversa.</DialogDescription>
+          <DialogDescription>Selecione um contato para iniciar uma conversa no WhatsApp.</DialogDescription>
         </DialogHeader>
         <Input
-          placeholder="Buscar usuário..."
+          placeholder="Buscar por nome, empresa ou telefone..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="max-h-64 overflow-y-auto space-y-1 mt-2">
           {filtered.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum usuário encontrado</p>
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum contato encontrado</p>
           )}
-          {filtered.map(u => (
+          {filtered.map(c => (
             <button
-              key={u.user_id}
-              onClick={() => startConversation(u.user_id, u.full_name || 'Usuário')}
+              key={`${c.source}-${c.phone}`}
+              onClick={() => startConversation(c)}
               disabled={creating}
               className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors text-left"
             >
               <Avatar className="h-10 w-10">
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
-                  {u.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                  {c.name?.charAt(0)?.toUpperCase() || '?'}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <p className="text-sm font-medium">{u.full_name || 'Usuário'}</p>
-                {u.job_title && <p className="text-xs text-muted-foreground">{u.job_title}</p>}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{c.name}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {c.companyName || c.displayPhone || 'Contato WhatsApp'}
+                </p>
               </div>
             </button>
           ))}

@@ -1,15 +1,25 @@
-Marcar todas as mensagens de chat como lidas, zerando os contadores de não lidas em todas as conversas.
+## Objetivo
 
-## O que será feito
+Substituir a lista de "Nova Conversa" — que hoje só lista usuários internos (`profiles`) — por uma lista de **contatos externos**, e fazer com que toda nova conversa criada seja uma conversa de **WhatsApp**.
 
-Executar um UPDATE no banco que define `read_at = now()` em todas as linhas de `public.chat_messages` onde `read_at IS NULL`. Isso fará com que `get_chat_inbox` retorne `unread_count = 0` para todas as conversas e o hook `useUnreadCount` também retorne 0.
+## Fontes de contatos a unificar
 
-## Detalhes técnicos
+1. **Cadastrados nas empresas**
+   - `clients.contact_name` + `clients.contact_phone`
+   - `client_department_contacts.contact_name` + `contact_phone`
+2. **Remetentes WhatsApp já conhecidos sem vínculo a empresa**
+   - `chat_conversations` com `whatsapp_phone` preenchido e `client_id IS NULL`, usando `name` (pushName) como nome do contato.
 
-```sql
-UPDATE public.chat_messages
-SET read_at = now()
-WHERE read_at IS NULL;
-```
+Deduplicação por telefone normalizado (apenas dígitos). Prioridade quando o mesmo telefone aparecer em mais de uma fonte: cliente > contato departamental > remetente avulso.
 
-Operação única, sem alterações de código ou schema. Novas mensagens recebidas a partir de agora voltam a contar normalmente.
+## Mudanças no front-end
+
+Arquivo: `src/components/chat/NewConversationDialog.tsx`
+
+- Trocar a query de `profiles` por buscas paralelas em `clients`, `client_department_contacts` e `chat_conversations` (filtro `whatsapp_phone IS NOT NULL`).
+- Construir `Contact { phone, name, companyName? }` unificado. **Não exibir departamento** — manter visual atual (avatar + nome + linha secundária com nome da empresa, quando houver, ou "Contato WhatsApp").
+- Busca por nome ou telefone.
+- Ao clicar em um contato:
+  1. Procurar `chat_conversations` existente com aquele `whatsapp_phone` (normalizado). Se encontrar, abrir.
+  2. Caso contrário, criar `chat_conversations` com `whatsapp_phone`, `name` (do contato), `client_id` (quando vier de cliente), `created_by` = usuário atual, `is_group=false`, `assigned_to` = usuário atual; e adicionar o usuário atual em `chat_participants`.
+- Remover a lógica antiga de detecção de 1:1 entre usuários internos.
