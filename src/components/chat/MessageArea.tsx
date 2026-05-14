@@ -218,9 +218,9 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
               </span>
             </div>
             {group.msgs.map(msg => {
-              const isIncoming = msg.message_type === 'whatsapp_incoming' || (msg.message_type?.startsWith('whatsapp_incoming_') ?? false);
-              const isOutgoing = msg.message_type === 'whatsapp_outgoing' || msg.message_type === 'whatsapp';
-              const showOnRight = !isIncoming && (isOutgoing || msg.sender_id === currentUserId);
+               const isIncoming = msg.message_type === 'whatsapp_incoming' || (msg.message_type?.startsWith('whatsapp_incoming_') ?? false);
+               const isWhatsAppOutgoing = !isIncoming && (msg.message_type === 'whatsapp' || msg.message_type?.startsWith('whatsapp_'));
+               const showOnRight = isWhatsAppOutgoing || (!isIncoming && msg.sender_id === currentUserId);
               return (
                 <MessageBubble
                   key={msg.id}
