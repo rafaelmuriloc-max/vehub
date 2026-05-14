@@ -235,7 +235,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                   )}
                 </div>
                 {conv.companyNames && conv.companyNames.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground truncate mt-0.5 px-[4px] border-0 border-none rounded-none shadow-md text-cyan-950 font-medium py-[2px] bg-inherit">
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5 px-[4px] border-0 border-none rounded-none text-cyan-950 font-medium py-[2px] bg-inherit shadow-none">
                     {conv.companyNames.join(' • ')}
                   </p>
                 )}
