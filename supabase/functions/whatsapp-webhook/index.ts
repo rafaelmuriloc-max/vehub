@@ -78,7 +78,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const messageObj = data.message || {};
+    let messageObj = data.message || {};
+
+    // Unwrap nested envelopes (ephemeral, view-once, document-with-caption)
+    for (let i = 0; i < 5; i++) {
+      const next =
+        messageObj.ephemeralMessage?.message ||
+        messageObj.viewOnceMessage?.message ||
+        messageObj.viewOnceMessageV2?.message ||
+        messageObj.viewOnceMessageV2Extension?.message ||
+        messageObj.documentWithCaptionMessage?.message;
+      if (!next) break;
+      messageObj = next;
+    }
 
     // Detect message type and extract text/caption
     let text: string | null = null;
@@ -496,8 +508,15 @@ Deno.serve(async (req) => {
       messageObj.audioMessage?.contextInfo ||
       messageObj.documentMessage?.contextInfo ||
       messageObj.stickerMessage?.contextInfo ||
+      messageObj.messageContextInfo ||
+      (data as any).contextInfo ||
       null;
     const quotedStanzaId: string | null = ctxInfo?.stanzaId || null;
+    console.log("Reply detection:", {
+      quotedStanzaId,
+      hasQuotedMessage: !!ctxInfo?.quotedMessage,
+      participant: ctxInfo?.participant || null,
+    });
     if (quotedStanzaId) {
       try {
         const { data: original } = await supabase
@@ -506,6 +525,7 @@ Deno.serve(async (req) => {
           .eq("conversation_id", conversationId)
           .eq("wa_evolution_id", quotedStanzaId)
           .maybeSingle();
+        console.log("Reply lookup:", { quotedStanzaId, foundOriginal: !!original });
         if (original) {
           insertData.reply_to_id = original.id;
           let senderFullName = "";
@@ -520,6 +540,31 @@ Deno.serve(async (req) => {
             content: original.content,
             message_type: original.message_type,
             media_url: original.media_url,
+          };
+        } else if (ctxInfo?.quotedMessage) {
+          // Fallback: original not found in DB (older message, missing wa_evolution_id).
+          // Use the snapshot Evolution sends us so the citation still renders.
+          const qm = ctxInfo.quotedMessage;
+          let qContent = "";
+          let qType = "whatsapp_incoming";
+          if (qm.conversation) qContent = qm.conversation;
+          else if (qm.extendedTextMessage?.text) qContent = qm.extendedTextMessage.text;
+          else if (qm.imageMessage) { qContent = qm.imageMessage.caption || ""; qType = "whatsapp_incoming_image"; }
+          else if (qm.videoMessage) { qContent = qm.videoMessage.caption || ""; qType = "whatsapp_incoming_video"; }
+          else if (qm.audioMessage) { qContent = ""; qType = "whatsapp_incoming_audio"; }
+          else if (qm.documentMessage) { qContent = qm.documentMessage.caption || qm.documentMessage.fileName || ""; qType = "whatsapp_incoming_document"; }
+          else if (qm.stickerMessage) { qContent = ""; qType = "whatsapp_incoming_image"; }
+          // If the quoted message was sent by us (participant matches our number),
+          // mark as outgoing so the bubble layout matches.
+          const fromUs = ctxInfo?.participant
+            ? false // can't easily tell; leave as incoming default
+            : false;
+          insertData.reply_to_snapshot = {
+            sender_id: null,
+            sender_name: fromUs ? "" : "",
+            content: qContent,
+            message_type: qType,
+            media_url: null,
           };
         }
       } catch (e) {
