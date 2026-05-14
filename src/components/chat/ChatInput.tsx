@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent, ClipboardEvent } from 'react';
 import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile } from 'lucide-react';
 import EmojiPicker, { EmojiStyle, type EmojiClickData } from 'emoji-picker-react';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,27 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items || !onAddPendingFiles) return;
+    const images: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const blob = it.getAsFile();
+        if (blob) {
+          const ext = (it.type.split('/')[1] || 'png').split('+')[0];
+          const file = new File([blob], `pasted_${Date.now()}_${i}.${ext}`, { type: it.type });
+          images.push(file);
+        }
+      }
+    }
+    if (images.length > 0) {
+      e.preventDefault();
+      onAddPendingFiles(images);
     }
   };
 
@@ -297,6 +318,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder="Digite uma mensagem"
           disabled={disabled}
           rows={1}
