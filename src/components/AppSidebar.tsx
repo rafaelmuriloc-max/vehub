@@ -68,7 +68,7 @@ export function AppSidebar() {
 
       <Separator className="bg-sidebar-border mx-3" />
 
-      <SidebarContent className="pt-2">
+      <SidebarContent className="pt-2 px-0">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">Menu</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -134,7 +134,7 @@ export function AppSidebar() {
         <Separator className="bg-sidebar-border mb-4" />
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/60">
-            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-semibold text-sm">
+            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-semibold text-sm text-left mx-0 px-0 rounded-none">
               {profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}
             </AvatarFallback>
           </Avatar>
