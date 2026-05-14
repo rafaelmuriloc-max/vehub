@@ -277,7 +277,7 @@ Deno.serve(async (req) => {
 
     const { data: convByPhone } = await supabase
       .from("chat_conversations")
-      .select("id, client_id, status, whatsapp_phone")
+      .select("id, client_id, status, whatsapp_phone, name_locked")
       .in("whatsapp_phone", phoneVariants)
       .order("status", { ascending: true })
       .order("updated_at", { ascending: false })
@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
         updates.client_id = clientId;
       }
       // Only update name from incoming messages (not fromMe)
-      if (!isFromMe && pushName) {
+      if (!isFromMe && pushName && !convByPhone[0].name_locked) {
         updates.name = pushName;
       }
       // Upgrade phone to canonical format
@@ -384,7 +384,7 @@ Deno.serve(async (req) => {
       // Existing conversation — check if avatar or name needs updating
       const { data: existingConvData } = await supabase
         .from("chat_conversations")
-        .select("name, avatar_url")
+        .select("name, avatar_url, name_locked")
         .eq("id", conversationId)
         .single();
 
@@ -429,9 +429,9 @@ Deno.serve(async (req) => {
       }
 
       // Update name: prefer pushName, fallback to clientName for generic names
-      if (!isFromMe && pushName && existingConvData?.name !== pushName) {
+      if (!isFromMe && pushName && existingConvData?.name !== pushName && !existingConvData?.name_locked) {
         await supabase.from("chat_conversations").update({ name: pushName }).eq("id", conversationId);
-      } else if (clientId && existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name)) {
+      } else if (clientId && existingConvData?.name && /WhatsApp\s+\d+/.test(existingConvData.name) && !existingConvData?.name_locked) {
         await supabase.from("chat_conversations").update({ name: clientName }).eq("id", conversationId);
       }
     }
