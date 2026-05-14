@@ -97,9 +97,9 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
 
 export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
-  const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
-  const isOutgoing = messageType === 'whatsapp_outgoing' || messageType === 'whatsapp';
-  const showOnRight = !isIncoming && (isOutgoing || isMine);
+   const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
+   const isWhatsAppOutgoing = !isIncoming && (messageType === 'whatsapp' || messageType?.startsWith('whatsapp_'));
+   const showOnRight = isWhatsAppOutgoing || (!isIncoming && isMine);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
 
@@ -193,13 +193,13 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   if (isDeleted) {
     return (
-      <div className={`flex ${showOnRight ? 'justify-end' : 'justify-start'} mb-1`}>
-        <div className={`relative max-w-[80%] sm:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm italic text-muted-foreground bg-zinc-200 dark:bg-zinc-800 ${showOnRight ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
+       <div className={`flex ${showOnRight ? 'justify-end pr-[42px]' : 'justify-start pl-[42px]'} mb-1`}>
+         <div className={`relative max-w-[80%] sm:max-w-[65%] px-[12px] py-1.5 rounded-lg shadow-sm italic text-muted-foreground bg-zinc-200 dark:bg-zinc-800 ${showOnRight ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
           <div className="flex items-center gap-1.5">
             <Ban className="h-3.5 w-3.5" />
             <span className="text-sm">Mensagem apagada</span>
           </div>
-          <div className="flex items-center gap-1 justify-end mt-0.5">
+           <div className="flex items-center gap-1 justify-end mt-[4px]">
             <span className="text-[10px] leading-none">
               {format(new Date(timestamp), 'HH:mm', { locale: ptBR })}
             </span>
@@ -210,8 +210,8 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   }
 
   return (
-    <div className={`flex ${showOnRight ? 'justify-end' : 'justify-start'} mb-1`}>
-      <div className="group relative flex items-start gap-1">
+     <div className={`flex ${showOnRight ? 'justify-end pr-[42px]' : 'justify-start pl-[42px]'} mb-1`}>
+       <div className={`group relative flex items-start gap-1 ${showOnRight ? 'flex-row-reverse' : 'flex-row'}`}>
       {showOnRight && (onEdit || onDeleteForMe || onDeleteForAll) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -242,18 +242,18 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         </DropdownMenu>
       )}
       <div
-        className={`relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-3 py-1.5 rounded-lg shadow-sm ${
+         className={`relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-[12px] py-1.5 rounded-lg shadow-sm ${
           showOnRight
-            ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none'
-            : 'bg-white dark:bg-zinc-700 text-foreground rounded-tl-none'
+           ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none'
+           : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none'
         }`}
       >
-        {senderName && (
-          <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">{senderName}</p>
+         {senderName && (
+           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-[4px]">{senderName}</p>
         )}
         {renderMedia()}
         {/* Show text content - skip for documents/location/contact */}
-        {editing ? (
+         {editing ? (
           <div className="flex flex-col gap-1.5 min-w-[200px]">
             <Textarea
               value={draft}
@@ -271,17 +271,17 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
               </Button>
             </div>
           </div>
-        ) : content && !hideTextContent && mediaKind !== 'document' ? (
-          <p className="text-sm whitespace-pre-wrap break-words">
+         ) : content && !hideTextContent && mediaKind !== 'document' ? (
+           <p className="text-sm whitespace-pre-wrap break-words">
             {content}
             {editedAt && <span className="text-[10px] text-muted-foreground ml-1 italic">(editada)</span>}
           </p>
         ) : null}
         {/* For audio with no text, don't show empty paragraph */}
-        {!content && !mediaUrl && !hideTextContent && !editing && (
-          <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
+         {!content && !mediaUrl && !hideTextContent && !editing && (
+           <p className="text-sm whitespace-pre-wrap break-words px-[12px]">{content}</p>
         )}
-        <div className={`flex items-center gap-1 justify-end mt-0.5 ${isMine ? '-mr-1' : ''}`}>
+         <div className={`flex items-center gap-1 justify-end mt-[4px]`}>
           <span className="text-[10px] text-muted-foreground leading-none">
             {format(new Date(timestamp), 'HH:mm', { locale: ptBR })}
           </span>
