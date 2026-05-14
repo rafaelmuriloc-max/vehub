@@ -1,7 +1,8 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X, Reply } from 'lucide-react';
+import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { AudioMessage } from './AudioMessage';
 import {
   DropdownMenu,
@@ -41,6 +42,9 @@ interface MessageBubbleProps {
   onJumpToReply?: (id: string) => void;
   bubbleRef?: (el: HTMLDivElement | null) => void;
   highlight?: boolean;
+  transcription?: string | null;
+  transcriptionStatus?: string | null;
+  messageId?: string;
 }
 
 function formatBytes(bytes: number): string {

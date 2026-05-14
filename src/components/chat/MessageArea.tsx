@@ -319,6 +319,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   onJumpToReply={jumpToMessage}
                   transcription={msg.transcription || undefined}
                   transcriptionStatus={msg.transcription_status || undefined}
+                  messageId={msg.id}
                   bubbleRef={(el) => {
                     if (el) bubbleRefs.current.set(msg.id, el);
                     else bubbleRefs.current.delete(msg.id);
