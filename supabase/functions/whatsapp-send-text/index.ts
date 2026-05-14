@@ -83,28 +83,69 @@ Deno.serve(async (req) => {
       }
       metaPhoneDigits = metaPhone;
 
-      const metaRes = await fetch(
-        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: metaPhone,
-            type: "text",
-            text: { body: signedText },
-          }),
-        }
-      );
+      const callMeta = async () => {
+        const r = await fetch(
+          `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: metaPhone,
+              type: "text",
+              text: { body: signedText },
+            }),
+          }
+        );
+        const j = await r.json().catch(() => ({} as any));
+        return { r, j };
+      };
 
-      const metaJson = await metaRes.json().catch(() => ({} as any));
+      let { r: metaRes, j: metaJson } = await callMeta();
+      // Retry once on transient Meta errors
+      const isTransient = (status: number, json: any) =>
+        status >= 500 || json?.error?.is_transient === true || json?.error?.code === 2;
+      if (!metaRes.ok && isTransient(metaRes.status, metaJson)) {
+        console.warn("Meta transient error, retrying in 800ms...");
+        await new Promise((res) => setTimeout(res, 800));
+        ({ r: metaRes, j: metaJson } = await callMeta());
+      }
+
       if (metaRes.ok) {
         sendSuccess = true;
         waMessageId = metaJson?.messages?.[0]?.id ?? null;
         console.log("Meta API send success, wamid:", waMessageId);
+      } else if (isTransient(metaRes.status, metaJson)) {
+        // Fallback to Evolution API on transient failures
+        console.warn("Meta still failing, falling back to Evolution API");
+        const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+        const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
+        const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
+        if (evolutionUrl && evolutionApiKey && evolutionInstance) {
+          const evoRes = await fetch(
+            `${evolutionUrl}/message/sendText/${evolutionInstance}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: evolutionApiKey },
+              body: JSON.stringify({ number: metaPhone, text: signedText }),
+            }
+          );
+          const evoJson = await evoRes.json().catch(() => ({} as any));
+          if (evoRes.ok) {
+            sendSuccess = true;
+            waMessageId = evoJson?.key?.id ?? null;
+            console.log("Evolution fallback success, key.id:", waMessageId);
+          } else {
+            sendError = `Meta transient + Evolution fallback failed: ${evoRes.status} ${JSON.stringify(evoJson)}`;
+            console.error(sendError);
+          }
+        } else {
+          sendError = `Meta API temporarily unavailable: ${JSON.stringify(metaJson)}`;
+          console.error(sendError);
+        }
       } else {
         sendError = `Meta API error: ${metaRes.status} ${JSON.stringify(metaJson)}`;
         console.error(sendError);
@@ -154,10 +195,15 @@ Deno.serve(async (req) => {
     }
 
     if (!sendSuccess) {
-      return new Response(JSON.stringify({ error: sendError || "Failed to send message" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Return 200 with fallback flag for transient failures so UI doesn't crash
+      const transient = /is_transient|temporarily unavailable|Service temporarily/i.test(sendError || "");
+      return new Response(
+        JSON.stringify({ ok: false, error: sendError || "Failed to send message", transient }),
+        {
+          status: transient ? 200 : 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Use caller's user_id when provided; fallback to first admin
