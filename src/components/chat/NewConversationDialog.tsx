@@ -167,7 +167,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
           <DialogDescription>Selecione um contato para iniciar uma conversa no WhatsApp.</DialogDescription>
         </DialogHeader>
         <Input
-          placeholder="Buscar por nome, empresa ou telefone..."
+          placeholder="Buscar por nome, empresa ou digite um telefone..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
