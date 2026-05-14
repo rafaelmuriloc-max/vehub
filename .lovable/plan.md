@@ -1,19 +1,33 @@
-## Restringir alertas de chat ao horário de atendimento
+## Objetivo
+Adicionar um seletor de cor no cadastro de usuário. Essa cor será usada como fundo da tag de atribuição (`assignedToName`) na lista de conversas do chat.
 
-Modificar a edge function `chat-waiting-alert` para só disparar alertas no grupo do WhatsApp quando o momento atual estiver dentro do horário de atendimento configurado em `company_settings` e em dia útil (seg–sex, fora de feriado nacional).
+## Mudanças
 
-### Mudanças
+### 1. Banco de dados (migração)
+- `profiles`: adicionar coluna `tag_color text` (hex, ex: `#D97706`), nullable, default `NULL`.
+- Atualizar a função RPC `get_user_chat_conversations` (última versão em `20260513211605_*`) para também retornar `assigned_to_color text` (vindo de `profiles.tag_color`).
 
-**`supabase/functions/chat-waiting-alert/index.ts`**
-- Carregar de `company_settings` os campos: `service_hours_enabled`, `service_open_time`, `service_close_time`, `service_lunch_start`, `service_lunch_end`, `service_timezone` (junto com `chat_alert_whatsapp_group_id` que já é lido).
-- Antes de buscar conversas em espera, calcular `now` no `service_timezone` (default `America/Sao_Paulo`).
-- Pular execução (retornar `{ ok: true, skipped: "off_hours" }`) quando:
-  - dia da semana for sábado/domingo, ou
-  - data atual for feriado nacional (porta inline da lógica de `src/lib/holidays.ts` — algoritmo de Páscoa de Meeus + lista fixa), ou
-  - `service_hours_enabled = true` e a hora atual estiver fora do intervalo `service_open_time`–`service_close_time`, ou dentro de `service_lunch_start`–`service_lunch_end` (quando preenchidos).
-- Se `service_hours_enabled = false` ou as horas não estiverem configuradas, manter apenas o filtro de dia útil + feriado (seg–sex). 
+### 2. Backend de usuário (Edge Function `manage-user`)
+- Aceitar campo opcional `tag_color` em `create` e `update`, gravando em `profiles.tag_color`.
 
-### Comportamento
+### 3. UI – Cadastro/edição de usuário (`src/components/settings/UsersTab.tsx`)
+- Adicionar campo "Cor da tag" nos formulários de criar e editar:
+  - Input nativo `<input type="color">` + presets de cores rápidas (8 cores) + opção limpar.
+- Persistir e enviar `tag_color` para `manage-user`.
+- Exibir um pequeno chip com a cor na coluna "Permissão" (ou nova coluna "Cor") da tabela de usuários.
 
-- Conversas que entraram em espera fora do horário acumulam tempo normalmente, mas o alerta só dispara quando o expediente reabre (a checagem do `last_wait_alert_at` continua valendo).
-- Nada muda na UI, no banco ou no fluxo de resposta automática do agente — apenas o alerta de espera passa a respeitar o expediente.
+### 4. Chat – Tag de atribuição (`src/components/chat/ConversationList.tsx` + `src/pages/Chat.tsx`)
+- Mapear `assigned_to_color` no `ConversationItem` (campo `assignedToColor?: string`).
+- Em `ConversationList`, aplicar a cor via `style={{ backgroundColor: color, color: '#fff' }}` no `Badge` quando `assignedToColor` existir; manter o `bg-amber-600` atual como fallback.
+
+## Detalhes técnicos
+- A cor é armazenada como hex string. Sem CHECK constraint (validação client-side via input type=color).
+- Cor de texto: usar branco (`#fff`) — todas as cores presets serão escuras o suficiente. Para cor custom, calcular contraste simples com luminância YIQ se quiser maior robustez.
+- Tipos do Supabase (`types.ts`) serão regenerados automaticamente após a migração.
+
+## Arquivos afetados
+- `supabase/migrations/<novo>.sql` — coluna + RPC atualizada
+- `supabase/functions/manage-user/index.ts`
+- `src/components/settings/UsersTab.tsx`
+- `src/components/chat/ConversationList.tsx`
+- `src/pages/Chat.tsx`
