@@ -1,50 +1,86 @@
 ## Problema
 
-Mensagens enviadas usam a Meta API e salvam `wa_message_id` no formato `wamid.HBgM...`. Mensagens recebidas chegam pela Evolution API e salvam o id cru do WhatsApp (`3EB0...`, `2A79...`). Os dois formatos não conversam entre si:
+Quando o cliente responde uma mensagem no WhatsApp, a citação não chega — a mensagem entra no chat como mensagem normal, sem `reply_to_id`/`reply_to_snapshot`.
 
-- Resposta nossa → cliente: enviamos pela Meta com `context.message_id = <id da Evolution>`, a Meta ignora e o cliente recebe sem citação.
-- Resposta do cliente → nós: webhook recebe `stanzaId` no formato cru, mas nosso outgoing está salvo com prefixo `wamid.`. O lookup `wa_message_id = stanzaId` falha, `reply_to_id` fica NULL e nada é renderizado.
+Olhando o banco, a última mensagem recebida ("Ok") veio como `conversation` puro, sem `contextInfo`. Isso indica duas possibilidades:
 
-## Solução
+1. A mensagem não foi enviada como reply real (só texto digitado);
+2. O Evolution está embrulhando a mensagem em `ephemeralMessage` / `viewOnceMessageV2` / `messageContextInfo`, e nosso código procura `contextInfo` apenas dentro de `extendedTextMessage`/`imageMessage`/etc — não dentro do envelope externo.
 
-Manter os dois formatos lado a lado em uma nova coluna e usar a API correta para cada caso de resposta.
+A função `whatsapp-send-text` para replies já está funcionando (a saída "teste" tem `wa_evolution_id` válido), então o problema é só no webhook ao receber o reply do cliente.
 
-### 1. Banco
+## Plano
 
-Adicionar coluna `wa_evolution_id text` em `chat_messages` (id no formato Evolution / WhatsApp cru, sem prefixo `wamid.`). Índice em `(conversation_id, wa_evolution_id)`.
+### 1. `supabase/functions/whatsapp-webhook/index.ts`
 
-Backfill: para linhas existentes onde `wa_message_id` não começa com `wamid.`, copiar o valor para `wa_evolution_id`.
+- **Desempacotar envelopes**: antes de processar `messageObj`, desembrulhar:
+  - `messageObj.ephemeralMessage?.message`
+  - `messageObj.viewOnceMessage?.message`
+  - `messageObj.viewOnceMessageV2?.message`
+  - `messageObj.viewOnceMessageV2Extension?.message`
+  - `messageObj.documentWithCaptionMessage?.message`
+  
+  Aplicar em loop até estabilizar para garantir que pegamos o conteúdo real.
 
-### 2. Webhook (`whatsapp-webhook`)
+- **Ampliar busca de `contextInfo`**: além de procurar dentro de cada `*Message.contextInfo`, também olhar:
+  - `messageObj.messageContextInfo` (nível raiz da mensagem)
+  - `data.contextInfo` (alguns webhooks Evolution colocam aqui)
+  - `messageObj.extendedTextMessage.contextInfo.stanzaId` continua como principal
 
-- Para qualquer mensagem (incoming ou outgoing eco do vhub), gravar `wa_evolution_id = key.id`.
-- No backfill do bloco `vhub_origin` (mensagem nossa ecoando da Evolution), em vez de sobrescrever `wa_message_id`, gravar apenas `wa_evolution_id = key.id` — preservando o `wamid.` original da Meta.
-- Lookup de resposta entrante: buscar a mensagem original por `wa_evolution_id = quotedStanzaId` (não mais por `wa_message_id`). Isso resolve o caso "cliente responde uma mensagem nossa".
+- **Logar a detecção**: adicionar `console.log("Reply detection:", { quotedStanzaId, foundOriginal: !!original })` para confirmar via Edge Logs no próximo teste real do usuário.
 
-### 3. Envio (`whatsapp-send-text` e `whatsapp-send-media`)
+- **Snapshot fallback**: quando `quotedStanzaId` existir mas não acharmos a mensagem original na base (ex: mensagem antiga sem `wa_evolution_id`), usar o conteúdo de `ctxInfo.quotedMessage` (que o próprio Evolution envia) para preencher `reply_to_snapshot` mesmo sem `reply_to_id`. Assim a citação aparece visualmente, mesmo sem link clicável.
 
-Ao receber `replyToMessageId`, buscar `wa_message_id`, `wa_evolution_id` e `message_type` da mensagem original e decidir o canal:
+### 2. Backfill defensivo
 
-```text
-Tipo da original         | API usada para enviar a resposta
--------------------------+----------------------------------
-outgoing (wamid.* válido)| Meta API com context.message_id = wa_message_id
-incoming (id Evolution)  | Evolution API com quoted.key.id = wa_evolution_id
+Para mensagens antigas (`whatsapp_outgoing`) com `wa_message_id` no formato `wamid.*` e `wa_evolution_id` nulo, não há como recuperar o ID raw do WhatsApp depois do envio (Meta não devolve), então mensagens enviadas antes deste fix não poderão ser referenciadas em replies vindos do cliente. Apenas mensagens novas enviadas via Evolution ou recebidas terão lookup completo.
+
+### 3. Validação
+
+Após deploy:
+1. Pedir ao usuário para responder uma mensagem nova (enviada após o fix) usando a ação "Responder" no WhatsApp.
+2. Conferir Edge Logs do `whatsapp-webhook` pelo log `Reply detection:` e ver se `quotedStanzaId` apareceu e foi resolvido.
+3. Se `foundOriginal: false`, o snapshot fallback ainda renderiza a citação visualmente.
+
+## Detalhes técnicos
+
+```ts
+// Unwrap envelopes
+let inner: any = messageObj;
+for (let i = 0; i < 5; i++) {
+  const next =
+    inner.ephemeralMessage?.message ||
+    inner.viewOnceMessage?.message ||
+    inner.viewOnceMessageV2?.message ||
+    inner.viewOnceMessageV2Extension?.message ||
+    inner.documentWithCaptionMessage?.message;
+  if (!next) break;
+  inner = next;
+}
+// use `inner` instead of `messageObj` from here on
+
+// Reply detection with broader scan
+const ctxInfo =
+  inner.extendedTextMessage?.contextInfo ||
+  inner.imageMessage?.contextInfo ||
+  inner.videoMessage?.contextInfo ||
+  inner.audioMessage?.contextInfo ||
+  inner.documentMessage?.contextInfo ||
+  inner.stickerMessage?.contextInfo ||
+  inner.messageContextInfo ||
+  data.contextInfo ||
+  null;
+
+const quotedStanzaId = ctxInfo?.stanzaId || null;
+console.log("Reply detection:", { quotedStanzaId, hasQuotedMessage: !!ctxInfo?.quotedMessage });
+
+if (quotedStanzaId) {
+  // existing lookup by wa_evolution_id
+  // if !original and ctxInfo.quotedMessage, build snapshot from quotedMessage
+}
 ```
 
-Quando a janela de 24h está fechada, já caímos em Evolution — usar `wa_evolution_id` da original.
+## Fora do escopo
 
-Se a Meta retornar erro de `context` inválido, fazer fallback automático para Evolution com `quoted.key.id`.
-
-Salvar a nova mensagem outgoing com:
-- `wa_message_id` = wamid retornado pela Meta (quando enviado pela Meta)
-- `wa_evolution_id` = key.id retornado pela Evolution (quando enviado pela Evolution; a Meta não devolve isso, então fica para o eco do webhook preencher)
-
-### 4. Frontend
-
-Sem mudanças funcionais — `reply_to_snapshot` continua sendo renderizado pelo `MessageBubble`. Apenas garantir que o `Chat.tsx` carregue `wa_evolution_id` no SELECT (não é estritamente necessário para UI, mas mantém o tipo coerente).
-
-## Fora de escopo
-
-- Migrar inteiramente para o webhook da Meta (resolveria de vez, mas exige reconfigurar no Business Manager).
-- Tornar replies funcionais para mensagens antigas (anteriores ao deploy) que só têm um dos formatos — só novas mensagens citadas funcionarão dos dois lados; histórico continua sem citação onde já está NULL.
+- Mudar para webhook do Meta (resolveria o ID mismatch de vez, mas exige reconfig no Business Manager).
+- Backfill de `wa_evolution_id` em mensagens antigas enviadas via Meta.
