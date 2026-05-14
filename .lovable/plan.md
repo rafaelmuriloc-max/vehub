@@ -1,19 +1,27 @@
-## Mudança
-Em `src/components/AppSidebar.tsx` (header, linhas 54–67), ocultar o bloco de texto "Velocitä / Contabilidade" quando a sidebar estiver no estado `collapsed`, deixando apenas as barras estilizadas do logo.
+## Remover preview da última mensagem na lista de conversas
 
-Aproveitar o hook `useSidebar()` (já disponível) ou a classe utilitária `group-data-[collapsible=icon]:hidden` exposta pelo `Sidebar` shadcn:
+Em `src/components/chat/ConversationList.tsx` (linhas 242–249), remover apenas o `<span>` que mostra `conv.lastMessage` (texto "Sem mensagens" como fallback), mantendo o badge de não lidas (`conv.unreadCount`) que vive no mesmo container.
+
+### Mudança
+Substituir o bloco:
 
 ```tsx
-<div className="group-data-[collapsible=icon]:hidden">
-  <h2 ...>Velocitä</h2>
-  <p ...>Contabilidade</p>
+<div className="flex items-center justify-between mt-0.5">
+  <span className="text-xs text-muted-foreground truncate">{conv.lastMessage || 'Sem mensagens'}</span>
+  {conv.unreadCount > 0 && (
+    <span className="ml-2 shrink-0 ...">{conv.unreadCount}</span>
+  )}
 </div>
 ```
 
-Também ajustar o padding do `SidebarHeader` para `p-3` no estado colapsado para não cortar/expandir desnecessariamente, usando a mesma variante:
+por uma versão sem o preview, preservando o badge alinhado à direita:
 
 ```tsx
-<SidebarHeader className="p-5 group-data-[collapsible=icon]:p-3">
+{conv.unreadCount > 0 && (
+  <div className="flex items-center justify-end mt-0.5">
+    <span className="shrink-0 ...">{conv.unreadCount}</span>
+  </div>
+)}
 ```
 
-Sem outras mudanças.
+Nada mais é alterado — horário, nome, empresas, badges de status/atribuição e timer de espera continuam iguais.
