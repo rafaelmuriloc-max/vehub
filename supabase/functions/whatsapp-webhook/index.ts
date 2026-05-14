@@ -506,6 +506,18 @@ Deno.serve(async (req) => {
 
     console.log("Message saved successfully for conversation:", conversationId, "type:", messageType);
 
+    // ===== Auto-reply outside business hours =====
+    if (!isFromMe) {
+      try {
+        await maybeSendOffHoursReply(supabase, {
+          conversationId,
+          phone: phoneRaw,
+        });
+      } catch (e) {
+        console.error("offhours auto-reply failed:", e);
+      }
+    }
+
     return new Response(JSON.stringify({ ok: true, conversation_id: conversationId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -517,3 +529,173 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// ===== Off-hours helpers =====
+
+function getEasterDate(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function fmtYMD(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getBrazilHolidays(year: number): Set<string> {
+  const easter = getEasterDate(year);
+  const add = (n: number) => {
+    const x = new Date(easter);
+    x.setUTCDate(x.getUTCDate() + n);
+    return fmtYMD(x);
+  };
+  return new Set<string>([
+    `${year}-01-01`,
+    add(-47), // Carnaval
+    add(-2),  // Sexta-feira Santa
+    `${year}-04-21`,
+    `${year}-05-01`,
+    add(60),  // Corpus Christi
+    `${year}-09-07`,
+    `${year}-10-12`,
+    `${year}-11-02`,
+    `${year}-11-15`,
+    `${year}-12-25`,
+  ]);
+}
+
+/** Returns { ymd, weekday (0-6 Sun-Sat), minutes } in given IANA timezone. */
+function getZonedParts(tz: string): { ymd: string; weekday: number; minutes: number } {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  const wkMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const ymd = `${parts.year}-${parts.month}-${parts.day}`;
+  const weekday = wkMap[parts.weekday as string] ?? 0;
+  const hour = parseInt(parts.hour as string, 10);
+  const minute = parseInt(parts.minute as string, 10);
+  return { ymd, weekday, minutes: hour * 60 + minute };
+}
+
+function hmToMinutes(hm: string): number {
+  const [h, m] = hm.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+
+function fmtRange(open: string, close: string, lStart?: string | null, lEnd?: string | null): string {
+  const trim = (s: string) => s.slice(0, 5);
+  if (lStart && lEnd) {
+    return `${trim(open)}–${trim(lStart)} e ${trim(lEnd)}–${trim(close)}`;
+  }
+  return `${trim(open)}–${trim(close)}`;
+}
+
+async function maybeSendOffHoursReply(
+  supabase: ReturnType<typeof createClient>,
+  args: { conversationId: string; phone: string },
+) {
+  const { data: settings } = await supabase
+    .from("company_settings")
+    .select("id, service_hours_enabled, service_open_time, service_close_time, service_lunch_start, service_lunch_end, service_timezone, agent_name, agent_offhours_message, agent_offhours_last_sent")
+    .limit(1)
+    .maybeSingle();
+
+  if (!settings?.service_hours_enabled) return;
+  if (!settings.service_open_time || !settings.service_close_time) return;
+  if (!settings.agent_offhours_message) return;
+
+  const tz = settings.service_timezone || "America/Sao_Paulo";
+  const { ymd, weekday, minutes } = getZonedParts(tz);
+
+  const open = hmToMinutes(settings.service_open_time);
+  const close = hmToMinutes(settings.service_close_time);
+  const lStart = settings.service_lunch_start ? hmToMinutes(settings.service_lunch_start) : null;
+  const lEnd = settings.service_lunch_end ? hmToMinutes(settings.service_lunch_end) : null;
+
+  const isWeekend = weekday === 0 || weekday === 6;
+  const year = parseInt(ymd.slice(0, 4), 10);
+  const isHoliday = getBrazilHolidays(year).has(ymd);
+
+  let offHours = false;
+  if (isWeekend || isHoliday) {
+    offHours = true;
+  } else if (minutes < open || minutes >= close) {
+    offHours = true;
+  } else if (lStart !== null && lEnd !== null && minutes >= lStart && minutes < lEnd) {
+    offHours = true;
+  }
+  if (!offHours) return;
+
+  // Anti-spam: don't repeat to same phone within 6h
+  const lastSent = (settings.agent_offhours_last_sent as Record<string, string>) || {};
+  const phoneKey = args.phone.replace(/\D/g, "");
+  const lastIso = lastSent[phoneKey];
+  if (lastIso) {
+    const ageMs = Date.now() - new Date(lastIso).getTime();
+    if (ageMs < 6 * 60 * 60 * 1000) return;
+  }
+
+  const agentName = settings.agent_name || "Atendimento";
+  const horario = fmtRange(
+    settings.service_open_time,
+    settings.service_close_time,
+    settings.service_lunch_start,
+    settings.service_lunch_end,
+  );
+  const text = (settings.agent_offhours_message as string)
+    .replaceAll("{nome_agente}", agentName)
+    .replaceAll("{horario}", horario);
+
+  // Send via internal whatsapp-send-text edge function
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({
+      conversationId: args.conversationId,
+      text,
+      senderName: agentName,
+    }),
+  });
+  if (!sendRes.ok) {
+    console.error("offhours send-text failed:", sendRes.status, await sendRes.text());
+    return;
+  }
+
+  // Update anti-spam map
+  const newMap = { ...lastSent, [phoneKey]: new Date().toISOString() };
+  await supabase
+    .from("company_settings")
+    .update({ agent_offhours_last_sent: newMap })
+    .eq("id", settings.id);
+
+  // Log
+  await supabase.from("whatsapp_logs").insert({
+    recipient_phone: phoneKey,
+    body_text: text,
+    status: "sent",
+    template_name: "offhours_auto_reply",
+  });
+}

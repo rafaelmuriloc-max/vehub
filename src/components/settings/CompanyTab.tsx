@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, Download, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import forge from 'node-forge';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 
 interface CompanyData {
   id?: string;
@@ -26,6 +28,14 @@ interface CompanyData {
   accountant_certificate_expiry?: string | null;
   accountant_cpf?: string | null;
   chat_alert_whatsapp_group_id?: string | null;
+  service_hours_enabled?: boolean | null;
+  service_open_time?: string | null;
+  service_close_time?: string | null;
+  service_lunch_start?: string | null;
+  service_lunch_end?: string | null;
+  service_timezone?: string | null;
+  agent_name?: string | null;
+  agent_offhours_message?: string | null;
 }
 
 export function CompanyTab() {
@@ -363,7 +373,144 @@ export function CompanyTab() {
         currentGroupId={data.chat_alert_whatsapp_group_id || ''}
         onSaved={(gid) => setData(prev => ({ ...prev, chat_alert_whatsapp_group_id: gid }))}
       />
+
+      <ServiceHoursCard
+        admin={admin}
+        data={data}
+        onSaved={(patch) => setData(prev => ({ ...prev, ...patch }))}
+      />
     </div>
+  );
+}
+
+function ServiceHoursCard({
+  admin,
+  data,
+  onSaved,
+}: {
+  admin: boolean;
+  data: CompanyData;
+  onSaved: (patch: Partial<CompanyData>) => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [enabled, setEnabled] = useState(!!data.service_hours_enabled);
+  const [openTime, setOpenTime] = useState(data.service_open_time || '08:00');
+  const [closeTime, setCloseTime] = useState(data.service_close_time || '18:00');
+  const [hasLunch, setHasLunch] = useState(!!(data.service_lunch_start && data.service_lunch_end));
+  const [lunchStart, setLunchStart] = useState(data.service_lunch_start || '12:00');
+  const [lunchEnd, setLunchEnd] = useState(data.service_lunch_end || '13:00');
+  const [agentName, setAgentName] = useState(data.agent_name || '');
+  const [offMsg, setOffMsg] = useState(
+    data.agent_offhours_message ||
+      'Olá! Nosso horário de atendimento é {horario}. Retornaremos seu contato no próximo dia útil.\n\n— {nome_agente}',
+  );
+
+  const save = async () => {
+    if (!data.id) return;
+    setSaving(true);
+    const patch: Partial<CompanyData> = {
+      service_hours_enabled: enabled,
+      service_open_time: openTime || null,
+      service_close_time: closeTime || null,
+      service_lunch_start: hasLunch ? lunchStart || null : null,
+      service_lunch_end: hasLunch ? lunchEnd || null : null,
+      agent_name: agentName || null,
+      agent_offhours_message: offMsg || null,
+    };
+    const { error } = await supabase.from('company_settings').update(patch).eq('id', data.id);
+    setSaving(false);
+    if (error) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    onSaved(patch);
+    toast({ title: 'Horário de atendimento salvo' });
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Horário de Atendimento e Agente Virtual</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label className="text-sm font-medium">Resposta automática fora do horário</Label>
+            <p className="text-xs text-muted-foreground">
+              Quando ativada, mensagens recebidas no WhatsApp fora do horário de atendimento recebem uma resposta automática assinada pelo agente.
+            </p>
+          </div>
+          <Switch checked={enabled} onCheckedChange={setEnabled} disabled={!admin} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Abertura</Label>
+            <Input type="time" value={openTime} onChange={e => setOpenTime(e.target.value)} disabled={!admin} />
+          </div>
+          <div className="space-y-1">
+            <Label>Fechamento</Label>
+            <Input type="time" value={closeTime} onChange={e => setCloseTime(e.target.value)} disabled={!admin} />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={hasLunch}
+              onChange={e => setHasLunch(e.target.checked)}
+              disabled={!admin}
+            />
+            Tem pausa para almoço
+          </label>
+          {hasLunch && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Início do almoço</Label>
+                <Input type="time" value={lunchStart} onChange={e => setLunchStart(e.target.value)} disabled={!admin} />
+              </div>
+              <div className="space-y-1">
+                <Label>Fim do almoço</Label>
+                <Input type="time" value={lunchEnd} onChange={e => setLunchEnd(e.target.value)} disabled={!admin} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Aplicado de segunda a sexta. Sábados, domingos e feriados nacionais ficam como fora do horário.
+        </p>
+
+        <div className="space-y-1">
+          <Label>Nome do agente</Label>
+          <Input
+            value={agentName}
+            onChange={e => setAgentName(e.target.value)}
+            placeholder="Ex.: Atendimento Velocitä"
+            disabled={!admin}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label>Mensagem fora do horário</Label>
+          <Textarea
+            value={offMsg}
+            onChange={e => setOffMsg(e.target.value)}
+            rows={5}
+            disabled={!admin}
+          />
+          <p className="text-xs text-muted-foreground">
+            Variáveis disponíveis: <code>{'{nome_agente}'}</code> e <code>{'{horario}'}</code> (ex.: 08:00–12:00 e 13:00–18:00).
+          </p>
+        </div>
+
+        {admin && (
+          <Button onClick={save} disabled={saving || !data.id}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

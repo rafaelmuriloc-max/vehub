@@ -450,6 +450,9 @@ export type Database = {
           accountant_certificate_url: string | null
           accountant_cpf: string | null
           address: string | null
+          agent_name: string | null
+          agent_offhours_last_sent: Json
+          agent_offhours_message: string | null
           cert_responsible_name: string | null
           cert_responsible_phone: string | null
           cert_whatsapp_group_id: string | null
@@ -465,6 +468,12 @@ export type Database = {
           logo_url: string | null
           phone: string | null
           serpro_cnpj: string | null
+          service_close_time: string | null
+          service_hours_enabled: boolean
+          service_lunch_end: string | null
+          service_lunch_start: string | null
+          service_open_time: string | null
+          service_timezone: string
           updated_at: string
         }
         Insert: {
@@ -473,6 +482,9 @@ export type Database = {
           accountant_certificate_url?: string | null
           accountant_cpf?: string | null
           address?: string | null
+          agent_name?: string | null
+          agent_offhours_last_sent?: Json
+          agent_offhours_message?: string | null
           cert_responsible_name?: string | null
           cert_responsible_phone?: string | null
           cert_whatsapp_group_id?: string | null
@@ -488,6 +500,12 @@ export type Database = {
           logo_url?: string | null
           phone?: string | null
           serpro_cnpj?: string | null
+          service_close_time?: string | null
+          service_hours_enabled?: boolean
+          service_lunch_end?: string | null
+          service_lunch_start?: string | null
+          service_open_time?: string | null
+          service_timezone?: string
           updated_at?: string
         }
         Update: {
@@ -496,6 +514,9 @@ export type Database = {
           accountant_certificate_url?: string | null
           accountant_cpf?: string | null
           address?: string | null
+          agent_name?: string | null
+          agent_offhours_last_sent?: Json
+          agent_offhours_message?: string | null
           cert_responsible_name?: string | null
           cert_responsible_phone?: string | null
           cert_whatsapp_group_id?: string | null
@@ -511,6 +532,12 @@ export type Database = {
           logo_url?: string | null
           phone?: string | null
           serpro_cnpj?: string | null
+          service_close_time?: string | null
+          service_hours_enabled?: boolean
+          service_lunch_end?: string | null
+          service_lunch_start?: string | null
+          service_open_time?: string | null
+          service_timezone?: string
           updated_at?: string
         }
         Relationships: []
