@@ -98,6 +98,7 @@ export type Database = {
           reply_to_id: string | null
           reply_to_snapshot: Json | null
           sender_id: string
+          wa_evolution_id: string | null
           wa_message_id: string | null
           wa_remote_jid: string | null
         }
@@ -116,6 +117,7 @@ export type Database = {
           reply_to_id?: string | null
           reply_to_snapshot?: Json | null
           sender_id: string
+          wa_evolution_id?: string | null
           wa_message_id?: string | null
           wa_remote_jid?: string | null
         }
@@ -134,6 +136,7 @@ export type Database = {
           reply_to_id?: string | null
           reply_to_snapshot?: Json | null
           sender_id?: string
+          wa_evolution_id?: string | null
           wa_message_id?: string | null
           wa_remote_jid?: string | null
         }
