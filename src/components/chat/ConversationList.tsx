@@ -226,26 +226,28 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 </AvatarFallback>
               </Avatar>
               <div className={`flex-1 min-w-0 text-left pr-2 md:pr-3 ${idx < filtered.length - 1 ? 'border-b border-border/60 pb-2.5 md:pb-3' : ''}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium truncate">{conv.name}</span>
-                  {conv.lastMessageAt && (
-                    <span className={`text-[11px] shrink-0 ${conv.unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
-                      {formatTime(conv.lastMessageAt)}
-                    </span>
-                  )}
-                </div>
-                {conv.companyNames && conv.companyNames.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground truncate mt-0.5 border-0 border-none rounded-none text-cyan-950 font-medium py-[2px] bg-inherit shadow-none text-left mx-0 my-0 px-[4px]">
-                    {conv.companyNames.join(' • ')}
-                  </p>
-                )}
-                {conv.unreadCount > 0 && (
-                  <div className="flex items-center justify-end mt-0.5">
-                    <span className="shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center py-0 px-[6px] mx-0 my-0 bg-lime-600">
-                      {conv.unreadCount}
-                    </span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium truncate block">{conv.name}</span>
+                    {conv.companyNames && conv.companyNames.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground truncate mt-0.5 border-0 border-none rounded-none text-cyan-950 font-medium py-[2px] bg-inherit shadow-none text-left mx-0 my-0 px-[4px]">
+                        {conv.companyNames.join(' • ')}
+                      </p>
+                    )}
                   </div>
-                )}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {conv.lastMessageAt && (
+                      <span className={`text-[11px] ${conv.unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                        {formatTime(conv.lastMessageAt)}
+                      </span>
+                    )}
+                    {conv.unreadCount > 0 && (
+                      <span className="shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center py-0 px-[6px] mx-0 my-0 bg-lime-600">
+                        {conv.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {conv.status === 'open' && (
                   <div className="mt-1">
                     {conv.assignedToName ? (
