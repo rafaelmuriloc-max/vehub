@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
 interface Department { id: string; name: string; description: string | null; triage_keywords?: string | null; smtp_email?: string | null; smtp_password?: string | null; }
 
@@ -17,6 +17,7 @@ export function DepartmentsTab() {
   const { isAdmin: admin } = useAuth();
   const { toast } = useToast();
   const [items, setItems] = useState<Department[]>([]);
+  const [triageEnabled, setTriageEnabled] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
   const [form, setForm] = useState({ name: '', description: '', triage_keywords: '', smtp_email: '', smtp_password: '' });
@@ -29,6 +30,8 @@ export function DepartmentsTab() {
     const credMap = new Map<string, { smtp_email: string | null; smtp_password: string | null }>();
     (creds as any[] | null)?.forEach(c => credMap.set(c.department_id, { smtp_email: c.smtp_email, smtp_password: c.smtp_password }));
     setItems((depts as any[]).map(d => ({ ...d, smtp_email: credMap.get(d.id)?.smtp_email ?? null, smtp_password: credMap.get(d.id)?.smtp_password ?? null })) as Department[]);
+    const { data: cs } = await supabase.from('company_settings').select('triage_enabled').limit(1).maybeSingle();
+    setTriageEnabled(!!(cs as any)?.triage_enabled);
   };
 
   useEffect(() => { fetch(); }, []);
@@ -69,6 +72,15 @@ export function DepartmentsTab() {
         {admin && <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" />Novo</Button>}
       </CardHeader>
       <CardContent>
+        {triageEnabled && items.some(d => !d.triage_keywords) && (
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" />
+            <div>
+              A triagem automática está ativa, mas <strong>{items.filter(d => !d.triage_keywords).length}</strong> departamento(s) sem palavras-chave.
+              Sem isso, a IA pode classificar errado e cair no fallback. Edite cada departamento e preencha o campo <em>Palavras-chave para triagem por IA</em>.
+            </div>
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>

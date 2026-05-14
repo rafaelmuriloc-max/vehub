@@ -419,6 +419,18 @@ function ServiceHoursCard({
 
   const save = async () => {
     if (!data.id) return;
+    if (triageEnabled) {
+      if (!fallbackDept) {
+        toast({ title: 'Selecione um departamento de fallback', description: 'A triagem precisa de um departamento padrão para encaminhar quando a IA não conseguir classificar.', variant: 'destructive' });
+        return;
+      }
+      const { data: depWithKw } = await supabase.from('departments').select('id, triage_keywords');
+      const withKw = (depWithKw as any[] | null)?.filter(d => d.triage_keywords && d.triage_keywords.trim().length > 0).length || 0;
+      if (withKw === 0) {
+        toast({ title: 'Configure palavras-chave', description: 'Nenhum departamento possui palavras-chave para triagem. Edite os departamentos antes de ativar.', variant: 'destructive' });
+        return;
+      }
+    }
     setSaving(true);
     const patch: Partial<CompanyData> = {
       service_hours_enabled: enabled,
