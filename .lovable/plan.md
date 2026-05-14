@@ -1,49 +1,19 @@
-## Configuração de horário e agente de atendimento
+## Restringir alertas de chat ao horário de atendimento
 
-### 1. Banco — `company_settings` (nova migration)
-Adicionar colunas:
-- `service_hours_enabled boolean default false`
-- `service_open_time time` (ex.: 08:00)
-- `service_close_time time` (ex.: 18:00)
-- `service_lunch_start time` (opcional)
-- `service_lunch_end time` (opcional)
-- `service_timezone text default 'America/Sao_Paulo'`
-- `agent_name text` — nome exibido como assinatura do agente automático
-- `agent_offhours_message text` — mensagem enviada fora do horário
-- `agent_offhours_last_sent jsonb default '{}'` — para deduplicar resposta automática por contato (chave = phone, valor = timestamp ISO)
+Modificar a edge function `chat-waiting-alert` para só disparar alertas no grupo do WhatsApp quando o momento atual estiver dentro do horário de atendimento configurado em `company_settings` e em dia útil (seg–sex, fora de feriado nacional).
 
-Sem alteração de RLS (já é admin-only para update).
+### Mudanças
 
-### 2. UI — `src/components/settings/CompanyTab.tsx`
-Novo card **"Horário de Atendimento e Agente Virtual"**, abaixo do card de Alertas de Chat:
+**`supabase/functions/chat-waiting-alert/index.ts`**
+- Carregar de `company_settings` os campos: `service_hours_enabled`, `service_open_time`, `service_close_time`, `service_lunch_start`, `service_lunch_end`, `service_timezone` (junto com `chat_alert_whatsapp_group_id` que já é lido).
+- Antes de buscar conversas em espera, calcular `now` no `service_timezone` (default `America/Sao_Paulo`).
+- Pular execução (retornar `{ ok: true, skipped: "off_hours" }`) quando:
+  - dia da semana for sábado/domingo, ou
+  - data atual for feriado nacional (porta inline da lógica de `src/lib/holidays.ts` — algoritmo de Páscoa de Meeus + lista fixa), ou
+  - `service_hours_enabled = true` e a hora atual estiver fora do intervalo `service_open_time`–`service_close_time`, ou dentro de `service_lunch_start`–`service_lunch_end` (quando preenchidos).
+- Se `service_hours_enabled = false` ou as horas não estiverem configuradas, manter apenas o filtro de dia útil + feriado (seg–sex). 
 
-- Switch *Ativar resposta automática fora do horário*.
-- Inputs `time`: Abertura, Fechamento.
-- Inputs `time` opcionais: Início do almoço, Fim do almoço (com checkbox "Tem pausa de almoço").
-- Texto fixo: "Aplicado de segunda a sexta. Sábados, domingos e feriados nacionais ficam como fora do horário."
-- Input `Nome do agente` (ex.: "Atendimento Velocitä").
-- Textarea `Mensagem fora do horário` com placeholder e dica das variáveis disponíveis: `{nome_agente}`, `{horario}`.
-- Botão Salvar (admin-only).
+### Comportamento
 
-### 3. Edge Function — `whatsapp-webhook` (responder fora do horário)
-Após inserir a mensagem recebida (linha ~490), e somente quando:
-- `message.message_type` é de entrada (não `whatsapp_outgoing` / `text`),
-- conversa está `status='open'` e `assigned_to IS NULL`,
-- `company_settings.service_hours_enabled = true` e `agent_offhours_message` está preenchido,
-- horário atual em `service_timezone` cai fora do intervalo configurado (fora do dia útil seg–sex, antes da abertura, depois do fechamento, ou dentro da pausa de almoço, ou em feriado nacional via `src/lib/holidays.ts` portado para Deno),
-- e `agent_offhours_last_sent[phone]` é nulo ou tem mais de 6 h (anti-spam),
-
-→ enviar via Meta API (`whatsapp-send-text` / mesmo helper já usado) o texto:
-```
-{agent_offhours_message com {nome_agente} e {horario} substituídos}
-```
-com o sufixo VHUB_MARKER (`\u200B\u200B\u200B`) para evitar eco, atualizar `agent_offhours_last_sent`, e registrar em `whatsapp_logs`.
-
-Sem CRON novo — a checagem acontece no próprio webhook quando a mensagem chega.
-
-### 4. Tipos
-`src/integrations/supabase/types.ts` é regenerado automaticamente após a migration.
-
-### Resumo do comportamento
-Dentro do horário: sistema não responde sozinho (deixa para o atendente).
-Fora do horário (incluindo almoço, fim de semana e feriados): primeira mensagem do contato recebe a resposta cadastrada, assinada com o nome do agente. Repetições do mesmo contato dentro de 6 h não disparam nova resposta automática.
+- Conversas que entraram em espera fora do horário acumulam tempo normalmente, mas o alerta só dispara quando o expediente reabre (a checagem do `last_wait_alert_at` continua valendo).
+- Nada muda na UI, no banco ou no fluxo de resposta automática do agente — apenas o alerta de espera passa a respeitar o expediente.
