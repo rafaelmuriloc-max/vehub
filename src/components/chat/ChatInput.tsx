@@ -219,7 +219,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
                 <button
                   key={opt.label}
                   onClick={opt.onClick}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent text-sm transition-colors text-left"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent text-sm transition-colors text-left bg-orange-300"
                 >
                   <opt.icon className="h-4 w-4 text-primary" />
                   <span>{opt.label}</span>
