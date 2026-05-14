@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           avatar_url: string | null
+          awaiting_first_reply: boolean
           client_id: string | null
           closed_at: string | null
           created_at: string
@@ -41,6 +42,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           avatar_url?: string | null
+          awaiting_first_reply?: boolean
           client_id?: string | null
           closed_at?: string | null
           created_at?: string
@@ -64,6 +66,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           avatar_url?: string | null
+          awaiting_first_reply?: boolean
           client_id?: string | null
           closed_at?: string | null
           created_at?: string
@@ -1634,6 +1637,7 @@ export type Database = {
           assigned_to_color: string
           assigned_to_name: string
           avatar_url: string
+          awaiting_first_reply: boolean
           client_id: string
           created_at: string
           id: string
