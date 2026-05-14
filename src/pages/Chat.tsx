@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -175,6 +175,17 @@ export default function Chat() {
     setLoadingConversations(false);
   }, [user, activeTab]);
 
+  // Stable ref for loadConversations + debounced version (used by realtime)
+  const loadConversationsRef = useRef(loadConversations);
+  useEffect(() => { loadConversationsRef.current = loadConversations; }, [loadConversations]);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedReloadConversations = useCallback(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      loadConversationsRef.current();
+    }, 250);
+  }, []);
+
   useEffect(() => {
     loadConversations();
     loadWaitingCount();
@@ -208,13 +219,14 @@ export default function Chat() {
     loadConversations(tab);
   };
 
-  // Load messages for active conversation
+  // Load messages for active conversation (does NOT depend on `conversations`)
   useEffect(() => {
     if (!activeConvId || !user) {
       setMessages([]);
       return;
     }
 
+    let cancelled = false;
     const loadMessages = async () => {
       const { data } = await supabase
         .from('chat_messages')
@@ -223,7 +235,7 @@ export default function Chat() {
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (!data) return;
+      if (!data || cancelled) return;
 
       const filtered = (data as any[]).filter(m => !(m.deleted_for || []).includes(user.id));
       const ordered = [...filtered].reverse();
@@ -232,6 +244,7 @@ export default function Chat() {
         .from('profiles')
         .select('user_id, full_name')
         .in('user_id', senderIds);
+      if (cancelled) return;
 
       const nameMap = new Map(profiles?.map(p => [p.user_id, p.full_name || 'Usuário']) || []);
 
@@ -249,15 +262,22 @@ export default function Chat() {
           .from('chat_messages')
           .update({ read_at: new Date().toISOString() })
           .in('id', unreadIds);
-        loadConversations();
+        // O canal realtime de chat_conversations já dispara refresh de contadores;
+        // usamos versão debounced para evitar rajadas.
+        debouncedReloadConversations();
       }
     };
 
     loadMessages();
+    return () => { cancelled = true; };
+  }, [activeConvId, user, debouncedReloadConversations]);
 
+  // Sync active conversation name when the list changes (cheap, no message reload)
+  useEffect(() => {
+    if (!activeConvId) return;
     const conv = conversations.find(c => c.id === activeConvId);
-    setActiveConvName(conv?.name || null);
-  }, [activeConvId, user, conversations]);
+    if (conv) setActiveConvName(prev => (prev === conv.name ? prev : conv.name));
+  }, [activeConvId, conversations]);
 
   // Realtime subscription
   useEffect(() => {
@@ -294,7 +314,7 @@ export default function Chat() {
             }
           }
 
-          loadConversations();
+          debouncedReloadConversations();
         }
       )
       .subscribe();
@@ -302,7 +322,7 @@ export default function Chat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, activeConvId, loadConversations]);
+  }, [user, activeConvId, debouncedReloadConversations]);
 
   const activeConv = conversations.find(c => c.id === activeConvId);
   const isClosed = activeConv?.status === 'closed';
