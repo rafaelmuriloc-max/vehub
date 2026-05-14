@@ -34,23 +34,25 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
   // Fetch client info
   const { data: client } = await supabase.from('clients').select('company_name, contact_email').eq('id', clientId).single();
 
-  // Try department-specific contact first
-  let recipientEmail = client?.contact_email || null;
+  // Try department-specific contacts first (multiple allowed)
+  let recipientEmails: string[] = [];
   if (departmentId) {
-    const { data: deptContact } = await supabase
+    const { data: deptContacts } = await supabase
       .from('client_department_contacts')
       .select('contact_email')
       .eq('client_id', clientId)
-      .eq('department_id', departmentId)
-      .maybeSingle();
-    if (deptContact?.contact_email) {
-      recipientEmail = deptContact.contact_email;
-    }
+      .eq('department_id', departmentId);
+    recipientEmails = (deptContacts || [])
+      .map((d: any) => (d.contact_email || '').trim())
+      .filter((e: string) => !!e);
   }
-
-  if (!recipientEmail) {
+  if (recipientEmails.length === 0 && client?.contact_email) {
+    recipientEmails = [client.contact_email];
+  }
+  if (recipientEmails.length === 0) {
     return { success: false, error: 'Cliente sem e-mail de contato cadastrado' };
   }
+  const recipientEmail = recipientEmails.join(', ');
 
   // Fetch obligation_id from instance for logging
   const { data: instanceData } = await supabase
