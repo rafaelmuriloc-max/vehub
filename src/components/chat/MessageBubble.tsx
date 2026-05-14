@@ -126,13 +126,24 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
   );
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
    const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
    const isWhatsAppOutgoing = !isIncoming && (messageType === 'whatsapp' || messageType?.startsWith('whatsapp_'));
    const showOnRight = isWhatsAppOutgoing || (!isIncoming && isMine);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
+  const [retrying, setRetrying] = useState(false);
+
+  const retryTranscription = async () => {
+    if (!messageId || retrying) return;
+    setRetrying(true);
+    try {
+      await supabase.functions.invoke('whatsapp-transcribe-audio', { body: { message_id: messageId } });
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const isDeleted = !!deletedAt;
   const canEdit = isMine && !isDeleted && (messageType === 'text' || messageType === 'whatsapp_outgoing' || messageType === 'whatsapp')
