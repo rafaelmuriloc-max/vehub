@@ -521,14 +521,38 @@ export default function Chat() {
   };
 
   const reopenTicket = async () => {
-    if (!activeConvId) return;
-    const { error } = await supabase
+    if (!activeConvId || !user) return;
+
+    // Garantir que o usuário é participante (RLS de UPDATE em chat_conversations exige).
+    const { data: existing } = await supabase
+      .from('chat_participants')
+      .select('id')
+      .eq('conversation_id', activeConvId)
+      .eq('user_id', user.id);
+    if (!existing || existing.length === 0) {
+      await supabase.from('chat_participants').insert({
+        conversation_id: activeConvId,
+        user_id: user.id,
+      });
+    }
+
+    const { data: updated, error } = await supabase
       .from('chat_conversations')
-      .update({ status: 'open', closed_at: null } as any)
-      .eq('id', activeConvId);
+      .update({ status: 'open', closed_at: null, assigned_to: user.id } as any)
+      .eq('id', activeConvId)
+      .select('id');
 
     if (error) {
-      toast({ title: 'Erro ao reabrir chamado', variant: 'destructive' });
+      toast({ title: 'Erro ao reabrir chamado', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    if (!updated || updated.length === 0) {
+      toast({
+        title: 'Sem permissão para reabrir este chamado',
+        description: 'Peça a um administrador para reabrir.',
+        variant: 'destructive',
+      });
       return;
     }
 
