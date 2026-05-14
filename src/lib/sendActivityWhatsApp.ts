@@ -53,25 +53,22 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
   // Fetch company settings for nome_contabilidade
   const { data: companySettings } = await supabase.from('company_settings').select('company_name').limit(1).single();
 
-  // Try department-specific contact first
-  let recipientPhone = client?.contact_phone || null;
-  let contactName = client?.contact_name || '';
+  // Try department-specific contacts first (multiple allowed)
+  let recipients: { phone: string; name: string }[] = [];
   if (departmentId) {
-    const { data: deptContact } = await supabase
+    const { data: deptContacts } = await supabase
       .from('client_department_contacts')
       .select('contact_phone, contact_name')
       .eq('client_id', clientId)
-      .eq('department_id', departmentId)
-      .maybeSingle();
-    if (deptContact?.contact_phone) {
-      recipientPhone = deptContact.contact_phone;
-    }
-    if (deptContact?.contact_name) {
-      contactName = deptContact.contact_name;
-    }
+      .eq('department_id', departmentId);
+    recipients = (deptContacts || [])
+      .filter((d: any) => d.contact_phone)
+      .map((d: any) => ({ phone: d.contact_phone, name: d.contact_name || '' }));
   }
-
-  if (!recipientPhone) {
+  if (recipients.length === 0 && client?.contact_phone) {
+    recipients = [{ phone: client.contact_phone, name: client.contact_name || '' }];
+  }
+  if (recipients.length === 0) {
     return { success: false, error: 'Cliente sem telefone de contato cadastrado' };
   }
 
@@ -104,19 +101,6 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     '[Vencimento]': vencimento,
   };
 
-  // Variables for {{mustache}} replacement (template params)
-  const templateVars: Record<string, string> = {
-    'tratamento_contato': contactName || client?.company_name || 'Prezado(a)',
-    'nome_contabilidade': companySettings?.company_name || 'Contabilidade',
-    'cliente': client?.company_name || 'Cliente',
-    'nome_tipo_tarefa': obligationName || 'Obrigação',
-    'nome_da_obrigacao': obligationName || 'Obrigação',
-    'titulo_doc_anexo': obligationName || 'Documento',
-    'competencia': competencia || '-',
-    'vencimento': vencimento || '-',
-  };
-
-
   // Check for attached documents in this instance
   const { data: attachedDocs } = await supabase
     .from('obligation_activity_completions')
@@ -126,114 +110,127 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
   const hasDocuments = attachedDocs && attachedDocs.length > 0;
 
-  // Build shared body/button components once
-  const sharedComponents: Record<string, unknown>[] = [];
-
-  if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
-    // Extract {{var}} from message body to build named parameters
-    if (activity.whatsapp_message_body) {
-      const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
-      if (matches.length > 0) {
+  const buildSharedComponents = (contactName: string) => {
+    const templateVars: Record<string, string> = {
+      'tratamento_contato': contactName || client?.company_name || 'Prezado(a)',
+      'nome_contabilidade': companySettings?.company_name || 'Contabilidade',
+      'cliente': client?.company_name || 'Cliente',
+      'nome_tipo_tarefa': obligationName || 'Obrigação',
+      'nome_da_obrigacao': obligationName || 'Obrigação',
+      'titulo_doc_anexo': obligationName || 'Documento',
+      'competencia': competencia || '-',
+      'vencimento': vencimento || '-',
+    };
+    const sharedComponents: Record<string, unknown>[] = [];
+    if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
+      if (activity.whatsapp_message_body) {
+        const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
+        if (matches.length > 0) {
+          sharedComponents.push({
+            type: 'body',
+            parameters: matches.map(m => ({
+              type: 'text',
+              parameter_name: m[1],
+              text: templateVars[m[1]] || '',
+            })),
+          });
+        }
+      }
+      if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
+        const buttonValue = hasDocuments ? instanceId : activity.whatsapp_button_url;
         sharedComponents.push({
-          type: 'body',
-          parameters: matches.map(m => ({
-            type: 'text',
-            parameter_name: m[1],
-            text: templateVars[m[1]] || '',
-          })),
+          type: 'button',
+          sub_type: 'url',
+          index: '0',
+          parameters: [{ type: 'text', text: buttonValue }],
         });
       }
     }
+    return sharedComponents;
+  };
 
-    // Button URL param
-    if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
-      const buttonValue = hasDocuments ? instanceId : activity.whatsapp_button_url;
-      sharedComponents.push({
-        type: 'button',
-        sub_type: 'url',
-        index: '0',
-        parameters: [{ type: 'text', text: buttonValue }],
-      });
-    }
-  }
-
-  // Determine if we need multi-send (one message per document)
+  // Determine if we need multi-send (one message per document) — same for every recipient
   const needsMultiSend = activity.whatsapp_has_document_header && hasDocuments && attachedDocs && attachedDocs.length > 0
     && activity.whatsapp_template_name && activity.whatsapp_template_name.trim();
 
-  if (needsMultiSend) {
-    // Send one message per attached document
-    const errors: string[] = [];
+  const allErrors: string[] = [];
+  let anySuccess = false;
 
-    for (const doc of attachedDocs!) {
-      const fileUrl = doc.file_url!;
-      const filePath = fileUrl.includes('/documents/')
-        ? fileUrl.split('/documents/').pop()!
-        : fileUrl;
-      const { data: signedData } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(filePath, 604800);
+  for (const recipient of recipients) {
+    const sharedComponents = buildSharedComponents(recipient.name);
+    const recipientPhone = recipient.phone;
 
-      if (!signedData?.signedUrl) {
-        errors.push(`Não foi possível gerar URL para ${filePath}`);
-        continue;
+    if (false) {
+    // placeholder; legacy block follows below
+    }
+
+    if (needsMultiSend) {
+      const errors: string[] = [];
+      for (const doc of attachedDocs!) {
+        const fileUrl = doc.file_url!;
+        const filePath = fileUrl.includes('/documents/')
+          ? fileUrl.split('/documents/').pop()!
+          : fileUrl;
+        const { data: signedData } = await supabase.storage
+          .from('documents')
+          .createSignedUrl(filePath, 604800);
+        if (!signedData?.signedUrl) {
+          errors.push(`Não foi possível gerar URL para ${filePath}`);
+          continue;
+        }
+        const fileName = filePath.split('/').pop() || 'documento.pdf';
+        const components: Record<string, unknown>[] = [
+          {
+            type: 'header',
+            parameters: [{ type: 'document', document: { link: signedData.signedUrl, filename: fileName } }],
+          },
+          ...sharedComponents,
+        ];
+        const msgBody: Record<string, unknown> = {
+          to: recipientPhone,
+          clientId,
+          obligationId: instanceData?.obligation_id || null,
+          instanceId,
+          type: 'template',
+          templateName: activity.whatsapp_template_name,
+          templateLanguage: 'pt_BR',
+          ...(components.length > 0 ? { templateParams: components } : {}),
+        };
+        const { data, error } = await supabase.functions.invoke('whatsapp-send', { body: msgBody });
+        if (error) errors.push(error.message);
+        else if (data?.error) errors.push(data.error);
+        else anySuccess = true;
       }
-
-      const fileName = filePath.split('/').pop() || 'documento.pdf';
-      const components: Record<string, unknown>[] = [
-        {
-          type: 'header',
-          parameters: [{
-            type: 'document',
-            document: { link: signedData.signedUrl, filename: fileName },
-          }],
-        },
-        ...sharedComponents,
-      ];
-
-      const msgBody: Record<string, unknown> = {
+      if (errors.length > 0) allErrors.push(...errors);
+    } else {
+      const body: Record<string, unknown> = {
         to: recipientPhone,
         clientId,
         obligationId: instanceData?.obligation_id || null,
         instanceId,
-        type: 'template',
-        templateName: activity.whatsapp_template_name,
-        templateLanguage: 'pt_BR',
-        ...(components.length > 0 ? { templateParams: components } : {}),
       };
-
-      const { data, error } = await supabase.functions.invoke('whatsapp-send', { body: msgBody });
-      if (error) errors.push(error.message);
-      else if (data?.error) errors.push(data.error);
-    }
-
-    if (errors.length > 0 && errors.length === attachedDocs!.length) {
-      return { success: false, error: errors.join('; ') };
-    }
-  } else {
-    // Single message (no document header or text fallback)
-    const body: Record<string, unknown> = {
-      to: recipientPhone,
-      clientId,
-      obligationId: instanceData?.obligation_id || null,
-      instanceId,
-    };
-
-    if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
-      body.type = 'template';
-      body.templateName = activity.whatsapp_template_name;
-      body.templateLanguage = 'pt_BR';
-      if (sharedComponents.length > 0) {
-        body.templateParams = sharedComponents;
+      if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
+        body.type = 'template';
+        body.templateName = activity.whatsapp_template_name;
+        body.templateLanguage = 'pt_BR';
+        if (sharedComponents.length > 0) body.templateParams = sharedComponents;
+      } else if (activity.whatsapp_message_body) {
+        body.type = 'text';
+        body.text = replaceVariables(activity.whatsapp_message_body, variables);
       }
-    } else if (activity.whatsapp_message_body) {
-      body.type = 'text';
-      body.text = replaceVariables(activity.whatsapp_message_body, variables);
+      const { data, error } = await supabase.functions.invoke('whatsapp-send', { body });
+      if (error) allErrors.push(error.message);
+      else if (data?.error) allErrors.push(data.error);
+      else anySuccess = true;
     }
+  }
 
-    const { data, error } = await supabase.functions.invoke('whatsapp-send', { body });
-    if (error) return { success: false, error: error.message };
-    if (data?.error) return { success: false, error: data.error };
+  if (!anySuccess) {
+    return { success: false, error: allErrors.join('; ') || 'Falha ao enviar' };
+  }
+
+  if (false) {
+  // legacy block (unused)
   }
 
   // Mark activity as completed
