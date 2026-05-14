@@ -71,8 +71,23 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
     return () => { cancelled = true; };
   }, [mediaUrl]);
 
-  const handleClick = () => {
-    window.open(mediaUrl, '_blank', 'noopener,noreferrer');
+  const handleClick = async () => {
+    try {
+      const res = await fetch(mediaUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName || 'documento';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (err) {
+      // Fallback: tenta abrir o link direto
+      window.open(mediaUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
