@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
             apikey: evolutionApiKey,
           },
           body: JSON.stringify({
-            number: phone,
+            number: evoPhone,
             text: signedText,
           }),
         }
