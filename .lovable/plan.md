@@ -1,25 +1,23 @@
 ## Objetivo
 
-Permitir, no diálogo "Nova Conversa", iniciar um chat de WhatsApp digitando um número de telefone que ainda não está cadastrado nem como contato de empresa nem como remetente conhecido.
+Permitir múltiplos contatos por departamento na aba **Contato** do cadastro de empresa. Mesmos campos atuais (nome, telefone, e-mail). Disparos de WhatsApp/E-mail por departamento passam a enviar para **todos** os contatos do depto.
 
-## Mudanças
+## Schema
 
-Arquivo único: `src/components/chat/NewConversationDialog.tsx`
+Migration:
+- `ALTER TABLE public.client_department_contacts DROP CONSTRAINT client_department_contacts_client_id_department_id_key;`
+- `CREATE INDEX IF NOT EXISTS idx_cdc_client_dept ON public.client_department_contacts(client_id, department_id);`
 
-1. **Detecção do input como telefone**
-   - Normalizar o termo de busca removendo caracteres não numéricos.
-   - Se o normalizado tiver pelo menos 10 dígitos (DDD + número) e **não corresponder** a nenhum contato já presente em `contacts`, exibir uma linha extra fixa no topo da lista: "Enviar mensagem para +<número digitado>".
+## Front-end (`src/pages/Clients.tsx`)
 
-2. **Ação ao clicar nessa linha**
-   - Reaproveitar `startConversation` passando um `Contact` sintético `{ phone, displayPhone, name: displayPhone, source: 'whatsapp' }`.
-   - O fluxo atual já procura conversa existente pelo telefone normalizado e, se não houver, cria nova `chat_conversations` com `whatsapp_phone` preenchido — ou seja, nada novo no backend.
+- Estado: `Record<deptId, DeptContact[]>` (array por depto).
+- Carregamento agrupa as linhas por `department_id`. Se um depto não tem nenhum contato, inicializa com `[ { vazio } ]` para a UI mostrar uma linha em branco.
+- UI da aba Contato: para cada departamento, listar todos os contatos com nome / telefone / e-mail, botão "Remover" por linha e botão "+ Adicionar contato" abaixo do bloco do depto.
+- Salvamento: `delete` de todos os `client_department_contacts` daquele `client_id` e `insert` em lote (filtrando entradas totalmente vazias).
 
-3. **Validação leve**
-   - Comprimento entre 10 e 15 dígitos (padrão E.164 sem o "+").
-   - Não habilitar a opção quando vazio ou inválido.
+## Disparos (envio para todos os contatos do depto)
 
-4. **UI**
-   - Linha com ícone de telefone, label "Enviar mensagem para +<phone>" e subtítulo "Novo contato WhatsApp", no mesmo estilo dos itens existentes.
-   - Placeholder do input passa a sugerir: "Buscar por nome, empresa ou digite um telefone...".
+- `src/lib/sendActivityWhatsApp.ts` e `src/lib/sendActivityEmail.ts`: trocar `maybeSingle()` por `select(...)` retornando lista; iterar enviando para cada contato com telefone/e-mail válido. Fallback: contato principal do cliente se a lista vier vazia.
+- `src/components/ClientObligationsTab.tsx` e `src/pages/CalendarView.tsx`: ajustar `maybeSingle()` para listar todos os e-mails do depto e juntar (vírgula) no campo de destinatários, mantendo a UI atual de envio único.
 
-Sem mudanças de schema, RLS ou edge functions.
+Sem alteração nos demais consumidores (`Chat.tsx`, `NewConversationDialog.tsx`, `AttachFromObligationDialog.tsx`) — já tratam listas.

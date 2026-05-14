@@ -446,11 +446,14 @@ export default function ClientObligationsTab({ clientId }: Props) {
                             const obl = obligations.find(o => o.id === detailInstance!.obligation_id);
                             const refDate = new Date(detailInstance!.reference_month + 'T00:00:00');
                             const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-                            const [{ data: cli }, { data: deptContact }] = await Promise.all([
+                            const [{ data: cli }, { data: deptContacts }] = await Promise.all([
                               supabase.from('clients').select('company_name, contact_email').eq('id', clientId).single(),
-                              obl ? supabase.from('client_department_contacts').select('contact_email').eq('client_id', clientId).eq('department_id', obl.department_id).maybeSingle() : Promise.resolve({ data: null }),
+                              obl ? supabase.from('client_department_contacts').select('contact_email').eq('client_id', clientId).eq('department_id', obl.department_id) : Promise.resolve({ data: [] as any[] }),
                             ]);
-                            setEmailRecipient(deptContact?.contact_email || cli?.contact_email || '');
+                            const deptEmails = (deptContacts || [])
+                              .map((d: any) => (d.contact_email || '').trim())
+                              .filter((e: string) => !!e);
+                            setEmailRecipient(deptEmails.length > 0 ? deptEmails.join(', ') : (cli?.contact_email || ''));
                             setEmailVariables({
                               '[Nome_da_Empresa]': cli?.company_name || '',
                               '[Competencia]': competencia,
