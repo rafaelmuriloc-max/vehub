@@ -1,85 +1,50 @@
-## Objetivo
+## Problema
 
-Permitir responder uma mensagem específica no chat (igual WhatsApp), com:
-- Mini‑prévia da mensagem citada acima do campo de digitação (com X para cancelar).
-- Balão de resposta mostrando a citação (barra colorida + autor + trecho/thumbnail) em cima do conteúdo, clicável para rolar até a original.
-- Encaminhamento do contexto para o WhatsApp do cliente (Meta API `context.message_id`) — quando o cliente responder uma das nossas mensagens no WhatsApp, a citação também aparece no nosso chat.
+Mensagens enviadas usam a Meta API e salvam `wa_message_id` no formato `wamid.HBgM...`. Mensagens recebidas chegam pela Evolution API e salvam o id cru do WhatsApp (`3EB0...`, `2A79...`). Os dois formatos não conversam entre si:
 
-## 1. Banco — `chat_messages`
+- Resposta nossa → cliente: enviamos pela Meta com `context.message_id = <id da Evolution>`, a Meta ignora e o cliente recebe sem citação.
+- Resposta do cliente → nós: webhook recebe `stanzaId` no formato cru, mas nosso outgoing está salvo com prefixo `wamid.`. O lookup `wa_message_id = stanzaId` falha, `reply_to_id` fica NULL e nada é renderizado.
 
-Adicionar colunas (sem FK rígida, para sobreviver a apagamentos):
+## Solução
 
-- `reply_to_id uuid` — id da mensagem original (mesma conversa).
-- `reply_to_snapshot jsonb` — snapshot leve `{ sender_id, sender_name, content, message_type, media_url }` para renderizar a citação mesmo se a original for apagada.
+Manter os dois formatos lado a lado em uma nova coluna e usar a API correta para cada caso de resposta.
 
-Índice: `create index on chat_messages (reply_to_id)`.
+### 1. Banco
 
-Sem mudanças em RLS (herdam as policies atuais da tabela).
+Adicionar coluna `wa_evolution_id text` em `chat_messages` (id no formato Evolution / WhatsApp cru, sem prefixo `wamid.`). Índice em `(conversation_id, wa_evolution_id)`.
 
-## 2. Edge functions
+Backfill: para linhas existentes onde `wa_message_id` não começa com `wamid.`, copiar o valor para `wa_evolution_id`.
 
-### `whatsapp-send-text` e `whatsapp-send-media`
+### 2. Webhook (`whatsapp-webhook`)
 
-- Aceitar campo opcional `reply_to_message_id` (uuid local) no body.
-- Buscar `wa_message_id` da mensagem original; se existir, incluir no payload Meta:
-  ```json
-  { "context": { "message_id": "<wamid>" }, ... }
-  ```
-- Ao inserir a row em `chat_messages`, preencher `reply_to_id` e `reply_to_snapshot` (consultando a original).
+- Para qualquer mensagem (incoming ou outgoing eco do vhub), gravar `wa_evolution_id = key.id`.
+- No backfill do bloco `vhub_origin` (mensagem nossa ecoando da Evolution), em vez de sobrescrever `wa_message_id`, gravar apenas `wa_evolution_id = key.id` — preservando o `wamid.` original da Meta.
+- Lookup de resposta entrante: buscar a mensagem original por `wa_evolution_id = quotedStanzaId` (não mais por `wa_message_id`). Isso resolve o caso "cliente responde uma mensagem nossa".
 
-### `whatsapp-webhook`
+### 3. Envio (`whatsapp-send-text` e `whatsapp-send-media`)
 
-- Ler `value.messages[].context.id` (Meta) — quando presente, localizar a mensagem local cujo `wa_message_id = context.id` e salvar `reply_to_id` + snapshot na nova row de entrada.
-
-## 3. Frontend
-
-### `MessageArea.tsx`
-- Estado `replyingTo: ChatMessage | null`.
-- Passar `onReply={(msg)=>setReplyingTo(msg)}` para cada `MessageBubble`.
-- Passar `replyingTo` + `onCancelReply` para `ChatInput`.
-- `onSend` / `onSendMedia` propagam `replyingTo?.id`; limpar após enviar.
-- Util `scrollToMessage(id)` (ref map) para clique na citação.
-
-### `MessageBubble.tsx`
-- Nova prop `onReply`, `replySnapshot`, `onJumpToReply`.
-- Botão "Responder" no `DropdownMenu` (sempre visível, exceto em mensagem apagada).
-- Renderiza acima do conteúdo, quando `replySnapshot` existir, um bloco com:
-  - Barra vertical colorida (verde se autor = nós, cinza se contato).
-  - Nome do autor + trecho (`content` truncado; "Foto/Vídeo/Áudio/Documento/Localização" para mídia).
-  - Thumbnail à direita se `message_type` for imagem/vídeo.
-  - `onClick` → `onJumpToReply(reply_to_id)`.
-
-### `ChatInput.tsx`
-- Novas props `replyingTo`, `onCancelReply`.
-- Quando setado, renderizar barra acima do textarea (mesmo estilo do balão de citação) com botão X.
-- `handleSend` envia o reply id para `onSend`/`onSendMedia` (mudar assinaturas para aceitar opcional `replyToId`).
-
-### `Chat.tsx`
-- Passar `replyToId` para as chamadas das edge functions e para o insert de mensagens internas (`text`).
-- Subscrição realtime já cobre as novas colunas.
-
-## 4. Fora de escopo
-
-- Encaminhar (forward), reagir com emoji, marcar como favorita.
-- Suporte a `context` da Evolution API (manteremos só Meta, que é o canal oficial do projeto).
-- Animação de "swipe para responder" em mobile — só botão no menu por enquanto.
-
-## Detalhes técnicos
+Ao receber `replyToMessageId`, buscar `wa_message_id`, `wa_evolution_id` e `message_type` da mensagem original e decidir o canal:
 
 ```text
-chat_messages
-├── reply_to_id        uuid    null
-└── reply_to_snapshot  jsonb   null
-                         { sender_id, sender_name, content,
-                           message_type, media_url }
+Tipo da original         | API usada para enviar a resposta
+-------------------------+----------------------------------
+outgoing (wamid.* válido)| Meta API com context.message_id = wa_message_id
+incoming (id Evolution)  | Evolution API com quoted.key.id = wa_evolution_id
 ```
 
-Fluxo de envio com resposta:
-```
-ChatInput.handleSend
-  → MessageArea.onSend(text, replyToId)
-    → Chat.sendMessage(text, replyToId)
-      → invoke('whatsapp-send-text', { ..., reply_to_message_id })
-        → Meta API payload { context: { message_id: wamid } }
-        → insert chat_messages { reply_to_id, reply_to_snapshot }
-```
+Quando a janela de 24h está fechada, já caímos em Evolution — usar `wa_evolution_id` da original.
+
+Se a Meta retornar erro de `context` inválido, fazer fallback automático para Evolution com `quoted.key.id`.
+
+Salvar a nova mensagem outgoing com:
+- `wa_message_id` = wamid retornado pela Meta (quando enviado pela Meta)
+- `wa_evolution_id` = key.id retornado pela Evolution (quando enviado pela Evolution; a Meta não devolve isso, então fica para o eco do webhook preencher)
+
+### 4. Frontend
+
+Sem mudanças funcionais — `reply_to_snapshot` continua sendo renderizado pelo `MessageBubble`. Apenas garantir que o `Chat.tsx` carregue `wa_evolution_id` no SELECT (não é estritamente necessário para UI, mas mantém o tipo coerente).
+
+## Fora de escopo
+
+- Migrar inteiramente para o webhook da Meta (resolveria de vez, mas exige reconfigurar no Business Manager).
+- Tornar replies funcionais para mensagens antigas (anteriores ao deploy) que só têm um dos formatos — só novas mensagens citadas funcionarão dos dois lados; histórico continua sem citação onde já está NULL.
