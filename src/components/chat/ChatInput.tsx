@@ -15,9 +15,13 @@ interface ChatInputProps {
   onSendContact?: (name: string, phone: string) => void;
   onPickFromObligation?: () => void;
   disabled?: boolean;
+  pendingFiles?: File[];
+  onAddPendingFiles?: (files: File[]) => void;
+  onRemovePendingFile?: (index: number) => void;
+  onClearPendingFiles?: () => void;
 }
 
-export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -37,10 +41,21 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
+  const detectFileType = (file: File): 'image' | 'video' | 'document' | 'audio' => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('video/')) return 'video';
+    if (file.type.startsWith('audio/')) return 'audio';
+    return 'document';
+  };
+
   const handleSend = () => {
     const trimmed = message.trim();
-    if (!trimmed) return;
-    onSend(trimmed);
+    if (!trimmed && pendingFiles.length === 0) return;
+    if (pendingFiles.length > 0 && onSendMedia) {
+      pendingFiles.forEach((f) => onSendMedia(f, detectFileType(f)));
+      onClearPendingFiles?.();
+    }
+    if (trimmed) onSend(trimmed);
     setMessage('');
     inputRef.current?.focus();
   };
@@ -52,10 +67,9 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'document' | 'audio') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    onSendMedia?.(file, type);
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) onAddPendingFiles?.(files);
     e.target.value = '';
   };
 
@@ -171,12 +185,38 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
 
   return (
     <>
-      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, 'image')} />
-      <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFileSelect(e, 'video')} />
-      <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={(e) => handleFileSelect(e, 'audio')} />
-      <input ref={fileInputRef} type="file" accept="*" className="hidden" onChange={(e) => handleFileSelect(e, 'document')} />
+      <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
+      <input ref={videoInputRef} type="file" accept="video/*" multiple className="hidden" onChange={handleFileSelect} />
+      <input ref={audioInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handleFileSelect} />
+      <input ref={fileInputRef} type="file" accept="*" multiple className="hidden" onChange={handleFileSelect} />
 
-      <div className="flex items-end gap-2 p-1.5 md:p-2 bg-[#F0F0F0] dark:bg-zinc-800 border-t pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
+      <div className="flex flex-col bg-[#F0F0F0] dark:bg-zinc-800 border-t">
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pt-2">
+            {pendingFiles.map((f, idx) => {
+              const isImage = f.type.startsWith('image/');
+              return (
+                <div key={idx} className="relative flex items-center gap-2 bg-white dark:bg-zinc-700 rounded-md px-2 py-1.5 pr-7 text-xs max-w-[220px] shadow-sm">
+                  {isImage ? (
+                    <img src={URL.createObjectURL(f)} alt={f.name} className="h-8 w-8 rounded object-cover" />
+                  ) : (
+                    <FileText className="h-4 w-4 text-primary shrink-0" />
+                  )}
+                  <span className="truncate">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => onRemovePendingFile?.(idx)}
+                    className="absolute top-1 right-1 rounded-full p-0.5 hover:bg-black/10"
+                    aria-label="Remover anexo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex items-end gap-2 p-1.5 md:p-2 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
         {recording ? (
           <>
             <Button
@@ -268,7 +308,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
             t.style.height = Math.min(t.scrollHeight, 128) + 'px';
           }}
         />
-        {message.trim() ? (
+        {message.trim() || pendingFiles.length > 0 ? (
           <Button
             size="icon"
             onClick={handleSend}
@@ -289,6 +329,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
         )}
         </>
         )}
+        </div>
       </div>
 
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
