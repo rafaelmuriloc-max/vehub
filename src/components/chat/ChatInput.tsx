@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen } from 'lucide-react';
+import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile } from 'lucide-react';
+import EmojiPicker, { EmojiStyle, type EmojiClickData } from 'emoji-picker-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -19,6 +20,7 @@ interface ChatInputProps {
 export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -137,6 +139,26 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
 
   const fmtTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
+  const insertEmoji = (data: EmojiClickData) => {
+    const emoji = data.emoji;
+    const ta = inputRef.current;
+    if (!ta) {
+      setMessage((m) => m + emoji);
+      return;
+    }
+    const start = ta.selectionStart ?? message.length;
+    const end = ta.selectionEnd ?? message.length;
+    const next = message.slice(0, start) + emoji + message.slice(end);
+    setMessage(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + emoji.length;
+      ta.setSelectionRange(pos, pos);
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 128) + 'px';
+    });
+  };
+
   const attachOptions = [
     { icon: Image, label: 'Imagem', onClick: () => { setPopoverOpen(false); imageInputRef.current?.click(); } },
     { icon: Video, label: 'Vídeo', onClick: () => { setPopoverOpen(false); videoInputRef.current?.click(); } },
@@ -204,6 +226,29 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
                 </button>
               ))}
             </div>
+          </PopoverContent>
+        </Popover>
+
+        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={disabled}
+              className="rounded-full h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <Smile className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="top" align="start" className="w-auto p-0 border-0">
+            <EmojiPicker
+              onEmojiClick={insertEmoji}
+              emojiStyle={EmojiStyle.NATIVE}
+              lazyLoadEmojis
+              searchPlaceHolder="Buscar emoji..."
+              width={320}
+              height={380}
+            />
           </PopoverContent>
         </Popover>
 
