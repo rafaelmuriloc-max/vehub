@@ -215,7 +215,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-              className={`w-full gap-3 px-2 py-2.5 md:px-3 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-border/30 border-solid flex items-start justify-start shadow-sm ${
+              className={`w-full gap-3 px-2 py-2.5 md:px-3 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-border/30 flex items-start justify-start shadow-sm border-dashed ${
                 activeId === conv.id ? 'bg-[#F0F2F5] dark:bg-zinc-800' : ''
               }`}
             >
