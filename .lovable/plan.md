@@ -1,38 +1,40 @@
-## Por que a Gisele não respondeu
+## Triagens aguardando primeiro atendimento
 
-Investiguei a conversa de teste (Rafael Murilo) e o banco. Três coisas impedem a triagem hoje:
+Quando uma conversa é atribuída (pela Gisele OU manualmente por um admin), ela permanece na aba **Espera** com a tag colorida do atendente designado. Assim que o atendente envia a 1ª resposta, ela migra automaticamente para a aba **Chat** dele.
 
-1. **Todas as conversas existentes ficaram com `triage_status='skipped'`** pela migration anterior (justamente para não re-triagar conversas antigas). Como o webhook só dispara quando o status é `pending` ou `in_progress`, **nenhuma conversa atual aciona a Gisele** — só contatos totalmente novos.
-2. **Não há logs em `chat-triage-agent`** — confirma que o webhook nunca chamou a função.
-3. **5 dos 6 departamentos estão sem `triage_keywords`** (só "Depto Fiscal" tem). Sem isso, a IA não tem como classificar e cairia sempre no fallback.
+### 1. Banco
 
-## Correções
+Migration:
+- `chat_conversations.awaiting_first_reply boolean NOT NULL DEFAULT false`.
+- Trigger `BEFORE UPDATE` em `chat_conversations`: quando `assigned_to` muda de NULL → não-NULL, setar `awaiting_first_reply = true`. (Cobre Gisele e atribuição manual sem precisar mexer em cada call site.)
+- Trigger `AFTER INSERT` em `chat_messages`: se mensagem é saída (`message_type IN ('text','whatsapp_outgoing')`), `sender_id` = `chat_conversations.assigned_to` e `awaiting_first_reply = true` → setar `awaiting_first_reply = false`.
+- Atualizar a função `get_chat_inbox`:
+  - `mine`: `assigned_to = p_user AND status='open' AND awaiting_first_reply = false`
+  - `in_progress` (Espera): `status='open' AND (assigned_to IS NULL OR awaiting_first_reply = true)`
+  - Adicionar `awaiting_first_reply` ao retorno.
 
-### 1. Webhook: re-triar conversas sem atendente quando chega mensagem nova
-Em `whatsapp-webhook/index.ts`, ampliar a condição que dispara o `chat-triage-agent`:
+### 2. Edge Function `chat-triage-agent`
 
-- Hoje: `assigned_to IS NULL AND triage_status IN ('pending','in_progress')`
-- Novo: `assigned_to IS NULL AND triage_status IN ('pending','in_progress','skipped')` **e** `company_settings.triage_enabled = true`
+Nenhuma mudança lógica necessária — o trigger cuida do flag quando `assigned_to` é gravado. Só validar que o update de transferência continua atômico.
 
-Quando dispara em conversa `skipped`, o próprio `chat-triage-agent` reseta para `in_progress` no claim atômico (já faz isso).
+### 3. UI — `ConversationList.tsx`
 
-### 2. Claim atômico aceita `skipped`
-No `chat-triage-agent`, ajustar o `update ... where triage_status in (...)` para incluir `skipped` também (apenas no caminho disparado pelo webhook quando `assigned_to is null`). Mantém a proteção contra re-triar conversas que já foram fechadas com atendente.
+- Estender o tipo de conversa com `awaitingFirstReply` e ler do RPC.
+- Na aba **Espera**, quando `assigned_to_name` existe, exibir badge com `assigned_to_color` + nome do atendente (formato: "Aguardando {Nome}"), substituindo/complementando o indicador atual de tempo de espera.
+- Conversas sem `assigned_to` continuam mostrando "Aguardando atendimento" como hoje.
 
-### 3. Aviso de UX nas configurações
-Em `DepartmentsTab.tsx`, mostrar um banner amarelo quando `triage_enabled=true` mas houver departamento sem `triage_keywords`, alertando que a IA pode não classificar corretamente sem palavras-chave.
+### 4. Contadores
 
-### 4. Sanity-check ao salvar `triage_enabled`
-Em `CompanyTab.tsx`, antes de salvar `triage_enabled=true`, verificar se há ao menos 1 departamento com keywords e se `triage_fallback_department_id` está preenchido. Se não, mostrar toast de aviso (não bloqueia, só alerta).
+- `mineCount` em `Chat.tsx` já vem do RPC `mine`, então será automaticamente menor (exclui as awaiting). OK.
+- Badge da aba Espera passa a incluir as awaiting.
 
-## Fora de escopo
+### Detalhes técnicos
 
-- Não vou re-popular `triage_keywords` automaticamente — quem decide as palavras é o usuário, na aba Departamentos.
-- Não vou disparar triagem retroativa em conversas antigas sem mensagem nova — a próxima mensagem do contato já vai acionar.
+- Trigger evita mexer em todos os pontos de UI/edge que atribuem. Atribuição via UPDATE direto é o caminho atual em todo lugar.
+- Reabertura de chamado: se um admin reatribuir a outro atendente (NULL → user OU user → user2), o trigger marca novamente como awaiting. Comportamento desejado.
+- Realtime: `chat_conversations` já tem realtime; o flip de `awaiting_first_reply` dispara update e a UI move o card entre abas naturalmente.
 
-## Como testar depois
+### Fora de escopo
 
-1. Preencher `triage_keywords` em pelo menos 2-3 departamentos.
-2. Definir o departamento fallback em Configurações → Empresa.
-3. Pedir para o Rafael mandar uma nova mensagem — a Gisele deve responder em 2-3s.
-4. Acompanhar `Edge Functions → chat-triage-agent → Logs`.
+- Notificação push extra para o atendente quando recebe uma triagem (pode ser próximo passo).
+- Timeout automático para reatribuir se o atendente não responder em X minutos.
