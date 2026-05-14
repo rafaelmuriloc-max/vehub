@@ -151,8 +151,8 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="px-2 pt-2 pb-1">
+       {/* Tabs */}
+       <div className="px-2 pt-2 pb-1 bg-white">
         <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ChatTab)}>
           <TabsList className="w-full bg-transparent border-b border-border/40 rounded-none h-auto p-0 gap-1 justify-stretch">
             <TabsTrigger
