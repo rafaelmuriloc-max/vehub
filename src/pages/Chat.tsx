@@ -434,6 +434,7 @@ export default function Chat() {
   };
 
   const [attachObligationOpen, setAttachObligationOpen] = useState(false);
+  const [registerContactOpen, setRegisterContactOpen] = useState(false);
 
   const sendLocation = async (lat: number, lng: number) => {
     if (!user || !activeConvId || isClosed) return;
