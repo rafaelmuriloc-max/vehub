@@ -11,6 +11,8 @@ import { toast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { AttachFromObligationDialog } from '@/components/chat/AttachFromObligationDialog';
+import { AttachFromSystemDialog } from '@/components/chat/AttachFromSystemDialog';
+import { AttachSocietyDocumentsDialog } from '@/components/chat/AttachSocietyDocumentsDialog';
 import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
 import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
 
@@ -454,6 +456,8 @@ export default function Chat() {
   };
 
   const [attachObligationOpen, setAttachObligationOpen] = useState(false);
+  const [attachSystemOpen, setAttachSystemOpen] = useState(false);
+  const [attachSocietyOpen, setAttachSocietyOpen] = useState(false);
   const [registerContactOpen, setRegisterContactOpen] = useState(false);
 
   const sendLocation = async (lat: number, lng: number) => {
@@ -776,7 +780,7 @@ export default function Chat() {
             onSendMedia={sendMedia}
             onSendLocation={sendLocation}
             onSendContact={sendContact}
-            onPickFromObligation={() => setAttachObligationOpen(true)}
+            onPickFromObligation={() => setAttachSystemOpen(true)}
             isGroup={activeConv?.isGroup}
             avatarUrl={activeConv?.avatarUrl}
             currentUserName={profile?.full_name || undefined}
@@ -835,6 +839,21 @@ export default function Chat() {
       <AttachFromObligationDialog
         open={attachObligationOpen}
         onOpenChange={setAttachObligationOpen}
+        conversationClientId={activeConv?.clientId || null}
+        whatsappPhone={activeConv?.whatsappPhone || null}
+        onSend={sendExistingMedia}
+      />
+
+      <AttachFromSystemDialog
+        open={attachSystemOpen}
+        onOpenChange={setAttachSystemOpen}
+        onPickObligation={() => setAttachObligationOpen(true)}
+        onPickSociety={() => setAttachSocietyOpen(true)}
+      />
+
+      <AttachSocietyDocumentsDialog
+        open={attachSocietyOpen}
+        onOpenChange={setAttachSocietyOpen}
         conversationClientId={activeConv?.clientId || null}
         whatsappPhone={activeConv?.whatsappPhone || null}
         onSend={sendExistingMedia}
