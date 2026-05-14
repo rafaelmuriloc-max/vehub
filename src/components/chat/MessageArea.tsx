@@ -72,14 +72,8 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const dragCounterRef = useRef(0);
-
-  const detectFileType = (file: File): 'image' | 'video' | 'audio' | 'document' => {
-    if (file.type.startsWith('image/')) return 'image';
-    if (file.type.startsWith('video/')) return 'video';
-    if (file.type.startsWith('audio/')) return 'audio';
-    return 'document';
-  };
 
   const dropEnabled = !!conversationName && !isClosed && !!onSendMedia;
 
@@ -110,7 +104,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
     dragCounterRef.current = 0;
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files || []);
-    files.forEach((file) => onSendMedia?.(file, detectFileType(file)));
+    if (files.length > 0) setPendingFiles((prev) => [...prev, ...files]);
   };
 
   useEffect(() => {
@@ -321,6 +315,10 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           onSendLocation={onSendLocation}
           onSendContact={onSendContact}
           onPickFromObligation={onPickFromObligation}
+          pendingFiles={pendingFiles}
+          onAddPendingFiles={(files) => setPendingFiles((prev) => [...prev, ...files])}
+          onRemovePendingFile={(idx) => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+          onClearPendingFiles={() => setPendingFiles([])}
         />
       )}
 
