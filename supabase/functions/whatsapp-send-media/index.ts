@@ -27,6 +27,7 @@ Deno.serve(async (req) => {
       contactPhone,
       senderName,
       senderId: senderIdInput,
+      replyToMessageId,
     } = await req.json();
 
     if (!conversationId || !type) {
@@ -45,6 +46,35 @@ Deno.serve(async (req) => {
     const EVOLUTION_INSTANCE_NAME = Deno.env.get("EVOLUTION_INSTANCE_NAME");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Reply target lookup
+    let replySnapshot: any = null;
+    let replyWaMessageId: string | null = null;
+    if (replyToMessageId) {
+      const { data: replyMsg } = await supabase
+        .from("chat_messages")
+        .select("id, sender_id, content, message_type, media_url, wa_message_id")
+        .eq("id", replyToMessageId)
+        .maybeSingle();
+      if (replyMsg) {
+        replyWaMessageId = replyMsg.wa_message_id || null;
+        let senderFullName = "";
+        if (replyMsg.sender_id) {
+          const { data: prof } = await supabase
+            .from("profiles").select("full_name").eq("user_id", replyMsg.sender_id).maybeSingle();
+          senderFullName = prof?.full_name || "";
+        }
+        replySnapshot = {
+          sender_id: replyMsg.sender_id,
+          sender_name: senderFullName,
+          content: replyMsg.content,
+          message_type: replyMsg.message_type,
+          media_url: replyMsg.media_url,
+        };
+      }
+    }
+    const metaContext = replyWaMessageId ? { context: { message_id: replyWaMessageId } } : {};
+    const evoQuoted = replyWaMessageId ? { quoted: { key: { id: replyWaMessageId } } } : {};
 
     // Get conversation
     const { data: conv, error: convErr } = await supabase
@@ -125,6 +155,7 @@ Deno.serve(async (req) => {
           to: toPhone,
           type,
           [type]: { link: mediaUrl },
+          ...metaContext,
         };
         if (type === "document" && fileName) {
           payload[type].filename = fileName;
@@ -162,6 +193,7 @@ Deno.serve(async (req) => {
               media: mediaUrl,
               fileName: fileName || undefined,
               caption: senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER,
+              ...evoQuoted,
             }),
           }
         );
@@ -193,6 +225,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
               number: toPhone,
               audio: mediaUrl,
+              ...evoQuoted,
             }),
           }
         );
@@ -203,6 +236,7 @@ Deno.serve(async (req) => {
           to: toPhone,
           type: "audio",
           audio: { link: mediaUrl },
+          ...metaContext,
         };
         console.log("Sending audio via Meta API");
         const metaRes = await fetch(
@@ -229,6 +263,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
               number: toPhone,
               audio: mediaUrl,
+              ...evoQuoted,
             }),
           }
         );
@@ -251,6 +286,7 @@ Deno.serve(async (req) => {
             longitude: String(longitude),
             name: senderName || "Localização",
           },
+          ...metaContext,
         };
 
         const metaRes = await fetch(
@@ -302,6 +338,7 @@ Deno.serve(async (req) => {
               phones: [{ phone: contactPhoneClean, type: "CELL" }],
             },
           ],
+          ...metaContext,
         };
 
         const metaRes = await fetch(
@@ -383,6 +420,8 @@ Deno.serve(async (req) => {
         channel: "whatsapp",
         wa_message_id: waMessageId,
         wa_remote_jid: `${toPhone}@s.whatsapp.net`,
+        reply_to_id: replyToMessageId || null,
+        reply_to_snapshot: replySnapshot,
       })
       .select()
       .single();

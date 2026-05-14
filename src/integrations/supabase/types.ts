@@ -95,6 +95,8 @@ export type Database = {
           media_url: string | null
           message_type: string
           read_at: string | null
+          reply_to_id: string | null
+          reply_to_snapshot: Json | null
           sender_id: string
           wa_message_id: string | null
           wa_remote_jid: string | null
@@ -111,6 +113,8 @@ export type Database = {
           media_url?: string | null
           message_type?: string
           read_at?: string | null
+          reply_to_id?: string | null
+          reply_to_snapshot?: Json | null
           sender_id: string
           wa_message_id?: string | null
           wa_remote_jid?: string | null
@@ -127,6 +131,8 @@ export type Database = {
           media_url?: string | null
           message_type?: string
           read_at?: string | null
+          reply_to_id?: string | null
+          reply_to_snapshot?: Json | null
           sender_id?: string
           wa_message_id?: string | null
           wa_remote_jid?: string | null

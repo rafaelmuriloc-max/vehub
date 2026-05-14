@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X } from 'lucide-react';
+import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X, Reply } from 'lucide-react';
 import { AudioMessage } from './AudioMessage';
 import {
   DropdownMenu,
@@ -29,6 +29,18 @@ interface MessageBubbleProps {
   onEdit?: (newContent: string) => void;
   onDeleteForMe?: () => void;
   onDeleteForAll?: () => void;
+  onReply?: () => void;
+  replySnapshot?: {
+    sender_id?: string | null;
+    sender_name?: string | null;
+    content?: string | null;
+    message_type?: string | null;
+    media_url?: string | null;
+  } | null;
+  replyToId?: string | null;
+  onJumpToReply?: (id: string) => void;
+  bubbleRef?: (el: HTMLDivElement | null) => void;
+  highlight?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -110,7 +122,7 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
   );
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
    const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
    const isWhatsAppOutgoing = !isIncoming && (messageType === 'whatsapp' || messageType?.startsWith('whatsapp_'));
@@ -208,7 +220,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   if (isDeleted) {
     return (
-       <div className={`flex ${showOnRight ? 'justify-end pr-[42px]' : 'justify-start pl-[42px]'} mb-1`}>
+       <div ref={bubbleRef} className={`flex ${showOnRight ? 'justify-end pr-[42px]' : 'justify-start pl-[42px]'} mb-1`}>
          <div className={`relative max-w-[80%] sm:max-w-[65%] px-[12px] py-1.5 rounded-lg shadow-sm italic text-muted-foreground bg-zinc-200 dark:bg-zinc-800 ${showOnRight ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
           <div className="flex items-center gap-1.5">
             <Ban className="h-3.5 w-3.5" />
@@ -225,7 +237,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   }
 
   return (
-     <div className={`${showOnRight ? 'flex items-center justify-end pr-[42px]' : 'flex justify-start pl-[42px]'} mb-1`}>
+     <div ref={bubbleRef} className={`${showOnRight ? 'flex items-center justify-end pr-[42px]' : 'flex justify-start pl-[42px]'} mb-1 transition-colors ${highlight ? 'bg-yellow-200/40 rounded-lg' : ''}`}>
       <div
         className={`group relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-[12px] py-1.5 rounded-lg shadow-sm ${
           showOnRight
@@ -233,7 +245,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
            : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none'
         }`}
       >
-        {(onEdit || onDeleteForMe || onDeleteForAll) && (
+        {(onEdit || onDeleteForMe || onDeleteForAll || onReply) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10">
@@ -241,6 +253,11 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="bottom">
+              {onReply && (
+                <DropdownMenuItem onClick={onReply}>
+                  <Reply className="h-4 w-4 mr-2" /> Responder
+                </DropdownMenuItem>
+              )}
               {canEdit && onEdit && (
                 <DropdownMenuItem onClick={() => { setDraft(content); setEditing(true); }}>
                   <Pencil className="h-4 w-4 mr-2" /> Editar
@@ -264,6 +281,36 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         )}
          {senderName && (
            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-[4px]">{senderName}</p>
+        )}
+        {replySnapshot && (
+          <button
+            type="button"
+            onClick={() => replyToId && onJumpToReply?.(replyToId)}
+            className={`flex items-stretch gap-2 mb-1 w-full text-left rounded-md overflow-hidden border-l-4 ${
+              showOnRight ? 'border-emerald-600 bg-emerald-100/70 dark:bg-emerald-900/40' : 'border-emerald-500 bg-black/5 dark:bg-white/10'
+            } hover:opacity-90 transition`}
+          >
+            <div className="flex-1 min-w-0 px-2 py-1">
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 truncate">
+                {replySnapshot.sender_name || 'Contato'}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {(() => {
+                  const t = replySnapshot.message_type || '';
+                  if (t.includes('image')) return '📷 Foto' + (replySnapshot.content ? `: ${replySnapshot.content}` : '');
+                  if (t.includes('video')) return '🎥 Vídeo';
+                  if (t.includes('audio')) return '🎤 Áudio';
+                  if (t.includes('document')) return `📄 ${replySnapshot.content || 'Documento'}`;
+                  if (t.includes('location')) return '📍 Localização';
+                  if (t.includes('contact')) return '👤 Contato';
+                  return replySnapshot.content || '';
+                })()}
+              </p>
+            </div>
+            {replySnapshot.media_url && replySnapshot.message_type?.includes('image') && (
+              <img src={replySnapshot.media_url} alt="" className="h-12 w-12 object-cover shrink-0" />
+            )}
+          </button>
         )}
         {renderMedia()}
         {/* Show text content - skip for documents/location/contact */}

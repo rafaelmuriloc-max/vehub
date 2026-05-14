@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent, ClipboardEvent } from 'react';
-import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile } from 'lucide-react';
+import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile, Reply } from 'lucide-react';
 import EmojiPicker, { EmojiStyle, type EmojiClickData } from 'emoji-picker-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -19,9 +19,18 @@ interface ChatInputProps {
   onAddPendingFiles?: (files: File[]) => void;
   onRemovePendingFile?: (index: number) => void;
   onClearPendingFiles?: () => void;
+  replyingTo?: {
+    id: string;
+    sender_name?: string;
+    content?: string;
+    message_type?: string;
+    media_url?: string | null;
+    isMine?: boolean;
+  } | null;
+  onCancelReply?: () => void;
 }
 
-export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles }: ChatInputProps) {
+export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles, replyingTo, onCancelReply }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -40,6 +49,10 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (replyingTo) inputRef.current?.focus();
+  }, [replyingTo]);
 
   const detectFileType = (file: File): 'image' | 'video' | 'document' | 'audio' => {
     if (file.type.startsWith('image/')) return 'image';
@@ -212,6 +225,41 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
       <input ref={fileInputRef} type="file" accept="*" multiple className="hidden" onChange={handleFileSelect} />
 
       <div className="flex flex-col bg-[#F0F0F0] dark:bg-zinc-800 border-t">
+        {replyingTo && (
+          <div className="flex items-stretch gap-2 px-3 pt-2">
+            <div className="flex-1 flex items-center gap-2 bg-white dark:bg-zinc-700 rounded-md pl-2 pr-2 py-1.5 border-l-4 border-emerald-500 shadow-sm overflow-hidden">
+              <Reply className="h-4 w-4 text-emerald-600 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 truncate">
+                  {replyingTo.isMine ? 'Você' : (replyingTo.sender_name || 'Contato')}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {(() => {
+                    const t = replyingTo.message_type || '';
+                    if (t.includes('image')) return '📷 Foto' + (replyingTo.content ? `: ${replyingTo.content}` : '');
+                    if (t.includes('video')) return '🎥 Vídeo';
+                    if (t.includes('audio')) return '🎤 Áudio';
+                    if (t.includes('document')) return `📄 ${replyingTo.content || 'Documento'}`;
+                    if (t.includes('location')) return '📍 Localização';
+                    if (t.includes('contact')) return '👤 Contato';
+                    return replyingTo.content || '';
+                  })()}
+                </p>
+              </div>
+              {replyingTo.media_url && replyingTo.message_type?.includes('image') && (
+                <img src={replyingTo.media_url} alt="" className="h-10 w-10 rounded object-cover shrink-0" />
+              )}
+              <button
+                type="button"
+                onClick={onCancelReply}
+                className="p-1 rounded hover:bg-black/10 shrink-0"
+                aria-label="Cancelar resposta"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+          </div>
+        )}
         {pendingFiles.length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-2">
             {pendingFiles.map((f, idx) => {
