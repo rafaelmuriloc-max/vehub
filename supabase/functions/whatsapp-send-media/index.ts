@@ -428,6 +428,7 @@ Deno.serve(async (req) => {
         media_url: messageMediaUrl,
         channel: "whatsapp",
         wa_message_id: waMessageId,
+        wa_evolution_id: waMessageId && !waMessageId.startsWith("wamid.") ? waMessageId : null,
         wa_remote_jid: `${toPhone}@s.whatsapp.net`,
         reply_to_id: replyToMessageId || null,
         reply_to_snapshot: replySnapshot,
