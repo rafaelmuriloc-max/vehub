@@ -51,7 +51,7 @@ export function AppSidebar() {
       onMouseEnter={() => { if (!isMobile) setOpen(true); }}
       onMouseLeave={() => { if (!isMobile) setOpen(false); }}
     >
-      <SidebarHeader className="p-5 group-data-[collapsible=icon]:p-3">
+      <SidebarHeader className="p-5 group-data-[collapsible=icon]:p-3 px-[20px]">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           {/* Velocitä logo mark – stylized bars */}
           <div className="flex gap-0.5">
@@ -66,7 +66,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <Separator className="bg-sidebar-border mx-3" />
+      <Separator className="bg-sidebar-border mx-0" />
 
       <SidebarContent className="pt-2 px-0">
         <SidebarGroup>
@@ -94,7 +94,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <Separator className="bg-sidebar-border mx-3" />
+        <Separator className="bg-sidebar-border mx-0" />
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">Administração</SidebarGroupLabel>
