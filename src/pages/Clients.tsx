@@ -1909,50 +1909,69 @@ export default function Clients() {
                 {departments.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Nenhum departamento cadastrado.</p>
                 ) : (
-                  departments.map(dep => (
-                    <div key={dep.id} className="space-y-2 rounded-md border border-border p-4">
-                      <h4 className="font-medium text-foreground">{dep.name}</h4>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Nome</Label>
-                          <Input
-                            placeholder="Nome do contato"
-                            value={deptContacts[dep.id]?.contact_name || ''}
-                            disabled={viewOnly}
-                            onChange={e => setDeptContacts(prev => ({
-                              ...prev,
-                              [dep.id]: { ...prev[dep.id], contact_name: e.target.value }
-                            }))}
-                          />
+                  departments.map(dep => {
+                    const list = deptContacts[dep.id] || [{ contact_name: '', contact_phone: '', contact_email: '' }];
+                    const updateField = (idx: number, field: keyof DeptContact, value: string) => {
+                      setDeptContacts(prev => {
+                        const cur = prev[dep.id] ? [...prev[dep.id]] : [];
+                        cur[idx] = { ...cur[idx], [field]: value };
+                        return { ...prev, [dep.id]: cur };
+                      });
+                    };
+                    const addContact = () => {
+                      setDeptContacts(prev => ({
+                        ...prev,
+                        [dep.id]: [...(prev[dep.id] || []), { contact_name: '', contact_phone: '', contact_email: '' }],
+                      }));
+                    };
+                    const removeContact = (idx: number) => {
+                      setDeptContacts(prev => {
+                        const cur = (prev[dep.id] || []).filter((_, i) => i !== idx);
+                        return { ...prev, [dep.id]: cur.length > 0 ? cur : [{ contact_name: '', contact_phone: '', contact_email: '' }] };
+                      });
+                    };
+                    return (
+                      <div key={dep.id} className="space-y-3 rounded-md border border-border p-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-foreground">{dep.name}</h4>
+                          {!viewOnly && (
+                            <Button type="button" size="sm" variant="outline" onClick={addContact}>
+                              + Adicionar contato
+                            </Button>
+                          )}
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Telefone</Label>
-                          <Input
-                            placeholder="Telefone"
-                            value={deptContacts[dep.id]?.contact_phone || ''}
-                            disabled={viewOnly}
-                            onChange={e => setDeptContacts(prev => ({
-                              ...prev,
-                              [dep.id]: { ...prev[dep.id], contact_phone: e.target.value }
-                            }))}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">E-mail</Label>
-                          <Input
-                            type="email"
-                            placeholder="E-mail"
-                            value={deptContacts[dep.id]?.contact_email || ''}
-                            disabled={viewOnly}
-                            onChange={e => setDeptContacts(prev => ({
-                              ...prev,
-                              [dep.id]: { ...prev[dep.id], contact_email: e.target.value }
-                            }))}
-                          />
-                        </div>
+                        {list.map((c, idx) => (
+                          <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                            <div className="col-span-4 space-y-1">
+                              <Label className="text-xs">Nome</Label>
+                              <Input placeholder="Nome do contato" value={c.contact_name}
+                                disabled={viewOnly}
+                                onChange={e => updateField(idx, 'contact_name', e.target.value)} />
+                            </div>
+                            <div className="col-span-3 space-y-1">
+                              <Label className="text-xs">Telefone</Label>
+                              <Input placeholder="Telefone" value={c.contact_phone}
+                                disabled={viewOnly}
+                                onChange={e => updateField(idx, 'contact_phone', e.target.value)} />
+                            </div>
+                            <div className="col-span-4 space-y-1">
+                              <Label className="text-xs">E-mail</Label>
+                              <Input type="email" placeholder="E-mail" value={c.contact_email}
+                                disabled={viewOnly}
+                                onChange={e => updateField(idx, 'contact_email', e.target.value)} />
+                            </div>
+                            <div className="col-span-1">
+                              {!viewOnly && list.length > 0 && (
+                                <Button type="button" size="sm" variant="ghost" onClick={() => removeContact(idx)} title="Remover">
+                                  ✕
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </TabsContent>
 
