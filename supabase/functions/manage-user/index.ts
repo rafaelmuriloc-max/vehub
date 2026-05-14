@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     const { action } = body;
 
     if (action === "create" || action === "invite") {
-      const { email, password, full_name, job_title, department_id, role } = body;
+      const { email, password, full_name, job_title, department_id, role, tag_color } = body;
       if (!email || !password) {
         return new Response(JSON.stringify({ error: "Email e senha são obrigatórios" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -63,10 +63,11 @@ Deno.serve(async (req) => {
       const userId = created.user.id;
 
       // Update profile (created by trigger handle_new_user)
-      if (job_title || department_id) {
+      if (job_title || department_id || tag_color !== undefined) {
         await adminClient.from("profiles").update({
           job_title: job_title || null,
           department_id: department_id || null,
+          ...(tag_color !== undefined ? { tag_color: tag_color || null } : {}),
         }).eq("user_id", userId);
       }
 
@@ -76,6 +77,25 @@ Deno.serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ success: true, user_id: userId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "update") {
+      const { user_id, full_name, job_title, department_id, role, tag_color } = body;
+      if (!user_id) {
+        return new Response(JSON.stringify({ error: "user_id is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const profileUpdate: Record<string, unknown> = {};
+      if (full_name !== undefined) profileUpdate.full_name = full_name || null;
+      if (job_title !== undefined) profileUpdate.job_title = job_title || null;
+      if (department_id !== undefined) profileUpdate.department_id = department_id || null;
+      if (tag_color !== undefined) profileUpdate.tag_color = tag_color || null;
+      if (Object.keys(profileUpdate).length > 0) {
+        await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
+      }
+      if (role === "admin" || role === "employee") {
+        await adminClient.from("user_roles").update({ role }).eq("user_id", user_id);
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "delete") {
