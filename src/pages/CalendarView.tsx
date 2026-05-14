@@ -1218,11 +1218,14 @@ export default function CalendarView() {
                           : '';
                         let recipient = '';
                         if (detailInstance && detailObligation) {
-                          const [{ data: cli }, { data: deptContact }] = await Promise.all([
+                          const [{ data: cli }, { data: deptContacts }] = await Promise.all([
                             supabase.from('clients').select('contact_email').eq('id', detailInstance.client_id).single(),
-                            supabase.from('client_department_contacts').select('contact_email').eq('client_id', detailInstance.client_id).eq('department_id', detailObligation.department_id).maybeSingle(),
+                            supabase.from('client_department_contacts').select('contact_email').eq('client_id', detailInstance.client_id).eq('department_id', detailObligation.department_id),
                           ]);
-                          recipient = deptContact?.contact_email || cli?.contact_email || '';
+                          const deptEmails = (deptContacts || [])
+                            .map((d: any) => (d.contact_email || '').trim())
+                            .filter((e: string) => !!e);
+                          recipient = deptEmails.length > 0 ? deptEmails.join(', ') : (cli?.contact_email || '');
                         }
                         setEmailRecipient(recipient);
                         setEmailVariables({
