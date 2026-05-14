@@ -1,60 +1,78 @@
-## Transcrição automática de áudios do WhatsApp
+## Objetivo
 
-Adicionar transcrição automática de toda mensagem de áudio (recebida e enviada) usando Lovable AI Gateway com Gemini, exibindo o texto abaixo do player de áudio no chat.
+Ampliar a Gisele para fazer **primeiro atendimento + triagem** em toda mensagem nova de contato sem atendente atribuído (em qualquer horário). Ela conversa livremente até identificar com confiança o departamento responsável, transfere a conversa para um atendente daquele departamento (round-robin) e avisa o cliente.
 
-### 1. Banco de dados (migration)
+## Como vai funcionar (fluxo)
 
-Adicionar 2 colunas em `chat_messages`:
-- `transcription` (text, nullable) — texto transcrito
-- `transcription_status` (text, default `'pending'`) — `pending | processing | done | failed | unsupported`
+```text
+Mensagem entra (whatsapp-webhook)
+        │
+        ├─ assigned_to != NULL  → segue normal
+        │
+        └─ assigned_to == NULL  → dispara `chat-triage-agent` (fire-and-forget)
+                │
+                ├─ Carrega histórico da conversa + descrição dos departamentos
+                ├─ Chama Lovable AI (google/gemini-2.5-flash) com tool-calling:
+                │     • tool `ask_user(text)`        → continua a conversa
+                │     • tool `transfer(department_id, summary)` → encerra triagem
+                │
+                ├─ Se ask_user → envia mensagem como Gisele via Evolution API
+                │                grava no chat com sender_id = agente sintético
+                │
+                └─ Se transfer → escolhe atendente do depto (round-robin),
+                                 atualiza chat_conversations.assigned_to,
+                                 envia ao cliente: "Transferindo para {Depto}.
+                                 Em breve {Atendente} vai te atender."
+                                 grava nota interna com `summary` da IA
+```
 
-### 2. Nova edge function `whatsapp-transcribe-audio`
+## Mudanças
 
-- Recebe `{ message_id }`
-- Busca a mensagem em `chat_messages`; valida que `message_type` é áudio (`whatsapp_incoming_audio`, `whatsapp_outgoing_audio`, `audio`) e tem `media_url`
-- Marca `transcription_status = 'processing'`
-- Baixa o arquivo de áudio (do Supabase Storage `chat-media` ou da URL direta)
-- Converte para base64 e envia ao Lovable AI Gateway:
-  - Modelo: `google/gemini-2.5-flash` (suporta áudio inline via `input_audio`)
-  - System prompt: "Transcreva o áudio em português brasileiro literalmente, sem comentários."
-  - Conteúdo: array com `{ type: "input_audio", input_audio: { data: <base64>, format: "ogg"|"mp3" } }`
-- Salva resultado em `transcription` e marca `done` (ou `failed` com retry simples)
-- Tratamento dos erros 429/402 do gateway com toast/log
+### 1. Banco de dados
+- `chat_conversations`:
+  - `triage_status text default 'pending'` — `pending | in_progress | done | skipped`
+  - `triage_department_id uuid` — depto sugerido pela IA
+  - `triage_summary text` — resumo do que o cliente quer
+- `departments`:
+  - `triage_keywords text` — descrição livre que a IA usa para decidir (ex.: "Fiscal: notas fiscais, impostos, NFe, ICMS"). Editável na aba Departamentos.
+- `profiles`:
+  - já tem `department_id`. Triagem só sorteia entre `profiles` com `department_id = X` que tenham role `employee` ou `admin` ativos.
+- Round-robin: usar `chat_conversations` recentes (últimas 24h) por `assigned_to` no depto e escolher quem tem menos conversas abertas; em empate, ordem alfabética. Sem nova tabela.
 
-### 3. Disparo automático
+### 2. Edge function `chat-triage-agent` (nova)
+- Input: `{ conversation_id }`.
+- Lê mensagens da conversa (até 30 últimas), settings da empresa (`agent_name`), lista de departamentos (id, name, triage_keywords).
+- Chama `LOVABLE_API_KEY` em `https://ai.gateway.lovable.dev/v1/chat/completions` com `google/gemini-2.5-flash` e `tools` (function calling):
+  - `ask_user({ text })`
+  - `transfer({ department_id, summary })`
+- System prompt curto: "Você é {agent_name}, recepcionista da Velocitä. Cumprimente, descubra o departamento, transfira. Não responda dúvidas técnicas."
+- Limite de segurança: máximo 5 turnos da Gisele por conversa (evita loop). Se exceder, transfere para depto "Geral" (configurável em `company_settings.triage_fallback_department_id`).
+- Trata 429/402 como no `whatsapp-transcribe-audio`.
 
-Modificar `whatsapp-webhook/index.ts`:
-- Após inserir uma mensagem de áudio recebida, fazer fire-and-forget para `whatsapp-transcribe-audio`
+### 3. `whatsapp-webhook/index.ts`
+- Após inserir mensagem, se `!isFromMe` E `chat_conversations.assigned_to IS NULL` E (não é grupo) E (`triage_status` ∈ `pending|in_progress`):
+  - chama `chat-triage-agent` fire-and-forget.
+- Remove a chamada atual de `maybeSendOffHoursReply` para conversas que vão entrar em triagem (Gisele assume o primeiro contato em qualquer horário). Mantém off-hours só como fallback se a IA falhar.
 
-Modificar `whatsapp-send-media/index.ts`:
-- Após enviar áudio com sucesso e gravar em `chat_messages`, disparar a function
+### 4. Mensagens da Gisele
+- Enviadas via Evolution API (mesmo path do off-hours atual).
+- Inseridas em `chat_messages` com `message_type='whatsapp_outgoing'`, `sender_id` = id de um "usuário sistema" (criar em `profiles` com `full_name='Gisele'` e `tag_color`). Sufixo VHUB_MARKER já garante anti-eco.
 
-### 4. UI
+### 5. UI
+- `CompanyTab` (Atendimento): adicionar toggle **"Triagem automática pela {agent_name}"** + select de depto fallback.
+- `DepartmentsTab`: adicionar campo **"Palavras-chave / descrição p/ triagem IA"** (textarea).
+- `Chat` (header da conversa): badge "Em triagem" quando `triage_status='in_progress'`. Botão "Assumir agora" para o atendente cancelar a triagem manualmente (`triage_status='skipped'` e `assigned_to=auth.uid()`).
 
-`src/components/chat/AudioMessage.tsx`:
-- Aceitar nova prop `transcription?: string | null` e `transcriptionStatus?: string`
-- Renderizar abaixo do player:
-  - Se `processing`: skeleton/spinner pequeno + "Transcrevendo…"
-  - Se `done`: bloco discreto com ícone, texto da transcrição (collapsible se > 200 chars)
-  - Se `failed`: botão "Tentar novamente" que invoca a function
+## Detalhes técnicos
 
-`src/components/chat/MessageBubble.tsx`:
-- Passar `message.transcription` e `message.transcription_status` para `<AudioMessage />`
+- **Modelo**: `google/gemini-2.5-flash` (rápido, suporta tools, gratuito até 13/out/2025 no Lovable AI Gateway).
+- **Echo prevention**: as mensagens enviadas pela Gisele recebem o `VHUB_MARKER` no final (`\u200B\u200B\u200B`) — já tratado no webhook.
+- **Concorrência**: usar `update ... where triage_status='pending' returning id` para garantir que duas execuções simultâneas não dupliquem resposta.
+- **Realtime**: o front já escuta `chat_conversations` e `chat_messages`; nada novo aqui.
+- **Custos/limites**: cada conversa nova = 1–5 chamadas de LLM. Para Velocitä volume é baixo, OK.
 
-### 5. Realtime
+## Fora de escopo
 
-A página de chat já escuta `chat_messages` via realtime, então o UPDATE com `transcription` populado vai aparecer automaticamente sem mudanças adicionais.
-
-### Detalhes técnicos
-
-- Modelo escolhido: `google/gemini-2.5-flash` (multimodal, suporta áudio nativo, custo baixo)
-- Limite prático: áudios do WhatsApp raramente passam de 5 min, ficam bem dentro do limite do Gemini
-- Idioma fixo: pt-BR (sem detecção, custo menor)
-- Sem fila/cron: chamada direta async; se falhar fica `failed` e o botão manual recupera
-- Sem custo de novas secrets: usa `LOVABLE_API_KEY` já existente
-
-### Fora do escopo
-
-- Diarização de falantes (Gemini não faz; ficaria para ElevenLabs futuramente)
-- Transcrição de áudios antigos em lote (pode ser adicionado depois com um botão admin)
-- Tradução
+- Responder FAQs ou consultar dados do cliente (boletos, certidões). Pode ser segunda fase.
+- Triagem em conversas de grupo.
+- Re-triagem após o atendente fechar o ticket.
