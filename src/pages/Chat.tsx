@@ -256,7 +256,7 @@ export default function Chat() {
       })));
 
       const unreadIds = ordered
-        .filter(m => m.message_type !== 'text' && m.message_type !== 'whatsapp_outgoing' && !m.read_at)
+        .filter(m => m.message_type?.startsWith('whatsapp_incoming') && !m.read_at)
         .map(m => m.id);
 
       if (unreadIds.length > 0) {
