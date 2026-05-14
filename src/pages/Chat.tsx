@@ -746,6 +746,7 @@ export default function Chat() {
             onDeleteMessageForMe={deleteMessageForMe}
             onDeleteMessageForAll={deleteMessageForAll}
             onDeleteConversation={deleteConversation}
+            onRenameConversation={renameConversation}
           />
         </div>
       )}
