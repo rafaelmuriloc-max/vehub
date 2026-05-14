@@ -60,7 +60,7 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-    const { to, type, templateName, templateLanguage, templateParams, text, clientId, obligationId, instanceId } = await req.json();
+    const { to, type, templateName, templateLanguage, templateParams, text, chatPreview, clientId, obligationId, instanceId } = await req.json();
 
     if (!to) {
       return new Response(JSON.stringify({ error: "Campo 'to' é obrigatório" }), {
@@ -152,7 +152,7 @@ serve(async (req) => {
     });
 
     // --- Insert message into chat system ---
-    const messageContent = text || (templateName ? `[Template: ${templateName}]` : "Mensagem WhatsApp enviada");
+    const messageContent = text || chatPreview || (templateName ? `[Template: ${templateName}]` : "Mensagem WhatsApp enviada");
 
     try {
       if (clientId) {

@@ -1,52 +1,26 @@
-## Aviso de chamado inativo + fechamento automático
+# Renderizar templates do WhatsApp no chat
 
-Adicionar um novo monitor que avisa, no mesmo grupo de alertas (`chat_alert_whatsapp_group_id`), quando um chamado em atendimento ficar 30 minutos sem qualquer mensagem nova, e fecha automaticamente o chamado 5 minutos depois — apenas se continuar inativo.
+## Problema
 
-### Regras
+Quando uma atividade de obrigação envia uma mensagem via template do WhatsApp (Meta API), o registro inserido em `chat_messages` armazena `[Template: send_output_informations_template_3_header]` como conteúdo, porque a Edge Function `whatsapp-send` só conhece o `templateName` — não o corpo final renderizado.
 
-- **Escopo**: conversas com `status = 'open'` **e** `assigned_to IS NOT NULL`.
-- **Inatividade**: tempo desde a última mensagem da conversa (qualquer remetente) ≥ 30 min.
-- **Anti-spam**: cada chamado só recebe um aviso por ciclo de inatividade. Reusa o campo existente `chat_conversations.last_wait_alert_at` (já usado pelo alerta de espera). Para diferenciar os dois tipos, criamos um novo campo `last_inactivity_alert_at`.
-- **Fechamento automático**: 5 minutos após o aviso, se a `última mensagem` ainda for anterior ao aviso (sem nova interação), atualiza `status = 'closed'` e `closed_at = now()`. Se houver nova mensagem nesse intervalo, cancela e zera `last_inactivity_alert_at` para permitir novo ciclo futuro.
+Resultado: o usuário vê apenas o nome do template no chat interno, não o texto que foi de fato enviado ao cliente.
 
-### Mensagem postada no grupo
+## Solução
 
-```
-*Chamado sem atividade*
+O chamador (`src/lib/sendActivityWhatsApp.ts`) já tem o corpo do template (`activity.whatsapp_message_body`) com placeholders `{{var}}` e o mapa de variáveis (`templateVars`). Vamos renderizar o texto final lá e enviá-lo para a edge function num novo campo `chatPreview`, que será usado apenas para o registro no chat (não afeta o payload enviado à Meta).
 
-👤 Atendente: {full_name}
-📞 Contato: {contact_name ou whatsapp_phone}
-🏢 Empresa: {client.company_name ou "—"}
-⏱️ Inatividade: {minutos} min
+## Mudanças
 
-Seu chamado será fechado por tempo de inatividade.
-```
+### 1. `src/lib/sendActivityWhatsApp.ts`
+- Criar função `renderTemplateBody(body, templateVars)` que substitui `{{var}}` pelos valores resolvidos.
+- Quando enviar template, incluir `chatPreview: renderedBody` no body do POST para `whatsapp-send`. Anexar a URL do botão (se houver) ao final, em nova linha, para o usuário interno ver o link enviado.
 
-### Implementação
+### 2. `supabase/functions/whatsapp-send/index.ts`
+- Aceitar novo campo `chatPreview` no body.
+- Linha 155: trocar `const messageContent = text || (templateName ? \`[Template: ${templateName}]\` : ...)` por `const messageContent = text || chatPreview || (templateName ? \`[Template: ${templateName}]\` : ...)`.
+- `whatsapp_logs.body_text` continua refletindo apenas `text` (não duplica).
 
-1. **Migração** (`supabase--migration`):
-  - `ALTER TABLE chat_conversations ADD COLUMN last_inactivity_alert_at timestamptz;`
-2. **Edge Function** `chat-inactivity-monitor` (`supabase/functions/chat-inactivity-monitor/index.ts`):
-  - Lê `company_settings.chat_alert_whatsapp_group_id`.
-  - Modo padrão (sem param): varre conversas `open` + `assigned_to IS NOT NULL`. Para cada uma, busca a última `chat_messages.created_at`.
-    - Se `now - last_msg >= 30 min` E (`last_inactivity_alert_at IS NULL` OR `last_inactivity_alert_at < last_msg`):
-      - Envia mensagem ao grupo via Evolution API (`/message/sendText`).
-      - Salva `last_inactivity_alert_at = now()`.
-  - Modo `?action=close-check` (chamado pelo cron a cada minuto também): para conversas com `last_inactivity_alert_at` entre 5 e 10 min atrás:
-    - Se a última mensagem ainda for anterior a `last_inactivity_alert_at` → fecha (`status='closed'`, `closed_at=now()`).
-    - Caso contrário → zera `last_inactivity_alert_at`.
-3. **Cron** (via `supabase--read_query` com `cron.schedule`, fora de migration por conter URL/anon):
-  - `*/1 * * * *` chamando `chat-inactivity-monitor` (faz alerta + close-check no mesmo run).
-
-### Arquivos afetados
-
-- **Novo**: `supabase/functions/chat-inactivity-monitor/index.ts`
-- **Migration nova**: adiciona `last_inactivity_alert_at` em `chat_conversations`
-- **Cron**: agendamento via `pg_cron` (insert separado)
-- **Memória**: nova entrada `mem://features/chat/inactivity-auto-close` + atualização do `index.md`
-
-### Observações
-
-- Não envia nada ao cliente diretamente — tudo fica no grupo de alertas, conforme escolhido.
-- Não afeta o monitor de espera existente (`chat-waiting-alert`), que usa `waiting_since` e `last_wait_alert_at`.
-- Respeita horário comercial?  **Sim, deve enviar somrente em horário comercial, caso esteja fora do horário feche o chamado sem enviar aviso**
+## Fora de escopo
+- Mensagens já existentes no histórico permanecem como estão (sem migração retroativa).
+- Templates enviados manualmente fora do fluxo de obrigações (se houver) continuarão mostrando `[Template: ...]` até receberem o mesmo tratamento.

@@ -122,6 +122,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
       'vencimento': vencimento || '-',
     };
     const sharedComponents: Record<string, unknown>[] = [];
+    let chatPreview = '';
     if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
       if (activity.whatsapp_message_body) {
         const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
@@ -135,6 +136,10 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
             })),
           });
         }
+        chatPreview = activity.whatsapp_message_body.replace(
+          /\{\{(\w+)\}\}/g,
+          (_: string, name: string) => templateVars[name] ?? ''
+        );
       }
       if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
         const buttonValue = hasDocuments ? instanceId : activity.whatsapp_button_url;
@@ -146,7 +151,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
         });
       }
     }
-    return sharedComponents;
+    return { sharedComponents, chatPreview };
   };
 
   // Determine if we need multi-send (one message per document) — same for every recipient
@@ -157,7 +162,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
   let anySuccess = false;
 
   for (const recipient of recipients) {
-    const sharedComponents = buildSharedComponents(recipient.name);
+    const { sharedComponents, chatPreview } = buildSharedComponents(recipient.name);
     const recipientPhone = recipient.phone;
 
     if (needsMultiSend) {
@@ -191,6 +196,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
           templateName: activity.whatsapp_template_name,
           templateLanguage: 'pt_BR',
           ...(components.length > 0 ? { templateParams: components } : {}),
+          ...(chatPreview ? { chatPreview } : {}),
         };
         const { data, error } = await supabase.functions.invoke('whatsapp-send', { body: msgBody });
         if (error) errors.push(error.message);
@@ -210,6 +216,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
         body.templateName = activity.whatsapp_template_name;
         body.templateLanguage = 'pt_BR';
         if (sharedComponents.length > 0) body.templateParams = sharedComponents;
+        if (chatPreview) body.chatPreview = chatPreview;
       } else if (activity.whatsapp_message_body) {
         body.type = 'text';
         body.text = replaceVariables(activity.whatsapp_message_body, variables);
