@@ -232,7 +232,7 @@ export default function Chat() {
     const loadMessages = async () => {
       const { data } = await supabase
         .from('chat_messages')
-        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for, channel, wa_message_id, wa_remote_jid')
+        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for, channel, wa_message_id, wa_remote_jid, reply_to_id, reply_to_snapshot')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -361,14 +361,14 @@ export default function Chat() {
     loadConversations();
   };
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, replyToId?: string | null) => {
     if (!user || !activeConvId || isClosed) return;
 
     await ensureAssignedToMe(activeConvId);
 
     if (activeConv?.whatsappPhone) {
       const { error } = await supabase.functions.invoke('whatsapp-send-text', {
-        body: { conversationId: activeConvId, text: content, senderName: profile?.full_name || undefined, senderId: user.id },
+        body: { conversationId: activeConvId, text: content, senderName: profile?.full_name || undefined, senderId: user.id, replyToMessageId: replyToId || undefined },
       });
 
       if (error) {
@@ -376,11 +376,24 @@ export default function Chat() {
         toast({ title: 'Erro ao enviar mensagem', description: 'Tente novamente.', variant: 'destructive' });
       }
     } else {
+      let snapshot: any = null;
+      if (replyToId) {
+        const orig = messages.find(m => m.id === replyToId);
+        if (orig) snapshot = {
+          sender_id: orig.sender_id,
+          sender_name: orig.sender_name || null,
+          content: orig.content,
+          message_type: orig.message_type,
+          media_url: orig.media_url || null,
+        };
+      }
       await supabase.from('chat_messages').insert({
         conversation_id: activeConvId,
         sender_id: user.id,
         content,
         message_type: 'text',
+        reply_to_id: replyToId || null,
+        reply_to_snapshot: snapshot,
       });
 
       await supabase
@@ -390,7 +403,7 @@ export default function Chat() {
     }
   };
 
-  const sendMedia = async (file: File, type: 'image' | 'video' | 'document' | 'audio') => {
+  const sendMedia = async (file: File, type: 'image' | 'video' | 'document' | 'audio', replyToId?: string | null) => {
     if (!user || !activeConvId || isClosed) return;
 
     await ensureAssignedToMe(activeConvId);
@@ -412,7 +425,7 @@ export default function Chat() {
 
     if (activeConv?.whatsappPhone) {
       const { data: respData, error } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: { conversationId: activeConvId, type, mediaUrl, fileName: file.name, senderName: profile?.full_name || undefined, senderId: user.id },
+        body: { conversationId: activeConvId, type, mediaUrl, fileName: file.name, senderName: profile?.full_name || undefined, senderId: user.id, replyToMessageId: replyToId || undefined },
       });
       if (error || (respData && (respData as any).error)) {
         const detail = (respData as any)?.error || error?.message || '';
@@ -420,12 +433,22 @@ export default function Chat() {
         toast({ title: 'Erro ao enviar mídia', description: String(detail).slice(0, 200), variant: 'destructive' });
       }
     } else {
+      let snapshot: any = null;
+      if (replyToId) {
+        const orig = messages.find(m => m.id === replyToId);
+        if (orig) snapshot = {
+          sender_id: orig.sender_id, sender_name: orig.sender_name || null,
+          content: orig.content, message_type: orig.message_type, media_url: orig.media_url || null,
+        };
+      }
       await supabase.from('chat_messages').insert({
         conversation_id: activeConvId,
         sender_id: user.id,
         content: file.name,
         message_type: `whatsapp_${type}`,
         media_url: mediaUrl,
+        reply_to_id: replyToId || null,
+        reply_to_snapshot: snapshot,
       });
       await supabase.from('chat_conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConvId);
     }
