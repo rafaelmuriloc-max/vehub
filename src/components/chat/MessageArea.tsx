@@ -30,14 +30,22 @@ export interface ChatMessage {
   media_url?: string;
   edited_at?: string | null;
   deleted_at?: string | null;
+  reply_to_id?: string | null;
+  reply_to_snapshot?: {
+    sender_id?: string | null;
+    sender_name?: string | null;
+    content?: string | null;
+    message_type?: string | null;
+    media_url?: string | null;
+  } | null;
 }
 
 interface MessageAreaProps {
   conversationName: string | null;
   messages: ChatMessage[];
   currentUserId: string;
-  onSend: (message: string) => void;
-  onSendMedia?: (file: File, type: 'image' | 'video' | 'document' | 'audio') => void;
+  onSend: (message: string, replyToId?: string | null) => void;
+  onSendMedia?: (file: File, type: 'image' | 'video' | 'document' | 'audio', replyToId?: string | null) => void;
   onSendLocation?: (lat: number, lng: number, name?: string) => void;
   onSendContact?: (name: string, phone: string) => void;
   onPickFromObligation?: () => void;
@@ -74,6 +82,20 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   const [isDragging, setIsDragging] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const dragCounterRef = useRef(0);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const bubbleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const jumpToMessage = (id: string) => {
+    const el = bubbleRefs.current.get(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightId(id);
+    window.setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1500);
+  };
+
+  // Clear reply state when switching conversations
+  useEffect(() => { setReplyingTo(null); }, [conversationName]);
 
   const dropEnabled = !!conversationName && !isClosed && !!onSendMedia;
 
@@ -289,6 +311,15 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   onEdit={onEditMessage ? (text) => onEditMessage(msg.id, text) : undefined}
                   onDeleteForMe={onDeleteMessageForMe ? () => onDeleteMessageForMe(msg.id) : undefined}
                   onDeleteForAll={onDeleteMessageForAll ? () => onDeleteMessageForAll(msg.id) : undefined}
+                  onReply={() => setReplyingTo(msg)}
+                  replySnapshot={msg.reply_to_snapshot || undefined}
+                  replyToId={msg.reply_to_id || undefined}
+                  onJumpToReply={jumpToMessage}
+                  bubbleRef={(el) => {
+                    if (el) bubbleRefs.current.set(msg.id, el);
+                    else bubbleRefs.current.delete(msg.id);
+                  }}
+                  highlight={highlightId === msg.id}
                 />
               );
             })}
@@ -310,8 +341,8 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
         </div>
       ) : (
         <ChatInput
-          onSend={onSend}
-          onSendMedia={onSendMedia}
+          onSend={(text) => { onSend(text, replyingTo?.id || null); setReplyingTo(null); }}
+          onSendMedia={onSendMedia ? (file, type) => { onSendMedia(file, type, replyingTo?.id || null); setReplyingTo(null); } : undefined}
           onSendLocation={onSendLocation}
           onSendContact={onSendContact}
           onPickFromObligation={onPickFromObligation}
@@ -319,6 +350,15 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           onAddPendingFiles={(files) => setPendingFiles((prev) => [...prev, ...files])}
           onRemovePendingFile={(idx) => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
           onClearPendingFiles={() => setPendingFiles([])}
+          replyingTo={replyingTo ? {
+            id: replyingTo.id,
+            sender_name: replyingTo.sender_name,
+            content: replyingTo.content,
+            message_type: replyingTo.message_type,
+            media_url: replyingTo.media_url,
+            isMine: replyingTo.sender_id === currentUserId,
+          } : null}
+          onCancelReply={() => setReplyingTo(null)}
         />
       )}
 
