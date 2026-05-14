@@ -23,6 +23,7 @@ export interface ConversationItem {
   clientId?: string | null;
   status?: string;
   assignedToName?: string | null;
+  assignedToColor?: string | null;
   waitingSince?: string | null;
   totalWaitSeconds?: number;
 }
@@ -246,7 +247,11 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 {conv.status === 'open' && (
                   <div className="mt-1">
                     {conv.assignedToName ? (
-                      <Badge variant="secondary" className="inline-flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent hover:bg-secondary/80 text-[10px] py-0 px-1.5 h-4 gap-1 font-normal bg-amber-600 text-slate-50 border-0 rounded-none">
+                      <Badge
+                        variant="secondary"
+                        className="inline-flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent hover:opacity-90 text-[10px] py-0 px-1.5 h-4 gap-1 font-normal text-slate-50 border-0 rounded-none"
+                        style={{ backgroundColor: conv.assignedToColor || '#D97706' }}
+                      >
                         <User className="h-2.5 w-2.5" />
                         {conv.assignedToName.split(' ')[0]}
                       </Badge>
