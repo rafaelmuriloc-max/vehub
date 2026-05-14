@@ -211,43 +211,42 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   return (
      <div className={`${showOnRight ? 'flex items-center justify-end pr-[42px]' : 'flex justify-start pl-[42px]'} mb-1`}>
-       <div className={`group relative flex items-start gap-1 ${showOnRight ? 'flex-row-reverse' : 'flex-row'}`}>
-      {showOnRight && (onEdit || onDeleteForMe || onDeleteForAll) && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mt-1 rounded-full hover:bg-black/10">
-              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="left">
-            {canEdit && onEdit && (
-              <DropdownMenuItem onClick={() => { setDraft(content); setEditing(true); }}>
-                <Pencil className="h-4 w-4 mr-2" /> Editar
-              </DropdownMenuItem>
-            )}
-            {onDeleteForMe && (
-              <DropdownMenuItem onClick={onDeleteForMe}>
-                <Trash2 className="h-4 w-4 mr-2" /> Apagar só para mim
-              </DropdownMenuItem>
-            )}
-            {canDeleteForAll && onDeleteForAll && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onDeleteForAll} className="text-destructive focus:text-destructive">
-                  <Ban className="h-4 w-4 mr-2" /> Apagar para todos
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
       <div
-         className={`relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-[12px] py-1.5 rounded-lg shadow-sm ${
+        className={`group relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-[12px] py-1.5 rounded-lg shadow-sm ${
           showOnRight
            ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none'
            : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none'
         }`}
       >
+        {(onEdit || onDeleteForMe || onDeleteForAll) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10">
+                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="bottom">
+              {canEdit && onEdit && (
+                <DropdownMenuItem onClick={() => { setDraft(content); setEditing(true); }}>
+                  <Pencil className="h-4 w-4 mr-2" /> Editar
+                </DropdownMenuItem>
+              )}
+              {onDeleteForMe && (
+                <DropdownMenuItem onClick={onDeleteForMe}>
+                  <Trash2 className="h-4 w-4 mr-2" /> Apagar só para mim
+                </DropdownMenuItem>
+              )}
+              {canDeleteForAll && onDeleteForAll && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={onDeleteForAll} className="text-destructive focus:text-destructive">
+                    <Ban className="h-4 w-4 mr-2" /> Apagar para todos
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
          {senderName && (
            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-[4px]">{senderName}</p>
         )}
@@ -289,29 +288,6 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             <CheckCheck className={`h-3.5 w-3.5 ${isRead ? 'text-blue-500' : 'text-muted-foreground'}`} />
           )}
         </div>
-      </div>
-      {!showOnRight && (onDeleteForMe) && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mt-1 rounded-full hover:bg-black/10">
-              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right">
-            <DropdownMenuItem onClick={onDeleteForMe}>
-              <Trash2 className="h-4 w-4 mr-2" /> Apagar só para mim
-            </DropdownMenuItem>
-            {!!isAdmin && onDeleteForAll && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onDeleteForAll} className="text-destructive focus:text-destructive">
-                  <Ban className="h-4 w-4 mr-2" /> Apagar para todos
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
       </div>
     </div>
   );

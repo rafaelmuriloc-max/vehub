@@ -1,39 +1,28 @@
-## Objetivo
+## Mover o menu de ações (3 pontinhos) para dentro da bolha
 
-Adicionar um botão na conversa (cabeçalho) para cadastrar/atualizar o contato do número que está conversando, com vínculo opcional a uma Empresa e a um Departamento.
+Hoje o `DropdownMenu` com Editar/Apagar fica **fora** da bolha (irmão da `<div>` do balão). O usuário quer ele **dentro** da bolha, no canto superior direito.
 
-## UX
+## Alterações em `src/components/chat/MessageBubble.tsx`
 
-Botão **"Cadastrar contato"** (ícone `UserPlus`) no header de `MessageArea`, exibido somente quando `whatsappPhone` existe. Ao clicar abre um dialog `RegisterContactDialog`:
+1. Remover o bloco `{showOnRight && (onEdit || onDeleteForMe || onDeleteForAll) && (<DropdownMenu>…)}` que está fora do balão (linhas 215-243) e o equivalente do lado esquerdo (linhas 293-314).
+2. Remover o wrapper `<div className="group relative flex items-start gap-1 …">` que existia só para acomodar o botão ao lado, deixando a `<div>` da bolha como filha direta.
+3. Acrescentar o `group` na própria bolha (`<div className="relative group …">`).
+4. Dentro da bolha, no topo, posicionar o botão dos 3 pontinhos absoluto no canto superior direito:
+   ```tsx
+   <DropdownMenu>
+     <DropdownMenuTrigger asChild>
+       <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10">
+         <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+       </button>
+     </DropdownMenuTrigger>
+     <DropdownMenuContent align="end" side="bottom">…itens condicionais…</DropdownMenuContent>
+   </DropdownMenu>
+   ```
+5. Itens do menu — exibir conforme contexto (mesma lógica atual):
+   - `Editar` se `canEdit && onEdit` (apenas em mensagens próprias).
+   - `Apagar só para mim` se `onDeleteForMe`.
+   - `Apagar para todos` se `canDeleteForAll && onDeleteForAll` (próprias ou admin).
+6. Renderizar o menu **somente** quando houver pelo menos uma ação disponível.
+7. Pequeno padding-right extra no `senderName` (ou no container do header da bolha) só quando o menu existir, para o nome não ficar atrás do ícone.
 
-Campos:
-- **Nome** (texto, pré-preenchido com `conversationName`)
-- **Telefone** (texto, pré-preenchido com `whatsappPhone`, formato canônico `55+DDD+9+número`)
-- **E-mail** (texto, opcional)
-- **Empresa** — Combobox com busca em `clients.company_name` (segue padrão `Searchable Selects` da memória)
-- **Departamento** — Combobox com busca em `departments.name` (carregado quando uma empresa estiver selecionada; opcional)
-
-Botões: Cancelar / Salvar.
-
-## Regra de gravação
-
-Sem migração de banco — usar tabelas existentes.
-
-1. **Empresa + Departamento selecionados** → `INSERT` em `client_department_contacts (client_id, department_id, contact_name, contact_phone, contact_email)`. Como agora aceitamos múltiplos contatos por departamento (fix recente), basta inserir uma nova linha. Verificar duplicidade pelo telefone normalizado antes de inserir.
-2. **Apenas Empresa (sem departamento)** → se o cliente ainda não tem `contact_phone`, atualizar `clients.contact_name/phone/email`; caso contrário, gravar como `client_department_contacts` com `department_id = NULL`? Não — `department_id` é NOT NULL. Então neste caso apenas vincula a conversa ao cliente (`chat_conversations.client_id`) e atualiza os campos `contact_*` do cliente se estiverem vazios. Se já preenchidos, mostrar toast informando "Cliente já possui contato; selecione um departamento para adicionar mais um contato".
-3. **Sem empresa** → toast: "Selecione uma empresa para vincular o contato" (sem destino para gravar; ou alternativamente permitir só atualizar o nome da conversa). Manter simples: empresa é obrigatória.
-
-Em todos os casos com empresa selecionada, atualizar `chat_conversations.client_id` da conversa atual para o `client_id` escolhido (e `name_locked = true`, `name = contact_name`).
-
-## Arquivos a alterar
-
-1. **Criar `src/components/chat/RegisterContactDialog.tsx`** — dialog com Combobox de empresas/departamentos e mutações (Supabase).
-2. **`src/components/chat/MessageArea.tsx`** — adicionar prop `onRegisterContact` e botão `UserPlus` no header (escondido quando `isClosed` ou sem `whatsappPhone`).
-3. **`src/pages/Chat.tsx`** — controlar abertura do dialog, passar `whatsappPhone`, `conversationName`, `conversationId` ao dialog; após salvar, recarregar lista/header (já existe sync realtime).
-
-## Resumo
-
-- Novo botão "Cadastrar contato" no header da conversa.
-- Dialog com Nome, Telefone, E-mail, Empresa (busca), Departamento (busca).
-- Empresa obrigatória; com departamento → grava em `client_department_contacts`; sem departamento → atualiza `clients.contact_*` (se vazio) e vincula a conversa ao cliente.
-- Sem mudanças de schema; reaproveita tabelas existentes.
+Não há mudanças em `MessageArea.tsx`, banco ou edge functions.
