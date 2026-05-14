@@ -440,6 +440,24 @@ Deno.serve(async (req) => {
       console.error("Insert message error:", insertErr);
     }
 
+    // Fire-and-forget audio transcription
+    if (!insertErr && insertedMsg?.id && messageType === "whatsapp_audio") {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        fetch(`${supabaseUrl}/functions/v1/whatsapp-transcribe-audio`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ message_id: insertedMsg.id }),
+        }).catch((e) => console.error("transcribe trigger failed:", e));
+      } catch (e) {
+        console.error("transcribe trigger sync error:", e);
+      }
+    }
+
     // Update conversation
     await supabase
       .from("chat_conversations")
