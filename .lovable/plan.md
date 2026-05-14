@@ -1,25 +1,25 @@
 ## Objetivo
 
-Substituir a lista de "Nova Conversa" — que hoje só lista usuários internos (`profiles`) — por uma lista de **contatos externos**, e fazer com que toda nova conversa criada seja uma conversa de **WhatsApp**.
+Permitir, no diálogo "Nova Conversa", iniciar um chat de WhatsApp digitando um número de telefone que ainda não está cadastrado nem como contato de empresa nem como remetente conhecido.
 
-## Fontes de contatos a unificar
+## Mudanças
 
-1. **Cadastrados nas empresas**
-   - `clients.contact_name` + `clients.contact_phone`
-   - `client_department_contacts.contact_name` + `contact_phone`
-2. **Remetentes WhatsApp já conhecidos sem vínculo a empresa**
-   - `chat_conversations` com `whatsapp_phone` preenchido e `client_id IS NULL`, usando `name` (pushName) como nome do contato.
+Arquivo único: `src/components/chat/NewConversationDialog.tsx`
 
-Deduplicação por telefone normalizado (apenas dígitos). Prioridade quando o mesmo telefone aparecer em mais de uma fonte: cliente > contato departamental > remetente avulso.
+1. **Detecção do input como telefone**
+   - Normalizar o termo de busca removendo caracteres não numéricos.
+   - Se o normalizado tiver pelo menos 10 dígitos (DDD + número) e **não corresponder** a nenhum contato já presente em `contacts`, exibir uma linha extra fixa no topo da lista: "Enviar mensagem para +<número digitado>".
 
-## Mudanças no front-end
+2. **Ação ao clicar nessa linha**
+   - Reaproveitar `startConversation` passando um `Contact` sintético `{ phone, displayPhone, name: displayPhone, source: 'whatsapp' }`.
+   - O fluxo atual já procura conversa existente pelo telefone normalizado e, se não houver, cria nova `chat_conversations` com `whatsapp_phone` preenchido — ou seja, nada novo no backend.
 
-Arquivo: `src/components/chat/NewConversationDialog.tsx`
+3. **Validação leve**
+   - Comprimento entre 10 e 15 dígitos (padrão E.164 sem o "+").
+   - Não habilitar a opção quando vazio ou inválido.
 
-- Trocar a query de `profiles` por buscas paralelas em `clients`, `client_department_contacts` e `chat_conversations` (filtro `whatsapp_phone IS NOT NULL`).
-- Construir `Contact { phone, name, companyName? }` unificado. **Não exibir departamento** — manter visual atual (avatar + nome + linha secundária com nome da empresa, quando houver, ou "Contato WhatsApp").
-- Busca por nome ou telefone.
-- Ao clicar em um contato:
-  1. Procurar `chat_conversations` existente com aquele `whatsapp_phone` (normalizado). Se encontrar, abrir.
-  2. Caso contrário, criar `chat_conversations` com `whatsapp_phone`, `name` (do contato), `client_id` (quando vier de cliente), `created_by` = usuário atual, `is_group=false`, `assigned_to` = usuário atual; e adicionar o usuário atual em `chat_participants`.
-- Remover a lógica antiga de detecção de 1:1 entre usuários internos.
+4. **UI**
+   - Linha com ícone de telefone, label "Enviar mensagem para +<phone>" e subtítulo "Novo contato WhatsApp", no mesmo estilo dos itens existentes.
+   - Placeholder do input passa a sugerir: "Buscar por nome, empresa ou digite um telefone...".
+
+Sem mudanças de schema, RLS ou edge functions.
