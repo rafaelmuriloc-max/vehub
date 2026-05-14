@@ -51,15 +51,15 @@ export function AppSidebar() {
       onMouseEnter={() => { if (!isMobile) setOpen(true); }}
       onMouseLeave={() => { if (!isMobile) setOpen(false); }}
     >
-      <SidebarHeader className="p-5">
-        <div className="flex items-center gap-3">
+      <SidebarHeader className="p-5 group-data-[collapsible=icon]:p-3">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           {/* Velocitä logo mark – stylized bars */}
           <div className="flex gap-0.5">
             <div className="w-1 h-6 rounded-full bg-sidebar-primary" />
             <div className="w-1 h-8 rounded-full bg-sidebar-primary" />
             <div className="w-1 h-5 rounded-full bg-sidebar-primary" />
           </div>
-          <div>
+          <div className="group-data-[collapsible=icon]:hidden">
             <h2 className="text-lg font-bold tracking-tight text-sidebar-foreground">Velocitä</h2>
             <p className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/50 font-medium">Contabilidade</p>
           </div>
