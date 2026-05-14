@@ -215,13 +215,11 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-               className={`w-full gap-3 pl-2 md:pl-3 pr-0 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors flex items-start justify-start ${
-                 activeId === conv.id ? 'bg-white' : 'bg-white'
-               }`}
+               className="w-full gap-3 pl-2 md:pl-3 pr-0 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors bg-white flex items-center justify-start"
             >
               <Avatar className="h-11 w-11 md:h-12 md:w-12 shrink-0">
                 {conv.avatarUrl && <AvatarImage src={conv.avatarUrl} alt={conv.name} />}
-                <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                <AvatarFallback className="flex h-full w-full items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-left">
                   {conv.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
