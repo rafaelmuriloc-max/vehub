@@ -24,6 +24,7 @@ export type Database = {
           created_by: string
           id: string
           is_group: boolean
+          last_inactivity_alert_at: string | null
           last_wait_alert_at: string | null
           name: string | null
           name_locked: boolean
@@ -42,6 +43,7 @@ export type Database = {
           created_by: string
           id?: string
           is_group?: boolean
+          last_inactivity_alert_at?: string | null
           last_wait_alert_at?: string | null
           name?: string | null
           name_locked?: boolean
@@ -60,6 +62,7 @@ export type Database = {
           created_by?: string
           id?: string
           is_group?: boolean
+          last_inactivity_alert_at?: string | null
           last_wait_alert_at?: string | null
           name?: string | null
           name_locked?: boolean
