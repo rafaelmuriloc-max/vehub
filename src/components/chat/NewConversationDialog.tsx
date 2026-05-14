@@ -18,6 +18,35 @@ interface Contact {
 
 const normalizePhone = (p?: string | null) => (p || '').replace(/\D/g, '');
 
+// Canonicaliza para 13 dígitos: 55 + DDD + 9 + 8 dígitos (mesma lógica do whatsapp-webhook)
+const canonicalizePhone = (p?: string | null): string => {
+  let d = normalizePhone(p);
+  // Sem código do país: prefixar 55
+  if ((d.length === 10 || d.length === 11) && !d.startsWith('55')) {
+    d = '55' + d;
+  }
+  // 55 + DDD + 8 dígitos -> inserir 9 após DDD se local começar com 6/7/8/9
+  if (d.length === 12 && d.startsWith('55')) {
+    const localFirst = d[4];
+    if (['6', '7', '8', '9'].includes(localFirst)) {
+      d = d.slice(0, 4) + '9' + d.slice(4);
+    }
+  }
+  return d;
+};
+
+const phoneVariants = (p: string): string[] => {
+  const set = new Set<string>();
+  const d = normalizePhone(p);
+  set.add(d);
+  set.add(canonicalizePhone(d));
+  const c = canonicalizePhone(d);
+  if (c.length === 13 && c.startsWith('55') && c[4] === '9') {
+    set.add(c.slice(0, 4) + c.slice(5)); // variante sem o 9
+  }
+  return [...set].filter(Boolean);
+};
+
 interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -117,13 +146,17 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
     if (!user || creating) return;
     setCreating(true);
     try {
-      // Look for existing WhatsApp conversation by normalized phone
+      const canonical = canonicalizePhone(contact.phone);
+      const variants = phoneVariants(canonical);
+
+      // Procurar conversa existente por qualquer variante do telefone
       const { data: existing } = await supabase
         .from('chat_conversations')
         .select('id, whatsapp_phone');
-      const found = (existing || []).find(
-        (c: any) => normalizePhone(c.whatsapp_phone) === contact.phone,
-      );
+      const found = (existing || []).find((c: any) => {
+        const norm = normalizePhone(c.whatsapp_phone);
+        return variants.includes(norm) || variants.includes(canonicalizePhone(norm));
+      });
       if (found) {
         onCreated(found.id);
         onOpenChange(false);
@@ -134,11 +167,11 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
       const { data: conv, error } = await supabase
         .from('chat_conversations')
         .insert({
-          name: contact.name,
+          name: contact.clientId ? contact.name : `+${canonical}`,
           created_by: user.id,
           is_group: false,
           assigned_to: user.id,
-          whatsapp_phone: contact.displayPhone,
+          whatsapp_phone: canonical,
           client_id: contact.clientId ?? null,
         } as any)
         .select('id')
