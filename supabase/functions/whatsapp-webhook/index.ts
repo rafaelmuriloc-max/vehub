@@ -78,7 +78,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const messageObj = data.message || {};
+    let messageObj = data.message || {};
+
+    // Unwrap nested envelopes (ephemeral, view-once, document-with-caption)
+    for (let i = 0; i < 5; i++) {
+      const next =
+        messageObj.ephemeralMessage?.message ||
+        messageObj.viewOnceMessage?.message ||
+        messageObj.viewOnceMessageV2?.message ||
+        messageObj.viewOnceMessageV2Extension?.message ||
+        messageObj.documentWithCaptionMessage?.message;
+      if (!next) break;
+      messageObj = next;
+    }
 
     // Detect message type and extract text/caption
     let text: string | null = null;
