@@ -615,6 +615,23 @@ export default function Chat() {
     loadConversations();
   };
 
+  const renameConversation = async (newName: string) => {
+    if (!activeConvId) return;
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const { error } = await supabase
+      .from('chat_conversations')
+      .update({ name: trimmed, name_locked: true } as any)
+      .eq('id', activeConvId);
+    if (error) {
+      toast({ title: 'Erro ao renomear', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setActiveConvName(trimmed);
+    toast({ title: 'Contato renomeado' });
+    loadConversations();
+  };
+
   // Transfer ticket
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [teamMembers, setTeamMembers] = useState<{ user_id: string; full_name: string; job_title: string | null }[]>([]);
