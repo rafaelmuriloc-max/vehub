@@ -30,6 +30,10 @@ export type Database = {
           name_locked: boolean
           status: string
           total_wait_seconds: number
+          triage_department_id: string | null
+          triage_status: string
+          triage_summary: string | null
+          triage_turns: number
           updated_at: string
           waiting_since: string | null
           whatsapp_phone: string | null
@@ -49,6 +53,10 @@ export type Database = {
           name_locked?: boolean
           status?: string
           total_wait_seconds?: number
+          triage_department_id?: string | null
+          triage_status?: string
+          triage_summary?: string | null
+          triage_turns?: number
           updated_at?: string
           waiting_since?: string | null
           whatsapp_phone?: string | null
@@ -68,6 +76,10 @@ export type Database = {
           name_locked?: boolean
           status?: string
           total_wait_seconds?: number
+          triage_department_id?: string | null
+          triage_status?: string
+          triage_summary?: string | null
+          triage_turns?: number
           updated_at?: string
           waiting_since?: string | null
           whatsapp_phone?: string | null
@@ -495,6 +507,8 @@ export type Database = {
           service_lunch_start: string | null
           service_open_time: string | null
           service_timezone: string
+          triage_enabled: boolean
+          triage_fallback_department_id: string | null
           updated_at: string
         }
         Insert: {
@@ -527,6 +541,8 @@ export type Database = {
           service_lunch_start?: string | null
           service_open_time?: string | null
           service_timezone?: string
+          triage_enabled?: boolean
+          triage_fallback_department_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -559,6 +575,8 @@ export type Database = {
           service_lunch_start?: string | null
           service_open_time?: string | null
           service_timezone?: string
+          triage_enabled?: boolean
+          triage_fallback_department_id?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -598,18 +616,21 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          triage_keywords: string | null
         }
         Insert: {
           created_at?: string
           description?: string | null
           id?: string
           name: string
+          triage_keywords?: string | null
         }
         Update: {
           created_at?: string
           description?: string | null
           id?: string
           name?: string
+          triage_keywords?: string | null
         }
         Relationships: []
       }
