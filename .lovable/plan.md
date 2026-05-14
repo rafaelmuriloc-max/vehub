@@ -1,86 +1,60 @@
-## Problema
+## Transcrição automática de áudios do WhatsApp
 
-Quando o cliente responde uma mensagem no WhatsApp, a citação não chega — a mensagem entra no chat como mensagem normal, sem `reply_to_id`/`reply_to_snapshot`.
+Adicionar transcrição automática de toda mensagem de áudio (recebida e enviada) usando Lovable AI Gateway com Gemini, exibindo o texto abaixo do player de áudio no chat.
 
-Olhando o banco, a última mensagem recebida ("Ok") veio como `conversation` puro, sem `contextInfo`. Isso indica duas possibilidades:
+### 1. Banco de dados (migration)
 
-1. A mensagem não foi enviada como reply real (só texto digitado);
-2. O Evolution está embrulhando a mensagem em `ephemeralMessage` / `viewOnceMessageV2` / `messageContextInfo`, e nosso código procura `contextInfo` apenas dentro de `extendedTextMessage`/`imageMessage`/etc — não dentro do envelope externo.
+Adicionar 2 colunas em `chat_messages`:
+- `transcription` (text, nullable) — texto transcrito
+- `transcription_status` (text, default `'pending'`) — `pending | processing | done | failed | unsupported`
 
-A função `whatsapp-send-text` para replies já está funcionando (a saída "teste" tem `wa_evolution_id` válido), então o problema é só no webhook ao receber o reply do cliente.
+### 2. Nova edge function `whatsapp-transcribe-audio`
 
-## Plano
+- Recebe `{ message_id }`
+- Busca a mensagem em `chat_messages`; valida que `message_type` é áudio (`whatsapp_incoming_audio`, `whatsapp_outgoing_audio`, `audio`) e tem `media_url`
+- Marca `transcription_status = 'processing'`
+- Baixa o arquivo de áudio (do Supabase Storage `chat-media` ou da URL direta)
+- Converte para base64 e envia ao Lovable AI Gateway:
+  - Modelo: `google/gemini-2.5-flash` (suporta áudio inline via `input_audio`)
+  - System prompt: "Transcreva o áudio em português brasileiro literalmente, sem comentários."
+  - Conteúdo: array com `{ type: "input_audio", input_audio: { data: <base64>, format: "ogg"|"mp3" } }`
+- Salva resultado em `transcription` e marca `done` (ou `failed` com retry simples)
+- Tratamento dos erros 429/402 do gateway com toast/log
 
-### 1. `supabase/functions/whatsapp-webhook/index.ts`
+### 3. Disparo automático
 
-- **Desempacotar envelopes**: antes de processar `messageObj`, desembrulhar:
-  - `messageObj.ephemeralMessage?.message`
-  - `messageObj.viewOnceMessage?.message`
-  - `messageObj.viewOnceMessageV2?.message`
-  - `messageObj.viewOnceMessageV2Extension?.message`
-  - `messageObj.documentWithCaptionMessage?.message`
-  
-  Aplicar em loop até estabilizar para garantir que pegamos o conteúdo real.
+Modificar `whatsapp-webhook/index.ts`:
+- Após inserir uma mensagem de áudio recebida, fazer fire-and-forget para `whatsapp-transcribe-audio`
 
-- **Ampliar busca de `contextInfo`**: além de procurar dentro de cada `*Message.contextInfo`, também olhar:
-  - `messageObj.messageContextInfo` (nível raiz da mensagem)
-  - `data.contextInfo` (alguns webhooks Evolution colocam aqui)
-  - `messageObj.extendedTextMessage.contextInfo.stanzaId` continua como principal
+Modificar `whatsapp-send-media/index.ts`:
+- Após enviar áudio com sucesso e gravar em `chat_messages`, disparar a function
 
-- **Logar a detecção**: adicionar `console.log("Reply detection:", { quotedStanzaId, foundOriginal: !!original })` para confirmar via Edge Logs no próximo teste real do usuário.
+### 4. UI
 
-- **Snapshot fallback**: quando `quotedStanzaId` existir mas não acharmos a mensagem original na base (ex: mensagem antiga sem `wa_evolution_id`), usar o conteúdo de `ctxInfo.quotedMessage` (que o próprio Evolution envia) para preencher `reply_to_snapshot` mesmo sem `reply_to_id`. Assim a citação aparece visualmente, mesmo sem link clicável.
+`src/components/chat/AudioMessage.tsx`:
+- Aceitar nova prop `transcription?: string | null` e `transcriptionStatus?: string`
+- Renderizar abaixo do player:
+  - Se `processing`: skeleton/spinner pequeno + "Transcrevendo…"
+  - Se `done`: bloco discreto com ícone, texto da transcrição (collapsible se > 200 chars)
+  - Se `failed`: botão "Tentar novamente" que invoca a function
 
-### 2. Backfill defensivo
+`src/components/chat/MessageBubble.tsx`:
+- Passar `message.transcription` e `message.transcription_status` para `<AudioMessage />`
 
-Para mensagens antigas (`whatsapp_outgoing`) com `wa_message_id` no formato `wamid.*` e `wa_evolution_id` nulo, não há como recuperar o ID raw do WhatsApp depois do envio (Meta não devolve), então mensagens enviadas antes deste fix não poderão ser referenciadas em replies vindos do cliente. Apenas mensagens novas enviadas via Evolution ou recebidas terão lookup completo.
+### 5. Realtime
 
-### 3. Validação
+A página de chat já escuta `chat_messages` via realtime, então o UPDATE com `transcription` populado vai aparecer automaticamente sem mudanças adicionais.
 
-Após deploy:
-1. Pedir ao usuário para responder uma mensagem nova (enviada após o fix) usando a ação "Responder" no WhatsApp.
-2. Conferir Edge Logs do `whatsapp-webhook` pelo log `Reply detection:` e ver se `quotedStanzaId` apareceu e foi resolvido.
-3. Se `foundOriginal: false`, o snapshot fallback ainda renderiza a citação visualmente.
+### Detalhes técnicos
 
-## Detalhes técnicos
+- Modelo escolhido: `google/gemini-2.5-flash` (multimodal, suporta áudio nativo, custo baixo)
+- Limite prático: áudios do WhatsApp raramente passam de 5 min, ficam bem dentro do limite do Gemini
+- Idioma fixo: pt-BR (sem detecção, custo menor)
+- Sem fila/cron: chamada direta async; se falhar fica `failed` e o botão manual recupera
+- Sem custo de novas secrets: usa `LOVABLE_API_KEY` já existente
 
-```ts
-// Unwrap envelopes
-let inner: any = messageObj;
-for (let i = 0; i < 5; i++) {
-  const next =
-    inner.ephemeralMessage?.message ||
-    inner.viewOnceMessage?.message ||
-    inner.viewOnceMessageV2?.message ||
-    inner.viewOnceMessageV2Extension?.message ||
-    inner.documentWithCaptionMessage?.message;
-  if (!next) break;
-  inner = next;
-}
-// use `inner` instead of `messageObj` from here on
+### Fora do escopo
 
-// Reply detection with broader scan
-const ctxInfo =
-  inner.extendedTextMessage?.contextInfo ||
-  inner.imageMessage?.contextInfo ||
-  inner.videoMessage?.contextInfo ||
-  inner.audioMessage?.contextInfo ||
-  inner.documentMessage?.contextInfo ||
-  inner.stickerMessage?.contextInfo ||
-  inner.messageContextInfo ||
-  data.contextInfo ||
-  null;
-
-const quotedStanzaId = ctxInfo?.stanzaId || null;
-console.log("Reply detection:", { quotedStanzaId, hasQuotedMessage: !!ctxInfo?.quotedMessage });
-
-if (quotedStanzaId) {
-  // existing lookup by wa_evolution_id
-  // if !original and ctxInfo.quotedMessage, build snapshot from quotedMessage
-}
-```
-
-## Fora do escopo
-
-- Mudar para webhook do Meta (resolveria o ID mismatch de vez, mas exige reconfig no Business Manager).
-- Backfill de `wa_evolution_id` em mensagens antigas enviadas via Meta.
+- Diarização de falantes (Gemini não faz; ficaria para ElevenLabs futuramente)
+- Transcrição de áudios antigos em lote (pode ser adicionado depois com um botão admin)
+- Tradução
