@@ -97,7 +97,11 @@ Deno.serve(async (req) => {
     let waMessageId: string | null = null;
     let metaPhoneDigits = "";
 
-    if (hasOpenWindow) {
+    // If reply target is an inbound message (no Meta wamid), force Evolution path
+    // so the quote actually appears on the contact's WhatsApp.
+    const forceEvolutionForReply = !!(replyToMessageId && !replyMetaWamid && replyEvolutionId);
+
+    if (hasOpenWindow && !forceEvolutionForReply) {
       // Send via Meta API (official) - free text within 24h window
       console.log("Sending via Meta API (24h window open)");
       const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
