@@ -201,7 +201,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-0 mx-[6px]">
+      <div className="flex-1 overflow-y-auto px-0 mx-[6px] chat-scroll">
         {loading ? (
           <>
             {Array.from({ length: 6 }).map((_, i) => (
