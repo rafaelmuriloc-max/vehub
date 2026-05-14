@@ -239,14 +239,13 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                     {conv.companyNames.join(' • ')}
                   </p>
                 )}
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-xs text-muted-foreground truncate">{conv.lastMessage || 'Sem mensagens'}</span>
-                  {conv.unreadCount > 0 && (
-                    <span className="ml-2 shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
+                {conv.unreadCount > 0 && (
+                  <div className="flex items-center justify-end mt-0.5">
+                    <span className="shrink-0 bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
                       {conv.unreadCount}
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
                 {conv.status === 'open' && (
                   <div className="mt-1">
                     {conv.assignedToName ? (
