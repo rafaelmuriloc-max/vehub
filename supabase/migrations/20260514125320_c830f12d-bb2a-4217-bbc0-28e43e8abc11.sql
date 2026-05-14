@@ -1,0 +1,2 @@
+ALTER TABLE public.client_department_contacts DROP CONSTRAINT IF EXISTS client_department_contacts_client_id_department_id_key;
+CREATE INDEX IF NOT EXISTS idx_cdc_client_dept ON public.client_department_contacts(client_id, department_id);
