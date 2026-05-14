@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
 
   try {
     const VHUB_MARKER = "\u200B\u200B\u200B";
-    const { conversationId, text, senderName, senderId: senderIdInput } = await req.json();
+    const { conversationId, text, senderName, senderId: senderIdInput, replyToMessageId } = await req.json();
     const signedText = senderName ? `*${senderName}:*\n${text}${VHUB_MARKER}` : `${text}${VHUB_MARKER}`;
 
     if (!conversationId || !text) {
@@ -29,6 +29,36 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
+
+    // Look up reply target (for Meta context.message_id and snapshot)
+    let replySnapshot: any = null;
+    let replyWaMessageId: string | null = null;
+    if (replyToMessageId) {
+      const { data: replyMsg } = await supabase
+        .from("chat_messages")
+        .select("id, sender_id, content, message_type, media_url, wa_message_id")
+        .eq("id", replyToMessageId)
+        .maybeSingle();
+      if (replyMsg) {
+        replyWaMessageId = replyMsg.wa_message_id || null;
+        let senderFullName = "";
+        if (replyMsg.sender_id) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("user_id", replyMsg.sender_id)
+            .maybeSingle();
+          senderFullName = prof?.full_name || "";
+        }
+        replySnapshot = {
+          sender_id: replyMsg.sender_id,
+          sender_name: senderFullName,
+          content: replyMsg.content,
+          message_type: replyMsg.message_type,
+          media_url: replyMsg.media_url,
+        };
+      }
+    }
 
     // Get conversation
     const { data: conv, error: convErr } = await supabase
@@ -97,6 +127,7 @@ Deno.serve(async (req) => {
               to: metaPhone,
               type: "text",
               text: { body: signedText },
+              ...(replyWaMessageId ? { context: { message_id: replyWaMessageId } } : {}),
             }),
           }
         );
@@ -130,7 +161,11 @@ Deno.serve(async (req) => {
             {
               method: "POST",
               headers: { "Content-Type": "application/json", apikey: evolutionApiKey },
-              body: JSON.stringify({ number: metaPhone, text: signedText }),
+              body: JSON.stringify({
+                number: metaPhone,
+                text: signedText,
+                ...(replyWaMessageId ? { quoted: { key: { id: replyWaMessageId } } } : {}),
+              }),
             }
           );
           const evoJson = await evoRes.json().catch(() => ({} as any));
@@ -179,6 +214,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             number: evoPhone,
             text: signedText,
+            ...(replyWaMessageId ? { quoted: { key: { id: replyWaMessageId } } } : {}),
           }),
         }
       );
@@ -247,6 +283,8 @@ Deno.serve(async (req) => {
         channel: "whatsapp",
         wa_message_id: waMessageId,
         wa_remote_jid: metaPhoneDigits ? `${metaPhoneDigits}@s.whatsapp.net` : null,
+        reply_to_id: replyToMessageId || null,
+        reply_to_snapshot: replySnapshot,
       })
       .select("id, content, sender_id, created_at, read_at, message_type, media_url, channel")
       .single();
