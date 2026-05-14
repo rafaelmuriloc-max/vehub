@@ -112,7 +112,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
   return (
     <div className="flex flex-col h-full border-r bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between p-2 md:p-3 bg-muted border-b">
+       <div className="flex items-center justify-between p-2 md:p-3 bg-muted border-b bg-inherit">
         <div className="flex items-center gap-1">
           {onNavigateBack && (
             <Button variant="ghost" size="icon" onClick={onNavigateBack} className="h-8 w-8 md:hidden">
