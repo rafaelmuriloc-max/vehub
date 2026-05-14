@@ -215,7 +215,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-              className={`w-full gap-3 px-2 py-2.5 md:px-3 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors border-b border-border/30 flex items-start justify-start shadow-sm border-dashed ${
+              className={`w-full gap-3 px-2 py-2.5 md:px-3 md:py-3 transition-colors border-b border-border/30 flex items-start justify-start shadow-sm border-dashed bg-orange-100 ${
                 activeId === conv.id ? 'bg-[#F0F2F5] dark:bg-zinc-800' : ''
               }`}
             >
@@ -226,7 +226,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0 text-left">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between font-sans font-extrabold">
                   <span className="text-sm font-medium truncate">{conv.name}</span>
                   {conv.lastMessageAt && (
                     <span className={`text-[11px] shrink-0 ${conv.unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
