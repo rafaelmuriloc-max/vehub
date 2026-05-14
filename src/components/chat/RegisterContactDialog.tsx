@@ -29,7 +29,7 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [clientId, setClientId] = useState<string | null>(null);
-  const [departmentId, setDepartmentId] = useState<string | null>(null);
+  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
   const [clients, setClients] = useState<ClientOpt[]>([]);
   const [departments, setDepartments] = useState<DeptOpt[]>([]);
   const [clientOpen, setClientOpen] = useState(false);
@@ -42,7 +42,7 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
     setPhone(initialPhone || '');
     setEmail('');
     setClientId(null);
-    setDepartmentId(null);
+    setDepartmentIds([]);
     (async () => {
       const [cRes, dRes] = await Promise.all([
         supabase.from('clients').select('id, company_name').order('company_name'),
@@ -54,7 +54,10 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
   }, [open, initialName, initialPhone]);
 
   const selectedClient = useMemo(() => clients.find(c => c.id === clientId), [clients, clientId]);
-  const selectedDept = useMemo(() => departments.find(d => d.id === departmentId), [departments, departmentId]);
+  const selectedDeptsLabel = useMemo(() => {
+    if (departmentIds.length === 0) return '';
+    return departments.filter(d => departmentIds.includes(d.id)).map(d => d.name).join(', ');
+  }, [departments, departmentIds]);
 
   const save = async () => {
     if (!name.trim()) { toast.error('Informe o nome'); return; }
@@ -62,19 +65,19 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
     if (!clientId) { toast.error('Selecione uma empresa'); return; }
     setSaving(true);
     try {
-      if (departmentId) {
-        // Verifica duplicidade pelo telefone normalizado dentro do departamento
-        const { data: existing } = await supabase
-          .from('client_department_contacts')
-          .select('id, contact_phone')
-          .eq('client_id', clientId)
-          .eq('department_id', departmentId);
+      if (departmentIds.length > 0) {
         const phoneNorm = normalize(phone);
-        const dup = (existing || []).some((r: any) => normalize(r.contact_phone) === phoneNorm);
-        if (!dup) {
+        for (const depId of departmentIds) {
+          const { data: existing } = await supabase
+            .from('client_department_contacts')
+            .select('id, contact_phone')
+            .eq('client_id', clientId)
+            .eq('department_id', depId);
+          const dup = (existing || []).some((r: any) => normalize(r.contact_phone) === phoneNorm);
+          if (dup) continue;
           const { error } = await supabase.from('client_department_contacts').insert({
             client_id: clientId,
-            department_id: departmentId,
+            department_id: depId,
             contact_name: name.trim(),
             contact_phone: phone.trim(),
             contact_email: email.trim() || null,
@@ -123,7 +126,7 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cadastrar contato</DialogTitle>
-          <DialogDescription>Vincule este contato a uma empresa e, opcionalmente, a um departamento.</DialogDescription>
+          <DialogDescription>Vincule este contato a uma empresa e, opcionalmente, a um ou mais departamentos.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -175,12 +178,12 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
           </div>
 
           <div className="space-y-1.5">
-            <Label>Departamento (opcional)</Label>
+            <Label>Departamentos (opcional)</Label>
             <Popover open={deptOpen} onOpenChange={setDeptOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
-                  <span className={cn('truncate', !selectedDept && 'text-muted-foreground')}>
-                    {selectedDept?.name || 'Selecione o departamento...'}
+                  <span className={cn('truncate text-left', departmentIds.length === 0 && 'text-muted-foreground')}>
+                    {selectedDeptsLabel || 'Selecione os departamentos...'}
                   </span>
                   <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
                 </Button>
@@ -191,20 +194,23 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
                   <CommandList>
                     <CommandEmpty>Nenhum departamento encontrado.</CommandEmpty>
                     <CommandGroup>
-                      <CommandItem value="__none__" onSelect={() => { setDepartmentId(null); setDeptOpen(false); }}>
-                        <Check className={cn('mr-2 h-4 w-4', !departmentId ? 'opacity-100' : 'opacity-0')} />
-                        <span className="text-muted-foreground">Nenhum</span>
-                      </CommandItem>
-                      {departments.map(d => (
-                        <CommandItem
-                          key={d.id}
-                          value={d.name}
-                          onSelect={() => { setDepartmentId(d.id); setDeptOpen(false); }}
-                        >
-                          <Check className={cn('mr-2 h-4 w-4', departmentId === d.id ? 'opacity-100' : 'opacity-0')} />
-                          {d.name}
-                        </CommandItem>
-                      ))}
+                      {departments.map(d => {
+                        const checked = departmentIds.includes(d.id);
+                        return (
+                          <CommandItem
+                            key={d.id}
+                            value={d.name}
+                            onSelect={() => {
+                              setDepartmentIds(prev =>
+                                prev.includes(d.id) ? prev.filter(x => x !== d.id) : [...prev, d.id]
+                              );
+                            }}
+                          >
+                            <Check className={cn('mr-2 h-4 w-4', checked ? 'opacity-100' : 'opacity-0')} />
+                            {d.name}
+                          </CommandItem>
+                        );
+                      })}
                     </CommandGroup>
                   </CommandList>
                 </Command>
