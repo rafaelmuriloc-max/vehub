@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     // não exista atendente atribuído.
     const { data: claim, error: claimErr } = await supabase
       .from("chat_conversations")
-      .update({ triage_status: "in_progress", triage_turns: 0 })
+      .update({ triage_status: "in_progress" })
       .eq("id", conversation_id)
       .in("triage_status", ["pending", "in_progress", "skipped", "done"])
       .is("assigned_to", null)
