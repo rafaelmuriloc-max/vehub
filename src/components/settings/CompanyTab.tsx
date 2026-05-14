@@ -36,6 +36,8 @@ interface CompanyData {
   service_timezone?: string | null;
   agent_name?: string | null;
   agent_offhours_message?: string | null;
+  triage_enabled?: boolean | null;
+  triage_fallback_department_id?: string | null;
 }
 
 export function CompanyTab() {
@@ -405,6 +407,15 @@ function ServiceHoursCard({
     data.agent_offhours_message ||
       'Olá! Nosso horário de atendimento é {horario}. Retornaremos seu contato no próximo dia útil.\n\n— {nome_agente}',
   );
+  const [triageEnabled, setTriageEnabled] = useState(!!data.triage_enabled);
+  const [fallbackDept, setFallbackDept] = useState<string>(data.triage_fallback_department_id || '');
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    supabase.from('departments').select('id, name').order('name').then(({ data }) => {
+      setDepartments((data as any[]) || []);
+    });
+  }, []);
 
   const save = async () => {
     if (!data.id) return;
@@ -417,6 +428,8 @@ function ServiceHoursCard({
       service_lunch_end: hasLunch ? lunchEnd || null : null,
       agent_name: agentName || null,
       agent_offhours_message: offMsg || null,
+      triage_enabled: triageEnabled,
+      triage_fallback_department_id: fallbackDept || null,
     };
     const { error } = await supabase.from('company_settings').update(patch).eq('id', data.id);
     setSaving(false);
@@ -502,6 +515,35 @@ function ServiceHoursCard({
           <p className="text-xs text-muted-foreground">
             Variáveis disponíveis: <code>{'{nome_agente}'}</code> e <code>{'{horario}'}</code> (ex.: 08:00–12:00 e 13:00–18:00).
           </p>
+        </div>
+
+        <div className="border-t pt-4 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label className="text-sm font-medium">Triagem automática por IA</Label>
+              <p className="text-xs text-muted-foreground">
+                Quando ativada, {agentName || 'o agente virtual'} faz o primeiro atendimento de toda nova conversa, descobre o que o cliente precisa e transfere para um atendente do departamento correto. Quando ligada, a mensagem genérica fora do horário acima é desativada.
+              </p>
+            </div>
+            <Switch checked={triageEnabled} onCheckedChange={setTriageEnabled} disabled={!admin} />
+          </div>
+          <div className="space-y-1">
+            <Label>Departamento padrão (fallback)</Label>
+            <select
+              value={fallbackDept}
+              onChange={e => setFallbackDept(e.target.value)}
+              disabled={!admin || !triageEnabled}
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+            >
+              <option value="">— Selecione —</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Usado quando a IA não consegue identificar o departamento após algumas trocas de mensagem.
+            </p>
+          </div>
         </div>
 
         {admin && (
