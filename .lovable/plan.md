@@ -1,18 +1,49 @@
-## Objetivo
+## Problema
 
-Permitir que o usuário cole (Ctrl/Cmd+V) uma imagem da área de transferência diretamente no campo de mensagem do chat e ela seja adicionada como anexo pendente, pronta para envio.
+A contagem de não lidas (badge nas conversas e badge global do sidebar) inclui mensagens enviadas automaticamente pelo sistema (templates de obrigações, mídias enviadas pela função `whatsapp-send`/`whatsapp-send-media`). Essas mensagens são "saídas" e não deveriam contar como não lidas.
 
-## Mudança
+Hoje o filtro exclui apenas `message_type IN ('text','whatsapp_outgoing')`, mas mensagens automáticas usam `whatsapp`, `whatsapp_document`, `whatsapp_image`, etc. — então caem na contagem.
 
-Arquivo: `src/components/chat/ChatInput.tsx`
+Mensagens recebidas reais sempre têm prefixo `whatsapp_incoming*` (ver `whatsapp-webhook`).
 
-- Adicionar um handler `onPaste` no `<textarea>` da mensagem.
-- Para cada item em `e.clipboardData.items` cujo `kind === 'file'` e `type` começa com `image/`, chamar `getAsFile()`, gerar um nome (`pasted_<timestamp>.<ext>`) e adicioná-lo via `onAddPendingFiles?.([file])`.
-- Quando houver pelo menos uma imagem colada, chamar `e.preventDefault()` para evitar que o browser tente colar o nome do arquivo como texto.
-- Texto colado normalmente continua funcionando (sem `preventDefault` quando não há imagens).
+## Solução
+
+Restringir o que conta como "não lida" a mensagens de entrada do WhatsApp.
+
+### 1. Migration — `get_chat_inbox`
+
+Trocar a CTE `uc` para contar apenas:
+
+```sql
+message_type LIKE 'whatsapp_incoming%'
+AND read_at IS NULL
+AND deleted_at IS NULL
+AND NOT (p_user = ANY(deleted_for))
+```
+
+(remove o `NOT IN ('text','whatsapp_outgoing')` antigo).
+
+### 2. `src/hooks/useUnreadCount.ts`
+
+Mudar a query de mensagens para:
+
+```ts
+.like('message_type', 'whatsapp_incoming%')
+.is('read_at', null)
+```
+
+(remover o `.not('message_type','in', ...)`).
+
+### 3. `src/pages/Chat.tsx` (linha 259)
+
+Mesmo critério no filtro local de marcação como lida:
+
+```ts
+.filter(m => m.message_type?.startsWith('whatsapp_incoming') && !m.read_at)
+```
 
 ## Fora de escopo
 
-- Colar vídeos/PDFs (clipboard normalmente não os expõe; arquivos vão pelo botão Anexar ou drag-drop).
-- Pré-visualização especial — o anexo aparece na mesma faixa de `pendingFiles` já existente.
-- Mudanças no fluxo de envio (`onSendMedia`) — reaproveita o pipeline atual.
+- Notificações sonoras / push (já usam outro caminho).
+- Mensagens internas (`text`) — continuam não contando, como hoje.
+- Backfill: mensagens automáticas antigas que estão `read_at IS NULL` deixam de aparecer no contador automaticamente após a migration.

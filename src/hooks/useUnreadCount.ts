@@ -25,7 +25,7 @@ export function useUnreadCount() {
       .select('id', { count: 'exact', head: true })
       .in('conversation_id', convIds)
       .is('read_at', null)
-      .not('message_type', 'in', '("text","whatsapp_outgoing")');
+      .like('message_type', 'whatsapp_incoming%');
 
     setTotalUnread(count || 0);
   }, [user]);
