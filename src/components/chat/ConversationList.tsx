@@ -102,9 +102,12 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
   const [search, setSearch] = useState('');
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
-  const filtered = conversations.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const q = search.trim().toLowerCase();
+  const filtered = conversations.filter(c => {
+    if (!q) return true;
+    if (c.name.toLowerCase().includes(q)) return true;
+    return (c.companyNames ?? []).some(n => n.toLowerCase().includes(q));
+  });
 
   return (
     <div className="flex flex-col h-full border-r bg-background">
