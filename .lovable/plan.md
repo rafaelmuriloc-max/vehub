@@ -1,15 +1,21 @@
-## Adicionar botão de emojis ao lado do botão de anexos
+## Objetivo
 
-Adicionar um botão Smile (Lucide) ao lado direito do botão "+" (anexos) em `src/components/chat/ChatInput.tsx`, abrindo um Popover com um picker de emojis. Ao clicar em um emoji, ele é inserido na posição do cursor da textarea.
+Fazer com que os botões de opção de anexo (Arquivo, Imagem, etc.) no popover do chat fiquem com fundo laranja ao serem selecionados (clicados/ativos).
 
-### Mudanças
+## Mudança
 
-1. Instalar `emoji-picker-react` (componente leve e popular para React).
-2. Em `ChatInput.tsx`:
-   - Importar `Smile` do `lucide-react` e o `EmojiPicker` (lazy/dynamic import opcional para não pesar o bundle).
-   - Novo estado `emojiOpen`.
-   - Adicionar um `<Popover>` com trigger `Smile` logo após o Popover do "+", antes do `<textarea>`.
-   - Handler `onEmojiClick` insere `emoji.emoji` na posição do cursor (`selectionStart/End`) e mantém o foco no textarea.
-   - Esconder o botão durante a gravação de áudio (mesma lógica do "+").
+Arquivo: `src/components/chat/ChatInput.tsx` (linha 222)
 
-Sem alterações de backend, RLS, schema ou outros componentes.
+Adicionar estados visuais laranja às classes do botão de opção dentro do `PopoverContent`:
+
+- `active:bg-orange-300` — fundo laranja enquanto o botão está sendo clicado
+- `focus:bg-orange-300 focus:outline-none` — fundo laranja quando o botão recebe foco (selecionado via teclado/clique)
+
+Resultado da className final:
+```
+flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent focus:bg-orange-300 active:bg-orange-300 focus:outline-none text-sm transition-colors text-left
+```
+
+## Observação
+
+Se a intenção for um estado "selecionado persistente" (manter laranja após escolher uma opção), seria necessário adicionar estado React para rastrear a opção ativa — confirme se é esse o comportamento desejado ou se o destaque temporário ao clicar/focar é suficiente.
