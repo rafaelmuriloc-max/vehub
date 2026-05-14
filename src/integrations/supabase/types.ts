@@ -1279,6 +1279,7 @@ export type Database = {
           full_name: string | null
           id: string
           job_title: string | null
+          tag_color: string | null
           updated_at: string
           user_id: string
         }
@@ -1289,6 +1290,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           job_title?: string | null
+          tag_color?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1299,6 +1301,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           job_title?: string | null
+          tag_color?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1586,6 +1589,7 @@ export type Database = {
         Args: { p_tab: string; p_user: string }
         Returns: {
           assigned_to: string
+          assigned_to_color: string
           assigned_to_name: string
           avatar_url: string
           client_id: string
