@@ -487,6 +487,45 @@ Deno.serve(async (req) => {
       insertData.media_url = mediaUrl;
     }
 
+    // Detect reply (Evolution wraps quoted info under contextInfo on each message kind)
+    const ctxInfo =
+      messageObj.extendedTextMessage?.contextInfo ||
+      messageObj.imageMessage?.contextInfo ||
+      messageObj.videoMessage?.contextInfo ||
+      messageObj.audioMessage?.contextInfo ||
+      messageObj.documentMessage?.contextInfo ||
+      messageObj.stickerMessage?.contextInfo ||
+      null;
+    const quotedStanzaId: string | null = ctxInfo?.stanzaId || null;
+    if (quotedStanzaId) {
+      try {
+        const { data: original } = await supabase
+          .from("chat_messages")
+          .select("id, sender_id, content, message_type, media_url")
+          .eq("conversation_id", conversationId)
+          .eq("wa_message_id", quotedStanzaId)
+          .maybeSingle();
+        if (original) {
+          insertData.reply_to_id = original.id;
+          let senderFullName = "";
+          if (original.sender_id) {
+            const { data: prof } = await supabase
+              .from("profiles").select("full_name").eq("user_id", original.sender_id).maybeSingle();
+            senderFullName = prof?.full_name || "";
+          }
+          insertData.reply_to_snapshot = {
+            sender_id: original.sender_id,
+            sender_name: senderFullName,
+            content: original.content,
+            message_type: original.message_type,
+            media_url: original.media_url,
+          };
+        }
+      } catch (e) {
+        console.error("reply lookup failed:", e);
+      }
+    }
+
     const { error: msgErr } = await supabase.from("chat_messages").insert(insertData);
 
     if (msgErr) {
