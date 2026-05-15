@@ -20,6 +20,7 @@ import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
 import { sanitizeStorageName } from '@/lib/utils';
+import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
@@ -27,6 +28,7 @@ type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
+type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null };
 
 type CalendarEvent = {
   clientId: string; clientName: string; obligationName: string; deptName: string;
@@ -124,6 +126,8 @@ export default function CalendarView() {
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
@@ -143,13 +147,15 @@ export default function CalendarView() {
     const nextYear = m + 1 > 11 ? y + 1 : y;
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
-    const [instRes, oblRes, cliRes, deptRes, actRes] = await Promise.all([
+    const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
       supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
+      supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
+        .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
     const monthInstances = (instRes.data as Instance[]) || [];
     setInstances(monthInstances);
@@ -157,6 +163,7 @@ export default function CalendarView() {
     setClients((cliRes.data as Client[]) || []);
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
+    setTasks((taskRes.data as TaskRow[]) || []);
     // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
     const ids = monthInstances.map(i => i.id);
     const allComps: Completion[] = [];
