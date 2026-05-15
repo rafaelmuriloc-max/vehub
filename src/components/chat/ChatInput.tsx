@@ -28,9 +28,10 @@ interface ChatInputProps {
     isMine?: boolean;
   } | null;
   onCancelReply?: () => void;
+  keyboardOpen?: boolean;
 }
 
-export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles, replyingTo, onCancelReply }: ChatInputProps) {
+export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles, replyingTo, onCancelReply, keyboardOpen = false }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -285,7 +286,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
             })}
           </div>
         )}
-        <div className="flex items-end gap-2 p-1.5 md:p-2 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
+        <div className={`flex items-end gap-2 p-1.5 md:p-2 ${keyboardOpen ? 'pb-2' : 'pb-[calc(env(safe-area-inset-bottom,0px)+16px)]'}`}>
         {recording ? (
           <>
             <Button
