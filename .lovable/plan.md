@@ -1,23 +1,41 @@
-## Causa raiz
+## Objetivo
 
-A query de tarefas no `PendingTasksPanel` usa embeds do PostgREST (`clients(company_name)`, `departments(name)`, `task_assignments(user_id)`), mas a tabela `tasks` **não possui foreign keys** declaradas para `clients`, `departments` nem `task_assignments`. O PostgREST retorna erro `PGRST200`:
+Permitir que, ao solicitar uma tarefa por dentro da conversa, o usuário escolha mensagens (texto) e arquivos/mídias (PDF, imagem, áudio, vídeo, documento) já presentes na conversa para anexar à tarefa criada.
 
-> Could not find a relationship between 'tasks' and 'departments' in the schema cache
+## UX
 
-Resultado: `data` vem `null`, `rows = []`, `onCountChange(0)` é disparado, o painel fecha automaticamente — mesmo havendo a tarefa "Emitir Nota Fiscal" para POUSADA CAMINHO DOS SONHOS LTDA (cliente vinculado ao telefone do Rafael Murilo, confirmado em DB).
+1. No `TaskRequestForm` (painel "Solicitar tarefa"), adicionar um botão **"Selecionar da conversa"** logo acima da seção atual de Anexos.
+2. Clicar abre um Dialog com a lista das mensagens da conversa atual (mais recentes no topo), cada linha com checkbox, mostrando:
+   - Remetente + horário
+   - Pré-visualização do conteúdo (texto truncado, ou ícone + nome para mídia)
+3. Usuário marca quantas quiser, confirma. As escolhas aparecem como "chips" no formulário, junto dos arquivos manuais já existentes, com botão X para remover individualmente.
+4. Submit cria a tarefa normalmente e então:
+   - **Mídias selecionadas** (`message_type` whatsapp_image / document / audio / video, ou com `media_url`): baixa do bucket `chat-media`, regrava em `documents/tasks/{taskId}/{timestamp}_{nome}` e cria registro em `task_attachments` (`direction='input'`). Mantém uniformidade com o viewer existente.
+   - **Mensagens de texto selecionadas**: compila em um único arquivo `mensagens-da-conversa.txt` (formato: `[hh:mm DD/MM] Remetente: conteúdo`), faz upload em `documents/tasks/{taskId}/` e cria um `task_attachments`.
 
-Confirmei também que o restante do app (página Tasks) usa `.select('*')` + fetches separados — por isso só este painel quebra.
+## Arquivos
 
-## Plano
+**`src/components/chat/MessagePicker.tsx`** (novo)
+- Dialog com lista virtualizada simples + checkboxes.
+- Recebe `conversationId`, busca últimas ~200 mensagens (`chat_messages` order desc, filtra `deleted_at IS NULL`).
+- Resolve `sender_id → full_name` via map de profiles passado por prop ou query.
+- Emite `onConfirm(selected: SelectedItem[])` — cada item: `{ id, kind: 'text'|'media', content, media_url?, file_name?, file_type?, sender_name, created_at }`.
 
-**`src/components/chat/PendingTasksPanel.tsx`** — Reescrever o carregamento para não depender de FKs:
+**`src/components/chat/TaskRequestForm.tsx`**
+- Nova prop opcional `conversationId?: string | null`.
+- Novo state `selectedMessages: SelectedItem[]`.
+- Botão "Selecionar da conversa" (visível só quando `conversationId`).
+- Renderiza chips dos selecionados acima dos arquivos manuais.
+- No `handleSubmit`, após inserir a task:
+  - Para cada mídia: `supabase.storage.from('chat-media').download(path)` (extraído do `media_url` armazenado, que já é uma path relativa ou URL pública — implementar helper `extractChatMediaPath`), depois `upload` em `documents/tasks/{id}/...` e insert em `task_attachments`.
+  - Texto: agrega tudo em uma string, cria `Blob`, upload em `documents/tasks/{id}/mensagens-da-conversa-{timestamp}.txt`, insert em `task_attachments` com `file_type='text/plain'`.
+  - Reusa o tratamento de erro/`failed[]` já existente.
 
-1. Buscar `tasks` apenas com colunas escalares: `select('id,task_number,title,priority,due_date,client_id,created_at,created_by,department_id,status,notify_whatsapp,notify_email,notify_sent_at')` filtrando por `client_id in (ids)` e `status='todo'`.
-2. Em paralelo (após obter `rows`), fazer três queries auxiliares com os ids resultantes:
-   - `clients`: `select('id,company_name').in('id', clientIds)`
-   - `departments`: `select('id,name').in('id', deptIds)` (somente ids não-nulos)
-   - `task_assignments`: `select('task_id,user_id').in('task_id', taskIds)`
-3. Montar maps (`clientMap`, `deptMap`, `assignmentsByTask`) e compor cada `TaskRow` com os campos `clients`, `departments`, `task_assignments` esperados pelo render existente — sem alterar o JSX.
-4. Manter `profileMap` e `loadAttachmentCounts` como já estão.
+**`src/pages/Chat.tsx`**
+- Passa `conversationId={activeConvId}` para `<TaskRequestForm>`.
 
-Sem mudanças de schema, RLS, edge functions ou outros arquivos. O painel volta a aparecer para o Rafael Murilo (e qualquer contato com tarefas vinculadas).
+## Não-mudanças
+
+- Sem migração de schema (reusa `task_attachments` e bucket `documents`).
+- Sem mudanças no viewer de tarefas (`Tasks.tsx`) — anexos aparecem automaticamente.
+- Sem mudança em RLS (políticas atuais já permitem insert por `uploaded_by = auth.uid()`).
