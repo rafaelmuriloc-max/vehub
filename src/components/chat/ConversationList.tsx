@@ -15,6 +15,7 @@ export interface ConversationItem {
   name: string;
   lastMessage: string;
   lastMessageAt: string;
+  lastMessageType?: string | null;
   unreadCount: number;
   isGroup: boolean;
   avatarUrl?: string;
@@ -235,6 +236,22 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                         {conv.companyNames.join(' • ')}
                       </p>
                     )}
+                    {(() => {
+                      const t = (conv.lastMessageType || '').toLowerCase();
+                      let preview = conv.lastMessage || '';
+                      if (t.includes('image')) preview = '📷 Foto';
+                      else if (t.includes('video')) preview = '🎥 Vídeo';
+                      else if (t.includes('audio')) preview = '🎤 Áudio';
+                      else if (t.includes('document')) preview = '📄 Documento';
+                      else if (t.includes('location')) preview = '📍 Localização';
+                      else if (t.includes('contact')) preview = '👤 Contato';
+                      if (!preview) return null;
+                      return (
+                        <p className={`text-[12px] truncate mt-0.5 ${conv.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                          {preview}
+                        </p>
+                      );
+                    })()}
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     {conv.lastMessageAt && (
