@@ -1,46 +1,47 @@
 ## Objetivo
 
-Ao abrir uma conversa, mostrar automaticamente um painel à direita (dentro da `MessageArea`, abaixo do cabeçalho) com cards das tarefas em status "A Fazer" (`todo`) das empresas vinculadas ao contato (telefone) da conversa.
+Replicar no card do `PendingTasksPanel` (painel direito da conversa) todas as opções do card do quadro Kanban em `src/pages/Tasks.tsx`.
 
-## Comportamento
+## Opções do card Kanban a portar
 
-- Painel aparece **somente se houver pelo menos uma tarefa `todo`** para os clientes vinculados ao telefone do contato.
-- Painel é exclusivo da conversa atual: ao trocar de conversa, recarrega.
-- Cada card mostra: empresa (cliente), título, prioridade, prazo (`due_date`), responsáveis. Clicar no card abre `/tasks?id=...` em nova aba.
-- Botão de fechar (X) no cabeçalho do painel; estado `tasksPanelOpen` permite reabrir via novo botão "Tarefas pendentes" no header da conversa (ícone `ListTodo`) — mesmo padrão visual do botão de solicitar tarefa.
-- Quando o usuário abre o painel "Solicitar Tarefa" (`taskPanelOpen`), ele substitui o painel de tarefas pendentes (mesmo slot `rightPanel`). Ao fechar, o painel de tarefas pendentes reaparece se ainda houver itens.
+1. Título da tarefa
+2. Badge de prioridade com as mesmas cores (`priorityColors`/`priorityLabels`)
+3. Data de vencimento com coloração por urgência (`getDueDateColor`)
+4. Nome do cliente
+5. Lista de responsáveis em badges
+6. Botões "→ Aguardando" e "→ Concluído" para mover status (apenas para `todo`/`in_progress`)
+7. Contadores de anexos (input — `Paperclip`; output — `Upload` em `text-primary`)
+8. Botão/label "Para o cliente" com `<input type="file" multiple>` para upload de anexos `direction='output'`
+9. Botão excluir (lixeira `text-destructive`)
+10. Card clicável para abrir o registro completo
 
 ## Implementação
 
-### Novo componente `src/components/chat/PendingTasksPanel.tsx`
-- Props: `phone: string | null`, `onClose: () => void`, `onCountChange?: (n:number)=>void`.
-- Resolve `linkedClientIds`: consulta `client_department_contacts` filtrando por últimos 8 dígitos do telefone (mesma lógica usada em `TaskRequestForm`), coleta `client_id` distintos.
-- Carrega tarefas:
-  ```
-  supabase.from('tasks')
-    .select('id,title,priority,due_date,client_id,clients(company_name),task_assignments(user_id,profiles:profiles!inner(full_name))')
-    .in('client_id', linkedClientIds)
-    .eq('status', 'todo')
-    .order('due_date', { ascending: true, nullsFirst: false });
-  ```
-- Renderiza `ScrollArea` com lista de `Card` (design tokens: `bg-card`, `border`, `text-card-foreground`); badge de prioridade com cores semânticas; ícone de relógio + `due_date` formatado em pt-BR; avatar/nome do(s) responsável(is).
-- Cabeçalho do painel: título "Tarefas pendentes" + contador + botão X (mesmo padrão do `TaskPanel` atual).
-- Empty/loading states adequados.
-- Realtime opcional: subscribe em `tasks` filtrando pelos client_ids para refletir mudanças (manter simples — apenas refetch ao mudar `phone`).
+### `src/components/chat/PendingTasksPanel.tsx`
 
-### `src/pages/Chat.tsx`
-- Novo estado: `pendingTasksCount` (number) e `pendingTasksOpen` (boolean, default `true`).
-- `useEffect([activeConvId])`: resetar `pendingTasksOpen = true` (e o existente `setTaskPanelOpen(false)`).
-- Calcular `rightPanel`:
-  - Se `taskPanelOpen` → mantém atual `TaskPanel` (Solicitar Tarefa).
-  - Senão se `pendingTasksOpen && activeConv?.whatsappPhone` → renderiza `<PendingTasksPanel phone=... onClose={()=>setPendingTasksOpen(false)} onCountChange={setPendingTasksCount} />`.
-  - Senão `null`.
-- Adicionar botão "Tarefas pendentes" no header (junto ao botão Solicitar Tarefa) quando `pendingTasksCount > 0` e painel fechado, exibindo badge com a contagem. Reabre ao clicar.
+- Importar `Card`, `CardContent`, `Badge`, `Button` e ícones `Paperclip`, `Upload`, `Trash2` (lucide).
+- Carregar dados extras junto às tarefas:
+  - `task_assignments(user_id)` → já existe.
+  - Anexos: `supabase.from('task_attachments').select('task_id, direction').in('task_id', taskIds)` e agregar em `attachmentCounts: Record<id, {input, output}>`.
+- Manter a lookup `profileMap` (nomes dos responsáveis).
+- Constantes locais reaproveitadas do Tasks.tsx (cópia simples, sem refator):
+  - `priorityColors`, `priorityLabels`, `statusLabels`, `statusColumns`, `getDueDateColor`.
+- Funções locais:
+  - `moveTask(taskId, newStatus)`: `update tasks.status` e refetch local; quando muda para fora de `todo`, remover da lista (o painel só mostra `todo`).
+  - `uploadOutput(taskId, FileList)`: replicar lógica de `uploadCardOutputFiles` (sanitização NFD/_, path `tasks/{taskId}/{ts}_{safe}`, bucket `documents`, insert `task_attachments` com `direction:'output'`, `uploaded_by: user.id`); atualizar contador local.
+  - `deleteTask(taskId)`: `confirm()` + `delete from tasks` + refetch.
+- Layout do card idêntico ao Kanban:
+  - clique no card abre `/tasks?id={id}` em nova aba (mantém comportamento atual; o quadro abre dialog interno, mas no chat não há esse dialog disponível).
+  - `e.stopPropagation()` em todos os botões/inputs internos.
+- Manter cabeçalho atual do painel (título "Tarefas pendentes" + contador + X).
 
-### Sem mudanças de schema
-- Usa tabelas existentes (`tasks`, `task_assignments`, `clients`, `client_department_contacts`, `profiles`). RLS já permite leitura de tasks para admins/criador/atribuído; para Funcionários não-atribuídos as tarefas simplesmente não aparecerão (comportamento esperado).
+### Sem mudanças em `src/pages/Chat.tsx`, MessageArea ou schema
 
-## Notas de UI
-- Largura do painel mantém `md:w-[420px]` já usado em `MessageArea.rightPanel`.
-- Cards usam apenas tokens semânticos (`bg-card`, `text-muted-foreground`, `border`, `ring-primary/10`).
-- Mobile: reutiliza o mesmo slot — em telas estreitas o painel ocupa `w-full` (já configurado em `MessageArea`).
+- O painel já recebe `phone` e `onClose`; nenhuma prop nova necessária.
+- `useAuth()` para obter `user.id` no upload (já disponível via hook).
+
+## Notas
+
+- Botões de mover status seguem `statusColumns.filter(s => s !== 'todo').slice(0,2)` → mostram "→ Aguardando" e "→ Concluído".
+- Após mover/excluir, atualizar `tasks` local e propagar `onCountChange` com novo total.
+- Cores de prioridade e urgência mantidas idênticas ao Kanban (não trocar por tokens semânticos para garantir paridade visual exata, conforme pedido).
