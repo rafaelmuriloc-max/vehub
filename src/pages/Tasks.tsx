@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
+import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 
 type Task = {
   id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
