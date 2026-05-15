@@ -247,7 +247,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                       else if (t.includes('contact')) preview = '👤 Contato';
                       if (!preview) return null;
                       return (
-                        <p className={`text-[12px] truncate mt-0.5 ${conv.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                        <p className={`text-[12px] truncate mt-0.5 ${conv.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground text-black/65'}`}>
                           {preview}
                         </p>
                       );
