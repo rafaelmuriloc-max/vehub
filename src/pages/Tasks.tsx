@@ -621,6 +621,16 @@ export default function Tasks() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2 col-span-2">
+                <Label>Departamento</Label>
+                <Select value={form.department_id || 'none'} onValueChange={v => setForm({ ...form, department_id: v === 'none' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o departamento" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Sem departamento —</SelectItem>
+                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Atribuir a</Label>
