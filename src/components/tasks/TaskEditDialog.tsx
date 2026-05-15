@@ -168,7 +168,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-2xl lg:max-w-3xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader><DialogTitle>Editar Tarefa</DialogTitle></DialogHeader>
         {loading && <p className="text-sm text-muted-foreground py-6 text-center">Carregando…</p>}
         {!loading && !editing && <p className="text-sm text-muted-foreground py-6 text-center">Tarefa não encontrada.</p>}
