@@ -239,6 +239,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             <span className="hidden md:inline text-sm">Transferir</span>
           </Button>
         )}
+        {!isClosed && onRequestTask && (
+          <Button variant="outline" size="icon" onClick={onRequestTask} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5" title="Solicitar tarefa">
+            <ClipboardPlus className="h-4 w-4" />
+            <span className="hidden md:inline text-sm">Solicitar tarefa</span>
+          </Button>
+        )}
         {whatsappPhone && onRegisterContact && (
           <Button variant="outline" size="icon" onClick={onRegisterContact} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5" title="Cadastrar contato">
             <UserPlus className="h-4 w-4" />
