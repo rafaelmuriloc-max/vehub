@@ -212,6 +212,21 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
         <Label>Descrição</Label>
         <Textarea value={requestForm.description} onChange={e => setRequestForm({ ...requestForm, description: e.target.value })} rows={3} placeholder="Detalhes da solicitação" />
       </div>
+      {!requestTemplate && (
+        <div className="space-y-2">
+          <Label>Departamento</Label>
+          <Select
+            value={requestForm.department_id || 'none'}
+            onValueChange={v => setRequestForm(f => ({ ...f, department_id: v === 'none' ? '' : v }))}
+          >
+            <SelectTrigger><SelectValue placeholder="Selecione o departamento" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">— Sem departamento —</SelectItem>
+              {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2"><Label>Prazo</Label><Input type="date" value={requestForm.due_date} onChange={e => setRequestForm({ ...requestForm, due_date: e.target.value })} /></div>
         <div className="space-y-2">
