@@ -952,6 +952,54 @@ export default function CalendarView() {
                   );
                 })}
               </Tabs>
+              )}
+              {selectedDay && getTasksForDay(selectedDay).length > 0 && (
+                <div className={selectedEvents.length > 0 ? 'mt-6' : ''}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-primary" />
+                    <h4 className="text-sm font-semibold">Tarefas</h4>
+                    <Badge variant="secondary" className="text-[10px] px-1.5">{getTasksForDay(selectedDay).length}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {getTasksForDay(selectedDay).map(t => {
+                      const cli = t.client_id ? clientMap.get(t.client_id) : null;
+                      const dept = t.department_id ? deptMap.get(t.department_id) : null;
+                      const prioColor: Record<string, string> = { low: 'bg-muted text-foreground', medium: 'bg-blue-500 text-white', high: 'bg-orange-500 text-white', urgent: 'bg-red-500 text-white' };
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => setEditingTaskId(t.id)}
+                          className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground truncate">
+                                <span className="text-muted-foreground mr-1">#{String(t.task_number).padStart(6, '0')}</span>
+                                {t.title}
+                              </p>
+                              {cli && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{cli.company_name}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Badge className={`${prioColor[t.priority] || prioColor.medium} border-0 text-[10px]`}>{t.priority}</Badge>
+                            </div>
+                          </div>
+                          {dept && (
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{dept.name}</Badge>
+                              <Badge variant="outline" className="text-[10px]">{t.status}</Badge>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </CardContent>
         </Card>
