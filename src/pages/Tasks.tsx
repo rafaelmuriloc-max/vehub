@@ -67,7 +67,7 @@ export default function Tasks() {
   // Solicitar state
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
-  const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'] });
+  const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'], description: '' });
   const [requestFiles, setRequestFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
@@ -312,7 +312,7 @@ export default function Tasks() {
   function openRequest(tpl: TaskTemplate) {
     setRequestTemplate(tpl);
     const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
-    setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium' });
+    setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium', description: tpl.description || '' });
     setRequestFiles([]);
     setRequestOpen(true);
   }
@@ -324,7 +324,7 @@ export default function Tasks() {
     setUploading(true);
     const { data, error } = await supabase.from('tasks').insert({
       title: requestTemplate.name,
-      description: requestTemplate.description || null,
+      description: requestForm.description || null,
       status: 'todo',
       priority: requestForm.priority,
       due_date: requestForm.due_date || null,
@@ -726,6 +726,10 @@ export default function Tasks() {
                   {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Descrição</Label>
+              <Textarea value={requestForm.description} onChange={e => setRequestForm({ ...requestForm, description: e.target.value })} rows={3} placeholder="Detalhes da solicitação" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Prazo</Label><Input type="date" value={requestForm.due_date} onChange={e => setRequestForm({ ...requestForm, due_date: e.target.value })} /></div>
