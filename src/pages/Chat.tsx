@@ -854,6 +854,7 @@ export default function Chat() {
               <div className="flex-1 min-h-0 overflow-y-auto p-4">
                 <TaskRequestForm
                   defaultClientId={activeConv?.clientId || null}
+                  restrictToPhone={activeConv?.whatsappPhone || null}
                   onCreated={() => setTaskPanelOpen(false)}
                 />
               </div>
