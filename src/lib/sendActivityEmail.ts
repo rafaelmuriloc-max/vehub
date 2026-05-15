@@ -47,7 +47,7 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
   }
 
   // Fetch client info
-  const { data: client } = await supabase.from('clients').select('company_name, contact_email, cnpj').eq('id', clientId).single();
+  const { data: client } = await supabase.from('clients').select('company_name, contact_email, document').eq('id', clientId).single();
 
   // Try department-specific contacts first (multiple allowed)
   let recipientEmails: string[] = [];
@@ -109,7 +109,7 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
 
   const mustacheVars: Record<string, string> = {
     cliente: client.company_name || '',
-    cnpj: formatCnpj((client as any).cnpj),
+    cnpj: formatCnpj((client as any).document),
     tarefa: obligationName,
     vencimento,
     descricao: '',
