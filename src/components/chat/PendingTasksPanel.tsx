@@ -215,7 +215,6 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   }
 
   return (
-    !loading && tasks.length === 0 ? null :
     <>
       <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
