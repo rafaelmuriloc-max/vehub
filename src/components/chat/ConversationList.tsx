@@ -10,6 +10,16 @@ import { ptBR } from 'date-fns/locale';
 import { NewConversationDialog } from './NewConversationDialog';
 import type { ChatTab } from '@/pages/Chat';
 
+function getReadableTextColor(hex: string): string {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 160 ? '#0f172a' : '#ffffff';
+}
+
 export interface ConversationItem {
   id: string;
   name: string;
@@ -270,14 +280,25 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                 {conv.status === 'open' && (
                   <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                     {conv.assignedToName ? (
-                      <Badge
-                        variant="secondary"
-                        className="inline-flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent hover:opacity-90 text-[10px] px-1.5 h-4 gap-1 font-normal text-slate-50 border-0 rounded py-[2px]"
-                        style={{ backgroundColor: conv.assignedToColor || '#D97706' }}
-                      >
-                        <User className="h-2.5 w-2.5" />
-                        {conv.assignedToName.split(' ')[0]}
-                      </Badge>
+                      (() => {
+                        const bg = conv.assignedToColor || '';
+                        const hasColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(bg);
+                        const fg = hasColor ? getReadableTextColor(bg) : undefined;
+                        return (
+                          <Badge
+                            variant="secondary"
+                            className="inline-flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent hover:opacity-90 text-[10px] px-1.5 h-4 gap-1 font-normal border-0 rounded py-[2px]"
+                            style={
+                              hasColor
+                                ? { backgroundColor: bg, color: fg }
+                                : { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' }
+                            }
+                          >
+                            <User className="h-2.5 w-2.5" />
+                            {conv.assignedToName.split(' ')[0]}
+                          </Badge>
+                        );
+                      })()
                     ) : (
                       <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 font-normal">
                         Não atribuído

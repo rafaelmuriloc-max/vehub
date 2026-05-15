@@ -1,29 +1,31 @@
 ## Objetivo
 
-Mostrar um ícone (CheckSquare/clipboard) no canto inferior direito do card do contato na lista de conversas quando aquele contato tiver tarefas pendentes (`tasks.status = 'todo'`).
+Garantir que a tag do atendente atribuído (mostrada no card da conversa em `/chat`) apareça pintada com a cor cadastrada para o usuário em Configurações → Usuários (`profiles.tag_color`), e não sempre na cor laranja padrão.
+
+## Diagnóstico
+
+A infraestrutura já existe:
+- `profiles.tag_color` é editado em `src/components/settings/UsersTab.tsx`.
+- A RPC `get_chat_inbox` já retorna `assigned_to_color = p.tag_color`.
+- `src/pages/Chat.tsx` já mapeia para `assignedToColor`.
+- `src/components/chat/ConversationList.tsx` já aplica `style={{ backgroundColor: conv.assignedToColor || '#D97706' }}` no Badge.
+
+O problema visível: quando o perfil do atendente está sem `tag_color`, o fallback `#D97706` (laranja) é usado para todo mundo, dando a impressão de que a cor "do usuário" não é respeitada. Além disso, o texto é fixo em `text-slate-50`, o que pode ficar ilegível em cores claras escolhidas pelo usuário.
 
 ## Mudanças
 
-### 1. `src/pages/Chat.tsx` (loader de conversas)
+### 1) `src/components/chat/ConversationList.tsx`
+- Remover o fallback fixo `#D97706` do Badge do atendente. Quando `assignedToColor` estiver vazio, usar uma cor neutra do design system (`hsl(var(--muted))`) com texto `hsl(var(--muted-foreground))`, deixando claro visualmente que o usuário ainda não tem cor definida.
+- Calcular dinamicamente a cor do texto a partir do `assignedToColor` (luminância YIQ) para garantir contraste — texto branco em fundos escuros e texto quase-preto em fundos claros. Aplicar via `style.color` no Badge, em vez da classe fixa `text-slate-50`.
+- Pequena utilitária local `getReadableTextColor(hex)` no mesmo arquivo (sem nova dependência).
 
-No loader que monta `items`, após calcular `whatsappCompanyMap` (que já mapeia conv → matchedClientIds via telefone), também guardar um `Map<convId, string[]>` com os `clientIds` matchados. Em paralelo às queries existentes (`clients`, `participants`, `whatsappContactsResult`), juntar todos os clientIds (matched WhatsApp + `conv.client_id` direto) e fazer:
+### 2) Sem alterações de schema, RPC, RLS ou Edge Functions
+A coluna e o pipeline de dados já existem. Nenhuma migração nova é necessária.
 
-```ts
-supabase.from('tasks')
-  .select('client_id')
-  .in('client_id', allClientIds)
-  .eq('status', 'todo')
-```
+## Observação para o usuário
 
-Construir `pendingByClient: Map<clientId, number>`. Para cada conversa, somar contagens dos seus matched clientIds + clientId direto. Adicionar campo `pendingTasksCount` no item.
+Para que cada atendente apareça com cor distinta no card, é preciso definir a cor em **Configurações → Usuários → Editar usuário → Cor da tag**. Usuários sem cor cadastrada ficarão com a tag cinza neutra após esta mudança.
 
-### 2. `src/components/chat/ConversationList.tsx`
+## Resumo do escopo
 
-- Adicionar `pendingTasksCount?: number` em `ConversationItem`.
-- Tornar o `<button>` do card `relative` e renderizar, quando `pendingTasksCount > 0`, um pequeno badge absoluto no canto inferior direito:
-  - ícone `ClipboardList` da `lucide-react`
-  - número de tarefas ao lado (se > 0)
-  - cor primária (laranja do tema), com `title` "N tarefa(s) pendente(s)"
-  - posicionamento `absolute bottom-1.5 right-2` com `pointer-events-none`
-
-Sem mudança de schema/RLS. Tarefas já são visíveis para `authenticated`.
+Apenas ajustes de UI em `ConversationList.tsx`. Nenhuma mudança de lógica de negócio.
