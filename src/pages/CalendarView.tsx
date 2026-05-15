@@ -20,6 +20,7 @@ import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
 import { sanitizeStorageName } from '@/lib/utils';
+import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
@@ -27,6 +28,7 @@ type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
+type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null };
 
 type CalendarEvent = {
   clientId: string; clientName: string; obligationName: string; deptName: string;
@@ -124,6 +126,8 @@ export default function CalendarView() {
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
@@ -143,13 +147,15 @@ export default function CalendarView() {
     const nextYear = m + 1 > 11 ? y + 1 : y;
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
-    const [instRes, oblRes, cliRes, deptRes, actRes] = await Promise.all([
+    const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
       supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
+      supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
+        .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
     const monthInstances = (instRes.data as Instance[]) || [];
     setInstances(monthInstances);
@@ -157,6 +163,7 @@ export default function CalendarView() {
     setClients((cliRes.data as Client[]) || []);
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
+    setTasks((taskRes.data as TaskRow[]) || []);
     // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
     const ids = monthInstances.map(i => i.id);
     const allComps: Completion[] = [];
@@ -245,6 +252,16 @@ export default function CalendarView() {
   function getEventsForDay(day: number) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     return events.filter(e => e.date === dateStr);
+  }
+
+  function getTasksForDay(day: number) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return tasks.filter(t => {
+      if (t.due_date !== dateStr) return false;
+      if (filterDept !== 'all' && t.department_id !== filterDept) return false;
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      return true;
+    });
   }
 
   function getDayDots(day: number) {
@@ -724,6 +741,7 @@ export default function CalendarView() {
                 const visible = summary.slice(0, maxVisible);
                 const remaining = summary.length - maxVisible;
                 const typeColor = { alert: 'bg-green-500', target: 'bg-orange-500', due: 'bg-red-500' };
+                const dayTasks = getTasksForDay(day);
                 return (
                   <div
                     key={i}
@@ -746,13 +764,16 @@ export default function CalendarView() {
                     {isHoliday && (
                       <span className="hidden md:block text-[9px] text-muted-foreground truncate leading-tight mt-0.5">{holidayName}</span>
                     )}
-                    {visible.length > 0 && (
+                    {(visible.length > 0 || dayTasks.length > 0) && (
                       <>
                         {/* Mobile: dots only */}
                         <div className="flex flex-wrap gap-0.5 mt-1 md:hidden">
                           {summary.slice(0, 5).map((item, idx) => (
                             <span key={idx} className={`w-1 h-1 rounded-full ${typeColor[item.type]}`} />
                           ))}
+                          {dayTasks.length > 0 && (
+                            <span className="w-1 h-1 rounded-full bg-primary" />
+                          )}
                           {summary.length > 5 && <span className="text-[8px] text-muted-foreground">+{summary.length - 5}</span>}
                         </div>
                         {/* Desktop: full text */}
@@ -767,6 +788,13 @@ export default function CalendarView() {
                           {remaining > 0 && (
                             <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
                           )}
+                          {dayTasks.length > 0 && (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                              <span className="text-[10px] text-foreground truncate leading-tight">Tarefas</span>
+                              <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{dayTasks.length}</span>
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -780,6 +808,7 @@ export default function CalendarView() {
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary" /> Tarefa</div>
             </div>
           </CardContent>
         </Card>
@@ -807,17 +836,20 @@ export default function CalendarView() {
             )}
           </CardHeader>
           <CardContent>
+            {(() => { return null; })()}
             {!selectedDay ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <CalendarDays className="h-12 w-12 text-muted-foreground/40 mb-3" />
                 <p className="text-muted-foreground text-sm">Selecione um dia no calendário</p>
               </div>
-            ) : selectedEvents.length === 0 ? (
+            ) : selectedEvents.length === 0 && getTasksForDay(selectedDay).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <CheckSquare className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-muted-foreground text-sm">Nenhuma obrigação neste dia</p>
+                <p className="text-muted-foreground text-sm">Nada agendado neste dia</p>
               </div>
             ) : (
+              <>
+              {selectedEvents.length > 0 && (
               <Tabs defaultValue="pending">
                 <TabsList className="mb-4 w-full grid grid-cols-2">
                   <TabsTrigger value="pending">
@@ -920,6 +952,54 @@ export default function CalendarView() {
                   );
                 })}
               </Tabs>
+              )}
+              {selectedDay && getTasksForDay(selectedDay).length > 0 && (
+                <div className={selectedEvents.length > 0 ? 'mt-6' : ''}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-primary" />
+                    <h4 className="text-sm font-semibold">Tarefas</h4>
+                    <Badge variant="secondary" className="text-[10px] px-1.5">{getTasksForDay(selectedDay).length}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {getTasksForDay(selectedDay).map(t => {
+                      const cli = t.client_id ? clientMap.get(t.client_id) : null;
+                      const dept = t.department_id ? deptMap.get(t.department_id) : null;
+                      const prioColor: Record<string, string> = { low: 'bg-muted text-foreground', medium: 'bg-blue-500 text-white', high: 'bg-orange-500 text-white', urgent: 'bg-red-500 text-white' };
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => setEditingTaskId(t.id)}
+                          className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground truncate">
+                                <span className="text-muted-foreground mr-1">#{String(t.task_number).padStart(6, '0')}</span>
+                                {t.title}
+                              </p>
+                              {cli && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{cli.company_name}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Badge className={`${prioColor[t.priority] || prioColor.medium} border-0 text-[10px]`}>{t.priority}</Badge>
+                            </div>
+                          </div>
+                          {dept && (
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{dept.name}</Badge>
+                              <Badge variant="outline" className="text-[10px]">{t.status}</Badge>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -1333,6 +1413,13 @@ export default function CalendarView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <TaskEditDialog
+        open={editingTaskId !== null}
+        onOpenChange={(v) => { if (!v) setEditingTaskId(null); }}
+        taskId={editingTaskId}
+        onSaved={() => loadData()}
+      />
     </div>
   );
 }
