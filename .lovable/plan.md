@@ -1,13 +1,23 @@
-## Mostrar anexos ao abrir card da tarefa
+## Anexos para o cliente nas tarefas
 
-No diálogo de edição da tarefa (`Tasks.tsx`), exibir os documentos previamente anexados.
+Separar anexos da tarefa em duas categorias e adicionar botão de upload direto no card.
 
-### Alterações em `src/pages/Tasks.tsx`
+### Banco
 
-- Novo estado `editAttachments: Array<{ id; file_name; file_url; file_size; file_type }>`.
-- `openEdit(task)`: passa a buscar `task_attachments` via `supabase.from('task_attachments').select('*').eq('task_id', task.id)` e popula `editAttachments`.
-- No diálogo "Editar Tarefa", nova seção **Anexos**:
-  - Lista cada arquivo com ícone `Paperclip`, nome, tamanho e botão de download (gera signed URL do bucket `documents` e abre em nova aba).
-  - Botão remover (ícone `X`) — apaga registro `task_attachments` e o objeto do storage; permitido para o uploader ou admin (alinhado à RLS atual).
-  - Input `<input type="file" multiple>` para anexar novos arquivos à tarefa existente, reutilizando a sanitização de nomes e o caminho `documents/tasks/{taskId}/...` já usado no fluxo "Solicitar".
-- Sem mudanças no card do Kanban (o anexo aparece ao abrir a tarefa, conforme solicitado), sem mudanças de schema/RLS.
+- Adicionar coluna `direction text not null default 'input'` em `task_attachments` com check `('input','output')`.
+- `'input'` = arquivos enviados na solicitação (necessários para realizar a tarefa).
+- `'output'` = arquivos para o cliente (resultado/entrega).
+- Linhas existentes ficam como `input`.
+
+### `src/pages/Tasks.tsx`
+
+- Tipo `TaskAttachment` ganha campo `direction`.
+- Estado por tarefa carregando contadores de anexos `input`/`output` para badges no Kanban.
+- **Card do Kanban**: novo botão pequeno com ícone de upload ("Para o cliente"), abre seletor de arquivo direto. Após upload, badge mostra contagem de anexos `output`.
+- **Diálogo de edição da tarefa**: a seção atual "Anexos" passa a ter duas subseções:
+  - "Necessários para a tarefa" (`input`) — comportamento atual.
+  - "Para enviar ao cliente" (`output`) — mesma UI (lista, download, remover, anexar novos).
+- Upload via card e via diálogo usam o mesmo path `documents/tasks/{taskId}/{ts}_{nome}` com `direction` apropriado.
+- Botão "Solicitar" continua gravando como `input`.
+
+Sem mudanças em RLS (políticas atuais cobrem o novo campo) e sem envio automático ao cliente — apenas armazenamento.

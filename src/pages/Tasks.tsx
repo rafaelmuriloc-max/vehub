@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send, Paperclip, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type Task = {
@@ -23,7 +23,7 @@ type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type TaskTemplate = { id: string; name: string; department_id: string; description: string | null; default_due_days: number };
-type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null };
+type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null; direction?: 'input' | 'output' };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
@@ -63,17 +63,19 @@ export default function Tasks() {
   const [uploading, setUploading] = useState(false);
   const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
   const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, { input: number; output: number }>>({});
 
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    const [{ data: t }, { data: p }, { data: c }, { data: a }, { data: d }, { data: tpl }] = await Promise.all([
+    const [{ data: t }, { data: p }, { data: c }, { data: a }, { data: d }, { data: tpl }, { data: att }] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('user_id, full_name'),
       supabase.from('clients').select('id, company_name').order('company_name'),
       supabase.from('task_assignments').select('task_id, user_id'),
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('task_templates').select('*').order('name'),
+      supabase.from('task_attachments').select('task_id, direction'),
     ]);
     setTasks((t as Task[]) || []);
     setProfiles((p as Profile[]) || []);
@@ -83,6 +85,13 @@ export default function Tasks() {
     const aMap: Record<string, string[]> = {};
     (a || []).forEach((x: any) => { if (!aMap[x.task_id]) aMap[x.task_id] = []; aMap[x.task_id].push(x.user_id); });
     setAssignments(aMap);
+    const cMap: Record<string, { input: number; output: number }> = {};
+    (att || []).forEach((x: any) => {
+      if (!cMap[x.task_id]) cMap[x.task_id] = { input: 0, output: 0 };
+      const dir = (x.direction || 'input') as 'input' | 'output';
+      cMap[x.task_id][dir]++;
+    });
+    setAttachmentCounts(cMap);
   }
 
   function openNew() {
@@ -119,7 +128,7 @@ export default function Tasks() {
     setEditAttachments(prev => prev.filter(a => a.id !== att.id));
   }
 
-  async function uploadEditFiles() {
+  async function uploadEditFiles(direction: 'input' | 'output' = 'input') {
     if (!editing || editNewFiles.length === 0) return;
     setUploading(true);
     const failed: string[] = [];
@@ -131,7 +140,7 @@ export default function Tasks() {
       if (up.error) { failed.push(file.name); continue; }
       const { data, error } = await supabase.from('task_attachments').insert({
         task_id: editing.id, file_url: path, file_name: file.name,
-        file_type: file.type || null, file_size: file.size, uploaded_by: user?.id,
+        file_type: file.type || null, file_size: file.size, uploaded_by: user?.id, direction,
       } as any).select('*').single();
       if (error || !data) { failed.push(file.name); continue; }
       inserted.push(data as TaskAttachment);
@@ -139,8 +148,30 @@ export default function Tasks() {
     setEditAttachments(prev => [...prev, ...inserted]);
     setEditNewFiles([]);
     setUploading(false);
+    loadData();
     if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
     else toast({ title: 'Anexos adicionados' });
+  }
+
+  async function uploadCardOutputFiles(taskId: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const failed: string[] = [];
+    for (const file of Array.from(files)) {
+      const safe = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.\-]+/g, '_');
+      const path = `tasks/${taskId}/${Date.now()}_${safe}`;
+      const up = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || undefined });
+      if (up.error) { failed.push(file.name); continue; }
+      const { error } = await supabase.from('task_attachments').insert({
+        task_id: taskId, file_url: path, file_name: file.name,
+        file_type: file.type || null, file_size: file.size, uploaded_by: user?.id, direction: 'output',
+      } as any);
+      if (error) failed.push(file.name);
+    }
+    setUploading(false);
+    loadData();
+    if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
+    else toast({ title: 'Arquivos para o cliente anexados' });
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -301,7 +332,7 @@ export default function Tasks() {
         </TabsList>
 
         <TabsContent value="kanban">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             {statusColumns.map(col => (
               <div key={col} className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{statusLabels[col]}
@@ -333,6 +364,20 @@ export default function Tasks() {
                             ))}
                           </div>
                         )}
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t mt-1">
+                          <div className="flex gap-1 text-xs text-muted-foreground">
+                            {(attachmentCounts[task.id]?.input || 0) > 0 && (
+                              <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{attachmentCounts[task.id].input}</span>
+                            )}
+                            {(attachmentCounts[task.id]?.output || 0) > 0 && (
+                              <span className="flex items-center gap-0.5 text-primary"><Upload className="h-3 w-3" />{attachmentCounts[task.id].output}</span>
+                            )}
+                          </div>
+                          <label className="cursor-pointer text-xs flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+                            <Upload className="h-3 w-3" />Para o cliente
+                            <input type="file" multiple className="hidden" onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
+                          </label>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
@@ -495,35 +540,39 @@ export default function Tasks() {
               </div>
             </div>
             {editing && (
-              <div className="space-y-2">
-                <Label>Anexos</Label>
-                {editAttachments.length === 0 && <p className="text-xs text-muted-foreground">Nenhum anexo</p>}
-                <div className="space-y-1">
-                  {editAttachments.map(att => (
-                    <div key={att.id} className="flex items-center gap-2 text-sm border rounded-md px-2 py-1.5">
-                      <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <button type="button" onClick={() => downloadAttachment(att)} className="flex-1 text-left truncate hover:underline text-primary">
-                        {att.file_name}
-                      </button>
-                      {att.file_size != null && <span className="text-xs text-muted-foreground shrink-0">{(att.file_size / 1024).toFixed(1)} KB</span>}
-                      {(att.uploaded_by === user?.id || isAdmin) && (
-                        <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeAttachment(att)}>
-                          <X className="h-3 w-3" />
+              <>
+                {(['input', 'output'] as const).map(dir => {
+                  const list = editAttachments.filter(a => (a.direction || 'input') === dir);
+                  return (
+                    <div key={dir} className="space-y-2">
+                      <Label>{dir === 'input' ? 'Anexos da solicitação' : 'Anexos para o cliente'}</Label>
+                      {list.length === 0 && <p className="text-xs text-muted-foreground">Nenhum anexo</p>}
+                      <div className="space-y-1">
+                        {list.map(att => (
+                          <div key={att.id} className="flex items-center gap-2 text-sm border rounded-md px-2 py-1.5">
+                            {dir === 'input' ? <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" /> : <Upload className="h-4 w-4 text-primary shrink-0" />}
+                            <button type="button" onClick={() => downloadAttachment(att)} className="flex-1 text-left truncate hover:underline text-primary">
+                              {att.file_name}
+                            </button>
+                            {att.file_size != null && <span className="text-xs text-muted-foreground shrink-0">{(att.file_size / 1024).toFixed(1)} KB</span>}
+                            {(att.uploaded_by === user?.id || isAdmin) && (
+                              <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeAttachment(att)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <Input type="file" multiple onChange={e => setEditNewFiles(Array.from(e.target.files || []))} className="text-xs" />
+                        <Button type="button" size="sm" disabled={uploading || editNewFiles.length === 0} onClick={() => uploadEditFiles(dir)}>
+                          {uploading ? 'Enviando...' : 'Anexar'}
                         </Button>
-                      )}
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <Input type="file" multiple onChange={e => setEditNewFiles(Array.from(e.target.files || []))} className="text-xs" />
-                  <Button type="button" size="sm" disabled={uploading || editNewFiles.length === 0} onClick={uploadEditFiles}>
-                    {uploading ? 'Enviando...' : 'Anexar'}
-                  </Button>
-                </div>
-                {editNewFiles.length > 0 && (
-                  <p className="text-xs text-muted-foreground">{editNewFiles.length} arquivo(s) selecionado(s)</p>
-                )}
-              </div>
+                  );
+                })}
+              </>
             )}
             <Button type="submit" className="w-full">{editing ? 'Salvar' : 'Criar'}</Button>
           </form>
