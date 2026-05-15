@@ -19,10 +19,11 @@ type Profile = { user_id: string; full_name: string | null };
 
 interface TaskRequestFormProps {
   defaultClientId?: string | null;
+  defaultTemplateId?: string | null;
   onCreated?: () => void;
 }
 
-export function TaskRequestForm({ defaultClientId, onCreated }: TaskRequestFormProps) {
+export function TaskRequestForm({ defaultClientId, defaultTemplateId, onCreated }: TaskRequestFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -60,6 +61,17 @@ export function TaskRequestForm({ defaultClientId, onCreated }: TaskRequestFormP
       setRequestForm(f => ({ ...f, client_id: defaultClientId }));
     }
   }, [defaultClientId]);
+
+  useEffect(() => {
+    if (defaultTemplateId && templates.length > 0) {
+      const tpl = templates.find(t => t.id === defaultTemplateId) || null;
+      if (tpl) {
+        setRequestTemplate(tpl);
+        const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
+        setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0] }));
+      }
+    }
+  }, [defaultTemplateId, templates]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
