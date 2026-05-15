@@ -49,7 +49,6 @@ export function ForwardMessageDialog({ open, onOpenChange, message, currentConve
       const { data } = await supabase
         .from('chat_conversations')
         .select('id, name, avatar_url, whatsapp_phone')
-        .eq('status', 'open')
         .order('updated_at', { ascending: false })
         .limit(200);
       setConvs((data || []) as any);
