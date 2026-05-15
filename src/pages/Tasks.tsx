@@ -17,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 
 type Task = {
-  id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
+  id: string; task_number?: number | null; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
   created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
   notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null;
@@ -257,6 +257,9 @@ export default function Tasks() {
 
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.company_name || '';
   const getProfileName = (uid: string) => profiles.find(p => p.user_id === uid)?.full_name || 'Sem nome';
+  const getDepartmentName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
+  const formatTaskNumber = (n: number | null | undefined) => n ? `#${String(n).padStart(6, '0')}` : '#------';
+  const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const getDeptName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
 
   function openNewTemplate() {
@@ -409,18 +412,34 @@ export default function Tasks() {
                   {tasks.filter(t => t.status === col).map(task => (
                     <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(task)}>
                       <CardContent className="p-3 space-y-2">
-                        <p className="font-medium text-sm">{task.title}</p>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
                           <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority]}</Badge>
-                          {task.due_date && <span className={`text-xs ${getDueDateColor(task.due_date)}`}>{new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
                         </div>
-                        {task.client_id && <p className="text-xs text-muted-foreground">{getClientName(task.client_id)}</p>}
+                        <p className="font-medium text-sm leading-snug">{task.title}</p>
+                        {(task.client_id || task.department_id) && (
+                          <p className="text-xs text-muted-foreground">
+                            {task.client_id && <span>{getClientName(task.client_id)}</span>}
+                            {task.client_id && task.department_id && <span> · </span>}
+                            {task.department_id && <span>{getDepartmentName(task.department_id)}</span>}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground">
+                          Solicitado em {formatDateTime(task.created_at)}
+                          {task.created_by && <> por <span className="font-medium">{getProfileName(task.created_by)}</span></>}
+                        </p>
                         {assignments[task.id]?.length > 0 && (
-                          <div className="flex gap-1 flex-wrap">
+                          <div className="flex gap-1 flex-wrap items-center">
+                            <span className="text-[11px] text-muted-foreground">Atribuído:</span>
                             {assignments[task.id].map(uid => (
                               <Badge key={uid} variant="outline" className="text-xs">{getProfileName(uid)}</Badge>
                             ))}
                           </div>
+                        )}
+                        {task.due_date && (
+                          <p className={`text-xs ${getDueDateColor(task.due_date)}`}>
+                            Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          </p>
                         )}
                         {col !== 'done' && (
                           <div className="flex gap-1 pt-1">

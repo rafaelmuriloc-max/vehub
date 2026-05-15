@@ -16,11 +16,16 @@ interface Props {
 
 interface TaskRow {
   id: string;
+  task_number?: number | null;
   title: string;
   priority: 'low' | 'medium' | 'high' | 'urgent' | string;
   due_date: string | null;
   client_id: string | null;
+  created_at: string;
+  created_by: string | null;
+  department_id: string | null;
   clients: { company_name: string } | null;
+  departments?: { name: string } | null;
   task_assignments: { user_id: string }[];
   status?: string;
   notify_whatsapp?: boolean;
@@ -47,6 +52,9 @@ function getDueDateColor(due: string | null) {
   if (diff <= 3) return 'text-orange-500';
   return 'text-emerald-600';
 }
+
+const formatTaskNumber = (n: number | null | undefined) => n ? `#${String(n).padStart(6, '0')}` : '#------';
+const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   const { user } = useAuth();
@@ -100,7 +108,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
         }
         const { data } = await supabase
           .from('tasks')
-          .select('id,title,priority,due_date,client_id,status,notify_whatsapp,notify_email,notify_sent_at,clients(company_name),task_assignments(user_id)')
+          .select('id,task_number,title,priority,due_date,client_id,created_at,created_by,department_id,status,notify_whatsapp,notify_email,notify_sent_at,clients(company_name),departments(name),task_assignments(user_id)')
           .in('client_id', ids)
           .eq('status', 'todo')
           .order('due_date', { ascending: true, nullsFirst: false });
@@ -108,7 +116,10 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           const rows = (data as any as TaskRow[]) || [];
           setTasks(rows);
           onCountChangeRef.current?.(rows.length);
-          const userIds = [...new Set(rows.flatMap(r => (r.task_assignments || []).map(a => a.user_id)))];
+          const userIds = [...new Set([
+            ...rows.flatMap(r => (r.task_assignments || []).map(a => a.user_id)),
+            ...rows.map(r => r.created_by).filter(Boolean) as string[],
+          ])];
           if (userIds.length) {
             const { data: profs } = await supabase
               .from('profiles')
@@ -236,24 +247,34 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
                 onClick={() => window.open(`/tasks?id=${task.id}`, '_blank')}
               >
                 <CardContent className="p-3 space-y-2">
-                  <p className="font-medium text-sm">{task.title}</p>
-                  <div className="flex flex-wrap gap-1 items-center">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
                     <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority] || task.priority}</Badge>
-                    {task.due_date && (
-                      <span className={`text-xs ${getDueDateColor(task.due_date)}`}>
-                        {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
-                      </span>
-                    )}
                   </div>
-                  {task.clients?.company_name && (
-                    <p className="text-xs text-muted-foreground">{task.clients.company_name}</p>
+                  <p className="font-medium text-sm leading-snug">{task.title}</p>
+                  {(task.clients?.company_name || task.departments?.name) && (
+                    <p className="text-xs text-muted-foreground">
+                      {task.clients?.company_name && <span>{task.clients.company_name}</span>}
+                      {task.clients?.company_name && task.departments?.name && <span> · </span>}
+                      {task.departments?.name && <span>{task.departments.name}</span>}
+                    </p>
                   )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Solicitado em {formatDateTime(task.created_at)}
+                    {task.created_by && <> por <span className="font-medium">{profileMap[task.created_by] || 'Sem nome'}</span></>}
+                  </p>
                   {assignees.length > 0 && (
-                    <div className="flex gap-1 flex-wrap">
+                    <div className="flex gap-1 flex-wrap items-center">
+                      <span className="text-[11px] text-muted-foreground">Atribuído:</span>
                       {assignees.map(a => (
                         <Badge key={a.user_id} variant="outline" className="text-xs">{profileMap[a.user_id] || 'Sem nome'}</Badge>
                       ))}
                     </div>
+                  )}
+                  {task.due_date && (
+                    <p className={`text-xs ${getDueDateColor(task.due_date)}`}>
+                      Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                    </p>
                   )}
                   <div className="flex gap-1 pt-1">
                     {statusColumns.filter(s => s !== 'todo').slice(0, 2).map(s => (
