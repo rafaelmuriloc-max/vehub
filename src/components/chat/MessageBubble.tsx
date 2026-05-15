@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
  import { CheckCheck, MapPin, Contact, ArrowDownToLine, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw, Forward } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AudioMessage } from './AudioMessage';
@@ -143,6 +144,33 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   const isMobile = useIsMobile();
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
+  const bubbleNodeRef = useRef<HTMLDivElement | null>(null);
+  const [sheetPos, setSheetPos] = useState<{ top: number; placement: 'below' | 'above' } | null>(null);
+
+  const setBubbleNode = (el: HTMLDivElement | null) => {
+    bubbleNodeRef.current = el;
+    if (typeof bubbleRef === 'function') bubbleRef(el);
+  };
+
+  // Lock body scroll & compute sheet position when mobile menu opens
+  useEffect(() => {
+    if (!isMobile || !menuOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const rect = bubbleNodeRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const estimated = 280;
+      const placement: 'below' | 'above' = spaceBelow >= estimated || spaceBelow >= rect.top ? 'below' : 'above';
+      setSheetPos({
+        top: placement === 'below' ? rect.bottom + 8 : rect.top - 8,
+        placement,
+      });
+    }
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isMobile, menuOpen]);
 
   useEffect(() => {
     return () => {
@@ -175,6 +203,12 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   const handleContextMenu = (e: React.MouseEvent) => {
     if (longPressFired.current) e.preventDefault();
+  };
+
+  const closeMobileMenu = () => setMenuOpen(false);
+  const runAndClose = (fn?: () => void) => {
+    if (fn) fn();
+    setMenuOpen(false);
   };
 
   const retryTranscription = async () => {
