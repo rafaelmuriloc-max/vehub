@@ -107,6 +107,7 @@ export type Database = {
           deleted_for: string[]
           edited_at: string | null
           id: string
+          is_forwarded: boolean
           media_url: string | null
           message_type: string
           read_at: string | null
@@ -128,6 +129,7 @@ export type Database = {
           deleted_for?: string[]
           edited_at?: string | null
           id?: string
+          is_forwarded?: boolean
           media_url?: string | null
           message_type?: string
           read_at?: string | null
@@ -149,6 +151,7 @@ export type Database = {
           deleted_for?: string[]
           edited_at?: string | null
           id?: string
+          is_forwarded?: boolean
           media_url?: string | null
           message_type?: string
           read_at?: string | null
