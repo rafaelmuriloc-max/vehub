@@ -248,7 +248,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                   </div>
                 </div>
                 {conv.status === 'open' && (
-                  <div className="mt-1">
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                     {conv.assignedToName ? (
                       <Badge
                         variant="secondary"
@@ -263,12 +263,10 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                         Não atribuído
                       </Badge>
                     )}
-                  </div>
-                )}
-                {((activeTab === 'in_progress' && (conv.waitingSince || conv.lastMessageAt)) ||
-                  (conv.awaitingFirstReply && conv.lastMessageAt)) && (
-                  <div className="mt-1">
-                    <WaitingBadge since={conv.waitingSince || conv.lastMessageAt} />
+                    {((activeTab === 'in_progress' && (conv.waitingSince || conv.lastMessageAt)) ||
+                      (conv.awaitingFirstReply && conv.lastMessageAt)) && (
+                      <WaitingBadge since={conv.waitingSince || conv.lastMessageAt} />
+                    )}
                   </div>
                 )}
               </div>
