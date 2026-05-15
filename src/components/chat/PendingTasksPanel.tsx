@@ -159,8 +159,8 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
       }
     }
     setBusyId(null);
-    setTasks(prev => {
-      const next = prev.filter(t => t.id !== taskId);
+    setTasks(curr => {
+      const next = curr.filter(t => t.id !== taskId);
       onCountChangeRef.current?.(next.length);
       return next;
     });
