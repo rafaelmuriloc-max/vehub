@@ -1,21 +1,20 @@
-## Capturar departamento na criação/edição da tarefa
+## Problema
 
-O card já exibe o departamento quando `task.department_id` está preenchido, mas hoje só os templates definem esse campo. Tarefas criadas pelo botão "Nova Tarefa" e pelo formulário de solicitação sem template ficam sem departamento, então a informação não aparece.
+O painel de Tarefas Pendentes não abre automaticamente em conversas que têm tarefas (ex.: Rafael), porque o gate de renderização depende de uma contagem que só é calculada quando o painel já está montado.
 
-### Mudanças
+Em `src/pages/Chat.tsx` (linha 868):
+```tsx
+pendingTasksOpen && pendingTasksCount > 0 && activeConv?.whatsappPhone
+  ? <PendingTasksPanel ... onCountChange={setPendingTasksCount} />
+  : null
+```
 
-1. **`src/pages/Tasks.tsx` — diálogo Nova/Editar Tarefa**
-   - Adicionar campo `department_id` no estado `form` (init `''`).
-   - Popular `form.department_id` em `openEdit` (a partir de `task.department_id`).
-   - Inserir um `<Select>` "Departamento" no grid da Dialog (ao lado de Status/Prioridade/Prazo/Cliente), listando `departments`.
-   - Incluir `department_id: form.department_id || null` no `payload` do `handleSave` (insert e update).
+`pendingTasksCount` inicia em 0 e só é atualizado pelo `onCountChange` disparado dentro do próprio `PendingTasksPanel` após carregar as tarefas. Como o painel nunca monta, a busca nunca acontece.
 
-2. **`src/components/chat/TaskRequestForm.tsx` — solicitar sem template**
-   - Adicionar `department_id` ao estado do formulário (default vazio; preenchido pelo template quando selecionado).
-   - Mostrar `<Select>` "Departamento" quando não houver template (mantendo o atual quando vier do template).
-   - Usar `requestTemplate?.department_id || form.department_id || null` no insert.
+## Correção
 
-### Não muda
-- Schema (campo `department_id` já existe em `tasks`).
-- Layout do card (já renderiza "Empresa · Departamento").
-- RLS, edge functions, fluxo de notificação.
+1. **`src/pages/Chat.tsx`** — Remover o `pendingTasksCount > 0` do gate de renderização. O painel deve ser montado sempre que `pendingTasksOpen && activeConv?.whatsappPhone`. A contagem continua sendo usada apenas para que o usuário possa fechá-lo manualmente sem que ele reabra (já tratado pelo `setPendingTasksOpen(false)` em `onClose`).
+
+2. **`src/components/chat/PendingTasksPanel.tsx`** — Após o carregamento, se `tasks.length === 0`, chamar `onClose()` e retornar `null`. Isso preserva o comportamento já acordado ("sem tarefas a janela fecha") sem depender do gate externo na primeira renderização.
+
+Nenhuma mudança em backend, RLS ou schema. Apenas correção de fluxo de UI.
