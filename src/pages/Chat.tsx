@@ -779,7 +779,10 @@ export default function Chat() {
   const showMessages = isMobile ? !!activeConvId : true;
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-background md:h-screen">
+    <div
+      className="flex flex-col w-full overflow-hidden bg-background md:h-screen"
+      style={isMobile ? { height: viewportHeight } : undefined}
+    >
       <EnableNotificationsBanner />
       <div className="flex flex-1 min-h-0 w-full overflow-hidden">
       {showList && (
