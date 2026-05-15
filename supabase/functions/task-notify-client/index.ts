@@ -130,14 +130,14 @@ Deno.serve(async (req) => {
     if (task.client_id) {
       const { data: c } = await admin
         .from("clients")
-        .select("contact_phone, contact_email, company_name, cnpj")
+        .select("contact_phone, contact_email, company_name, document")
         .eq("id", task.client_id)
         .maybeSingle();
       if (c) {
         if (!phone) phone = c.contact_phone || null;
         if (!email) email = c.contact_email || null;
         clientName = c.company_name || "";
-        clientCnpj = formatCnpj(c.cnpj);
+        clientCnpj = formatCnpj((c as any).document);
       }
     }
 
