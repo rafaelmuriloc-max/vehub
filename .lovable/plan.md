@@ -1,24 +1,23 @@
-## Mover configuração de notificação para o cadastro da tarefa
+## Objetivo
+Permitir excluir uma tarefa diretamente do card no Kanban e da linha na visão de lista em `/tasks`.
 
-A configuração de envio por WhatsApp/E-mail deve ficar no **cadastro de tarefa** (template) e não na solicitação/edição da instância. Cada tarefa criada herda os valores do template.
+## Mudanças em `src/pages/Tasks.tsx`
 
-### Banco
+1. **Nova função `deleteTask(id)`**
+   - Confirmação: "Excluir esta tarefa? Esta ação não pode ser desfeita."
+   - Apaga dependências antes da tarefa para evitar erro de FK:
+     - `task_attachments` (where `task_id = id`)
+     - `task_assignments` (where `task_id = id`)
+   - `supabase.from('tasks').delete().eq('id', id)`
+   - Toast de sucesso/erro e `loadTasks()`.
 
-Adicionar em `task_templates`:
-- `notify_whatsapp boolean not null default false`
-- `notify_email boolean not null default false`
-- `notify_message text`
-- `notify_email_subject text`
+2. **Botão no card do Kanban**
+   - Ícone `Trash2` (variant `ghost`, size `icon`, `h-7 w-7`) ao lado do botão de editar já existente no card.
+   - `onClick` chama `deleteTask(task.id)` com `e.stopPropagation()` para não disparar o drag/abrir edição.
 
-Manter as colunas equivalentes em `tasks` (já criadas) — elas guardam o snapshot usado pela edge function `task-notify-client` no momento da conclusão.
+3. **Botão na visão lista**
+   - Na coluna de ações de cada linha, adicionar `Trash2` ao lado do botão editar, mesmo handler.
 
-### `src/pages/Tasks.tsx`
-
-- **Diálogo de template** ("Nova Tarefa Cadastrada"): adicionar a seção "Notificar cliente ao concluir" com os dois switches, textarea de mensagem e (se e-mail ativo) campo de assunto. Persistir no insert/update de `task_templates`.
-- **`handleRequest` (Solicitar)**: ao criar a `task`, copiar `notify_whatsapp`, `notify_email`, `notify_message`, `notify_email_subject` do template selecionado.
-- **Diálogo de edição da tarefa**: remover a seção de notificação adicionada no passo anterior. A tarefa continua disparando a notificação ao mudar status para `done` (via `triggerNotify`), usando os valores já armazenados na própria `tasks`.
-- O `templateForm` ganha os 4 campos e o `openNewTemplate` / `openEditTemplate` os hidratam.
-
-### Edge function
-
-Sem mudanças — `task-notify-client` continua lendo de `tasks`.
+## Observações
+- Apenas exclusão da instância de `tasks` (não mexe no `task_templates`).
+- Sem mudanças de schema, edge functions ou RLS.
