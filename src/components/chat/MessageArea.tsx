@@ -73,6 +73,7 @@ interface MessageAreaProps {
   onRegisterContact?: () => void;
   conversationId?: string | null;
   onRequestTask?: () => void;
+  rightPanel?: React.ReactNode;
 }
 
 function formatDateLabel(dateStr: string) {
