@@ -11,15 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, GripVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type Task = {
   id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'in_review' | 'done';
   priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
-  created_by: string | null; created_at: string;
+  created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
 };
 type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
+type Department = { id: string; name: string };
+type TaskTemplate = { id: string; name: string; department_id: string; description: string | null; default_due_days: number };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Em Andamento', in_review: 'Em Revisão', done: 'Concluído' };
 const statusColumns: string[] = ['todo', 'in_progress', 'in_review', 'done'];
@@ -30,6 +33,8 @@ export default function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
@@ -43,18 +48,33 @@ export default function Tasks() {
     due_date: '', client_id: '', assigned_to: [] as string[],
   });
 
+  // Templates state
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
+  const [templateForm, setTemplateForm] = useState({ name: '', department_id: '', description: '', default_due_days: '7' });
+  const [templateFilterDept, setTemplateFilterDept] = useState<string>('all');
+
+  // Solicitar state
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
+  const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'] });
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    const [{ data: t }, { data: p }, { data: c }, { data: a }] = await Promise.all([
+    const [{ data: t }, { data: p }, { data: c }, { data: a }, { data: d }, { data: tpl }] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('user_id, full_name'),
       supabase.from('clients').select('id, company_name').order('company_name'),
       supabase.from('task_assignments').select('task_id, user_id'),
+      supabase.from('departments').select('id, name').order('name'),
+      supabase.from('task_templates').select('*').order('name'),
     ]);
     setTasks((t as Task[]) || []);
     setProfiles((p as Profile[]) || []);
     setClients((c as Client[]) || []);
+    setDepartments((d as Department[]) || []);
+    setTemplates((tpl as TaskTemplate[]) || []);
     const aMap: Record<string, string[]> = {};
     (a || []).forEach((x: any) => { if (!aMap[x.task_id]) aMap[x.task_id] = []; aMap[x.task_id].push(x.user_id); });
     setAssignments(aMap);
@@ -120,6 +140,74 @@ export default function Tasks() {
 
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.company_name || '';
   const getProfileName = (uid: string) => profiles.find(p => p.user_id === uid)?.full_name || 'Sem nome';
+  const getDeptName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
+
+  function openNewTemplate() {
+    setEditingTemplate(null);
+    setTemplateForm({ name: '', department_id: '', description: '', default_due_days: '7' });
+    setTemplateDialogOpen(true);
+  }
+  function openEditTemplate(tpl: TaskTemplate) {
+    setEditingTemplate(tpl);
+    setTemplateForm({ name: tpl.name, department_id: tpl.department_id, description: tpl.description || '', default_due_days: String(tpl.default_due_days) });
+    setTemplateDialogOpen(true);
+  }
+  async function handleSaveTemplate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!templateForm.name || !templateForm.department_id) {
+      toast({ title: 'Preencha nome e departamento', variant: 'destructive' }); return;
+    }
+    const payload = {
+      name: templateForm.name,
+      department_id: templateForm.department_id,
+      description: templateForm.description || null,
+      default_due_days: parseInt(templateForm.default_due_days) || 7,
+    };
+    const { error } = editingTemplate
+      ? await supabase.from('task_templates').update(payload).eq('id', editingTemplate.id)
+      : await supabase.from('task_templates').insert({ ...payload, created_by: user?.id });
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    setTemplateDialogOpen(false); loadData();
+    toast({ title: editingTemplate ? 'Tarefa atualizada' : 'Tarefa cadastrada' });
+  }
+  async function deleteTemplate(id: string) {
+    if (!confirm('Excluir esta tarefa do cadastro?')) return;
+    const { error } = await supabase.from('task_templates').delete().eq('id', id);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    loadData(); toast({ title: 'Removida' });
+  }
+
+  function openRequest(tpl: TaskTemplate) {
+    setRequestTemplate(tpl);
+    const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
+    setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium' });
+    setRequestOpen(true);
+  }
+  async function handleRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!requestTemplate || !requestForm.client_id) {
+      toast({ title: 'Selecione o cliente', variant: 'destructive' }); return;
+    }
+    const { data, error } = await supabase.from('tasks').insert({
+      title: requestTemplate.name,
+      description: requestTemplate.description || null,
+      status: 'todo',
+      priority: requestForm.priority,
+      due_date: requestForm.due_date || null,
+      client_id: requestForm.client_id,
+      department_id: requestTemplate.department_id,
+      template_id: requestTemplate.id,
+      created_by: user?.id,
+    } as any).select('id').single();
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    if (requestForm.assigned_to.length > 0 && data?.id) {
+      await supabase.from('task_assignments').insert(requestForm.assigned_to.map(uid => ({ task_id: data.id, user_id: uid })));
+    }
+    setRequestOpen(false); loadData();
+    toast({ title: 'Tarefa solicitada' });
+  }
+
+  const filteredTemplates = templates.filter(t => templateFilterDept === 'all' || t.department_id === templateFilterDept);
 
   const filteredTasks = tasks.filter(t => {
     return (filterStatus === 'all' || t.status === filterStatus) && (filterPriority === 'all' || t.priority === filterPriority);
@@ -136,6 +224,7 @@ export default function Tasks() {
         <TabsList>
           <TabsTrigger value="kanban">Kanban</TabsTrigger>
           <TabsTrigger value="list">Lista</TabsTrigger>
+          <TabsTrigger value="catalog">Cadastro</TabsTrigger>
         </TabsList>
 
         <TabsContent value="kanban">
@@ -224,6 +313,60 @@ export default function Tasks() {
             {filteredTasks.length === 0 && <p className="text-center py-8 text-muted-foreground">Nenhuma tarefa encontrada</p>}
           </div>
         </TabsContent>
+
+        <TabsContent value="catalog" className="space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <Select value={templateFilterDept} onValueChange={setTemplateFilterDept}>
+              <SelectTrigger className="w-64"><SelectValue placeholder="Filtrar por departamento" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os departamentos</SelectItem>
+                {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {isAdmin && (
+              <Button onClick={openNewTemplate}><Plus className="mr-2 h-4 w-4" />Nova Tarefa Cadastrada</Button>
+            )}
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Departamento</TableHead>
+                    <TableHead>Prazo (dias)</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTemplates.map(tpl => (
+                    <TableRow key={tpl.id}>
+                      <TableCell className="font-medium">{tpl.name}</TableCell>
+                      <TableCell>{getDeptName(tpl.department_id)}</TableCell>
+                      <TableCell>{tpl.default_due_days}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm max-w-md truncate">{tpl.description}</TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button size="sm" variant="default" onClick={() => openRequest(tpl)}>
+                          <Send className="h-3 w-3 mr-1" />Solicitar
+                        </Button>
+                        {isAdmin && (
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => openEditTemplate(tpl)}><Pencil className="h-4 w-4" /></Button>
+                            <Button size="sm" variant="ghost" onClick={() => deleteTemplate(tpl.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredTemplates.length === 0 && (
+                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhuma tarefa cadastrada</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -279,6 +422,75 @@ export default function Tasks() {
               </div>
             </div>
             <Button type="submit" className="w-full">{editing ? 'Salvar' : 'Criar'}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template CRUD Dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{editingTemplate ? 'Editar Tarefa Cadastrada' : 'Nova Tarefa Cadastrada'}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSaveTemplate} className="space-y-4">
+            <div className="space-y-2"><Label>Nome *</Label><Input value={templateForm.name} onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })} required /></div>
+            <div className="space-y-2">
+              <Label>Departamento *</Label>
+              <Select value={templateForm.department_id} onValueChange={v => setTemplateForm({ ...templateForm, department_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>Descrição</Label><Textarea value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Prazo de entrega (dias)</Label><Input type="number" min="1" value={templateForm.default_due_days} onChange={e => setTemplateForm({ ...templateForm, default_due_days: e.target.value })} /></div>
+            <Button type="submit" className="w-full">{editingTemplate ? 'Salvar' : 'Cadastrar'}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Solicitar Dialog */}
+      <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Solicitar: {requestTemplate?.name}</DialogTitle></DialogHeader>
+          <form onSubmit={handleRequest} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Cliente *</Label>
+              <Select value={requestForm.client_id} onValueChange={v => setRequestForm({ ...requestForm, client_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label>Prazo</Label><Input type="date" value={requestForm.due_date} onChange={e => setRequestForm({ ...requestForm, due_date: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Prioridade</Label>
+                <Select value={requestForm.priority} onValueChange={v => setRequestForm({ ...requestForm, priority: v as any })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Baixa</SelectItem>
+                    <SelectItem value="medium">Média</SelectItem>
+                    <SelectItem value="high">Alta</SelectItem>
+                    <SelectItem value="urgent">Urgente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Atribuir a (opcional — vazio = livre para o departamento)</Label>
+              <div className="flex flex-wrap gap-2">
+                {profiles.map(p => (
+                  <Badge key={p.user_id} variant={requestForm.assigned_to.includes(p.user_id) ? 'default' : 'outline'}
+                    className="cursor-pointer" onClick={() => {
+                      setRequestForm(f => ({ ...f, assigned_to: f.assigned_to.includes(p.user_id) ? f.assigned_to.filter(x => x !== p.user_id) : [...f.assigned_to, p.user_id] }));
+                    }}>
+                    {p.full_name || 'Sem nome'}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <Button type="submit" className="w-full">Solicitar Tarefa</Button>
           </form>
         </DialogContent>
       </Dialog>
