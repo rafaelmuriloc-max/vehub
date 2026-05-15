@@ -1,19 +1,36 @@
 ## Problema
 
-O cabeçalho mobile (com botão de menu e título da página) está sendo renderizado por trás da barra de status do iOS quando o app é aberto como PWA standalone (modo "Adicionar à Tela de Início").
+Mensagens enviadas pela Gisele (agente de triagem) aparecem no chat interno assinadas com "Márcio".
 
-Causa: o `index.html` define `viewport-fit=cover` + `apple-mobile-web-app-status-bar-style=black-translucent`, o que faz a barra de status ficar transparente e sobreposta ao conteúdo. Mas o header sticky em `AppLayout.tsx` (`h-12` fixa, sem padding superior) não respeita `env(safe-area-inset-top)`, então fica escondido sob a barra de status.
+**Causa:** o edge function `chat-triage-agent` chama `whatsapp-send-text` sem `senderId`. O fallback escolhe o primeiro admin (Márcio) e grava `chat_messages.sender_id = <id do Márcio>`. No frontend, `MessageArea` resolve `sender_name` via `profiles.full_name` a partir do `sender_id`, então mostra "Márcio". O cliente vê correto porque o WhatsApp recebe `*Gisele:*` no corpo.
 
-## Correção
+## Solução
 
-Em `src/components/AppLayout.tsx`, no `<header>` mobile:
+Persistir o nome do agente na própria mensagem e usá-lo no UI quando presente.
 
-- Adicionar `padding-top: env(safe-area-inset-top)` via classe utilitária inline (`style={{ paddingTop: 'env(safe-area-inset-top)' }}`).
-- Manter `h-12` como altura do conteúdo do header (botão + título); o padding vai empurrar o conteúdo para baixo da barra de status.
-- Aplicar a mesma lógica no header da página de Chat se necessário (verificar `src/pages/Chat.tsx`, mas Chat já tem layout próprio em 100dvh).
+### Banco
 
-Também garantir que o `main` da rota `/chat` (que usa `h-[100dvh]`) não tenha problema similar — caso tenha, aplicar safe-area no topo do header interno do Chat.
+1. Migration: `ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS agent_name text;`
 
-## Resultado esperado
+### Edge function `whatsapp-send-text`
 
-Em PWA iOS standalone, o cabeçalho aparece logo abaixo da barra de status (relógio/bateria), sem sobreposição. Em navegador normal e desktop, nada muda (`env(safe-area-inset-top)` = 0).
+2. Aceitar campo opcional `agentName` no body.
+3. Incluir `agent_name: agentName ?? null` no `insert` em `chat_messages`.
+
+### Edge function `chat-triage-agent`
+
+4. Nas duas chamadas a `whatsapp-send-text` (`/ask` e transferência) passar `agentName: agentName` (já tem a variável `agentName` resolvida via `company_settings.agent_name`).
+
+### Frontend
+
+5. `src/pages/Chat.tsx`: nas duas queries de mensagens (carga inicial linha ~237 e realtime ~300) selecionar também `agent_name` e usar:
+   ```ts
+   sender_name: m.agent_name || nameMap.get(m.sender_id) || 'Usuário'
+   ```
+6. `src/components/chat/MessageArea.tsx`: incluir `agent_name?: string` no tipo `Message` (somente para tipagem; a substituição é feita em Chat.tsx). Também propagar em `reply_to_snapshot` se necessário (não obrigatório nesta correção).
+
+### Resultado
+
+- Mensagens da Gisele exibem "Gisele" (ou o `agent_name` configurado) no balão verde do chat interno.
+- Mensagens humanas continuam exibindo o nome do profile.
+- WhatsApp do cliente continua igual.

@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
       const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-        body: JSON.stringify({ conversationId: conversation_id, text, senderName: agentName }),
+        body: JSON.stringify({ conversationId: conversation_id, text, senderName: agentName, agentName }),
       });
       if (!sendRes.ok) {
         console.error("triage send-text failed:", sendRes.status, await sendRes.text());
@@ -268,7 +268,7 @@ Deno.serve(async (req) => {
     const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({ conversationId: conversation_id, text: transferText, senderName: agentName }),
+      body: JSON.stringify({ conversationId: conversation_id, text: transferText, senderName: agentName, agentName }),
     });
     if (!sendRes.ok) console.error("triage transfer send-text failed:", sendRes.status, await sendRes.text());
 

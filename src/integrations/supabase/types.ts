@@ -99,6 +99,7 @@ export type Database = {
       }
       chat_messages: {
         Row: {
+          agent_name: string | null
           channel: string
           content: string
           conversation_id: string
@@ -121,6 +122,7 @@ export type Database = {
           wa_remote_jid: string | null
         }
         Insert: {
+          agent_name?: string | null
           channel?: string
           content: string
           conversation_id: string
@@ -143,6 +145,7 @@ export type Database = {
           wa_remote_jid?: string | null
         }
         Update: {
+          agent_name?: string | null
           channel?: string
           content?: string
           conversation_id?: string

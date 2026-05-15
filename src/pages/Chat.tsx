@@ -234,7 +234,7 @@ export default function Chat() {
     const loadMessages = async () => {
       const { data } = await supabase
         .from('chat_messages')
-        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for, channel, wa_message_id, wa_remote_jid, reply_to_id, reply_to_snapshot, transcription, transcription_status, is_forwarded')
+        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for, channel, wa_message_id, wa_remote_jid, reply_to_id, reply_to_snapshot, transcription, transcription_status, is_forwarded, agent_name')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -254,7 +254,7 @@ export default function Chat() {
 
       setMessages(ordered.map(m => ({
         ...m,
-        sender_name: nameMap.get(m.sender_id) || 'Usuário',
+        sender_name: m.agent_name || nameMap.get(m.sender_id) || 'Usuário',
       })));
 
       const unreadIds = ordered
@@ -306,7 +306,7 @@ export default function Chat() {
               if (prev.some(m => m.id === newMsg.id)) return prev;
               return [...prev, {
                 ...newMsg,
-                sender_name: prof?.full_name || 'Usuário',
+                sender_name: newMsg.agent_name || prof?.full_name || 'Usuário',
               }];
             });
 
