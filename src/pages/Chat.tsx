@@ -16,7 +16,8 @@ import { AttachSocietyDocumentsDialog } from '@/components/chat/AttachSocietyDoc
 import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
 import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
-import { X } from 'lucide-react';
+import { PendingTasksPanel } from '@/components/chat/PendingTasksPanel';
+import { X, ListTodo } from 'lucide-react';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -496,7 +497,13 @@ export default function Chat() {
   const [attachSocietyOpen, setAttachSocietyOpen] = useState(false);
   const [registerContactOpen, setRegisterContactOpen] = useState(false);
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
-  useEffect(() => { setTaskPanelOpen(false); }, [activeConvId]);
+  const [pendingTasksOpen, setPendingTasksOpen] = useState(true);
+  const [pendingTasksCount, setPendingTasksCount] = useState(0);
+  useEffect(() => {
+    setTaskPanelOpen(false);
+    setPendingTasksOpen(true);
+    setPendingTasksCount(0);
+  }, [activeConvId]);
 
   const sendLocation = async (lat: number, lng: number) => {
     if (!user || !activeConvId || isClosed) return;
@@ -858,7 +865,13 @@ export default function Chat() {
                   />
                 </div>
               </>
-            ) : null}
+            ) : (pendingTasksOpen && activeConv?.whatsappPhone ? (
+              <PendingTasksPanel
+                phone={activeConv.whatsappPhone}
+                onClose={() => setPendingTasksOpen(false)}
+                onCountChange={setPendingTasksCount}
+              />
+            ) : null)}
           />
           </div>
         </div>
