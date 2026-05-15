@@ -1,12 +1,27 @@
 ## Objetivo
 
-Aplicar a cor cadastrada do usuário (`profiles.tag_color`) na tag "Atribuído" também nos cards de tarefas pendentes exibidos dentro da conversa (`PendingTasksPanel`), igual ao que já foi feito no Kanban de tarefas.
+No mobile, o painel "Tarefas pendentes" deve abrir como um overlay logo abaixo do header da conversa (área do retângulo vermelho da imagem) — e não ocupando a tela toda. Quando houver mais de uma tarefa, mostrar apenas um card por vez, com botões de navegação (anterior / próximo) e indicador de posição.
 
-## Mudanças (apenas `src/components/chat/PendingTasksPanel.tsx`)
+## Mudanças
 
-1. Trocar o `select('user_id, full_name')` em `profiles` por `select('user_id, full_name, tag_color')`.
-2. Substituir o `profileMap: Record<string, string>` por `Record<string, { name: string; color: string | null }>` e atualizar o `setProfileMap` correspondente.
-3. Ajustar os usos de `profileMap[uid]` (no "Solicitado em ... por ..." e no badge de atribuído) para ler `.name`.
-4. Reescrever o `<Badge variant="outline">` do atribuído usando o mesmo padrão do `Tasks.tsx`: helper local `getReadableTextColor` + componente `AssigneeBadge` (cor de fundo do `tag_color`, texto com contraste YIQ; fallback `outline` quando o usuário não tem cor).
+### 1. `src/components/chat/MessageArea.tsx` — posicionamento mobile do `rightPanel`
 
-Sem mudanças de schema, RPC ou edge functions.
+Hoje o `rightPanel` é renderizado como `<aside class="w-full md:w-[420px] ...">` ao lado da área de mensagens. No mobile isso ocupa a tela inteira da conversa.
+
+- Detectar mobile via `useIsMobile()` (já usado em `Chat.tsx`).
+- No mobile, renderizar o `rightPanel` como overlay absoluto dentro do container da conversa, abaixo do header (`top: header height ~56px`), ocupando largura total, com `max-h` ~70% da altura da conversa, fundo `bg-background`, borda inferior, sombra e `z-30`. Manter o conteúdo rolável internamente (o painel já tem `ScrollArea`).
+- No desktop (md+), manter o comportamento atual (`aside` lateral de 420px).
+
+### 2. `src/components/chat/PendingTasksPanel.tsx` — navegação 1 a 1 no mobile
+
+- Adicionar `useIsMobile()`.
+- Adicionar estado `currentIndex` (default 0). Resetar para 0 sempre que `tasks.length` mudar ou quando o índice ficar fora do range.
+- No mobile:
+  - Renderizar apenas `tasks[currentIndex]` (mesmo card que já existe hoje).
+  - Acima da lista, mostrar uma barra de navegação compacta: botão `‹` (ChevronLeft), texto "X de Y", botão `›` (ChevronRight). Botões desabilitados nos extremos.
+  - Manter o cabeçalho atual ("Tarefas pendentes" + contagem + botão fechar).
+- No desktop: manter o comportamento atual (lista vertical de todos os cards).
+
+Ícones `ChevronLeft` / `ChevronRight` do `lucide-react`.
+
+Sem mudanças em schema, RPCs, edge functions ou em outras telas.

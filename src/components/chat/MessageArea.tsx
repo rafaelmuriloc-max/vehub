@@ -298,7 +298,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
         )}
       </div>
 
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div className="flex-1 flex min-h-0 overflow-hidden relative">
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
       {/* Messages */}
       <div
@@ -394,7 +394,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
       </div>
         </div>
         {rightPanel && (
-          <aside className="w-full md:w-[420px] border-l bg-background flex flex-col shrink-0 min-h-0 overflow-hidden">
+          <aside className="absolute top-0 inset-x-0 z-30 max-h-[75%] bg-background border-b shadow-lg flex flex-col overflow-hidden md:static md:w-[420px] md:max-h-none md:border-b-0 md:border-l md:shadow-none md:shrink-0 md:min-h-0">
             {rightPanel}
           </aside>
         )}

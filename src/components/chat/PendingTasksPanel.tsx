@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
-import { X, ListTodo, Paperclip, Upload, Trash2 } from 'lucide-react';
+import { X, ListTodo, Paperclip, Upload, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 function getReadableTextColor(hex: string): string {
   let h = hex.replace('#', '');
@@ -84,14 +85,20 @@ const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { 
 
 export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, { name: string; color: string | null }>>({});
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, { input: number; output: number }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const onCountChangeRef = useRef(onCountChange);
   onCountChangeRef.current = onCountChange;
+
+  useEffect(() => {
+    if (currentIndex >= tasks.length) setCurrentIndex(0);
+  }, [tasks.length, currentIndex]);
 
   const loadAttachmentCounts = useCallback(async (taskIds: string[]) => {
     if (taskIds.length === 0) { setAttachmentCounts({}); return; }
@@ -285,6 +292,31 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           <X className="h-4 w-4" />
         </Button>
       </div>
+      {isMobile && tasks.length > 1 && (
+        <div className="flex items-center justify-between border-b px-3 py-2 shrink-0 bg-muted/40">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {currentIndex + 1} de {tasks.length}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={currentIndex >= tasks.length - 1}
+            onClick={() => setCurrentIndex((i) => Math.min(tasks.length - 1, i + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-3 space-y-2">
           {loading && (
@@ -295,7 +327,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
               Nenhuma tarefa "A Fazer" para as empresas vinculadas a este contato.
             </p>
           )}
-          {!loading && tasks.map((task) => {
+          {!loading && (isMobile ? tasks.slice(currentIndex, currentIndex + 1) : tasks).map((task) => {
             const assignees = task.task_assignments || [];
             return (
               <Card
