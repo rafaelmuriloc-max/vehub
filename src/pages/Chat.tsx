@@ -169,6 +169,7 @@ export default function Chat() {
         assignedToColor: (conv as any).assigned_to_color || null,
         waitingSince: conv.waiting_since || null,
         totalWaitSeconds: conv.total_wait_seconds || 0,
+        awaitingFirstReply: (conv as any).awaiting_first_reply ?? false,
       };
     });
 
