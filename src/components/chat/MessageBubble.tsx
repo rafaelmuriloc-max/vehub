@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
- import { CheckCheck, MapPin, Contact, ArrowBigDownDash, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw, Forward } from 'lucide-react';
+ import { CheckCheck, MapPin, Contact, ArrowDownToLine, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw, Forward } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AudioMessage } from './AudioMessage';
 import {
@@ -265,8 +265,8 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         {(onEdit || onDeleteForMe || onDeleteForAll || onReply || onForward) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-               <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10 rotate-180">
-                 <ArrowBigDownDash className="h-3.5 w-3.5 text-muted-foreground" />
+               <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10">
+                 <ArrowDownToLine className="h-3.5 w-3.5 text-muted-foreground" />
                </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="bottom">
