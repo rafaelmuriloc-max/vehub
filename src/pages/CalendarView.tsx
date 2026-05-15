@@ -741,6 +741,7 @@ export default function CalendarView() {
                 const visible = summary.slice(0, maxVisible);
                 const remaining = summary.length - maxVisible;
                 const typeColor = { alert: 'bg-green-500', target: 'bg-orange-500', due: 'bg-red-500' };
+                const dayTasks = getTasksForDay(day);
                 return (
                   <div
                     key={i}
@@ -763,13 +764,16 @@ export default function CalendarView() {
                     {isHoliday && (
                       <span className="hidden md:block text-[9px] text-muted-foreground truncate leading-tight mt-0.5">{holidayName}</span>
                     )}
-                    {visible.length > 0 && (
+                    {(visible.length > 0 || dayTasks.length > 0) && (
                       <>
                         {/* Mobile: dots only */}
                         <div className="flex flex-wrap gap-0.5 mt-1 md:hidden">
                           {summary.slice(0, 5).map((item, idx) => (
                             <span key={idx} className={`w-1 h-1 rounded-full ${typeColor[item.type]}`} />
                           ))}
+                          {dayTasks.length > 0 && (
+                            <span className="w-1 h-1 rounded-full bg-primary" />
+                          )}
                           {summary.length > 5 && <span className="text-[8px] text-muted-foreground">+{summary.length - 5}</span>}
                         </div>
                         {/* Desktop: full text */}
@@ -783,6 +787,13 @@ export default function CalendarView() {
                           ))}
                           {remaining > 0 && (
                             <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
+                          )}
+                          {dayTasks.length > 0 && (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                              <span className="text-[10px] text-foreground truncate leading-tight">Tarefas</span>
+                              <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{dayTasks.length}</span>
+                            </div>
                           )}
                         </div>
                       </>
