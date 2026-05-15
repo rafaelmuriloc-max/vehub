@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Paperclip, X } from 'lucide-react';
+import { Paperclip, X, MessageSquare } from 'lucide-react';
+import { MessagePicker, type PickedItem } from './MessagePicker';
 
 type TaskTemplate = {
   id: string; name: string; department_id: string; description: string | null; default_due_days: number;
@@ -21,10 +22,11 @@ interface TaskRequestFormProps {
   defaultClientId?: string | null;
   defaultTemplateId?: string | null;
   restrictToPhone?: string | null;
+  conversationId?: string | null;
   onCreated?: () => void;
 }
 
-export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictToPhone, onCreated }: TaskRequestFormProps) {
+export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictToPhone, conversationId, onCreated }: TaskRequestFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -45,6 +47,8 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
     department_id: '',
   });
   const [requestFiles, setRequestFiles] = useState<File[]>([]);
+  const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -147,11 +151,73 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
         toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
       }
     }
+    if (data?.id && pickedItems.length > 0) {
+      const failed: string[] = [];
+      const mediaItems = pickedItems.filter((i) => i.kind === 'media' && i.media_url);
+      const textItems = pickedItems.filter((i) => i.kind === 'text');
+      // Media: download from public URL, re-upload to documents bucket
+      for (const item of mediaItems) {
+        try {
+          const resp = await fetch(item.media_url!);
+          if (!resp.ok) { failed.push(item.media_url!.split('/').pop() || 'mídia'); continue; }
+          const blob = await resp.blob();
+          const rawName = decodeURIComponent((item.media_url || '').split('/').pop() || 'arquivo').replace(/^\d+_/, '');
+          const safe = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.\-]+/g, '_');
+          const path = `tasks/${data.id}/${Date.now()}_${safe}`;
+          const up = await supabase.storage.from('documents').upload(path, blob, { contentType: blob.type || undefined });
+          if (up.error) { failed.push(rawName); continue; }
+          const ins = await supabase.from('task_attachments').insert({
+            task_id: data.id,
+            file_url: path,
+            file_name: rawName,
+            file_type: blob.type || null,
+            file_size: blob.size,
+            uploaded_by: user?.id,
+            direction: 'input',
+          } as any);
+          if (ins.error) failed.push(rawName);
+        } catch {
+          failed.push('mídia da conversa');
+        }
+      }
+      // Text messages: bundle into a single .txt
+      if (textItems.length > 0) {
+        const lines = textItems
+          .slice()
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))
+          .map((i) => {
+            const dt = new Date(i.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            return `[${dt}] ${i.sender_name}:\n${i.content || '(sem conteúdo)'}\n`;
+          });
+        const content = `Mensagens selecionadas da conversa\n\n${lines.join('\n')}`;
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const fileName = `mensagens-da-conversa-${Date.now()}.txt`;
+        const path = `tasks/${data.id}/${fileName}`;
+        const up = await supabase.storage.from('documents').upload(path, blob, { contentType: 'text/plain' });
+        if (up.error) { failed.push(fileName); }
+        else {
+          const ins = await supabase.from('task_attachments').insert({
+            task_id: data.id,
+            file_url: path,
+            file_name: fileName,
+            file_type: 'text/plain',
+            file_size: blob.size,
+            uploaded_by: user?.id,
+            direction: 'input',
+          } as any);
+          if (ins.error) failed.push(fileName);
+        }
+      }
+      if (failed.length > 0) {
+        toast({ title: 'Alguns itens da conversa falharam', description: failed.join(', '), variant: 'destructive' });
+      }
+    }
     setUploading(false);
     setRequestTemplate(null);
     setRequestCustomTitle('');
     setRequestForm({ client_id: defaultClientId || '', due_date: '', assigned_to: [], priority: 'medium', description: '', department_id: '' });
     setRequestFiles([]);
+    setPickedItems([]);
     toast({ title: 'Tarefa solicitada' });
     onCreated?.();
   }
@@ -259,6 +325,36 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       </div>
       <div className="space-y-2">
         <Label className="flex items-center gap-2"><Paperclip className="h-4 w-4" />Anexos (documentos/imagens)</Label>
+        {conversationId && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => setPickerOpen(true)}
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Selecionar da conversa{pickedItems.length > 0 ? ` (${pickedItems.length})` : ''}
+          </Button>
+        )}
+        {pickedItems.length > 0 && (
+          <div className="space-y-1">
+            {pickedItems.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 text-sm bg-muted px-2 py-1 rounded">
+                <span className="truncate">
+                  <span className="text-muted-foreground text-xs mr-1">{p.kind === 'media' ? '📎' : '💬'}</span>
+                  {p.kind === 'media'
+                    ? decodeURIComponent((p.media_url || '').split('/').pop() || 'arquivo').replace(/^\d+_/, '')
+                    : (p.content?.slice(0, 60) || '(sem conteúdo)') + ((p.content || '').length > 60 ? '…' : '')}
+                  <span className="text-muted-foreground text-xs ml-1">— {p.sender_name}</span>
+                </span>
+                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setPickedItems((prev) => prev.filter((x) => x.id !== p.id))}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
         <Input
           type="file"
           multiple
@@ -285,6 +381,15 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       <Button type="submit" className="w-full" disabled={uploading}>
         {uploading ? 'Enviando…' : 'Solicitar Tarefa'}
       </Button>
+      {conversationId && (
+        <MessagePicker
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          conversationId={conversationId}
+          initialSelectedIds={pickedItems.map((p) => p.id)}
+          onConfirm={(items) => setPickedItems(items)}
+        />
+      )}
     </form>
   );
 }
