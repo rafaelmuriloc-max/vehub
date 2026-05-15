@@ -259,14 +259,14 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         className={`group relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-[12px] py-1.5 rounded-lg shadow-sm ${
           showOnRight
            ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none'
-           : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none'
+            : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none text-left'
         }`}
       >
         {(onEdit || onDeleteForMe || onDeleteForAll || onReply || onForward) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
                <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10">
-                 <ArrowDownToLine className="h-3.5 w-3.5 text-muted-foreground" />
+                <ArrowDownToLine className="lucide lucide-arrow-down-to-line h-3.5 w-3.5 text-muted-foreground mx-0 my-0 mr-0 px-0" />
                </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="bottom">
@@ -387,9 +387,9 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
               </Button>
             </div>
           </div>
-         ) : content && !hideTextContent && mediaKind !== 'document' ? (
-           <p className="text-sm whitespace-pre-wrap break-words">
-            {content}
+          ) : content && !hideTextContent && mediaKind !== 'document' ? (
+            <p className="text-sm whitespace-pre-wrap break-words text-left px-[10px] mx-0">
+              {content}
             {editedAt && <span className="text-[10px] text-muted-foreground ml-1 italic">(editada)</span>}
           </p>
         ) : null}
