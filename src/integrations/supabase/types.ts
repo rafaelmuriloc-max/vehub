@@ -1484,16 +1484,51 @@ export type Database = {
           },
         ]
       }
+      task_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_due_days: number
+          department_id: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_due_days?: number
+          department_id: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_due_days?: number
+          department_id?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           client_id: string | null
           created_at: string
           created_by: string | null
+          department_id: string | null
           description: string | null
           due_date: string | null
           id: string
           priority: Database["public"]["Enums"]["task_priority"]
           status: Database["public"]["Enums"]["task_status"]
+          template_id: string | null
           title: string
           updated_at: string
         }
@@ -1501,11 +1536,13 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          department_id?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
+          template_id?: string | null
           title: string
           updated_at?: string
         }
@@ -1513,11 +1550,13 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          department_id?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
+          template_id?: string | null
           title?: string
           updated_at?: string
         }

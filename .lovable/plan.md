@@ -1,30 +1,36 @@
-## Problema
+## Objetivo
+Adicionar uma aba **"Cadastro"** dentro de `/tasks` para registrar modelos de tarefas pontuais por departamento. As tarefas cadastradas aparecem como atalho/templates que, quando solicitadas, criam um card no Kanban existente.
 
-Ao reabrir um chamado fechado (ex.: Armazém Baudoro), o cronômetro continua somando o tempo da abertura anterior em vez de zerar.
+## Mudanças no banco
 
-**Causa:** `reopenTicket` em `src/pages/Chat.tsx` atualiza apenas `status`, `closed_at` e `assigned_to`. Os campos `waiting_since` e `total_wait_seconds` permanecem com os valores anteriores ao fechamento, então o `WaitingBadge` (alimentado por `waiting_since`) exibe o tempo acumulado de antes.
+1. Nova tabela `task_templates`:
+   - `name` (texto)
+   - `department_id` (uuid → departments)
+   - `description` (texto)
+   - `default_due_days` (int) — quantos dias para entrega a partir da solicitação
+   - RLS: admin gerencia (insert/update/delete); todos autenticados visualizam.
 
-## Solução
+2. Adicionar coluna `department_id` (uuid, nullable) e `template_id` (uuid, nullable) à tabela `tasks` para vincular tarefas instanciadas ao template e departamento.
 
-Zerar o cronômetro nas transições de estado do chamado, em uma única alteração no frontend (sem migration — colunas já existem):
+## Mudanças no frontend
 
-1. **`reopenTicket`** (`src/pages/Chat.tsx` ~linha 577): no `update`, incluir
-   - `waiting_since: new Date().toISOString()` (cronômetro reinicia agora)
-   - `total_wait_seconds: 0`
+### `src/pages/Tasks.tsx`
+- Envolver conteúdo em `Tabs` com 3 abas: **Quadro**, **Lista**, **Cadastro** (Quadro+Lista podem ficar como sub-toggle como já está, ou virar tabs também — opção mais simples: tabs no topo `Tarefas` (atual) e `Cadastro de Tarefas`).
+- Aba **Cadastro**:
+  - Listagem de templates agrupados/filtráveis por departamento (Tabela: Nome, Departamento, Prazo padrão, Ações).
+  - Botão "Nova tarefa" → Dialog com campos: Nome, Departamento (select), Descrição (textarea), Prazo de entrega (dias, número).
+  - Editar/Excluir templates (somente admin).
+  - Botão "Solicitar" em cada template abre dialog rápido para escolher: Cliente (Combobox obrigatório), Responsável (multi-select opcional — vazio = livre para departamento), data de entrega (pré-preenchida com hoje + `default_due_days`). Ao confirmar, cria registro em `tasks` (status `todo`) + `task_assignments` se houver responsáveis. A tarefa criada já aparece no Kanban da aba Quadro.
 
-2. **`closeTicket`** (~linha 545): no `update`, incluir
-   - `waiting_since: null`
-   - `total_wait_seconds: 0`
-   
-   Garante estado limpo ao fechar e evita carry-over caso o chamado seja reaberto futuramente por outra rota.
+### Card do Kanban
+- Mostrar badge do departamento quando `department_id` presente.
 
-## Resultado
+## Permissões / regras
+- Cliente é **obrigatório** ao solicitar uma tarefa a partir do template.
+- Responsável é opcional (deixar vazio = qualquer um do departamento pode pegar).
+- Apenas admin cria/edita/exclui templates; qualquer autenticado pode "Solicitar" (criar instância).
 
-- Fechar chamado → cronômetro zerado e ocultado.
-- Reabrir chamado → cronômetro recomeça do zero a partir do momento da reabertura.
-- Comportamento de "espera" durante o atendimento normal (não atribuído + mensagem do cliente) continua funcionando via trigger `trg_chat_msg_start_waiting`.
-
-## Detalhes técnicos
-
-- Sem migration. Apenas edição em `src/pages/Chat.tsx`.
-- A política de RLS atual (participante na conversa) já cobre o update adicional dos dois campos.
+## Fora do escopo
+- Não criar atividades/checklists nos templates (diferente das obrigações).
+- Não há geração em lote nem recorrência — são solicitações pontuais.
+- Sem migração de tarefas existentes.
