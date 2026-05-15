@@ -1,0 +1,1 @@
+UPDATE public.tasks SET status = 'in_progress' WHERE status = 'in_review';
