@@ -1413,6 +1413,13 @@ export default function CalendarView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <TaskEditDialog
+        open={editingTaskId !== null}
+        onOpenChange={(v) => { if (!v) setEditingTaskId(null); }}
+        taskId={editingTaskId}
+        onSaved={() => loadData()}
+      />
     </div>
   );
 }
