@@ -336,23 +336,31 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
                 onClick={() => setEditingTaskId(task.id)}
               >
                 <CardContent className="p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
-                    <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority] || task.priority}</Badge>
-                  </div>
+                  {!isMobile && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
+                      <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority] || task.priority}</Badge>
+                    </div>
+                  )}
                   <p className="font-medium text-sm leading-snug">{task.title}</p>
-                  {(task.clients?.company_name || task.departments?.name) && (
+                  {isMobile ? (
+                    task.clients?.company_name && (
+                      <p className="text-xs text-muted-foreground">{task.clients.company_name}</p>
+                    )
+                  ) : (task.clients?.company_name || task.departments?.name) && (
                     <p className="text-xs text-muted-foreground">
                       {task.clients?.company_name && <span>{task.clients.company_name}</span>}
                       {task.clients?.company_name && task.departments?.name && <span> · </span>}
                       {task.departments?.name && <span>{task.departments.name}</span>}
                     </p>
                   )}
-                  <p className="text-[11px] text-muted-foreground">
-                    Solicitado em {formatDateTime(task.created_at)}
-                    {task.created_by && <> por <span className="font-medium">{profileMap[task.created_by]?.name || 'Sem nome'}</span></>}
-                  </p>
-                  {assignees.length > 0 && (
+                  {!isMobile && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Solicitado em {formatDateTime(task.created_at)}
+                      {task.created_by && <> por <span className="font-medium">{profileMap[task.created_by]?.name || 'Sem nome'}</span></>}
+                    </p>
+                  )}
+                  {!isMobile && assignees.length > 0 && (
                     <div className="flex gap-1 flex-wrap items-center">
                       <span className="text-[11px] text-muted-foreground">Atribuído:</span>
                       {assignees.map(a => (
@@ -364,11 +372,12 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
                       ))}
                     </div>
                   )}
-                  {task.due_date && (
+                  {!isMobile && task.due_date && (
                     <p className={`text-xs ${getDueDateColor(task.due_date)}`}>
                       Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                     </p>
                   )}
+                  {!isMobile && (
                   <div className="flex gap-1 pt-1">
                     {statusColumns.filter(s => s !== 'todo').slice(0, 2).map(s => (
                       <Button
@@ -382,6 +391,8 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
                       </Button>
                     ))}
                   </div>
+                  )}
+                  {!isMobile && (
                   <div className="flex items-center justify-between gap-2 pt-1 border-t mt-1">
                     <div className="flex gap-1 text-xs text-muted-foreground">
                       {(attachmentCounts[task.id]?.input || 0) > 0 && (
@@ -411,6 +422,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
                       </Button>
                     </div>
                   </div>
+                  )}
                 </CardContent>
               </Card>
             );
