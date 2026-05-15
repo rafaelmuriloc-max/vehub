@@ -188,14 +188,19 @@ export default function Tasks() {
     const payload = {
       title: form.title, description: form.description || null, status: form.status,
       priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
+      notify_whatsapp: form.notify_whatsapp,
+      notify_email: form.notify_email,
+      notify_message: form.notify_message || null,
+      notify_email_subject: form.notify_email_subject || null,
     };
     let error;
     let taskId: string;
+    const wasDone = editing?.status === 'done';
     if (editing) {
       taskId = editing.id;
-      ({ error } = await supabase.from('tasks').update(payload).eq('id', editing.id));
+      ({ error } = await supabase.from('tasks').update(payload as any).eq('id', editing.id));
     } else {
-      const { data, error: err } = await supabase.from('tasks').insert({ ...payload, created_by: user?.id }).select('id').single();
+      const { data, error: err } = await supabase.from('tasks').insert({ ...payload, created_by: user?.id } as any).select('id').single();
       error = err;
       taskId = data?.id || '';
     }
@@ -207,12 +212,36 @@ export default function Tasks() {
       await supabase.from('task_assignments').insert(form.assigned_to.map(uid => ({ task_id: taskId, user_id: uid })));
     }
 
-    setDialogOpen(false); loadData(); toast({ title: editing ? 'Tarefa atualizada' : 'Tarefa criada' });
+    setDialogOpen(false);
+    if (form.status === 'done' && !wasDone && (form.notify_whatsapp || form.notify_email)) {
+      await triggerNotify(taskId);
+    }
+    loadData();
+    toast({ title: editing ? 'Tarefa atualizada' : 'Tarefa criada' });
   }
 
   async function moveTask(taskId: string, newStatus: Task['status']) {
+    const prev = tasks.find(t => t.id === taskId);
     await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+    if (newStatus === 'done' && prev?.status !== 'done' && (prev?.notify_whatsapp || prev?.notify_email) && !prev?.notify_sent_at) {
+      await triggerNotify(taskId);
+    }
     loadData();
+  }
+
+  async function triggerNotify(taskId: string) {
+    try {
+      const { data, error } = await supabase.functions.invoke('task-notify-client', { body: { taskId } });
+      if (error) { toast({ title: 'Falha ao notificar cliente', description: error.message, variant: 'destructive' }); return; }
+      const w = data?.whatsapp; const e = data?.email;
+      const msgs: string[] = [];
+      if (w) msgs.push(w.ok ? 'WhatsApp enviado' : `WhatsApp: ${w.error}`);
+      if (e) msgs.push(e.ok ? 'E-mail enviado' : `E-mail: ${e.error}`);
+      const anyOk = (w?.ok) || (e?.ok);
+      toast({ title: anyOk ? 'Cliente notificado' : 'Falha ao notificar cliente', description: msgs.join(' • '), variant: anyOk ? 'default' : 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao notificar cliente', description: err.message, variant: 'destructive' });
+    }
   }
 
   const today = new Date().toISOString().split('T')[0];
