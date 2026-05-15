@@ -40,7 +40,10 @@ export function AppLayout() {
         <AppSidebar />
         <main className={location.pathname === '/chat' ? 'flex-1 h-[100dvh] overflow-hidden' : 'flex-1 overflow-auto'}>
           {location.pathname !== '/chat' && (
-          <header className="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-border bg-background px-4 md:hidden">
+          <header
+            className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background px-4 md:hidden h-[calc(3rem+env(safe-area-inset-top))]"
+            style={{ paddingTop: 'env(safe-area-inset-top)' }}
+          >
             <SidebarTrigger />
             <span className="text-sm font-medium text-foreground">{pageTitle}</span>
           </header>
