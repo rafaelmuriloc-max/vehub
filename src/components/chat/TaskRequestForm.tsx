@@ -19,16 +19,18 @@ type Profile = { user_id: string; full_name: string | null; department_id: strin
 interface TaskRequestFormProps {
   defaultClientId?: string | null;
   defaultTemplateId?: string | null;
+  restrictToPhone?: string | null;
   onCreated?: () => void;
 }
 
-export function TaskRequestForm({ defaultClientId, defaultTemplateId, onCreated }: TaskRequestFormProps) {
+export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictToPhone, onCreated }: TaskRequestFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
 
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [linkedClientIds, setLinkedClientIds] = useState<string[] | null>(null);
 
   const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
   const [requestCustomTitle, setRequestCustomTitle] = useState('');
@@ -54,6 +56,23 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, onCreated 
       setProfiles((p as Profile[]) || []);
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!restrictToPhone) { setLinkedClientIds(null); return; }
+      const digits = restrictToPhone.replace(/\D/g, '');
+      const search = digits.length > 4 ? digits.slice(-8) : digits;
+      if (!search) { setLinkedClientIds([]); return; }
+      const { data } = await supabase
+        .from('client_department_contacts')
+        .select('client_id, contact_phone');
+      const ids = [...new Set((data || [])
+        .filter((c: any) => c.contact_phone && c.contact_phone.replace(/\D/g, '').includes(search))
+        .map((c: any) => c.client_id))] as string[];
+      setLinkedClientIds(ids);
+      if (ids.length === 1) setRequestForm(f => ({ ...f, client_id: f.client_id || ids[0] }));
+    })();
+  }, [restrictToPhone]);
 
   useEffect(() => {
     if (defaultClientId) {
@@ -169,12 +188,20 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, onCreated 
       )}
       <div className="space-y-2">
         <Label>Cliente *</Label>
-        <Select value={requestForm.client_id} onValueChange={v => setRequestForm({ ...requestForm, client_id: v })}>
-          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-          <SelectContent>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {(() => {
+          const list = linkedClientIds === null ? clients : clients.filter(c => linkedClientIds.includes(c.id));
+          if (linkedClientIds !== null && list.length === 0) {
+            return <p className="text-sm text-muted-foreground">Nenhum cliente vinculado a este contato.</p>;
+          }
+          return (
+            <Select value={requestForm.client_id} onValueChange={v => setRequestForm({ ...requestForm, client_id: v })}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                {list.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          );
+        })()}
       </div>
       <div className="space-y-2">
         <Label>Descrição</Label>

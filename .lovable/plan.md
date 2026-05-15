@@ -1,11 +1,17 @@
-## Mudança em `src/components/chat/TaskRequestForm.tsx`
+## Mudança
 
-1. Carregar `profiles` incluindo `department_id`: `select('user_id, full_name, department_id')` e atualizar o type `Profile`.
-2. Substituir o grupo de Badges por um `<Select>` (lista suspensa) — single-select de "Atribuir a", já que o tipo do select padrão atende. Manter `assigned_to` como array para compatibilidade com `task_assignments` (insere 1 item).
-3. Filtrar a lista exibida:
-   - Se `requestTemplate?.department_id` existir → mostrar apenas profiles com `department_id === requestTemplate.department_id` (admins sem departamento são incluídos opcionalmente — incluir somente quem bate com o departamento).
-   - Se nenhum template selecionado → mostrar todos.
-4. Incluir item "— Livre para o departamento —" (valor `none`) que limpa `assigned_to`.
-5. Resetar `assigned_to` ao trocar de template.
+Filtrar a lista "Cliente *" do `TaskRequestForm` para mostrar apenas as empresas vinculadas ao contato da conversa (mesmo critério usado em `companyNames`: telefone do contato batendo via `client_department_contacts.contact_phone` pelos últimos 8 dígitos).
 
-Sem mudanças de schema, backend ou outros arquivos.
+## Implementação
+
+1. **`src/components/chat/TaskRequestForm.tsx`**
+   - Nova prop opcional `restrictToPhone?: string | null`.
+   - Quando `restrictToPhone` estiver presente, após carregar a lista geral de clientes, consultar `client_department_contacts` filtrando por `contact_phone ilike '%<últimos 8 dígitos>%'`, coletar `client_id` distintos e filtrar `clients` para exibir apenas esses.
+   - Se não houver vínculos, manter mensagem padrão e nenhuma opção; mostrar texto "Nenhum cliente vinculado a este contato".
+   - Se `restrictToPhone` for nulo/ausente, comportamento atual (todos os clientes).
+   - Pré-seleciona automaticamente o cliente quando houver apenas um vínculo.
+
+2. **`src/pages/Chat.tsx`**
+   - Passar `restrictToPhone={activeConv?.whatsappPhone || null}` para `<TaskRequestForm />`.
+
+Sem mudanças de schema. Sem mudanças no `defaultClientId` (continua respeitado).
