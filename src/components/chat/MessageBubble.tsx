@@ -258,7 +258,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
       <div
         className={`group relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-[12px] py-1.5 rounded-lg shadow-sm ${
           showOnRight
-           ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none'
+            ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none rounded-2xl'
             : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none text-left'
         }`}
       >
