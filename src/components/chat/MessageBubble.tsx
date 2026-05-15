@@ -26,6 +26,7 @@ interface MessageBubbleProps {
   avatarUrl?: string;
   editedAt?: string | null;
   deletedAt?: string | null;
+  isForwarded?: boolean;
   isAdmin?: boolean;
   onEdit?: (newContent: string) => void;
   onDeleteForMe?: () => void;
@@ -127,7 +128,7 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
   );
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, onForward, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isForwarded, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, onForward, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
    const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
    const isWhatsAppOutgoing = !isIncoming && (messageType === 'whatsapp' || messageType?.startsWith('whatsapp_'));
@@ -302,6 +303,12 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
         )}
          {senderName && (
            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-[4px]">{senderName}</p>
+        )}
+        {isForwarded && (
+          <div className="flex items-center gap-1 mb-[2px] text-muted-foreground italic text-xs">
+            <Forward className="h-3 w-3 -scale-x-100" />
+            <span>Encaminhada</span>
+          </div>
         )}
         {replySnapshot && (
           <button

@@ -233,7 +233,7 @@ export default function Chat() {
     const loadMessages = async () => {
       const { data } = await supabase
         .from('chat_messages')
-        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for, channel, wa_message_id, wa_remote_jid, reply_to_id, reply_to_snapshot, transcription, transcription_status')
+        .select('id, content, sender_id, created_at, read_at, message_type, media_url, edited_at, deleted_at, deleted_for, channel, wa_message_id, wa_remote_jid, reply_to_id, reply_to_snapshot, transcription, transcription_status, is_forwarded')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: false })
         .limit(100);
