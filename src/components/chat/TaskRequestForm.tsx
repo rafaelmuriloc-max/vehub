@@ -154,7 +154,6 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
     if (data?.id && pickedItems.length > 0) {
       const failed: string[] = [];
       const mediaItems = pickedItems.filter((i) => i.kind === 'media' && i.media_url);
-      const textItems = pickedItems.filter((i) => i.kind === 'text');
       // Media: download from public URL, re-upload to documents bucket
       for (const item of mediaItems) {
         try {
@@ -178,34 +177,6 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
           if (ins.error) failed.push(rawName);
         } catch {
           failed.push('mídia da conversa');
-        }
-      }
-      // Text messages: bundle into a single .txt
-      if (textItems.length > 0) {
-        const lines = textItems
-          .slice()
-          .sort((a, b) => a.created_at.localeCompare(b.created_at))
-          .map((i) => {
-            const dt = new Date(i.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-            return `[${dt}] ${i.sender_name}:\n${i.content || '(sem conteúdo)'}\n`;
-          });
-        const content = `Mensagens selecionadas da conversa\n\n${lines.join('\n')}`;
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const fileName = `mensagens-da-conversa-${Date.now()}.txt`;
-        const path = `tasks/${data.id}/${fileName}`;
-        const up = await supabase.storage.from('documents').upload(path, blob, { contentType: 'text/plain' });
-        if (up.error) { failed.push(fileName); }
-        else {
-          const ins = await supabase.from('task_attachments').insert({
-            task_id: data.id,
-            file_url: path,
-            file_name: fileName,
-            file_type: 'text/plain',
-            file_size: blob.size,
-            uploaded_by: user?.id,
-            direction: 'input',
-          } as any);
-          if (ins.error) failed.push(fileName);
         }
       }
       if (failed.length > 0) {
@@ -387,7 +358,27 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
           onOpenChange={setPickerOpen}
           conversationId={conversationId}
           initialSelectedIds={pickedItems.map((p) => p.id)}
-          onConfirm={(items) => setPickedItems(items)}
+          onConfirm={(items) => {
+            setPickedItems(items);
+            const textItems = items.filter((i) => i.kind === 'text');
+            const MARKER = '--- Mensagens da conversa ---';
+            setRequestForm((f) => {
+              const baseRaw = f.description || '';
+              const idx = baseRaw.indexOf(MARKER);
+              const base = (idx >= 0 ? baseRaw.slice(0, idx) : baseRaw).replace(/\s+$/, '');
+              if (textItems.length === 0) return { ...f, description: base };
+              const lines = textItems
+                .slice()
+                .sort((a, b) => a.created_at.localeCompare(b.created_at))
+                .map((i) => {
+                  const dt = new Date(i.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  return `[${dt}] ${i.sender_name}:\n${i.content || '(sem conteúdo)'}`;
+                });
+              const block = `${MARKER}\n${lines.join('\n\n')}`;
+              const description = base ? `${base}\n\n${block}` : block;
+              return { ...f, description };
+            });
+          }}
         />
       )}
     </form>
