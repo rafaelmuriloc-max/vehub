@@ -82,7 +82,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact, conversationId, onRequestTask }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact, conversationId, onRequestTask, rightPanel }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
