@@ -177,7 +177,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
         </div>
       )}
       {/* Header */}
-       <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-4 py-2 border-b shrink-0 bg-white">
+       <div className="sticky top-0 z-20 flex items-center gap-1.5 md:gap-2 px-2 md:px-4 py-2 border-b shrink-0 bg-background">
         {onBack && (
           <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-8 w-8">
             <ArrowLeft className="h-4 w-4" />

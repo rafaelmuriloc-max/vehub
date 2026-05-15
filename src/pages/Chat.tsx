@@ -15,6 +15,7 @@ import { AttachFromSystemDialog } from '@/components/chat/AttachFromSystemDialog
 import { AttachSocietyDocumentsDialog } from '@/components/chat/AttachSocietyDocumentsDialog';
 import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
 import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
+import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -22,6 +23,7 @@ export type ChatTab = 'mine' | 'in_progress' | 'all';
 export default function Chat() {
   const { user, profile, isAdmin } = useAuth();
   const isMobile = useIsMobile();
+  const viewportHeight = useVisualViewportHeight();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -777,7 +779,10 @@ export default function Chat() {
   const showMessages = isMobile ? !!activeConvId : true;
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-background md:h-screen">
+    <div
+      className="flex flex-col w-full overflow-hidden bg-background md:h-screen"
+      style={isMobile ? { height: viewportHeight } : undefined}
+    >
       <EnableNotificationsBanner />
       <div className="flex flex-1 min-h-0 w-full overflow-hidden">
       {showList && (
