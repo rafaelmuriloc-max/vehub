@@ -23,6 +23,7 @@ type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type TaskTemplate = { id: string; name: string; department_id: string; description: string | null; default_due_days: number };
+type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
@@ -60,6 +61,8 @@ export default function Tasks() {
   const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'] });
   const [requestFiles, setRequestFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
+  const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -88,14 +91,56 @@ export default function Tasks() {
     setDialogOpen(true);
   }
 
-  function openEdit(task: Task) {
+  async function openEdit(task: Task) {
     setEditing(task);
     setForm({
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
       assigned_to: assignments[task.id] || [],
     });
+    setEditNewFiles([]);
+    setEditAttachments([]);
     setDialogOpen(true);
+    const { data } = await supabase.from('task_attachments').select('*').eq('task_id', task.id).order('created_at', { ascending: true });
+    setEditAttachments((data as TaskAttachment[]) || []);
+  }
+
+  async function downloadAttachment(att: TaskAttachment) {
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(att.file_url, 60);
+    if (error || !data?.signedUrl) { toast({ title: 'Erro ao baixar', description: error?.message, variant: 'destructive' }); return; }
+    window.open(data.signedUrl, '_blank');
+  }
+
+  async function removeAttachment(att: TaskAttachment) {
+    if (!confirm('Remover este anexo?')) return;
+    await supabase.storage.from('documents').remove([att.file_url]);
+    const { error } = await supabase.from('task_attachments').delete().eq('id', att.id);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    setEditAttachments(prev => prev.filter(a => a.id !== att.id));
+  }
+
+  async function uploadEditFiles() {
+    if (!editing || editNewFiles.length === 0) return;
+    setUploading(true);
+    const failed: string[] = [];
+    const inserted: TaskAttachment[] = [];
+    for (const file of editNewFiles) {
+      const safe = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.\-]+/g, '_');
+      const path = `tasks/${editing.id}/${Date.now()}_${safe}`;
+      const up = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || undefined });
+      if (up.error) { failed.push(file.name); continue; }
+      const { data, error } = await supabase.from('task_attachments').insert({
+        task_id: editing.id, file_url: path, file_name: file.name,
+        file_type: file.type || null, file_size: file.size, uploaded_by: user?.id,
+      } as any).select('*').single();
+      if (error || !data) { failed.push(file.name); continue; }
+      inserted.push(data as TaskAttachment);
+    }
+    setEditAttachments(prev => [...prev, ...inserted]);
+    setEditNewFiles([]);
+    setUploading(false);
+    if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
+    else toast({ title: 'Anexos adicionados' });
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -449,6 +494,37 @@ export default function Tasks() {
                 ))}
               </div>
             </div>
+            {editing && (
+              <div className="space-y-2">
+                <Label>Anexos</Label>
+                {editAttachments.length === 0 && <p className="text-xs text-muted-foreground">Nenhum anexo</p>}
+                <div className="space-y-1">
+                  {editAttachments.map(att => (
+                    <div key={att.id} className="flex items-center gap-2 text-sm border rounded-md px-2 py-1.5">
+                      <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <button type="button" onClick={() => downloadAttachment(att)} className="flex-1 text-left truncate hover:underline text-primary">
+                        {att.file_name}
+                      </button>
+                      {att.file_size != null && <span className="text-xs text-muted-foreground shrink-0">{(att.file_size / 1024).toFixed(1)} KB</span>}
+                      {(att.uploaded_by === user?.id || isAdmin) && (
+                        <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeAttachment(att)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Input type="file" multiple onChange={e => setEditNewFiles(Array.from(e.target.files || []))} className="text-xs" />
+                  <Button type="button" size="sm" disabled={uploading || editNewFiles.length === 0} onClick={uploadEditFiles}>
+                    {uploading ? 'Enviando...' : 'Anexar'}
+                  </Button>
+                </div>
+                {editNewFiles.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{editNewFiles.length} arquivo(s) selecionado(s)</p>
+                )}
+              </div>
+            )}
             <Button type="submit" className="w-full">{editing ? 'Salvar' : 'Criar'}</Button>
           </form>
         </DialogContent>
