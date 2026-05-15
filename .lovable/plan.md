@@ -1,28 +1,23 @@
-## Causa real
+## Causa raiz
 
-A política RLS de SELECT em `tasks` exige que o usuário seja assignee, criador ou admin:
-```
-((EXISTS (SELECT 1 FROM task_assignments ta WHERE ta.task_id = tasks.id AND ta.user_id = auth.uid()))
- OR has_role(auth.uid(), 'admin')
- OR (created_by = auth.uid()))
-```
-Por isso o `PendingTasksPanel` não enxergava a tarefa do contato Rafael (atribuída a outro funcionário) e retornava `null`, deixando o `<aside>` vazio.
+A query de tarefas no `PendingTasksPanel` usa embeds do PostgREST (`clients(company_name)`, `departments(name)`, `task_assignments(user_id)`), mas a tabela `tasks` **não possui foreign keys** declaradas para `clients`, `departments` nem `task_assignments`. O PostgREST retorna erro `PGRST200`:
 
-## Correção
+> Could not find a relationship between 'tasks' and 'departments' in the schema cache
 
-1. **Migration RLS** — Trocar a política de SELECT em `public.tasks` para liberar leitura a todos os autenticados (igual ao padrão já usado em `clients`, `task_templates`, `task_attachments`):
-   - `DROP POLICY "Users can view assigned tasks" ON public.tasks;`
-   - `CREATE POLICY "Authenticated can view tasks" ON public.tasks FOR SELECT TO authenticated USING (true);`
-   - Manter inalteradas as policies de INSERT/UPDATE/DELETE (continuam restritas a admin/criador/assignee).
-   - Aplicar o mesmo para `task_assignments` (hoje SELECT = `user_id = auth.uid() OR admin`) → trocar por `USING (true)` para que o painel veja os assignees de qualquer tarefa.
+Resultado: `data` vem `null`, `rows = []`, `onCountChange(0)` é disparado, o painel fecha automaticamente — mesmo havendo a tarefa "Emitir Nota Fiscal" para POUSADA CAMINHO DOS SONHOS LTDA (cliente vinculado ao telefone do Rafael Murilo, confirmado em DB).
 
-2. **`src/pages/Chat.tsx`** — Reverter o gate para considerar a contagem novamente, agora que a contagem reflete a verdade:
-   - Voltar para `pendingTasksOpen && pendingTasksCount > 0 && activeConv?.whatsappPhone`.
-   - Sem isso o `<aside>` fica visível como faixa vazia em conversas sem tarefas.
+Confirmei também que o restante do app (página Tasks) usa `.select('*')` + fetches separados — por isso só este painel quebra.
 
-3. **`src/components/chat/PendingTasksPanel.tsx`** — Remover o early-return `null` que adicionei (a responsabilidade volta ao parent via `onCountChange`).
+## Plano
 
-Resultado:
-- Todos os usuários autenticados veem todas as tarefas (no painel do chat, no Kanban e na lista).
-- O painel "Tarefas pendentes" abre automaticamente em qualquer conversa cujo telefone bata com algum contato vinculado a clientes com tarefas em aberto.
-- Permissões de criação/edição/exclusão continuam restritas (admin, criador, assignee).
+**`src/components/chat/PendingTasksPanel.tsx`** — Reescrever o carregamento para não depender de FKs:
+
+1. Buscar `tasks` apenas com colunas escalares: `select('id,task_number,title,priority,due_date,client_id,created_at,created_by,department_id,status,notify_whatsapp,notify_email,notify_sent_at')` filtrando por `client_id in (ids)` e `status='todo'`.
+2. Em paralelo (após obter `rows`), fazer três queries auxiliares com os ids resultantes:
+   - `clients`: `select('id,company_name').in('id', clientIds)`
+   - `departments`: `select('id,name').in('id', deptIds)` (somente ids não-nulos)
+   - `task_assignments`: `select('task_id,user_id').in('task_id', taskIds)`
+3. Montar maps (`clientMap`, `deptMap`, `assignmentsByTask`) e compor cada `TaskRow` com os campos `clients`, `departments`, `task_assignments` esperados pelo render existente — sem alterar o JSX.
+4. Manter `profileMap` e `loadAttachmentCounts` como já estão.
+
+Sem mudanças de schema, RLS, edge functions ou outros arquivos. O painel volta a aparecer para o Rafael Murilo (e qualquer contato com tarefas vinculadas).
