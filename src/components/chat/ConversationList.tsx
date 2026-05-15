@@ -162,7 +162,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             >
               Chat
               {totalUnread != null && totalUnread > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
+                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 bg-lime-600 px-[8px] mx-0 text-center">
                   {totalUnread > 99 ? '99+' : totalUnread}
                 </span>
               )}
@@ -173,7 +173,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             >
               Espera
               {waitingCount != null && waitingCount > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 px-1">
+                <span className="ml-1 inline-flex items-center justify-center bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full h-4 min-w-4 bg-lime-600 px-[8px] mx-0 text-center">
                   {waitingCount > 99 ? '99+' : waitingCount}
                 </span>
               )}
