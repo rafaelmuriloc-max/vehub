@@ -254,6 +254,16 @@ export default function CalendarView() {
     return events.filter(e => e.date === dateStr);
   }
 
+  function getTasksForDay(day: number) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return tasks.filter(t => {
+      if (t.due_date !== dateStr) return false;
+      if (filterDept !== 'all' && t.department_id !== filterDept) return false;
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      return true;
+    });
+  }
+
   function getDayDots(day: number) {
     const dayEvents = getEventsForDay(day);
     const counts = { alert: 0, target: 0, due: 0 };
