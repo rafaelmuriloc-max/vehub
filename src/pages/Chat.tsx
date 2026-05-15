@@ -865,7 +865,7 @@ export default function Chat() {
                   />
                 </div>
               </>
-            ) : (pendingTasksOpen && pendingTasksCount > 0 && activeConv?.whatsappPhone ? (
+            ) : (pendingTasksOpen && activeConv?.whatsappPhone ? (
               <PendingTasksPanel
                 phone={activeConv.whatsappPhone}
                 onClose={() => setPendingTasksOpen(false)}
