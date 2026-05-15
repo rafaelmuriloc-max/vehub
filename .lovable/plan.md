@@ -1,36 +1,30 @@
 ## Problema
 
-Mensagens enviadas pela Gisele (agente de triagem) aparecem no chat interno assinadas com "Márcio".
+Ao reabrir um chamado fechado (ex.: Armazém Baudoro), o cronômetro continua somando o tempo da abertura anterior em vez de zerar.
 
-**Causa:** o edge function `chat-triage-agent` chama `whatsapp-send-text` sem `senderId`. O fallback escolhe o primeiro admin (Márcio) e grava `chat_messages.sender_id = <id do Márcio>`. No frontend, `MessageArea` resolve `sender_name` via `profiles.full_name` a partir do `sender_id`, então mostra "Márcio". O cliente vê correto porque o WhatsApp recebe `*Gisele:*` no corpo.
+**Causa:** `reopenTicket` em `src/pages/Chat.tsx` atualiza apenas `status`, `closed_at` e `assigned_to`. Os campos `waiting_since` e `total_wait_seconds` permanecem com os valores anteriores ao fechamento, então o `WaitingBadge` (alimentado por `waiting_since`) exibe o tempo acumulado de antes.
 
 ## Solução
 
-Persistir o nome do agente na própria mensagem e usá-lo no UI quando presente.
+Zerar o cronômetro nas transições de estado do chamado, em uma única alteração no frontend (sem migration — colunas já existem):
 
-### Banco
+1. **`reopenTicket`** (`src/pages/Chat.tsx` ~linha 577): no `update`, incluir
+   - `waiting_since: new Date().toISOString()` (cronômetro reinicia agora)
+   - `total_wait_seconds: 0`
 
-1. Migration: `ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS agent_name text;`
+2. **`closeTicket`** (~linha 545): no `update`, incluir
+   - `waiting_since: null`
+   - `total_wait_seconds: 0`
+   
+   Garante estado limpo ao fechar e evita carry-over caso o chamado seja reaberto futuramente por outra rota.
 
-### Edge function `whatsapp-send-text`
+## Resultado
 
-2. Aceitar campo opcional `agentName` no body.
-3. Incluir `agent_name: agentName ?? null` no `insert` em `chat_messages`.
+- Fechar chamado → cronômetro zerado e ocultado.
+- Reabrir chamado → cronômetro recomeça do zero a partir do momento da reabertura.
+- Comportamento de "espera" durante o atendimento normal (não atribuído + mensagem do cliente) continua funcionando via trigger `trg_chat_msg_start_waiting`.
 
-### Edge function `chat-triage-agent`
+## Detalhes técnicos
 
-4. Nas duas chamadas a `whatsapp-send-text` (`/ask` e transferência) passar `agentName: agentName` (já tem a variável `agentName` resolvida via `company_settings.agent_name`).
-
-### Frontend
-
-5. `src/pages/Chat.tsx`: nas duas queries de mensagens (carga inicial linha ~237 e realtime ~300) selecionar também `agent_name` e usar:
-   ```ts
-   sender_name: m.agent_name || nameMap.get(m.sender_id) || 'Usuário'
-   ```
-6. `src/components/chat/MessageArea.tsx`: incluir `agent_name?: string` no tipo `Message` (somente para tipagem; a substituição é feita em Chat.tsx). Também propagar em `reply_to_snapshot` se necessário (não obrigatório nesta correção).
-
-### Resultado
-
-- Mensagens da Gisele exibem "Gisele" (ou o `agent_name` configurado) no balão verde do chat interno.
-- Mensagens humanas continuam exibindo o nome do profile.
-- WhatsApp do cliente continua igual.
+- Sem migration. Apenas edição em `src/pages/Chat.tsx`.
+- A política de RLS atual (participante na conversa) já cobre o update adicional dos dois campos.

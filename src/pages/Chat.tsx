@@ -544,7 +544,7 @@ export default function Chat() {
     if (!activeConvId) return;
     const { error } = await supabase
       .from('chat_conversations')
-      .update({ status: 'closed', closed_at: new Date().toISOString(), assigned_to: null } as any)
+      .update({ status: 'closed', closed_at: new Date().toISOString(), assigned_to: null, waiting_since: null, total_wait_seconds: 0 } as any)
       .eq('id', activeConvId);
 
     if (error) {
@@ -576,7 +576,7 @@ export default function Chat() {
 
     const { data: updated, error } = await supabase
       .from('chat_conversations')
-      .update({ status: 'open', closed_at: null, assigned_to: user.id } as any)
+      .update({ status: 'open', closed_at: null, assigned_to: user.id, waiting_since: new Date().toISOString(), total_wait_seconds: 0 } as any)
       .eq('id', activeConvId)
       .select('id');
 
