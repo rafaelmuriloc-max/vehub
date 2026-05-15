@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
  import { CheckCheck, MapPin, Contact, ArrowDownToLine, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw, Forward } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AudioMessage } from './AudioMessage';
@@ -143,6 +144,33 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   const isMobile = useIsMobile();
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
+  const bubbleNodeRef = useRef<HTMLDivElement | null>(null);
+  const [sheetPos, setSheetPos] = useState<{ top: number; placement: 'below' | 'above' } | null>(null);
+
+  const setBubbleNode = (el: HTMLDivElement | null) => {
+    bubbleNodeRef.current = el;
+    if (typeof bubbleRef === 'function') bubbleRef(el);
+  };
+
+  // Lock body scroll & compute sheet position when mobile menu opens
+  useEffect(() => {
+    if (!isMobile || !menuOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const rect = bubbleNodeRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const estimated = 280;
+      const placement: 'below' | 'above' = spaceBelow >= estimated || spaceBelow >= rect.top ? 'below' : 'above';
+      setSheetPos({
+        top: placement === 'below' ? rect.bottom + 8 : rect.top - 8,
+        placement,
+      });
+    }
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isMobile, menuOpen]);
 
   useEffect(() => {
     return () => {
@@ -175,6 +203,12 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   const handleContextMenu = (e: React.MouseEvent) => {
     if (longPressFired.current) e.preventDefault();
+  };
+
+  const closeMobileMenu = () => setMenuOpen(false);
+  const runAndClose = (fn?: () => void) => {
+    if (fn) fn();
+    setMenuOpen(false);
   };
 
   const retryTranscription = async () => {
@@ -296,6 +330,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   return (
      <div ref={bubbleRef} className={`${showOnRight ? 'flex items-center justify-end pr-[42px]' : 'flex justify-start pl-[42px]'} mb-1 transition-colors ${highlight ? 'bg-yellow-200/40 rounded-lg' : ''}`}>
        <div
+        ref={setBubbleNode}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onTouchMove={handleTouchEnd}
@@ -308,7 +343,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
             : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none text-left my-[10px] rounded-2xl'
         }`}
       >
-        {hasMenu && (
+        {hasMenu && !isMobile && (
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
                <button className="absolute top-1 right-1 opacity-0 sm:group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10 hidden sm:block">
@@ -346,6 +381,54 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        {hasMenu && isMobile && menuOpen && createPortal(
+          <div className="fixed inset-0 z-[100]" onClick={closeMobileMenu}>
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-in fade-in" />
+            <div
+              role="menu"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                top: sheetPos?.placement === 'above' ? undefined : (sheetPos?.top ?? 100),
+                bottom: sheetPos?.placement === 'above' ? `calc(100vh - ${sheetPos.top}px)` : undefined,
+                left: '50%',
+                transform: 'translateX(-50%)',
+              }}
+              className="absolute min-w-[260px] max-w-[320px] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            >
+              {onReply && (
+                <button role="menuitem" onClick={() => runAndClose(onReply)} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left active:bg-black/10 hover:bg-black/5">
+                  <span>Responder</span>
+                  <Reply className="h-5 w-5 text-muted-foreground" />
+                </button>
+              )}
+              {onForward && !isDeleted && (
+                <button role="menuitem" onClick={() => runAndClose(onForward)} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left border-t border-black/10 dark:border-white/10 active:bg-black/10 hover:bg-black/5">
+                  <span>Encaminhar</span>
+                  <Forward className="h-5 w-5 text-muted-foreground" />
+                </button>
+              )}
+              {canEdit && onEdit && (
+                <button role="menuitem" onClick={() => { setDraft(content); setEditing(true); setMenuOpen(false); }} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left border-t border-black/10 dark:border-white/10 active:bg-black/10 hover:bg-black/5">
+                  <span>Editar</span>
+                  <Pencil className="h-5 w-5 text-muted-foreground" />
+                </button>
+              )}
+              {onDeleteForMe && (
+                <button role="menuitem" onClick={() => runAndClose(onDeleteForMe)} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left border-t border-black/10 dark:border-white/10 active:bg-black/10 hover:bg-black/5">
+                  <span>Apagar só para mim</span>
+                  <Trash2 className="h-5 w-5 text-muted-foreground" />
+                </button>
+              )}
+              {canDeleteForAll && onDeleteForAll && (
+                <button role="menuitem" onClick={() => runAndClose(onDeleteForAll)} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left text-destructive border-t-[6px] border-black/5 dark:border-white/5 active:bg-destructive/10 hover:bg-destructive/5">
+                  <span>Apagar para todos</span>
+                  <Ban className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body
         )}
          {senderName && (
            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-[4px]">{senderName}</p>

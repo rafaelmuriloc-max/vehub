@@ -1,30 +1,34 @@
 ## Objetivo
-No mobile, substituir a seta no canto superior direito da bolha de mensagem por um gesto de toque longo (2 segundos) para abrir o menu de ações, igual ao WhatsApp. No desktop, manter o comportamento atual (seta visível ao passar o mouse).
+No mobile, ao manter pressionada a bolha por 2s, abrir um menu flutuante no estilo iOS/WhatsApp: cartão branco arredondado, opções empilhadas verticalmente com ícone à esquerda e rótulo grande à direita, item destrutivo "Apagar" em vermelho, separador antes dele. Centralizado horizontalmente próximo da bolha, com fundo escurecido (overlay) cobrindo o restante da tela.
 
 ## Mudanças em `src/components/chat/MessageBubble.tsx`
 
-1. **Detectar mobile** com o hook `useIsMobile()` (já existente em `src/hooks/use-mobile.tsx`).
+1. **Remover o `DropdownMenu` no mobile** e manter apenas no desktop (já controlado por `isMobile`). No desktop o comportamento atual segue intacto.
 
-2. **Estado controlado do DropdownMenu**: adicionar `const [menuOpen, setMenuOpen] = useState(false)` e converter `<DropdownMenu>` para controlado (`open={menuOpen} onOpenChange={setMenuOpen}`).
+2. **Criar componente local `MobileActionSheet`** (dentro do mesmo arquivo) renderizado via portal (`createPortal` do `react-dom`) quando `isMobile && menuOpen`:
+   - `<div>` overlay fixed inset-0 com `bg-black/30 backdrop-blur-sm` e `onClick={close}`.
+   - `<div>` cartão centralizado horizontalmente, `position: fixed`, posicionado verticalmente em relação à bolha (usar `getBoundingClientRect` da bolha guardada via `ref`; se não couber abaixo, posicionar acima). `min-w-[260px] max-w-[320px] bg-white dark:bg-zinc-900 rounded-2xl shadow-xl overflow-hidden`.
+   - Cada item: `<button>` `flex items-center justify-between w-full px-4 py-3.5 text-base text-left hover:bg-black/5 active:bg-black/10` com rótulo à esquerda e ícone à direita (Reply/Forward/Pencil/Trash2/Ban), separador `border-t border-black/10` entre eles. "Apagar para todos" em `text-destructive` precedido de divisor mais grosso.
+   - Ordem dos itens: Responder, Encaminhar, Editar (se `canEdit`), Apagar só para mim, Apagar para todos (se `canDeleteForAll`).
+   - Animação simples de entrada via classes Tailwind (`animate-in fade-in zoom-in-95`).
 
-3. **No mobile**:
-   - Esconder o botão da seta (`ArrowDownToLine`) — renderizar apenas quando `!isMobile`.
-   - Adicionar handlers `onTouchStart` / `onTouchEnd` / `onTouchMove` / `onTouchCancel` no container da bolha (a `<div>` com classe `group relative ...`) que iniciam um `setTimeout` de 2000ms para abrir o menu.
-   - Cancelar o timer se o dedo for solto, sair, ou houver scroll.
-   - Quando disparar, chamar `setMenuOpen(true)` e fazer `e.preventDefault()` para evitar disparo de clique/seleção subsequente.
-   - Adicionar `style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}` no container para evitar o menu nativo de copiar/selecionar do iOS durante o press.
+3. **Posicionamento**:
+   - Após `setMenuOpen(true)`, em `useLayoutEffect` calcular `rect` da bolha, decidir top/bottom (preferir abaixo; se faltar espaço usar acima), guardar em estado `{ top, side }`.
+   - Centralizar horizontalmente com `left: 50%; transform: translateX(-50%)`.
 
-4. **DropdownMenuTrigger** continua existindo (invisível no mobile) apenas como âncora — para o mobile, usar um `<DropdownMenuTrigger asChild><span className="sr-only" /></DropdownMenuTrigger>` posicionado, OU manter o trigger atual e abrir via estado controlado (sem precisar de clique no trigger). A segunda opção é mais simples: o menu controlado abre ancorado no `DropdownMenuContent` que se posiciona a partir do trigger DOM — manteremos o `<DropdownMenuTrigger asChild><button ... /></DropdownMenuTrigger>` mas com `className` que esconde o botão no mobile (`hidden sm:block` em vez de `opacity-0 group-hover:opacity-100`). No desktop, o usuário ainda pode clicar na seta; no mobile, abrir via long-press com `setMenuOpen(true)`.
+4. **Fechar**:
+   - Ao clicar em qualquer item ou no overlay, `setMenuOpen(false)`.
+   - Travar scroll do body enquanto aberto (`document.body.style.overflow = 'hidden'` em `useEffect`).
 
-5. **Acessibilidade desktop**: manter `group-hover:opacity-100` para a seta no breakpoint `sm:` em diante.
+5. **Acessibilidade**:
+   - `role="menu"` no cartão e `role="menuitem"` nos botões.
+   - Botão "Cancelar" não é necessário — o overlay clicável basta (igual WhatsApp).
 
 ## Detalhes técnicos
-
-- Constante `LONG_PRESS_MS = 2000`.
-- Timer armazenado em `useRef<number | null>(null)` para limpar corretamente.
-- Limpar o timer no `useEffect` cleanup quando o componente desmontar.
-- Não alterar nenhuma lógica de envio, edição ou exclusão — apenas a forma de abrir o menu.
+- Reaproveitar o ref já passado pelo pai (`bubbleRef`) — adicionar um `useRef` interno que guarda o nó da bolha (combinar com o ref externo via callback).
+- Sem novas dependências.
+- `createPortal(node, document.body)`.
 
 ## Fora de escopo
-- Lista de conversas e outras telas.
-- Comportamento de seleção múltipla (WhatsApp também tem, mas não foi pedido).
+- Barra de reações com emojis acima da bolha (presente no print do WhatsApp). Pode ser próximo passo, mas não foi pedido.
+- Mudanças no comportamento desktop.
