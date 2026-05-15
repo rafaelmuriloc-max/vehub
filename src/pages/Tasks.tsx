@@ -306,7 +306,7 @@ export default function Tasks() {
     await supabase.from('task_assignments').delete().eq('task_id', id);
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
-    loadTasks(); toast({ title: 'Tarefa excluída' });
+    loadData(); toast({ title: 'Tarefa excluída' });
   }
 
   function openRequest(tpl: TaskTemplate) {
