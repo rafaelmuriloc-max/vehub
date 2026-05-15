@@ -292,6 +292,31 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           <X className="h-4 w-4" />
         </Button>
       </div>
+      {isMobile && tasks.length > 1 && (
+        <div className="flex items-center justify-between border-b px-3 py-2 shrink-0 bg-muted/40">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {currentIndex + 1} de {tasks.length}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            disabled={currentIndex >= tasks.length - 1}
+            onClick={() => setCurrentIndex((i) => Math.min(tasks.length - 1, i + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-3 space-y-2">
           {loading && (
@@ -302,7 +327,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
               Nenhuma tarefa "A Fazer" para as empresas vinculadas a este contato.
             </p>
           )}
-          {!loading && tasks.map((task) => {
+          {!loading && (isMobile ? tasks.slice(currentIndex, currentIndex + 1) : tasks).map((task) => {
             const assignees = task.task_assignments || [];
             return (
               <Card
