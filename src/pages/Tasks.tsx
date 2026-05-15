@@ -322,24 +322,27 @@ export default function Tasks() {
   }
   async function handleRequest(e: React.FormEvent) {
     e.preventDefault();
-    if (!requestTemplate || !requestForm.client_id) {
+    if (!requestForm.client_id) {
       toast({ title: 'Selecione o cliente', variant: 'destructive' }); return;
+    }
+    if (!requestTemplate && !requestCustomTitle.trim()) {
+      toast({ title: 'Informe o nome ou selecione uma tarefa cadastrada', variant: 'destructive' }); return;
     }
     setUploading(true);
     const { data, error } = await supabase.from('tasks').insert({
-      title: requestTemplate.name,
+      title: requestTemplate ? requestTemplate.name : requestCustomTitle.trim(),
       description: requestForm.description || null,
       status: 'todo',
       priority: requestForm.priority,
       due_date: requestForm.due_date || null,
       client_id: requestForm.client_id,
-      department_id: requestTemplate.department_id,
-      template_id: requestTemplate.id,
+      department_id: requestTemplate?.department_id || null,
+      template_id: requestTemplate?.id || null,
       created_by: user?.id,
-      notify_whatsapp: !!requestTemplate.notify_whatsapp,
-      notify_email: !!requestTemplate.notify_email,
-      notify_message: requestTemplate.notify_message || null,
-      notify_email_subject: requestTemplate.notify_email_subject || null,
+      notify_whatsapp: !!requestTemplate?.notify_whatsapp,
+      notify_email: !!requestTemplate?.notify_email,
+      notify_message: requestTemplate?.notify_message || null,
+      notify_email_subject: requestTemplate?.notify_email_subject || null,
     } as any).select('id').single();
     if (error) { setUploading(false); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     if (requestForm.assigned_to.length > 0 && data?.id) {
