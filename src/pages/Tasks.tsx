@@ -15,7 +15,7 @@ import { Plus, Pencil, Trash2, Send, Paperclip, X } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type Task = {
-  id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'in_review' | 'done';
+  id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
   created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
 };
@@ -24,8 +24,8 @@ type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type TaskTemplate = { id: string; name: string; department_id: string; description: string | null; default_due_days: number };
 
-const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Em Andamento', in_review: 'Em Revisão', done: 'Concluído' };
-const statusColumns: string[] = ['todo', 'in_progress', 'in_review', 'done'];
+const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
+const statusColumns: string[] = ['todo', 'in_progress', 'done'];
 const priorityColors: Record<string, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-blue-100 text-blue-800', high: 'bg-orange-100 text-orange-800', urgent: 'bg-red-100 text-red-800' };
 const priorityLabels: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
 
