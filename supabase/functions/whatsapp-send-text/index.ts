@@ -17,7 +17,10 @@ Deno.serve(async (req) => {
   try {
     const VHUB_MARKER = "\u200B\u200B\u200B";
     const { conversationId, text, senderName, senderId: senderIdInput, replyToMessageId, isForwarded } = await req.json();
-    const signedText = senderName ? `*${senderName}:*\n${text}${VHUB_MARKER}` : `${text}${VHUB_MARKER}`;
+    const FORWARD_PREFIX = isForwarded ? "↪️ _Encaminhada_\n" : "";
+    const signedText = senderName
+      ? `${FORWARD_PREFIX}*${senderName}:*\n${text}${VHUB_MARKER}`
+      : `${FORWARD_PREFIX}${text}${VHUB_MARKER}`;
 
     if (!conversationId || !text) {
       return new Response(JSON.stringify({ error: "conversationId and text are required" }), {

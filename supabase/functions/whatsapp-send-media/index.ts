@@ -135,6 +135,8 @@ Deno.serve(async (req) => {
     // Build content text with sender signature
     const VHUB_MARKER = "\u200B\u200B\u200B";
     const signPrefix = senderName ? `*${senderName}:*\n` : "";
+    const FORWARD_PREFIX = isForwarded ? "↪️ _Encaminhada_\n" : "";
+    const captionBase = `${FORWARD_PREFIX}${senderName ? `*${senderName}*` : ""}${VHUB_MARKER}`;
 
     // Helper: derive mimetype from fileName / type
     const guessMime = (): string => {
@@ -171,7 +173,7 @@ Deno.serve(async (req) => {
           payload[type].filename = fileName;
         }
         if (type === "image") {
-          payload[type].caption = senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER;
+          payload[type].caption = captionBase;
         }
 
         const metaRes = await fetch(
@@ -202,7 +204,7 @@ Deno.serve(async (req) => {
               mimetype: guessMime(),
               media: mediaUrl,
               fileName: fileName || undefined,
-              caption: senderName ? `*${senderName}*${VHUB_MARKER}` : VHUB_MARKER,
+              caption: captionBase,
               ...evoQuoted,
             }),
           }
