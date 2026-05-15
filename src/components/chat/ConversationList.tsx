@@ -230,9 +230,9 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium truncate block">{conv.name}</span>
+                    <span className="font-medium truncate block text-base">{conv.name}</span>
                     {conv.companyNames && conv.companyNames.length > 0 && (
-                      <p className="text-[11px] text-muted-foreground truncate mt-0.5 border-0 border-none rounded-none text-cyan-950 font-medium py-[2px] bg-inherit shadow-none text-left mx-0 my-0 px-[4px]">
+                      <p className="text-[11px] text-muted-foreground truncate mt-0.5 border-0 border-none rounded-none font-medium py-[2px] bg-inherit shadow-none text-left mx-0 my-0 px-[4px] text-gray-950">
                         {conv.companyNames.join(' • ')}
                       </p>
                     )}
@@ -247,7 +247,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                       else if (t.includes('contact')) preview = '👤 Contato';
                       if (!preview) return null;
                       return (
-                        <p className={`text-[12px] truncate mt-0.5 ${conv.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground text-black/65'}`}>
+                        <p className={`text-[12px] truncate mt-0.5 ${conv.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground text-slate-400'}`}>
                           {preview}
                         </p>
                       );
