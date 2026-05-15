@@ -17,7 +17,7 @@ import { EnableNotificationsBanner } from '@/components/chat/EnableNotifications
 import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 import { PendingTasksPanel } from '@/components/chat/PendingTasksPanel';
-import { X, ListTodo } from 'lucide-react';
+import { X } from 'lucide-react';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
