@@ -107,7 +107,7 @@ export default function Tasks() {
   async function loadData() {
     const [{ data: t }, { data: p }, { data: c }, { data: a }, { data: d }, { data: tpl }, { data: att }] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('user_id, full_name'),
+      supabase.from('profiles').select('user_id, full_name, tag_color'),
       supabase.from('clients').select('id, company_name').order('company_name'),
       supabase.from('task_assignments').select('task_id, user_id'),
       supabase.from('departments').select('id, name').order('name'),
@@ -285,6 +285,7 @@ export default function Tasks() {
 
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.company_name || '';
   const getProfileName = (uid: string) => profiles.find(p => p.user_id === uid)?.full_name || 'Sem nome';
+  const getProfileColor = (uid: string) => profiles.find(p => p.user_id === uid)?.tag_color || null;
   const getDepartmentName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
   const formatTaskNumber = (n: number | null | undefined) => n ? `#${String(n).padStart(6, '0')}` : '#------';
   const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -460,7 +461,7 @@ export default function Tasks() {
                           <div className="flex gap-1 flex-wrap items-center">
                             <span className="text-[11px] text-muted-foreground">Atribuído:</span>
                             {assignments[task.id].map(uid => (
-                              <Badge key={uid} variant="outline" className="text-xs">{getProfileName(uid)}</Badge>
+                              <AssigneeBadge key={uid} name={getProfileName(uid)} color={getProfileColor(uid)} />
                             ))}
                           </div>
                         )}
@@ -541,7 +542,7 @@ export default function Tasks() {
                   </div>
                   <div className="flex gap-1">
                     {assignments[task.id]?.map(uid => (
-                      <Badge key={uid} variant="outline" className="text-xs">{getProfileName(uid)}</Badge>
+                      <AssigneeBadge key={uid} name={getProfileName(uid)} color={getProfileColor(uid)} />
                     ))}
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive ml-2" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}>
                       <Trash2 className="h-4 w-4" />
