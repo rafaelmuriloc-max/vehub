@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, Calendar, Building2, User as UserIcon, ListTodo } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { Card, CardContent } from '@/components/ui/card';
+import { X, ListTodo, Paperclip, Upload, Trash2 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 interface Props {
   phone: string | null;
@@ -16,24 +17,57 @@ interface Props {
 interface TaskRow {
   id: string;
   title: string;
-  priority: 'low' | 'medium' | 'high' | string;
+  priority: 'low' | 'medium' | 'high' | 'urgent' | string;
   due_date: string | null;
   client_id: string | null;
   clients: { company_name: string } | null;
   task_assignments: { user_id: string }[];
 }
 
-const priorityLabel: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta' };
-const priorityVariant: Record<string, 'secondary' | 'default' | 'destructive'> = {
-  low: 'secondary',
-  medium: 'default',
-  high: 'destructive',
+const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
+const statusColumns: string[] = ['todo', 'in_progress', 'done'];
+const priorityColors: Record<string, string> = {
+  low: 'bg-muted text-muted-foreground',
+  medium: 'bg-blue-100 text-blue-800',
+  high: 'bg-orange-100 text-orange-800',
+  urgent: 'bg-red-100 text-red-800',
 };
+const priorityLabels: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
+
+const today = () => new Date().toISOString().split('T')[0];
+function getDueDateColor(due: string | null) {
+  if (!due) return '';
+  const t = today();
+  if (due < t) return 'text-red-500';
+  const diff = (new Date(due).getTime() - new Date(t).getTime()) / (1000 * 60 * 60 * 24);
+  if (diff <= 3) return 'text-orange-500';
+  return 'text-emerald-600';
+}
 
 export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, string>>({});
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, { input: number; output: number }>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const onCountChangeRef = useRef(onCountChange);
+  onCountChangeRef.current = onCountChange;
+
+  const loadAttachmentCounts = useCallback(async (taskIds: string[]) => {
+    if (taskIds.length === 0) { setAttachmentCounts({}); return; }
+    const { data } = await supabase
+      .from('task_attachments')
+      .select('task_id, direction')
+      .in('task_id', taskIds);
+    const counts: Record<string, { input: number; output: number }> = {};
+    (data || []).forEach((a: any) => {
+      const c = counts[a.task_id] || { input: 0, output: 0 };
+      if (a.direction === 'output') c.output++; else c.input++;
+      counts[a.task_id] = c;
+    });
+    setAttachmentCounts(counts);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,13 +75,13 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
       setLoading(true);
       try {
         if (!phone) {
-          if (!cancelled) { setTasks([]); onCountChange?.(0); }
+          if (!cancelled) { setTasks([]); onCountChangeRef.current?.(0); }
           return;
         }
         const digits = phone.replace(/\D/g, '');
         const search = digits.length > 4 ? digits.slice(-8) : digits;
         if (!search) {
-          if (!cancelled) { setTasks([]); onCountChange?.(0); }
+          if (!cancelled) { setTasks([]); onCountChangeRef.current?.(0); }
           return;
         }
         const { data: contacts } = await supabase
@@ -57,7 +91,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           .filter((c: any) => c.contact_phone && c.contact_phone.replace(/\D/g, '').includes(search))
           .map((c: any) => c.client_id))] as string[];
         if (ids.length === 0) {
-          if (!cancelled) { setTasks([]); onCountChange?.(0); }
+          if (!cancelled) { setTasks([]); onCountChangeRef.current?.(0); }
           return;
         }
         const { data } = await supabase
@@ -69,7 +103,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
         if (!cancelled) {
           const rows = (data as any as TaskRow[]) || [];
           setTasks(rows);
-          onCountChange?.(rows.length);
+          onCountChangeRef.current?.(rows.length);
           const userIds = [...new Set(rows.flatMap(r => (r.task_assignments || []).map(a => a.user_id)))];
           if (userIds.length) {
             const { data: profs } = await supabase
@@ -82,13 +116,63 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           } else {
             setProfileMap({});
           }
+          await loadAttachmentCounts(rows.map(r => r.id));
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [phone, onCountChange]);
+  }, [phone, loadAttachmentCounts]);
+
+  async function moveTask(taskId: string, newStatus: string) {
+    setBusyId(taskId);
+    const { error } = await supabase.from('tasks').update({ status: newStatus } as any).eq('id', taskId);
+    setBusyId(null);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    setTasks(prev => {
+      const next = prev.filter(t => t.id !== taskId);
+      onCountChangeRef.current?.(next.length);
+      return next;
+    });
+    toast({ title: `Movida para ${statusLabels[newStatus] || newStatus}` });
+  }
+
+  async function deleteTask(taskId: string) {
+    if (!confirm('Excluir esta tarefa?')) return;
+    setBusyId(taskId);
+    await supabase.from('task_assignments').delete().eq('task_id', taskId);
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    setBusyId(null);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    setTasks(prev => {
+      const next = prev.filter(t => t.id !== taskId);
+      onCountChangeRef.current?.(next.length);
+      return next;
+    });
+    toast({ title: 'Tarefa excluída' });
+  }
+
+  async function uploadOutput(taskId: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setBusyId(taskId);
+    const failed: string[] = [];
+    for (const file of Array.from(files)) {
+      const safe = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.\-]+/g, '_');
+      const path = `tasks/${taskId}/${Date.now()}_${safe}`;
+      const up = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || undefined });
+      if (up.error) { failed.push(file.name); continue; }
+      const { error } = await supabase.from('task_attachments').insert({
+        task_id: taskId, file_url: path, file_name: file.name,
+        file_type: file.type || null, file_size: file.size, uploaded_by: user?.id, direction: 'output',
+      } as any);
+      if (error) failed.push(file.name);
+    }
+    setBusyId(null);
+    await loadAttachmentCounts(tasks.map(t => t.id));
+    if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
+    else toast({ title: 'Arquivos para o cliente anexados' });
+  }
 
   return (
     <>
@@ -114,43 +198,78 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
               Nenhuma tarefa "A Fazer" para as empresas vinculadas a este contato.
             </p>
           )}
-          {!loading && tasks.map((t) => {
-            const responsibles = (t.task_assignments || [])
-              .map(a => profileMap[a.user_id])
-              .filter(Boolean) as string[];
-            const due = t.due_date ? format(new Date(t.due_date + 'T00:00:00'), "dd 'de' MMM", { locale: ptBR }) : null;
+          {!loading && tasks.map((task) => {
+            const assignees = task.task_assignments || [];
             return (
-              <a
-                key={t.id}
-                href={`/tasks?id=${t.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-lg border bg-card text-card-foreground p-3 hover:border-primary/40 hover:shadow-sm transition"
+              <Card
+                key={task.id}
+                className={`cursor-pointer hover:shadow-md transition-shadow ${busyId === task.id ? 'opacity-60 pointer-events-none' : ''}`}
+                onClick={() => window.open(`/tasks?id=${task.id}`, '_blank')}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-medium leading-snug line-clamp-2">{t.title}</h3>
-                  <Badge variant={priorityVariant[t.priority] || 'secondary'} className="shrink-0 text-[10px]">
-                    {priorityLabel[t.priority] || t.priority}
-                  </Badge>
-                </div>
-                {t.clients?.company_name && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Building2 className="h-3 w-3" />
-                    <span className="truncate">{t.clients.company_name}</span>
+                <CardContent className="p-3 space-y-2">
+                  <p className="font-medium text-sm">{task.title}</p>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority] || task.priority}</Badge>
+                    {task.due_date && (
+                      <span className={`text-xs ${getDueDateColor(task.due_date)}`}>
+                        {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </span>
+                    )}
                   </div>
-                )}
-                <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  {due ? (
-                    <span className="flex items-center gap-1.5"><Calendar className="h-3 w-3" />{due}</span>
-                  ) : <span />}
-                  {responsibles.length > 0 && (
-                    <span className="flex items-center gap-1.5 truncate">
-                      <UserIcon className="h-3 w-3" />
-                      <span className="truncate">{responsibles.join(', ')}</span>
-                    </span>
+                  {task.clients?.company_name && (
+                    <p className="text-xs text-muted-foreground">{task.clients.company_name}</p>
                   )}
-                </div>
-              </a>
+                  {assignees.length > 0 && (
+                    <div className="flex gap-1 flex-wrap">
+                      {assignees.map(a => (
+                        <Badge key={a.user_id} variant="outline" className="text-xs">{profileMap[a.user_id] || 'Sem nome'}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-1 pt-1">
+                    {statusColumns.filter(s => s !== 'todo').slice(0, 2).map(s => (
+                      <Button
+                        key={s}
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-6 px-2"
+                        onClick={(e) => { e.stopPropagation(); moveTask(task.id, s); }}
+                      >
+                        → {statusLabels[s]}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t mt-1">
+                    <div className="flex gap-1 text-xs text-muted-foreground">
+                      {(attachmentCounts[task.id]?.input || 0) > 0 && (
+                        <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{attachmentCounts[task.id].input}</span>
+                      )}
+                      {(attachmentCounts[task.id]?.output || 0) > 0 && (
+                        <span className="flex items-center gap-0.5 text-primary"><Upload className="h-3 w-3" />{attachmentCounts[task.id].output}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <label className="cursor-pointer text-xs flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+                        <Upload className="h-3 w-3" />Para o cliente
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => { uploadOutput(task.id, e.target.files); e.target.value = ''; }}
+                        />
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
