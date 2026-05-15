@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { X, ListTodo, Paperclip, Upload, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
 interface Props {
   phone: string | null;
@@ -63,6 +64,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   const [profileMap, setProfileMap] = useState<Record<string, string>>({});
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, { input: number; output: number }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const onCountChangeRef = useRef(onCountChange);
   onCountChangeRef.current = onCountChange;
 
@@ -272,7 +274,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
               <Card
                 key={task.id}
                 className={`cursor-pointer hover:shadow-md transition-shadow ${busyId === task.id ? 'opacity-60 pointer-events-none' : ''}`}
-                onClick={() => window.open(`/tasks?id=${task.id}`, '_blank')}
+                onClick={() => setEditingTaskId(task.id)}
               >
                 <CardContent className="p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -352,6 +354,33 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           })}
         </div>
       </ScrollArea>
+      <TaskEditDialog
+        open={!!editingTaskId}
+        onOpenChange={(v) => { if (!v) setEditingTaskId(null); }}
+        taskId={editingTaskId}
+        onSaved={() => {
+          setTasks((curr) => {
+            // Remove from pending list if status no longer 'todo' will be reflected on next load.
+            return curr;
+          });
+          // Re-trigger load by toggling phone effect: simplest is to reload attachment counts and refetch tasks.
+          // The parent useEffect re-runs only on phone change; manually refetch:
+          (async () => {
+            const ids = tasks.map((t) => t.id);
+            if (ids.length === 0) return;
+            const { data } = await supabase
+              .from('tasks')
+              .select('id,status')
+              .in('id', ids);
+            const stillPending = new Set((data || []).filter((t: any) => t.status === 'todo').map((t: any) => t.id));
+            setTasks((curr) => {
+              const next = curr.filter((t) => stillPending.has(t.id));
+              onCountChangeRef.current?.(next.length);
+              return next;
+            });
+          })();
+        }}
+      />
     </>
   );
 }
