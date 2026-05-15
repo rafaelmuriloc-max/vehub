@@ -25,7 +25,10 @@ type Task = {
 type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
-type TaskTemplate = { id: string; name: string; department_id: string; description: string | null; default_due_days: number };
+type TaskTemplate = {
+  id: string; name: string; department_id: string; description: string | null; default_due_days: number;
+  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null;
+};
 type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null; direction?: 'input' | 'output' };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
@@ -50,13 +53,15 @@ export default function Tasks() {
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as Task['status'], priority: 'medium' as Task['priority'],
     due_date: '', client_id: '', assigned_to: [] as string[],
-    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '',
   });
 
   // Templates state
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
-  const [templateForm, setTemplateForm] = useState({ name: '', department_id: '', description: '', default_due_days: '7' });
+  const [templateForm, setTemplateForm] = useState({
+    name: '', department_id: '', description: '', default_due_days: '7',
+    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '',
+  });
   const [templateFilterDept, setTemplateFilterDept] = useState<string>('all');
 
   // Solicitar state
@@ -100,8 +105,7 @@ export default function Tasks() {
 
   function openNew() {
     setEditing(null);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [],
-      notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '' });
+    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [] });
     setDialogOpen(true);
   }
 
@@ -111,10 +115,6 @@ export default function Tasks() {
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
       assigned_to: assignments[task.id] || [],
-      notify_whatsapp: !!task.notify_whatsapp,
-      notify_email: !!task.notify_email,
-      notify_message: task.notify_message || '',
-      notify_email_subject: task.notify_email_subject || '',
     });
     setEditNewFiles([]);
     setEditAttachments([]);
