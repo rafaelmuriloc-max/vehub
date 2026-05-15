@@ -20,7 +20,7 @@ interface TaskRow {
   due_date: string | null;
   client_id: string | null;
   clients: { company_name: string } | null;
-  task_assignments: { profiles: { full_name: string | null } | null }[];
+  task_assignments: { user_id: string }[];
 }
 
 const priorityLabel: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta' };
@@ -33,6 +33,7 @@ const priorityVariant: Record<string, 'secondary' | 'default' | 'destructive'> =
 export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [profileMap, setProfileMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +62,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
         }
         const { data } = await supabase
           .from('tasks')
-          .select('id,title,priority,due_date,client_id,clients(company_name),task_assignments(profiles:profiles!task_assignments_user_id_fkey(full_name))')
+          .select('id,title,priority,due_date,client_id,clients(company_name),task_assignments(user_id)')
           .in('client_id', ids)
           .eq('status', 'todo')
           .order('due_date', { ascending: true, nullsFirst: false });
@@ -69,6 +70,18 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           const rows = (data as any as TaskRow[]) || [];
           setTasks(rows);
           onCountChange?.(rows.length);
+          const userIds = [...new Set(rows.flatMap(r => (r.task_assignments || []).map(a => a.user_id)))];
+          if (userIds.length) {
+            const { data: profs } = await supabase
+              .from('profiles')
+              .select('user_id, full_name')
+              .in('user_id', userIds);
+            const m: Record<string, string> = {};
+            (profs || []).forEach((p: any) => { m[p.user_id] = p.full_name || ''; });
+            if (!cancelled) setProfileMap(m);
+          } else {
+            setProfileMap({});
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -103,7 +116,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           )}
           {!loading && tasks.map((t) => {
             const responsibles = (t.task_assignments || [])
-              .map(a => a.profiles?.full_name)
+              .map(a => profileMap[a.user_id])
               .filter(Boolean) as string[];
             const due = t.due_date ? format(new Date(t.due_date + 'T00:00:00'), "dd 'de' MMM", { locale: ptBR }) : null;
             return (
