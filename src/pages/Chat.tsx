@@ -121,6 +121,7 @@ export default function Chat() {
 
     const allContacts = whatsappContactsResult.data || [];
     const whatsappCompanyMap = new Map<string, string[]>();
+    const convClientIdsMap = new Map<string, string[]>();
     if (whatsappConvs.length > 0 && allContacts.length > 0) {
       const contactClientIds = [...new Set(allContacts.filter(c => c.client_id).map(c => c.client_id))];
       const { data: contactClients } = contactClientIds.length > 0
@@ -138,7 +139,26 @@ export default function Chat() {
         )];
         const names = matchedClientIds.map(id => contactClientMap.get(id)).filter(Boolean) as string[];
         if (names.length > 0) whatsappCompanyMap.set((conv as any).id, names);
+        if (matchedClientIds.length > 0) convClientIdsMap.set((conv as any).id, matchedClientIds as string[]);
       }
+    }
+
+    // Pending tasks count per conversation
+    const allTaskClientIds = [...new Set([
+      ...Array.from(convClientIdsMap.values()).flat(),
+      ...convs.map((c: any) => c.client_id).filter(Boolean),
+    ])] as string[];
+    const pendingByClient = new Map<string, number>();
+    if (allTaskClientIds.length > 0) {
+      const { data: pendingTasks } = await supabase
+        .from('tasks')
+        .select('client_id')
+        .in('client_id', allTaskClientIds)
+        .eq('status', 'todo');
+      (pendingTasks || []).forEach((t: any) => {
+        if (!t.client_id) return;
+        pendingByClient.set(t.client_id, (pendingByClient.get(t.client_id) || 0) + 1);
+      });
     }
 
     const items: ConversationItem[] = convs.map((conv: any) => {
@@ -155,6 +175,13 @@ export default function Chat() {
           name = profileMap.get(otherUserId) || name;
         }
       }
+
+      const matchedIds = new Set<string>([
+        ...(convClientIdsMap.get(conv.id) || []),
+        ...(conv.client_id ? [conv.client_id] : []),
+      ]);
+      let pendingTasksCount = 0;
+      matchedIds.forEach(cid => { pendingTasksCount += pendingByClient.get(cid) || 0; });
 
       return {
         id: conv.id,
@@ -174,6 +201,7 @@ export default function Chat() {
         waitingSince: conv.waiting_since || null,
         totalWaitSeconds: conv.total_wait_seconds || 0,
         awaitingFirstReply: (conv as any).awaiting_first_reply ?? false,
+        pendingTasksCount,
       };
     });
 

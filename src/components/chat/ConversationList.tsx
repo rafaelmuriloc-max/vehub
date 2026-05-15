@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw, ExternalLink, Timer } from 'lucide-react';
+import { Search, MessageSquarePlus, ArrowLeft, User, RefreshCw, ExternalLink, Timer, ClipboardList } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,7 @@ export interface ConversationItem {
   waitingSince?: string | null;
   totalWaitSeconds?: number;
   awaitingFirstReply?: boolean;
+  pendingTasksCount?: number;
 }
 
 interface ConversationListProps {
@@ -217,7 +218,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-               className={`w-full gap-3 pl-2 md:pl-3 pr-2 md:pr-3 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors flex items-center justify-start border-b border-border/60 last:border-b-0 rounded-lg ${
+               className={`relative w-full gap-3 pl-2 md:pl-3 pr-2 md:pr-3 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors flex items-center justify-start border-b border-border/60 last:border-b-0 rounded-lg ${
                  conv.id === activeId ? 'bg-[#F0F2F5] dark:bg-zinc-800' : 'bg-white dark:bg-zinc-900'
                }`}
             >
@@ -289,6 +290,15 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                   </div>
                 )}
               </div>
+              {conv.pendingTasksCount && conv.pendingTasksCount > 0 ? (
+                <span
+                  className="absolute bottom-1.5 right-2 inline-flex items-center gap-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold px-1.5 py-0.5 pointer-events-none shadow-sm"
+                  title={`${conv.pendingTasksCount} tarefa(s) pendente(s)`}
+                >
+                  <ClipboardList className="h-3 w-3" />
+                  {conv.pendingTasksCount}
+                </span>
+              ) : null}
             </button>
           ))
         )}
