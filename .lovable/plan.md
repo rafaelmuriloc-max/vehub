@@ -1,14 +1,16 @@
-## Mudança
+## Problema
 
-Alterar o painel "Solicitar tarefa" no `src/pages/Chat.tsx` para que, em vez de abrir como overlay absoluto sobre as mensagens, ocupe espaço lateral dentro da área de conversa, empurrando as mensagens para a esquerda.
+O painel "Solicitar tarefa" não rola: campos finais (anexos, botões) ficam fora da viewport.
 
-## Implementação
+## Causa
 
-Em `src/pages/Chat.tsx` (linhas ~813-862):
+O wrapper interno `<div className="flex-1 overflow-y-auto p-4">` em `src/pages/Chat.tsx` está dentro de um `flex flex-col` sem `min-h-0`, então o `overflow-y-auto` não dispara — o filho expande além do container.
 
-1. Remover `relative` do wrapper externo e `absolute inset-y-0 right-0 z-20` do painel.
-2. O painel passa a ser um irmão flex normal: `w-full md:w-[420px] border-l bg-background flex flex-col shrink-0`.
-3. Mantém o `MessageArea` em `flex-1 min-w-0` — assim, ao abrir o painel, o flex layout reduz a largura da área de mensagens automaticamente (push em vez de overlay).
-4. No mobile (telas estreitas), o painel ainda ocupa `w-full`, então a área de mensagens fica oculta — comportamento aceitável dado o pouco espaço; alternativa: esconder `MessageArea` via `hidden md:flex` quando `taskPanelOpen` for true no mobile.
+## Correção
 
-Sem mudanças de lógica, props ou outros arquivos.
+Em `src/pages/Chat.tsx`, no bloco do painel `taskPanelOpen`:
+
+1. Adicionar `min-h-0` ao container externo `<div className="w-full md:w-[420px] border-l ... flex flex-col shrink-0">` para que ele respeite a altura do flex pai.
+2. Adicionar `min-h-0` ao `<div className="flex-1 overflow-y-auto p-4">` para permitir o scroll.
+
+Sem mudanças em `TaskRequestForm.tsx`.
