@@ -315,6 +315,7 @@ export default function Tasks() {
 
   function openRequest(tpl: TaskTemplate) {
     setRequestTemplate(tpl);
+    setRequestCustomTitle('');
     const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
     setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium', description: tpl.description || '' });
     setRequestFiles([]);
@@ -723,8 +724,39 @@ export default function Tasks() {
       {/* Solicitar Dialog */}
       <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Solicitar: {requestTemplate?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{requestTemplate ? `Solicitar: ${requestTemplate.name}` : 'Nova Tarefa'}</DialogTitle></DialogHeader>
           <form onSubmit={handleRequest} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tarefa cadastrada (opcional)</Label>
+              <Select
+                value={requestTemplate?.id || 'none'}
+                onValueChange={(v) => {
+                  if (v === 'none') {
+                    setRequestTemplate(null);
+                  } else {
+                    const tpl = templates.find(t => t.id === v) || null;
+                    setRequestTemplate(tpl);
+                    if (tpl) {
+                      const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
+                      setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0] }));
+                      setRequestCustomTitle('');
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione uma tarefa do cadastro" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Nenhuma (digitar nome livre) —</SelectItem>
+                  {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {!requestTemplate && (
+              <div className="space-y-2">
+                <Label>Nome da tarefa *</Label>
+                <Input value={requestCustomTitle} onChange={e => setRequestCustomTitle(e.target.value)} placeholder="Ex.: Enviar declaração para o cliente" />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Cliente *</Label>
               <Select value={requestForm.client_id} onValueChange={v => setRequestForm({ ...requestForm, client_id: v })}>
