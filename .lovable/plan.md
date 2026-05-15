@@ -1,44 +1,26 @@
 ## Objetivo
 
-Ao clicar no card de uma tarefa dentro do painel de tarefas pendentes do chat, abrir o **mesmo dialog de edição** usado no Kanban (em vez de abrir `/tasks?id=...` em nova aba).
-
-## Contexto
-
-- Hoje, em `PendingTasksPanel.tsx`, o card chama `window.open('/tasks?id=...')`.
-- O dialog de edição vive **inline** dentro de `src/pages/Tasks.tsx` (linhas 586–695) e depende de várias funções/estados locais (`form`, `editAttachments`, `uploadEditFiles`, `downloadAttachment`, `removeAttachment`, `handleSave`, `profiles`, `clients`, `departments`, `assignments`).
-
-Para reutilizar exatamente o mesmo dialog no chat, vamos extrair a edição em um componente autocontido.
+Adaptar o dialog "Editar Tarefa" (`src/components/tasks/TaskEditDialog.tsx`) para mobile, sem alterar lógica.
 
 ## Mudanças
 
-### 1. Novo `src/components/tasks/TaskEditDialog.tsx`
+**`DialogContent`**
+- Largura responsiva: `w-[calc(100vw-1rem)] sm:max-w-lg`
+- Altura: `max-h-[95vh] sm:max-h-[90vh]`
+- Padding compatível com mobile
 
-Componente reutilizável que recebe:
-```ts
-{ open: boolean; onOpenChange: (v: boolean) => void; taskId: string | null; onSaved?: () => void }
-```
+**Grid de campos (Status/Prioridade/Prazo/Cliente/Departamento)**
+- Trocar `grid-cols-2` por `grid-cols-1 sm:grid-cols-2`
+- Ajustar `col-span-2` para `sm:col-span-2`
 
-Internamente:
-- Ao abrir com `taskId`, carrega em paralelo: `tasks` (a tarefa), `task_assignments` (do task), `task_attachments` (do task), `profiles`, `clients`, `departments`.
-- Renderiza exatamente o mesmo formulário de edição já existente em `Tasks.tsx`:
-  - Título, Descrição, Status, Prioridade, Prazo, Cliente, Departamento, Atribuir a (badges).
-  - Aviso de notificação WhatsApp/E-mail.
-  - Listas de anexos `input` (Anexos da solicitação) e `output` (Anexos para o cliente), com download (signed URL), remoção e upload.
-- Funções internas: `handleSave`, `uploadFiles(direction)`, `downloadAttachment`, `removeAttachment` — replicando a lógica atual de `Tasks.tsx`.
-- Ao salvar com sucesso: fecha e dispara `onSaved?.()`.
+**Linha de upload de anexos**
+- Trocar `flex items-center gap-2` por `flex flex-col sm:flex-row sm:items-center gap-2` para o input `type="file"` + botão "Anexar" não estourarem em telas estreitas
+- Botão "Anexar" com `w-full sm:w-auto`
 
-### 2. `src/components/chat/PendingTasksPanel.tsx`
+**Itens de anexo já existentes**
+- Manter, mas garantir `min-w-0` no container e `truncate` (já está) para nome do arquivo não estourar
 
-- Importar `TaskEditDialog`.
-- Adicionar estado `editingTaskId: string | null`.
-- Substituir o `onClick` do card:
-  - **De**: `onClick={() => window.open('/tasks?id=...', '_blank')}`
-  - **Para**: `onClick={() => setEditingTaskId(task.id)}`
-- Renderizar `<TaskEditDialog open={!!editingTaskId} onOpenChange={(v) => !v && setEditingTaskId(null)} taskId={editingTaskId} onSaved={loadTasks} />` no final do componente.
-- Manter `e.stopPropagation()` nos botões internos (mover status, anexar arquivo, excluir) para não disparar a abertura do dialog.
+**Badges "Atribuir a"**
+- Já usa `flex flex-wrap`, sem mudança
 
-### 3. `src/pages/Tasks.tsx` (sem refactor obrigatório)
-
-Mantém seu dialog inline atual — não precisamos mexer agora. Em uma iteração futura pode-se trocar pelo novo `TaskEditDialog` para deduplicar.
-
-Sem mudanças em schema, RLS, edge functions ou rotas.
+Nenhuma alteração em backend, hooks, queries ou comportamento.
