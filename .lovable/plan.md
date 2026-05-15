@@ -1,36 +1,39 @@
-## Objetivo
+## Problema
 
-Quando uma mensagem é encaminhada via diálogo "Encaminhar mensagem", a nova mensagem entregue ao destinatário deve exibir o indicador "↪ Encaminhada" em itálico no topo do balão (igual ao WhatsApp da imagem de referência), tanto no nosso chat quanto no WhatsApp do contato.
+A marcação nativa "Encaminhada" no WhatsApp do contato só aparece quando a mensagem é enviada com o `contextInfo` de forwarding do protocolo Baileys/WA-Web.
 
-## Mudanças
+A Meta Cloud API **não expõe** essa flag — qualquer mensagem enviada por ela aparece como mensagem normal no WhatsApp do destinatário, mesmo com `is_forwarded=true` no nosso banco.
 
-### 1. Banco de dados (migração nova)
-- Adicionar coluna `is_forwarded boolean not null default false` em `chat_messages`.
+A Evolution API (que já usamos como fallback para replies) suporta enviar mensagens com `options.contextInfo.forwardingScore` e `options.contextInfo.isForwarded`, fazendo o WhatsApp do contato exibir o rótulo "Encaminhada".
 
-### 2. `ForwardMessageDialog.tsx`
-- No insert direto (conversa interna sem WhatsApp): incluir `is_forwarded: true`.
-- Nas chamadas a `whatsapp-send-text` e `whatsapp-send-media`: passar `isForwarded: true` no body.
+Logs confirmam que o teste atual foi via Meta API: `Sending via Meta API (24h window open)`.
 
-### 3. Edge functions `whatsapp-send-text` e `whatsapp-send-media`
-- Aceitar o parâmetro `isForwarded` no body.
-- Incluir `is_forwarded: !!isForwarded` no `insert` em `chat_messages`.
-- Não há mudança no payload Meta API — o WhatsApp do contato exibirá nativamente como "encaminhada" apenas se o app reconhecer; em nossa UI o indicador ficará garantido pelo flag salvo. (A Meta Cloud API não expõe o atributo `forwarded` no envio de mensagens — esse rótulo do WhatsApp nativo não é controlável via API; a marcação visual fica garantida no nosso chat.)
+## Solução
 
-### 4. `MessageArea.tsx`
-- Selecionar `is_forwarded` na query de mensagens.
-- Repassar prop `isForwarded` para `<MessageBubble>`.
+Quando a mensagem for encaminhada (`isForwarded=true`), forçar o envio via Evolution API e incluir o `contextInfo` de forward.
 
-### 5. `MessageBubble.tsx`
-- Nova prop `isForwarded?: boolean`.
-- Quando `true` e a mensagem não estiver deletada, renderizar acima do conteúdo (e abaixo do `senderName`):
-  ```
-  <div class="flex items-center gap-1 mb-1 text-muted-foreground italic text-xs">
-    <Forward className="h-3 w-3 -scale-x-100" /> Encaminhada
-  </div>
-  ```
+### 1. `supabase/functions/whatsapp-send-text/index.ts`
+- Quando `isForwarded === true`:
+  - Pular Meta API e ir direto para o branch Evolution (já existente, hoje usado para reply fallback).
+  - No payload do `/message/sendText/{instance}`, incluir:
+    ```json
+    "options": {
+      "contextInfo": {
+        "isForwarded": true,
+        "forwardingScore": 5
+      }
+    }
+    ```
+- Manter persistência de `is_forwarded: true` em `chat_messages`.
+
+### 2. `supabase/functions/whatsapp-send-media/index.ts`
+- Mesma lógica: quando `isForwarded === true`, rotear via Evolution (`/message/sendMedia/{instance}` ou `/message/sendWhatsAppAudio/{instance}`) com `options.contextInfo.{isForwarded, forwardingScore}`.
+
+### 3. Fallback
+- Se Evolution não estiver configurada (variáveis ausentes), cair de volta para Meta API e gravar `is_forwarded` apenas para exibição interna (sem rótulo nativo no celular do contato). Logar aviso.
 
 ## Detalhes técnicos
 
-- Reutilizar o ícone `Forward` já importado (`lucide-react`), com `-scale-x-100` para ficar com a seta apontando como na referência.
-- Manter cores via tokens semânticos (`text-muted-foreground`).
-- O flag `is_forwarded` é apenas exibição; não impacta lógicas de WhatsApp/edição/exclusão existentes.
+- A flag `forwardingScore` (>=1) é o que faz o WhatsApp Web/Mobile exibir "Encaminhada"; valores >=5 mostram "Encaminhada várias vezes". Vamos usar `5` para coincidir com o visual da referência ("Encaminhada" simples também aceita ≥1, mas Baileys padrão é 5).
+- O `VHUB_MARKER` (`\u200B\u200B\u200B`) deve continuar sendo anexado ao texto para evitar eco no webhook.
+- Não há mudança de UI: o rótulo no nosso chat (já implementado) continua via `is_forwarded` da tabela.
