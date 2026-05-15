@@ -494,6 +494,37 @@ export default function Tasks() {
                 ))}
               </div>
             </div>
+            {editing && (
+              <div className="space-y-2">
+                <Label>Anexos</Label>
+                {editAttachments.length === 0 && <p className="text-xs text-muted-foreground">Nenhum anexo</p>}
+                <div className="space-y-1">
+                  {editAttachments.map(att => (
+                    <div key={att.id} className="flex items-center gap-2 text-sm border rounded-md px-2 py-1.5">
+                      <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <button type="button" onClick={() => downloadAttachment(att)} className="flex-1 text-left truncate hover:underline text-primary">
+                        {att.file_name}
+                      </button>
+                      {att.file_size != null && <span className="text-xs text-muted-foreground shrink-0">{(att.file_size / 1024).toFixed(1)} KB</span>}
+                      {(att.uploaded_by === user?.id || isAdmin) && (
+                        <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeAttachment(att)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Input type="file" multiple onChange={e => setEditNewFiles(Array.from(e.target.files || []))} className="text-xs" />
+                  <Button type="button" size="sm" disabled={uploading || editNewFiles.length === 0} onClick={uploadEditFiles}>
+                    {uploading ? 'Enviando...' : 'Anexar'}
+                  </Button>
+                </div>
+                {editNewFiles.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{editNewFiles.length} arquivo(s) selecionado(s)</p>
+                )}
+              </div>
+            )}
             <Button type="submit" className="w-full">{editing ? 'Salvar' : 'Criar'}</Button>
           </form>
         </DialogContent>
