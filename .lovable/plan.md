@@ -1,33 +1,52 @@
-## Objetivo
-Replicar o comportamento do WhatsApp no chat mobile: quando o teclado abre, o input "gruda" logo acima dele e o cabeçalho permanece visível, sem espaço vazio entre o teclado e a caixa de texto.
+## Problema
+Mesmo com `position: fixed` + `visualViewport.offsetTop/height` no container do Chat, sobra um espaço grande entre o input e o teclado no iOS (visível na captura). No WhatsApp não acontece porque o input fica colado no topo do teclado.
 
-## Mudanças
+Causas prováveis:
+1. iOS Safari não respeita `interactive-widget=resizes-content` (apenas Chromium suporta). O layout viewport não encolhe — só o `visualViewport`.
+2. Quando o usuário foca o `<textarea>` dentro de um `position: fixed`, o iOS faz scroll automático para tentar centralizar o input, deslocando `visualViewport.offsetTop` de forma instável.
+3. `pb-[calc(env(safe-area-inset-bottom,0px)+16px)]` no `ChatInput` adiciona padding fixo na base do input (16-50px) que não some com o teclado aberto.
+
+## Solução
+
+Trocar a estratégia atual por uma que separa o input do container, igual ao WhatsApp Web/PWA:
 
 ### 1. `src/pages/Chat.tsx`
-No mobile, transformar o container raiz em `position: fixed` ancorado ao `visualViewport`:
-
+Voltar o container do Chat no mobile para layout simples, sem `position: fixed`:
 ```jsx
-style={
-  isMobile
-    ? {
-        position: 'fixed',
-        top: viewportOffsetTop,
-        left: 0,
-        right: 0,
-        height: viewportHeight,
-        paddingTop: 'env(safe-area-inset-top)',
-      }
-    : undefined
-}
+className="flex flex-col w-full overflow-hidden bg-background h-[100dvh] md:h-screen"
+style={{ paddingTop: 'env(safe-area-inset-top)' }}
 ```
+Remover o uso de `viewportOffsetTop`/`viewportHeight` no container raiz.
 
-O hook `useVisualViewport` já foi estendido na iteração anterior para devolver `{ height, offsetTop }`, então só falta garantir que o `Chat.tsx` consuma `offsetTop` e aplique no `top` do container.
+### 2. `src/components/chat/MessageArea.tsx`
+Envolver o `ChatInput` em um wrapper que se desloca para cima conforme o teclado abre, usando `transform: translateY(-keyboardInset)`:
+```jsx
+const keyboardInset = Math.max(0, window.innerHeight - viewportHeight - viewportOffsetTop);
+<div
+  className="shrink-0"
+  style={{ transform: `translateY(-${keyboardInset}px)`, transition: 'transform 0s' }}
+>
+  <ChatInput ... />
+</div>
+```
+Adicionar também `padding-bottom: keyboardInset` na área de scroll das mensagens para que a última mensagem não fique escondida pelo input deslocado.
 
-### 2. Verificação
-- Confirmar que `useVisualViewport` está sendo importado e desestruturado corretamente em `Chat.tsx`.
-- Testar no preview mobile (402x632) abrindo uma conversa e simulando foco no input.
-- Garantir que `ChatPopup.tsx` (desktop popup) não seja afetado — ele usa `h-[100dvh]` e `isMobile=false`.
+### 3. `src/components/chat/ChatInput.tsx`
+Remover o `pb-[calc(env(safe-area-inset-bottom,0px)+16px)]` quando o teclado está aberto. Substituir por:
+```jsx
+className="... pb-[calc(env(safe-area-inset-bottom,0px)+8px)]"
+```
+e zerar via prop `keyboardOpen` quando `keyboardInset > 0` (sem padding extra).
+
+### 4. Hook
+Manter `useVisualViewport()` retornando `{ height, offsetTop }`. Usar em `MessageArea` para calcular `keyboardInset`.
+
+## Por que funciona
+- O container ocupa toda a tela com `100dvh`. O teclado sobrepõe a parte de baixo.
+- O `translateY` move o input para cima pelo exato número de pixels que o teclado cobre, deixando-o colado no topo do teclado.
+- O `padding-bottom` no scroll mantém a última mensagem visível.
+- Sem `position: fixed`, o iOS para de fazer scroll automático maluco.
 
 ## Fora de escopo
-- Layout desktop.
-- Outros componentes do chat (MessageArea, ChatInput) já tratam scroll interno.
+- Layout desktop (continua usando `md:h-screen`).
+- ChatPopup (já usa `h-[100dvh]`).
