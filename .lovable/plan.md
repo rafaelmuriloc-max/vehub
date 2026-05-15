@@ -1,36 +1,23 @@
-## Anexos na solicitação de tarefa
+## Mudança no Kanban de Tarefas
 
-Adicionar suporte a anexos (documentos/imagens) no diálogo "Solicitar Tarefa" da página /tasks.
+Reduzir o quadro Kanban para 3 colunas:
+- **A Fazer** (`todo`)
+- **Aguardando** (`in_progress`)
+- **Concluído** (`done`)
 
-### Banco de dados
+A coluna "Em Revisão" (`in_review`) será removida. Tarefas existentes nesse status serão migradas para `in_progress` ("Aguardando").
 
-Nova tabela `task_attachments`:
-- `task_id` (uuid, FK → tasks)
-- `file_url` (text — caminho no bucket `documents`)
-- `file_name` (text)
-- `file_type` (text)
-- `file_size` (int)
-- `uploaded_by` (uuid)
+### Alterações
 
-RLS: usuários autenticados podem visualizar/inserir; quem subiu (ou admin) pode deletar.
+**`src/pages/Tasks.tsx`**
+- `statusLabels`: `{ todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' }`
+- `statusColumns`: `['todo', 'in_progress', 'done']`
+- Tipo `Task['status']`: `'todo' | 'in_progress' | 'done'`
+- Selects de status (filtro e diálogo de edição) refletem as 3 opções
+- Tarefas com `in_review` carregadas do banco são exibidas na coluna "Aguardando" (tratamento de fallback)
 
-Storage: reutilizar o bucket existente `documents`, prefixo `tasks/{task_id}/{arquivo_sanitizado}`. Nome do arquivo sanitizado conforme regra do projeto (sem espaços/acentos, NFD).
+**Migração SQL**
+- `UPDATE public.tasks SET status = 'in_progress' WHERE status = 'in_review';`
+- (não removo o valor do enum — caso `status` seja `text`, basta o update; se for enum, mantenho o valor para não quebrar dependências)
 
-### Frontend (`src/pages/Tasks.tsx`)
-
-Diálogo "Solicitar":
-- Novo campo "Anexos" com `<input type="file" multiple>` aceitando imagens e documentos comuns (pdf, doc, xls, png, jpg, etc.).
-- Lista pré-upload com nome, tamanho e botão remover.
-- Ao submeter: cria a tarefa → faz upload dos arquivos para `documents/tasks/{taskId}/...` → insere registros em `task_attachments`.
-- Toast de erro se algum upload falhar (a tarefa permanece criada).
-
-Diálogo "Editar tarefa" (criar/editar manual):
-- Mesma seção de anexos, listando os já existentes com link de download (signed URL) e botão remover.
-
-Card do Kanban:
-- Pequeno ícone de clipe com contagem de anexos quando houver.
-
-### Fora de escopo
-- Pré-visualização inline de imagens.
-- Versionamento de arquivos.
-- Anexos em massa via drag-and-drop (apenas seletor padrão).
+Sem mudanças em outras páginas, RLS ou lógica de atribuição.
