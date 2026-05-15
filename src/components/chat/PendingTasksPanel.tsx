@@ -9,6 +9,31 @@ import { X, ListTodo, Paperclip, Upload, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
+function getReadableTextColor(hex: string): string {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 160 ? '#0f172a' : '#ffffff';
+}
+
+function AssigneeBadge({ name, color }: { name: string; color?: string | null }) {
+  const hasColor = !!color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color);
+  if (!hasColor) {
+    return <Badge variant="outline">{name}</Badge>;
+  }
+  return (
+    <Badge
+      variant="secondary"
+      style={{ backgroundColor: color!, color: getReadableTextColor(color!) }}
+    >
+      {name}
+    </Badge>
+  );
+}
+
 interface Props {
   phone: string | null;
   onClose: () => void;
