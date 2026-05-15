@@ -15,6 +15,8 @@ import { AttachFromSystemDialog } from '@/components/chat/AttachFromSystemDialog
 import { AttachSocietyDocumentsDialog } from '@/components/chat/AttachSocietyDocumentsDialog';
 import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
 import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
+import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
+import { X } from 'lucide-react';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
