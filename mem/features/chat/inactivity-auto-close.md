@@ -6,6 +6,7 @@ type: feature
 Edge function `chat-inactivity-monitor` (cron `* * * * *`):
 
 - Escopo: conversas com `status='open'` E `assigned_to IS NOT NULL`.
+- Exceção: ignora conversas com `awaiting_first_reply=true` (atendente atribuído mas ainda sem 1ª resposta) — o timer só passa a valer após a 1ª mensagem do atendente.
 - Inatividade: 30 min sem qualquer mensagem nova na conversa.
 - Em horário comercial (`company_settings.service_hours_enabled` + open/close/lunch + dias úteis + feriados nacionais), envia aviso no `chat_alert_whatsapp_group_id` via Evolution API e grava `chat_conversations.last_inactivity_alert_at`.
 - Fora do horário comercial: fecha o chamado silenciosamente (sem aviso).
