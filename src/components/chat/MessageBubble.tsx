@@ -18,6 +18,14 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 const LONG_PRESS_MS = 2000;
 
+const triggerHaptic = (pattern: number | number[] = 30) => {
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(pattern);
+    }
+  } catch {}
+};
+
 interface MessageBubbleProps {
   content: string;
   timestamp: string;
@@ -193,6 +201,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
     clearLongPress();
     longPressTimer.current = window.setTimeout(() => {
       longPressFired.current = true;
+      triggerHaptic(40);
       setMenuOpen(true);
     }, LONG_PRESS_MS);
   };
@@ -207,6 +216,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   const closeMobileMenu = () => setMenuOpen(false);
   const runAndClose = (fn?: () => void) => {
+    triggerHaptic(15);
     if (fn) fn();
     setMenuOpen(false);
   };
@@ -409,7 +419,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
                 </button>
               )}
               {canEdit && onEdit && (
-                <button role="menuitem" onClick={() => { setDraft(content); setEditing(true); setMenuOpen(false); }} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left border-t border-black/10 dark:border-white/10 active:bg-black/10 hover:bg-black/5">
+                <button role="menuitem" onClick={() => { triggerHaptic(15); setDraft(content); setEditing(true); setMenuOpen(false); }} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left border-t border-black/10 dark:border-white/10 active:bg-black/10 hover:bg-black/5">
                   <span>Editar</span>
                   <Pencil className="h-5 w-5 text-muted-foreground" />
                 </button>
