@@ -1,0 +1,1 @@
+ALTER TABLE public.task_attachments ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'input' CHECK (direction IN ('input','output'));
