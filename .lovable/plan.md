@@ -1,31 +1,33 @@
-## Problema
-Ao abrir o teclado no iOS, o container do chat fica com a altura correta (visualViewport), mas como ele usa `position: static` dentro de um `<body>` com `window.innerHeight` original, sobra um espaço enorme abaixo do input — o chat fica "encolhido" no topo da tela, e o teclado cobre apenas o vazio.
+## Objetivo
+Replicar o comportamento do WhatsApp no chat mobile: quando o teclado abre, o input "gruda" logo acima dele e o cabeçalho permanece visível, sem espaço vazio entre o teclado e a caixa de texto.
 
-No WhatsApp o input encosta no teclado porque o container fica ancorado à área visível (visualViewport), não ao body.
+## Mudanças
 
-## Solução
-Em `src/pages/Chat.tsx`, no mobile, transformar o container raiz em `position: fixed` ancorado à área visível usando `window.visualViewport.offsetTop`/`height`:
+### 1. `src/pages/Chat.tsx`
+No mobile, transformar o container raiz em `position: fixed` ancorado ao `visualViewport`:
 
-- Estender `useVisualViewportHeight` para também devolver `offsetTop` (renomear para `useVisualViewport()` retornando `{ height, offsetTop }`).
-- No mobile, aplicar:
-  ```
-  style={{
-    position: 'fixed',
-    top: offsetTop,
-    left: 0,
-    right: 0,
-    height: viewportHeight,
-    paddingTop: 'env(safe-area-inset-top)',
-  }}
-  ```
-- Manter `md:h-screen` no desktop (sem style fixed) — usar prop condicional.
+```jsx
+style={
+  isMobile
+    ? {
+        position: 'fixed',
+        top: viewportOffsetTop,
+        left: 0,
+        right: 0,
+        height: viewportHeight,
+        paddingTop: 'env(safe-area-inset-top)',
+      }
+    : undefined
+}
+```
 
-Isso faz o chat "grudar" no visualViewport: quando o teclado sobe, o container desce/encolhe junto e o input fica logo acima do teclado, sem gap.
+O hook `useVisualViewport` já foi estendido na iteração anterior para devolver `{ height, offsetTop }`, então só falta garantir que o `Chat.tsx` consuma `offsetTop` e aplique no `top` do container.
 
-## Detalhes técnicos
-- `visualViewport.offsetTop` indica o quanto a viewport visual foi deslocada para baixo (em iOS quando o teclado abre + scroll por causa do input focado).
-- `position: fixed` ignora o body e usa a viewport.
-- O `paddingTop: safe-area` continua válido para o notch.
+### 2. Verificação
+- Confirmar que `useVisualViewport` está sendo importado e desestruturado corretamente em `Chat.tsx`.
+- Testar no preview mobile (402x632) abrindo uma conversa e simulando foco no input.
+- Garantir que `ChatPopup.tsx` (desktop popup) não seja afetado — ele usa `h-[100dvh]` e `isMobile=false`.
 
 ## Fora de escopo
-- Layout desktop e popup mantêm comportamento atual.
+- Layout desktop.
+- Outros componentes do chat (MessageArea, ChatInput) já tratam scroll interno.
