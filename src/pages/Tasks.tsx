@@ -38,12 +38,11 @@ function getReadableTextColor(hex: string): string {
 function AssigneeBadge({ name, color }: { name: string; color?: string | null }) {
   const hasColor = !!color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color);
   if (!hasColor) {
-    return <Badge variant="outline" className="text-xs">{name}</Badge>;
+    return <Badge variant="outline">{name}</Badge>;
   }
   return (
     <Badge
       variant="secondary"
-      className="text-xs border-0"
       style={{ backgroundColor: color!, color: getReadableTextColor(color!) }}
     >
       {name}
