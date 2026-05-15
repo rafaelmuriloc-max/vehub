@@ -108,12 +108,40 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
         }
         const { data } = await supabase
           .from('tasks')
-          .select('id,task_number,title,priority,due_date,client_id,created_at,created_by,department_id,status,notify_whatsapp,notify_email,notify_sent_at,clients(company_name),departments(name),task_assignments(user_id)')
+          .select('id,task_number,title,priority,due_date,client_id,created_at,created_by,department_id,status,notify_whatsapp,notify_email,notify_sent_at')
           .in('client_id', ids)
           .eq('status', 'todo')
           .order('due_date', { ascending: true, nullsFirst: false });
         if (!cancelled) {
-          const rows = (data as any as TaskRow[]) || [];
+          const baseRows = (data as any[]) || [];
+          const taskIds = baseRows.map((r) => r.id);
+          const clientIds = [...new Set(baseRows.map((r) => r.client_id).filter(Boolean))] as string[];
+          const deptIds = [...new Set(baseRows.map((r) => r.department_id).filter(Boolean))] as string[];
+          const [clientsRes, deptsRes, assignsRes] = await Promise.all([
+            clientIds.length
+              ? supabase.from('clients').select('id,company_name').in('id', clientIds)
+              : Promise.resolve({ data: [] as any[] }),
+            deptIds.length
+              ? supabase.from('departments').select('id,name').in('id', deptIds)
+              : Promise.resolve({ data: [] as any[] }),
+            taskIds.length
+              ? supabase.from('task_assignments').select('task_id,user_id').in('task_id', taskIds)
+              : Promise.resolve({ data: [] as any[] }),
+          ]);
+          const clientMap: Record<string, { company_name: string }> = {};
+          (clientsRes.data || []).forEach((c: any) => { clientMap[c.id] = { company_name: c.company_name }; });
+          const deptMap: Record<string, { name: string }> = {};
+          (deptsRes.data || []).forEach((d: any) => { deptMap[d.id] = { name: d.name }; });
+          const assignsByTask: Record<string, { user_id: string }[]> = {};
+          (assignsRes.data || []).forEach((a: any) => {
+            (assignsByTask[a.task_id] ||= []).push({ user_id: a.user_id });
+          });
+          const rows: TaskRow[] = baseRows.map((r) => ({
+            ...r,
+            clients: r.client_id ? clientMap[r.client_id] || null : null,
+            departments: r.department_id ? deptMap[r.department_id] || null : null,
+            task_assignments: assignsByTask[r.id] || [],
+          }));
           setTasks(rows);
           onCountChangeRef.current?.(rows.length);
           const userIds = [...new Set([
