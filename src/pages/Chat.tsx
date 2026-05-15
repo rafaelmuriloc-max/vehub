@@ -811,8 +811,8 @@ export default function Chat() {
         </div>
       )}
       {showMessages && (
-        <div className="flex-1 flex min-w-0 relative">
-          <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex min-w-0">
+          <div className={`flex-1 flex flex-col min-w-0 ${taskPanelOpen ? 'hidden md:flex' : ''}`}>
           <MessageArea
             conversationName={activeConvName}
             messages={messages}
@@ -844,7 +844,7 @@ export default function Chat() {
           />
           </div>
           {taskPanelOpen && (
-            <div className="absolute inset-y-0 right-0 z-20 w-full md:w-[420px] border-l bg-background shadow-xl flex flex-col">
+            <div className="w-full md:w-[420px] border-l bg-background flex flex-col shrink-0">
               <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
                 <h2 className="text-base font-semibold">Solicitar tarefa</h2>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setTaskPanelOpen(false)}>
