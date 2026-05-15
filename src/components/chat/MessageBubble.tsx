@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-const LONG_PRESS_MS = 2000;
+const LONG_PRESS_MS = 500;
 
 const triggerHaptic = (pattern: number | number[] = 30) => {
   try {
