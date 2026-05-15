@@ -1,19 +1,24 @@
 ## Mudança
 
-Em `src/components/chat/ConversationList.tsx` (linha 219), no `<button>` de cada conversa, aplicar condicionalmente o fundo `#F0F2F5` (claro) / `bg-zinc-800` (escuro) quando `conv.id === activeId` — exatamente o mesmo tom usado hoje no `hover:bg-*`.
+Em `src/components/chat/ConversationList.tsx`, dentro do bloco de cada conversa (linha ~232), adicionar uma nova linha com a prévia da última mensagem (`conv.lastMessage`) logo abaixo do nome do contato e da lista de empresas (`companyNames`).
 
-Antes:
-```
-className="... hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 ... bg-white ..."
-```
+Posição: após o `<p>` de `companyNames` (linha 237) e antes do `</div>` da coluna esquerda (linha 238).
 
-Depois:
-```
-className={`... hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 ... ${
-  conv.id === activeId
-    ? 'bg-[#F0F2F5] dark:bg-zinc-800'
-    : 'bg-white dark:bg-zinc-900'
-} ...`}
-```
+Renderização:
+- Texto truncado em uma linha (`truncate`).
+- Estilo cinza (`text-muted-foreground`), `text-[12px]`, com leve negrito quando houver mensagens não lidas (igual ao tratamento já dado ao horário).
+- Se a mensagem for de mídia (sem texto), mostrar rótulo amigável conforme `lastMessageType`:
+  - `whatsapp_*image*` → "📷 Foto"
+  - `whatsapp_*video*` → "🎥 Vídeo"
+  - `whatsapp_*audio*` → "🎤 Áudio"
+  - `whatsapp_*document*` → "📄 Documento"
+  - `whatsapp_location` → "📍 Localização"
+  - `whatsapp_contact` → "👤 Contato"
+  - caso contrário → `conv.lastMessage`.
 
-Nenhum outro arquivo precisa ser alterado — `activeId` já é passado como prop ao `ConversationList`.
+### Detalhes técnicos
+
+1. Em `src/pages/Chat.tsx` (linha ~159), incluir `lastMessageType: conv.last_message_type || null` no objeto da conversa (o campo já é retornado pela view `get_chat_inbox`).
+2. Em `src/components/chat/ConversationList.tsx`, adicionar `lastMessageType?: string | null` na `interface Conversation` e renderizar a prévia descrita acima.
+
+Nenhuma mudança em DB ou estilos globais.
