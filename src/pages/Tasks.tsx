@@ -699,6 +699,9 @@ export default function Tasks() {
                       rows={4}
                       placeholder="Texto enviado ao cliente quando a tarefa for concluída..."
                     />
+                    <p className="text-[11px] text-muted-foreground">
+                      Variáveis: <code>{'{{cliente}}'}</code>, <code>{'{{cnpj}}'}</code>, <code>{'{{tarefa}}'}</code>, <code>{'{{vencimento}}'}</code>, <code>{'{{descricao}}'}</code>, <code>{'{{responsavel}}'}</code>, <code>{'{{data_hoje}}'}</code>
+                    </p>
                   </div>
                   {templateForm.notify_email && (
                     <div className="space-y-1">
