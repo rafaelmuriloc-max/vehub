@@ -26,6 +26,7 @@ export interface ConversationItem {
   assignedToColor?: string | null;
   waitingSince?: string | null;
   totalWaitSeconds?: number;
+  awaitingFirstReply?: boolean;
 }
 
 interface ConversationListProps {
@@ -264,7 +265,8 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
                     )}
                   </div>
                 )}
-                {activeTab === 'in_progress' && (conv.waitingSince || conv.lastMessageAt) && (
+                {((activeTab === 'in_progress' && (conv.waitingSince || conv.lastMessageAt)) ||
+                  (conv.awaitingFirstReply && conv.lastMessageAt)) && (
                   <div className="mt-1">
                     <WaitingBadge since={conv.waitingSince || conv.lastMessageAt} />
                   </div>
