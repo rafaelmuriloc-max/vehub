@@ -419,7 +419,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
                 </button>
               )}
               {canEdit && onEdit && (
-                <button role="menuitem" onClick={() => { setDraft(content); setEditing(true); setMenuOpen(false); }} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left border-t border-black/10 dark:border-white/10 active:bg-black/10 hover:bg-black/5">
+                <button role="menuitem" onClick={() => { triggerHaptic(15); setDraft(content); setEditing(true); setMenuOpen(false); }} className="flex items-center justify-between w-full px-4 py-3.5 text-base text-left border-t border-black/10 dark:border-white/10 active:bg-black/10 hover:bg-black/5">
                   <span>Editar</span>
                   <Pencil className="h-5 w-5 text-muted-foreground" />
                 </button>
