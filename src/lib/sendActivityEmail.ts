@@ -21,6 +21,16 @@ function replaceVariables(text: string, variables: Record<string, string>): stri
   for (const [key, value] of Object.entries(variables)) {
     result = result.split(key).join(value);
   }
+  // Also support {{var}} placeholders (case-insensitive)
+  const lower: Record<string, string> = {};
+  for (const [k, v] of Object.entries(variables)) {
+    const m = k.match(/^\[(.+)\]$/);
+    if (m) lower[m[1].toLowerCase()] = v ?? '';
+  }
+  result = result.replace(/\{\{\s*([\w_]+)\s*\}\}/gi, (_m, name) => {
+    const v = lower[String(name).toLowerCase()];
+    return v === undefined ? '' : v;
+  });
   return result;
 }
 
