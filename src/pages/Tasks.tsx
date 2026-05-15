@@ -17,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 
 type Task = {
-  id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
+  id: string; task_number?: number | null; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
   created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
   notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null;
@@ -257,6 +257,9 @@ export default function Tasks() {
 
   const getClientName = (id: string | null) => clients.find(c => c.id === id)?.company_name || '';
   const getProfileName = (uid: string) => profiles.find(p => p.user_id === uid)?.full_name || 'Sem nome';
+  const getDepartmentName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
+  const formatTaskNumber = (n: number | null | undefined) => n ? `#${String(n).padStart(6, '0')}` : '#------';
+  const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const getDeptName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
 
   function openNewTemplate() {
