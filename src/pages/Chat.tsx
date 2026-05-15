@@ -496,6 +496,7 @@ export default function Chat() {
   const [attachSocietyOpen, setAttachSocietyOpen] = useState(false);
   const [registerContactOpen, setRegisterContactOpen] = useState(false);
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
+  useEffect(() => { setTaskPanelOpen(false); }, [activeConvId]);
 
   const sendLocation = async (lat: number, lng: number) => {
     if (!user || !activeConvId || isClosed) return;
