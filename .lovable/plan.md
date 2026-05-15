@@ -1,29 +1,43 @@
 ## Objetivo
-O botão "+ Nova Tarefa" no topo da página de Tarefas deve abrir o mesmo diálogo "Solicitar Tarefa", acrescentando um seletor para escolher um template já cadastrado **ou** digitar um nome livre.
 
-## Mudanças em `src/pages/Tasks.tsx`
+Fazer com que qualquer texto entre `{{ }}` nas mensagens enviadas (WhatsApp e E-mail) seja interpretado como variável e substituído pelos dados reais da tarefa/cliente/obrigação no momento do envio.
 
-1. **`openNew()`** — em vez de abrir o diálogo de edição, deve:
-   - `setRequestTemplate(null)`
-   - resetar `requestForm` com `due_date` = hoje + 7 dias, `description=''`, demais campos vazios
-   - `setRequestFiles([])`
-   - `setRequestOpen(true)`
-   - novo estado `requestCustomTitle` ('') para o nome livre
+## Variáveis suportadas (conjunto completo)
 
-2. **`requestForm`** — adicionar campo opcional `template_id?: string` (ou usar o estado `requestTemplate` existente). Adicionar `requestCustomTitle: string`.
+| Variável | Conteúdo |
+|---|---|
+| `{{cliente}}` | Razão social do cliente |
+| `{{cnpj}}` | CNPJ formatado `XX.XXX.XXX/XXXX-XX` |
+| `{{tarefa}}` | Título da tarefa / nome da obrigação |
+| `{{vencimento}}` | Data de vencimento `dd/mm/aaaa` |
+| `{{descricao}}` | Descrição da tarefa |
+| `{{responsavel}}` | Nome do responsável (criador da tarefa, ou usuário corrente para atividades) |
+| `{{data_hoje}}` | Data atual `dd/mm/aaaa` |
+| `{{competencia}}` | Mês/ano de competência (atividades de obrigações) |
 
-3. **Diálogo "Solicitar"** — quando `requestTemplate` for `null` (entrada via "+ Nova Tarefa"), exibir no topo:
-   - Combobox/Select "Tarefa cadastrada (opcional)" listando todos os `templates` (filtrar por departamento que o usuário acessa). Ao selecionar, popula `requestTemplate`, `description` (do template) e `due_date` (com `default_due_days`).
-   - Input "Ou digite um nome" — visível/usado quando nenhum template estiver selecionado. Edita `requestCustomTitle`.
-   - Título do diálogo passa a "Nova Tarefa" quando `requestTemplate` é `null`; senão "Solicitar: {nome}".
+A substituição é tolerante: variáveis desconhecidas ficam vazias; `{{ Cliente }}` (com espaços/maiúsculas) também funciona.
 
-4. **Validação em `handleRequest`**:
-   - Cliente continua obrigatório.
-   - Se `requestTemplate` existe → comportamento atual (title = template.name, herda department/template_id e flags de notificação).
-   - Caso contrário → exigir `requestCustomTitle.trim()`. `title = requestCustomTitle`, `template_id = null`, `department_id = null`, flags de notificação = `false`/`null`.
+## Onde aplicar
 
-5. **Botão "+ Nova Tarefa"** — manter no mesmo lugar, apenas o `onClick={openNew}` agora abre o diálogo unificado.
+1. **`supabase/functions/task-notify-client/index.ts`** (notificação manual da tarefa ao cliente — WhatsApp + E-mail):
+   - Carregar `tasks.title, description, due_date, created_by` + `clients.company_name, cnpj` + `profiles.full_name` do criador.
+   - Construir mapa de variáveis e aplicar em `notify_message` e `notify_email_subject` (assunto) antes de enviar texto WhatsApp e antes de montar o `html` do e-mail.
 
-6. **Diálogo de edição (`dialogOpen`)** — permanece para editar tarefas existentes (acionado por `openEdit`). Não removido.
+2. **`src/lib/sendActivityEmail.ts`** e **`src/lib/sendActivityWhatsApp.ts`** (atividades automáticas das obrigações):
+   - Adicionar as chaves `{{cliente}}, {{cnpj}}, {{tarefa}}, {{vencimento}}, {{descricao}}, {{responsavel}}, {{data_hoje}}, {{competencia}}` ao mapa `variables` existente, mantendo as variáveis atuais em colchetes `[...]` para retrocompatibilidade.
+   - Trocar a substituição por uma função única que suporta os dois formatos e é case-insensitive para `{{...}}`.
 
-Sem mudanças de schema — `tasks.template_id` e `department_id` já são nullable.
+3. **UI — `src/pages/Tasks.tsx`** (apenas dica visual, sem mudança de lógica):
+   - Sob o campo "Mensagem ao cliente" do dialog de cadastro de tarefa, exibir um pequeno texto auxiliar listando as variáveis disponíveis (ex.: "Variáveis: `{{cliente}}`, `{{cnpj}}`, `{{tarefa}}`, `{{vencimento}}`, `{{descricao}}`, `{{responsavel}}`, `{{data_hoje}}`").
+
+## Detalhes técnicos
+
+- Helper único `applyTemplateVars(text, vars)` em cada arquivo (edge function em Deno, libs no front) com regex `/\{\{\s*([\w_]+)\s*\}\}/gi` que faz lookup case-insensitive no mapa.
+- Formatação de CNPJ no edge function: `cnpj.replace(/\D/g,'').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, '$1.$2.$3/$4-$5')`.
+- Formatação de datas em pt-BR: `new Date(...).toLocaleDateString('pt-BR')`.
+- Sem migrações de banco; sem novas dependências; sem mudança de schema.
+
+## Fora de escopo
+
+- Não alterar o fluxo de envio nem os anexos.
+- Não mexer nos templates do WhatsApp Cloud (mensagens de modelo aprovadas pela Meta usam `{{1}}`, `{{2}}` posicionais — isso continua intocado).

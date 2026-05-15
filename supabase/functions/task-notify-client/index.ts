@@ -16,6 +16,32 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function formatCnpj(raw?: string | null): string {
+  if (!raw) return "";
+  const d = String(raw).replace(/\D/g, "");
+  if (d.length !== 14) return raw;
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, "$1.$2.$3/$4-$5");
+}
+
+function formatDateBR(iso?: string | null): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + "T00:00:00" : iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("pt-BR");
+  } catch { return ""; }
+}
+
+function applyTemplateVars(text: string, vars: Record<string, string>): string {
+  if (!text) return text;
+  const lower: Record<string, string> = {};
+  for (const [k, v] of Object.entries(vars)) lower[k.toLowerCase()] = v ?? "";
+  return text.replace(/\{\{\s*([\w_]+)\s*\}\}/gi, (_m, name) => {
+    const v = lower[String(name).toLowerCase()];
+    return v === undefined ? "" : v;
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -54,7 +80,7 @@ Deno.serve(async (req) => {
 
     const { data: task, error: taskErr } = await admin
       .from("tasks")
-      .select("id, title, client_id, department_id, notify_whatsapp, notify_email, notify_message, notify_email_subject, notify_sent_at")
+      .select("id, title, description, due_date, created_by, client_id, department_id, notify_whatsapp, notify_email, notify_message, notify_email_subject, notify_sent_at")
       .eq("id", taskId)
       .single();
     if (taskErr || !task) {
@@ -68,8 +94,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const message: string = (task.notify_message || "").trim();
-    if (!message) {
+    const rawMessage: string = (task.notify_message || "").trim();
+    if (!rawMessage) {
       return new Response(JSON.stringify({ error: "notify_message vazio" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -86,6 +112,8 @@ Deno.serve(async (req) => {
     // Client contact resolution (department-specific first, fallback client)
     let phone: string | null = null;
     let email: string | null = null;
+    let clientName = "";
+    let clientCnpj = "";
     if (task.client_id && task.department_id) {
       const { data: dc } = await admin
         .from("client_department_contacts")
@@ -99,17 +127,41 @@ Deno.serve(async (req) => {
         email = dc.contact_email || null;
       }
     }
-    if (task.client_id && (!phone || !email)) {
+    if (task.client_id) {
       const { data: c } = await admin
         .from("clients")
-        .select("contact_phone, contact_email")
+        .select("contact_phone, contact_email, company_name, document")
         .eq("id", task.client_id)
         .maybeSingle();
       if (c) {
         if (!phone) phone = c.contact_phone || null;
         if (!email) email = c.contact_email || null;
+        clientName = c.company_name || "";
+        clientCnpj = formatCnpj((c as any).document);
       }
     }
+
+    let responsavel = "";
+    if (task.created_by) {
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("full_name")
+        .eq("user_id", task.created_by)
+        .maybeSingle();
+      responsavel = (prof as any)?.full_name || "";
+    }
+
+    const templateVars: Record<string, string> = {
+      cliente: clientName,
+      cnpj: clientCnpj,
+      tarefa: task.title || "",
+      vencimento: formatDateBR(task.due_date),
+      descricao: (task as any).description || "",
+      responsavel,
+      data_hoje: new Date().toLocaleDateString("pt-BR"),
+      competencia: "",
+    };
+    const message = applyTemplateVars(rawMessage, templateVars);
 
     const result: Record<string, any> = { whatsapp: null, email: null };
 
@@ -170,7 +222,8 @@ Deno.serve(async (req) => {
       } else if (!task.department_id) {
         result.email = { ok: false, error: "Tarefa sem departamento" };
       } else {
-        const subject = (task.notify_email_subject || `Documentos da tarefa: ${task.title}`).trim();
+        const subjectRaw = (task.notify_email_subject || `Documentos da tarefa: ${task.title}`).trim();
+        const subject = applyTemplateVars(subjectRaw, templateVars);
         const html = `<p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p>`;
         const emailAttachments = attachments.map(a => ({ fileUrl: a.file_url, fileName: a.file_name }));
         try {

@@ -16,10 +16,25 @@ interface SendActivityEmailParams {
   departmentId?: string;
 }
 
-function replaceVariables(text: string, variables: Record<string, string>): string {
+function formatCnpj(raw?: string | null): string {
+  if (!raw) return '';
+  const d = String(raw).replace(/\D/g, '');
+  if (d.length !== 14) return raw;
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, '$1.$2.$3/$4-$5');
+}
+
+function replaceVariables(text: string, variables: Record<string, string>, mustache?: Record<string, string>): string {
   let result = text;
   for (const [key, value] of Object.entries(variables)) {
     result = result.split(key).join(value);
+  }
+  if (mustache) {
+    const lower: Record<string, string> = {};
+    for (const [k, v] of Object.entries(mustache)) lower[k.toLowerCase()] = v ?? '';
+    result = result.replace(/\{\{\s*([\w_]+)\s*\}\}/gi, (_m, name) => {
+      const v = lower[String(name).toLowerCase()];
+      return v === undefined ? '' : v;
+    });
   }
   return result;
 }
@@ -32,7 +47,7 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
   }
 
   // Fetch client info
-  const { data: client } = await supabase.from('clients').select('company_name, contact_email').eq('id', clientId).single();
+  const { data: client } = await supabase.from('clients').select('company_name, contact_email, document').eq('id', clientId).single();
 
   // Try department-specific contacts first (multiple allowed)
   let recipientEmails: string[] = [];
@@ -82,8 +97,29 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
     '[Vencimento]': vencimento,
   };
 
-  const finalSubject = replaceVariables(activity.email_subject, variables);
-  const finalBody = replaceVariables(activity.email_body, variables);
+  // Current user (responsavel) for {{responsavel}}
+  let responsavel = '';
+  try {
+    const { data: u } = await supabase.auth.getUser();
+    if (u?.user?.id) {
+      const { data: prof } = await supabase.from('profiles').select('full_name').eq('user_id', u.user.id).maybeSingle();
+      responsavel = (prof as any)?.full_name || '';
+    }
+  } catch { /* ignore */ }
+
+  const mustacheVars: Record<string, string> = {
+    cliente: client.company_name || '',
+    cnpj: formatCnpj((client as any).document),
+    tarefa: obligationName,
+    vencimento,
+    descricao: '',
+    responsavel,
+    data_hoje: new Date().toLocaleDateString('pt-BR'),
+    competencia,
+  };
+
+  const finalSubject = replaceVariables(activity.email_subject, variables, mustacheVars);
+  const finalBody = replaceVariables(activity.email_body, variables, mustacheVars);
 
   // Collect attachments from completed document activities of the same instance
   const { data: fileCompletions } = await supabase
