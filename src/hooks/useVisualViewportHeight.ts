@@ -6,17 +6,28 @@ import { useEffect, useState } from 'react';
  * appears, but window.visualViewport.height does. Using this value as the
  * container height keeps headers/footers visible while typing.
  */
-export function useVisualViewportHeight(): number {
-  const [height, setHeight] = useState<number>(() => {
-    if (typeof window === 'undefined') return 0;
-    return window.visualViewport?.height ?? window.innerHeight;
+export interface VisualViewportState {
+  height: number;
+  offsetTop: number;
+}
+
+export function useVisualViewport(): VisualViewportState {
+  const [state, setState] = useState<VisualViewportState>(() => {
+    if (typeof window === 'undefined') return { height: 0, offsetTop: 0 };
+    return {
+      height: window.visualViewport?.height ?? window.innerHeight,
+      offsetTop: window.visualViewport?.offsetTop ?? 0,
+    };
   });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const vv = window.visualViewport;
     const update = () => {
-      setHeight(vv?.height ?? window.innerHeight);
+      setState({
+        height: vv?.height ?? window.innerHeight,
+        offsetTop: vv?.offsetTop ?? 0,
+      });
     };
     update();
     if (vv) {
@@ -35,5 +46,10 @@ export function useVisualViewportHeight(): number {
     };
   }, []);
 
-  return height;
+  return state;
+}
+
+/** Backwards-compatible helper returning only the height. */
+export function useVisualViewportHeight(): number {
+  return useVisualViewport().height;
 }
