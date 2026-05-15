@@ -141,14 +141,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Quem concluiu = usuário autenticado que disparou a notificação
     let responsavel = "";
-    if (task.created_by) {
+    {
       const { data: prof } = await admin
         .from("profiles")
         .select("full_name")
-        .eq("user_id", task.created_by)
+        .eq("user_id", user.id)
         .maybeSingle();
       responsavel = (prof as any)?.full_name || "";
+      if (!responsavel && task.created_by) {
+        const { data: prof2 } = await admin
+          .from("profiles")
+          .select("full_name")
+          .eq("user_id", task.created_by)
+          .maybeSingle();
+        responsavel = (prof2 as any)?.full_name || "";
+      }
     }
 
     const templateVars: Record<string, string> = {
@@ -162,6 +171,7 @@ Deno.serve(async (req) => {
       competencia: "",
     };
     const message = applyTemplateVars(rawMessage, templateVars);
+    const signedMessage = responsavel ? `*${responsavel}*\n\n${message}` : message;
 
     const result: Record<string, any> = { whatsapp: null, email: null };
 
@@ -185,7 +195,7 @@ Deno.serve(async (req) => {
               messaging_product: "whatsapp",
               to,
               type: "text",
-              text: { body: message },
+              text: { body: signedMessage },
             }),
           });
           if (!r.ok) errors.push(`texto: ${await r.text()}`);
@@ -224,7 +234,10 @@ Deno.serve(async (req) => {
       } else {
         const subjectRaw = (task.notify_email_subject || `Documentos da tarefa: ${task.title}`).trim();
         const subject = applyTemplateVars(subjectRaw, templateVars);
-        const html = `<p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p>`;
+        const signatureHtml = responsavel
+          ? `<p><strong>${escapeHtml(responsavel)}</strong></p>`
+          : "";
+        const html = `${signatureHtml}<p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p>`;
         const emailAttachments = attachments.map(a => ({ fileUrl: a.file_url, fileName: a.file_name }));
         try {
           const r = await fetch(`${SUPABASE_URL}/functions/v1/smtp-send`, {
