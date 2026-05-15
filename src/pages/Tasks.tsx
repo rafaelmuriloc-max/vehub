@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
+import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 
 type Task = {
   id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
@@ -728,108 +729,10 @@ export default function Tasks() {
       <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{requestTemplate ? `Solicitar: ${requestTemplate.name}` : 'Nova Tarefa'}</DialogTitle></DialogHeader>
-          <form onSubmit={handleRequest} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Tarefa cadastrada (opcional)</Label>
-              <Select
-                value={requestTemplate?.id || 'none'}
-                onValueChange={(v) => {
-                  if (v === 'none') {
-                    setRequestTemplate(null);
-                  } else {
-                    const tpl = templates.find(t => t.id === v) || null;
-                    setRequestTemplate(tpl);
-                    if (tpl) {
-                      const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
-                      setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0] }));
-                      setRequestCustomTitle('');
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione uma tarefa do cadastro" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Nenhuma (digitar nome livre) —</SelectItem>
-                  {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {!requestTemplate && (
-              <div className="space-y-2">
-                <Label>Nome da tarefa *</Label>
-                <Input value={requestCustomTitle} onChange={e => setRequestCustomTitle(e.target.value)} placeholder="Ex.: Enviar declaração para o cliente" />
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>Cliente *</Label>
-              <Select value={requestForm.client_id} onValueChange={v => setRequestForm({ ...requestForm, client_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Descrição</Label>
-              <Textarea value={requestForm.description} onChange={e => setRequestForm({ ...requestForm, description: e.target.value })} rows={3} placeholder="Detalhes da solicitação" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Prazo</Label><Input type="date" value={requestForm.due_date} onChange={e => setRequestForm({ ...requestForm, due_date: e.target.value })} /></div>
-              <div className="space-y-2">
-                <Label>Prioridade</Label>
-                <Select value={requestForm.priority} onValueChange={v => setRequestForm({ ...requestForm, priority: v as any })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Baixa</SelectItem>
-                    <SelectItem value="medium">Média</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                    <SelectItem value="urgent">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Atribuir a (opcional — vazio = livre para o departamento)</Label>
-              <div className="flex flex-wrap gap-2">
-                {profiles.map(p => (
-                  <Badge key={p.user_id} variant={requestForm.assigned_to.includes(p.user_id) ? 'default' : 'outline'}
-                    className="cursor-pointer" onClick={() => {
-                      setRequestForm(f => ({ ...f, assigned_to: f.assigned_to.includes(p.user_id) ? f.assigned_to.filter(x => x !== p.user_id) : [...f.assigned_to, p.user_id] }));
-                    }}>
-                    {p.full_name || 'Sem nome'}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2"><Paperclip className="h-4 w-4" />Anexos (documentos/imagens)</Label>
-              <Input
-                type="file"
-                multiple
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
-                onChange={(e) => {
-                  const fs = Array.from(e.target.files || []);
-                  setRequestFiles(prev => [...prev, ...fs]);
-                  e.target.value = '';
-                }}
-              />
-              {requestFiles.length > 0 && (
-                <div className="space-y-1">
-                  {requestFiles.map((f, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 text-sm bg-muted px-2 py-1 rounded">
-                      <span className="truncate">{f.name} <span className="text-muted-foreground text-xs">({(f.size / 1024).toFixed(0)} KB)</span></span>
-                      <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setRequestFiles(prev => prev.filter((_, j) => j !== i))}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Button type="submit" className="w-full" disabled={uploading}>
-              {uploading ? 'Enviando…' : 'Solicitar Tarefa'}
-            </Button>
-          </form>
+          <TaskRequestForm
+            defaultTemplateId={requestTemplate?.id || null}
+            onCreated={() => { setRequestOpen(false); loadData(); }}
+          />
         </DialogContent>
       </Dialog>
     </div>

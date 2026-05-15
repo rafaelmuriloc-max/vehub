@@ -3,7 +3,7 @@ import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { MessageCircle, CheckCircle2, UserRoundPlus, Phone, ArrowLeft, MoreVertical, Trash2, Pencil, UserPlus } from 'lucide-react';
+import { MessageCircle, CheckCircle2, UserRoundPlus, Phone, ArrowLeft, MoreVertical, Trash2, Pencil, UserPlus, ClipboardPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -72,6 +72,7 @@ interface MessageAreaProps {
   onRenameConversation?: (newName: string) => void;
   onRegisterContact?: () => void;
   conversationId?: string | null;
+  onRequestTask?: () => void;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -81,7 +82,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact, conversationId }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact, conversationId, onRequestTask }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -236,6 +237,12 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           <Button variant="outline" size="icon" onClick={onTransferTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <UserRoundPlus className="h-4 w-4" />
             <span className="hidden md:inline text-sm">Transferir</span>
+          </Button>
+        )}
+        {!isClosed && onRequestTask && (
+          <Button variant="outline" size="icon" onClick={onRequestTask} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5" title="Solicitar tarefa">
+            <ClipboardPlus className="h-4 w-4" />
+            <span className="hidden md:inline text-sm">Solicitar tarefa</span>
           </Button>
         )}
         {whatsappPhone && onRegisterContact && (
