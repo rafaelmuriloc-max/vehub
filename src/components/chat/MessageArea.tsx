@@ -70,7 +70,6 @@ interface MessageAreaProps {
   onRenameConversation?: (newName: string) => void;
   onRegisterContact?: () => void;
   conversationId?: string | null;
-  currentUserName?: string;
 }
 
 function formatDateLabel(dateStr: string) {
