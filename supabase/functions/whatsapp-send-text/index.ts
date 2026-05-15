@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
 
   try {
     const VHUB_MARKER = "\u200B\u200B\u200B";
-    const { conversationId, text, senderName, senderId: senderIdInput, replyToMessageId, isForwarded } = await req.json();
+    const { conversationId, text, senderName, senderId: senderIdInput, replyToMessageId, isForwarded, agentName } = await req.json();
     const FORWARD_PREFIX = isForwarded ? "↪️ _Encaminhada_\n" : "";
     const signedText = senderName
       ? `${FORWARD_PREFIX}*${senderName}:*\n${text}${VHUB_MARKER}`
@@ -298,6 +298,7 @@ Deno.serve(async (req) => {
         reply_to_id: replyToMessageId || null,
         reply_to_snapshot: replySnapshot,
         is_forwarded: !!isForwarded,
+        agent_name: agentName || null,
       })
       .select("id, content, sender_id, created_at, read_at, message_type, media_url, channel")
       .single();
