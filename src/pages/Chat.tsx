@@ -158,6 +158,7 @@ export default function Chat() {
         name,
         lastMessage: conv.last_message || '',
         lastMessageAt: conv.last_message_at || conv.created_at,
+        lastMessageType: (conv as any).last_message_type || null,
         unreadCount: conv.unread_count || 0,
         isGroup: conv.is_group,
         avatarUrl: conv.avatar_url || undefined,
