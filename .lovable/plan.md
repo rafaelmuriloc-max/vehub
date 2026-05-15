@@ -1,23 +1,13 @@
-## Mudança no Kanban de Tarefas
+## Mostrar anexos ao abrir card da tarefa
 
-Reduzir o quadro Kanban para 3 colunas:
-- **A Fazer** (`todo`)
-- **Aguardando** (`in_progress`)
-- **Concluído** (`done`)
+No diálogo de edição da tarefa (`Tasks.tsx`), exibir os documentos previamente anexados.
 
-A coluna "Em Revisão" (`in_review`) será removida. Tarefas existentes nesse status serão migradas para `in_progress` ("Aguardando").
+### Alterações em `src/pages/Tasks.tsx`
 
-### Alterações
-
-**`src/pages/Tasks.tsx`**
-- `statusLabels`: `{ todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' }`
-- `statusColumns`: `['todo', 'in_progress', 'done']`
-- Tipo `Task['status']`: `'todo' | 'in_progress' | 'done'`
-- Selects de status (filtro e diálogo de edição) refletem as 3 opções
-- Tarefas com `in_review` carregadas do banco são exibidas na coluna "Aguardando" (tratamento de fallback)
-
-**Migração SQL**
-- `UPDATE public.tasks SET status = 'in_progress' WHERE status = 'in_review';`
-- (não removo o valor do enum — caso `status` seja `text`, basta o update; se for enum, mantenho o valor para não quebrar dependências)
-
-Sem mudanças em outras páginas, RLS ou lógica de atribuição.
+- Novo estado `editAttachments: Array<{ id; file_name; file_url; file_size; file_type }>`.
+- `openEdit(task)`: passa a buscar `task_attachments` via `supabase.from('task_attachments').select('*').eq('task_id', task.id)` e popula `editAttachments`.
+- No diálogo "Editar Tarefa", nova seção **Anexos**:
+  - Lista cada arquivo com ícone `Paperclip`, nome, tamanho e botão de download (gera signed URL do bucket `documents` e abre em nova aba).
+  - Botão remover (ícone `X`) — apaga registro `task_attachments` e o objeto do storage; permitido para o uploader ou admin (alinhado à RLS atual).
+  - Input `<input type="file" multiple>` para anexar novos arquivos à tarefa existente, reutilizando a sanitização de nomes e o caminho `documents/tasks/{taskId}/...` já usado no fluxo "Solicitar".
+- Sem mudanças no card do Kanban (o anexo aparece ao abrir a tarefa, conforme solicitado), sem mudanças de schema/RLS.
