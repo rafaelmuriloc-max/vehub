@@ -61,7 +61,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
-  const [profileMap, setProfileMap] = useState<Record<string, string>>({});
+  const [profileMap, setProfileMap] = useState<Record<string, { name: string; color: string | null }>>({});
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, { input: number; output: number }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -153,10 +153,12 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           if (userIds.length) {
             const { data: profs } = await supabase
               .from('profiles')
-              .select('user_id, full_name')
+              .select('user_id, full_name, tag_color')
               .in('user_id', userIds);
-            const m: Record<string, string> = {};
-            (profs || []).forEach((p: any) => { m[p.user_id] = p.full_name || ''; });
+            const m: Record<string, { name: string; color: string | null }> = {};
+            (profs || []).forEach((p: any) => {
+              m[p.user_id] = { name: p.full_name || '', color: p.tag_color || null };
+            });
             if (!cancelled) setProfileMap(m);
           } else {
             setProfileMap({});
@@ -291,13 +293,17 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
                   )}
                   <p className="text-[11px] text-muted-foreground">
                     Solicitado em {formatDateTime(task.created_at)}
-                    {task.created_by && <> por <span className="font-medium">{profileMap[task.created_by] || 'Sem nome'}</span></>}
+                    {task.created_by && <> por <span className="font-medium">{profileMap[task.created_by]?.name || 'Sem nome'}</span></>}
                   </p>
                   {assignees.length > 0 && (
                     <div className="flex gap-1 flex-wrap items-center">
                       <span className="text-[11px] text-muted-foreground">Atribuído:</span>
                       {assignees.map(a => (
-                        <Badge key={a.user_id} variant="outline" className="text-xs">{profileMap[a.user_id] || 'Sem nome'}</Badge>
+                        <AssigneeBadge
+                          key={a.user_id}
+                          name={profileMap[a.user_id]?.name || 'Sem nome'}
+                          color={profileMap[a.user_id]?.color || null}
+                        />
                       ))}
                     </div>
                   )}
