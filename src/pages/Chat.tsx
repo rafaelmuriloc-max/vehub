@@ -23,7 +23,6 @@ export type ChatTab = 'mine' | 'in_progress' | 'all';
 export default function Chat() {
   const { user, profile, isAdmin } = useAuth();
   const isMobile = useIsMobile();
-  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -780,19 +779,8 @@ export default function Chat() {
 
   return (
     <div
-      className="flex flex-col w-full overflow-hidden bg-background md:h-screen"
-      style={
-        isMobile
-          ? {
-              position: 'fixed',
-              top: viewportOffsetTop,
-              left: 0,
-              right: 0,
-              height: viewportHeight,
-              paddingTop: 'env(safe-area-inset-top)',
-            }
-          : undefined
-      }
+      className="flex flex-col w-full overflow-hidden bg-background h-[100dvh] md:h-screen"
+      style={isMobile ? { paddingTop: 'env(safe-area-inset-top)' } : undefined}
     >
       <EnableNotificationsBanner />
       <div className="flex flex-1 min-h-0 w-full overflow-hidden">
