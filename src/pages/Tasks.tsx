@@ -591,44 +591,15 @@ export default function Tasks() {
             </div>
             {editing && (
               <>
-                <div className="space-y-3 border rounded-md p-3 bg-muted/30">
-                  <Label className="text-sm font-semibold">Notificar cliente ao concluir</Label>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="notify-wa" className="text-sm font-normal">Enviar por WhatsApp</Label>
-                    <Switch id="notify-wa" checked={form.notify_whatsapp} onCheckedChange={v => setForm(f => ({ ...f, notify_whatsapp: v }))} />
+                {(editing.notify_whatsapp || editing.notify_email) && (
+                  <div className="text-xs text-muted-foreground border rounded-md p-2 bg-muted/30">
+                    Ao concluir, o cliente será notificado por
+                    {editing.notify_whatsapp ? ' WhatsApp' : ''}
+                    {editing.notify_whatsapp && editing.notify_email ? ' e' : ''}
+                    {editing.notify_email ? ' E-mail' : ''}.
+                    {editing.notify_sent_at && ' (Já enviado.)'}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="notify-em" className="text-sm font-normal">Enviar por E-mail</Label>
-                    <Switch id="notify-em" checked={form.notify_email} onCheckedChange={v => setForm(f => ({ ...f, notify_email: v }))} />
-                  </div>
-                  {(form.notify_whatsapp || form.notify_email) && (
-                    <>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Mensagem</Label>
-                        <Textarea
-                          value={form.notify_message}
-                          onChange={e => setForm({ ...form, notify_message: e.target.value })}
-                          rows={4}
-                          placeholder="Texto enviado ao cliente quando a tarefa for concluída..."
-                        />
-                      </div>
-                      {form.notify_email && (
-                        <div className="space-y-1">
-                          <Label className="text-xs">Assunto do e-mail</Label>
-                          <Input
-                            value={form.notify_email_subject}
-                            onChange={e => setForm({ ...form, notify_email_subject: e.target.value })}
-                            placeholder={`Documentos da tarefa: ${form.title || ''}`}
-                          />
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Os arquivos da seção "Anexos para o cliente" serão enviados junto.
-                        {editing?.notify_sent_at && ' (Já enviado anteriormente — não será reenviado.)'}
-                      </p>
-                    </>
-                  )}
-                </div>
+                )}
                 {(['input', 'output'] as const).map(dir => {
                   const list = editAttachments.filter(a => (a.direction || 'input') === dir);
                   return (
