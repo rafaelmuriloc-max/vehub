@@ -97,6 +97,7 @@ export function ForwardMessageDialog({ open, onOpenChange, message, currentConve
                 fileName: message.content || 'arquivo',
                 senderName: senderName || undefined,
                 senderId: user.id,
+                isForwarded: true,
               },
             });
             if (error) throw error;
@@ -107,6 +108,7 @@ export function ForwardMessageDialog({ open, onOpenChange, message, currentConve
                 text: message.content,
                 senderName: senderName || undefined,
                 senderId: user.id,
+                isForwarded: true,
               },
             });
             if (error) throw error;
@@ -118,6 +120,7 @@ export function ForwardMessageDialog({ open, onOpenChange, message, currentConve
             content: message.content,
             message_type: isMedia ? `whatsapp_${mediaKind}` : 'text',
             media_url: isMedia ? message.media_url : null,
+            is_forwarded: true,
           });
           if (error) throw error;
           await supabase.from('chat_conversations').update({ updated_at: new Date().toISOString() }).eq('id', conv.id);

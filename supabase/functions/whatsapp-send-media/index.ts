@@ -28,6 +28,7 @@ Deno.serve(async (req) => {
       senderName,
       senderId: senderIdInput,
       replyToMessageId,
+      isForwarded,
     } = await req.json();
 
     if (!conversationId || !type) {
@@ -432,6 +433,7 @@ Deno.serve(async (req) => {
         wa_remote_jid: `${toPhone}@s.whatsapp.net`,
         reply_to_id: replyToMessageId || null,
         reply_to_snapshot: replySnapshot,
+        is_forwarded: !!isForwarded,
       })
       .select()
       .single();

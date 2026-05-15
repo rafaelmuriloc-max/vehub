@@ -41,6 +41,7 @@ export interface ChatMessage {
   } | null;
   transcription?: string | null;
   transcription_status?: string | null;
+  is_forwarded?: boolean | null;
 }
 
 interface MessageAreaProps {
@@ -312,6 +313,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   avatarUrl={avatarUrl}
                   editedAt={msg.edited_at}
                   deletedAt={msg.deleted_at}
+                  isForwarded={!!msg.is_forwarded}
                   isAdmin={isAdmin}
                   onEdit={onEditMessage ? (text) => onEditMessage(msg.id, text) : undefined}
                   onDeleteForMe={onDeleteMessageForMe ? () => onDeleteMessageForMe(msg.id) : undefined}

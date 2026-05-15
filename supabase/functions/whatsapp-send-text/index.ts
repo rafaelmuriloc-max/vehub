@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
 
   try {
     const VHUB_MARKER = "\u200B\u200B\u200B";
-    const { conversationId, text, senderName, senderId: senderIdInput, replyToMessageId } = await req.json();
+    const { conversationId, text, senderName, senderId: senderIdInput, replyToMessageId, isForwarded } = await req.json();
     const signedText = senderName ? `*${senderName}:*\n${text}${VHUB_MARKER}` : `${text}${VHUB_MARKER}`;
 
     if (!conversationId || !text) {
@@ -294,6 +294,7 @@ Deno.serve(async (req) => {
         wa_remote_jid: metaPhoneDigits ? `${metaPhoneDigits}@s.whatsapp.net` : null,
         reply_to_id: replyToMessageId || null,
         reply_to_snapshot: replySnapshot,
+        is_forwarded: !!isForwarded,
       })
       .select("id, content, sender_id, created_at, read_at, message_type, media_url, channel")
       .single();
