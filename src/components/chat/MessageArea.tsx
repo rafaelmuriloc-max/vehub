@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Upload } from 'lucide-react';
+import { ForwardMessageDialog, type ForwardMessageData } from './ForwardMessageDialog';
 
 export interface ChatMessage {
   id: string;
@@ -68,6 +69,8 @@ interface MessageAreaProps {
   onDeleteConversation?: () => void;
   onRenameConversation?: (newName: string) => void;
   onRegisterContact?: () => void;
+  conversationId?: string | null;
+  currentUserName?: string;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -85,6 +88,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const dragCounterRef = useRef(0);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [forwardingMsg, setForwardingMsg] = useState<ForwardMessageData | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const bubbleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -314,6 +318,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   onDeleteForMe={onDeleteMessageForMe ? () => onDeleteMessageForMe(msg.id) : undefined}
                   onDeleteForAll={onDeleteMessageForAll ? () => onDeleteMessageForAll(msg.id) : undefined}
                   onReply={() => setReplyingTo(msg)}
+                  onForward={() => setForwardingMsg({ id: msg.id, content: msg.content, message_type: msg.message_type, media_url: msg.media_url || null })}
                   replySnapshot={msg.reply_to_snapshot || undefined}
                   replyToId={msg.reply_to_id || undefined}
                   onJumpToReply={jumpToMessage}
