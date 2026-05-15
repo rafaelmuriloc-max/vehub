@@ -831,6 +831,7 @@ export default function Chat() {
             onDeleteConversation={deleteConversation}
             onRenameConversation={renameConversation}
             onRegisterContact={() => setRegisterContactOpen(true)}
+            conversationId={activeConvId}
           />
         </div>
       )}

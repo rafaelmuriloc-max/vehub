@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { CheckCheck, MapPin, Contact, MoreVertical, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw, Forward } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AudioMessage } from './AudioMessage';
 import {
@@ -31,6 +31,7 @@ interface MessageBubbleProps {
   onDeleteForMe?: () => void;
   onDeleteForAll?: () => void;
   onReply?: () => void;
+  onForward?: () => void;
   replySnapshot?: {
     sender_id?: string | null;
     sender_name?: string | null;
@@ -126,7 +127,7 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
   );
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, onForward, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
    const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
    const isWhatsAppOutgoing = !isIncoming && (messageType === 'whatsapp' || messageType?.startsWith('whatsapp_'));
@@ -260,7 +261,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
            : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none'
         }`}
       >
-        {(onEdit || onDeleteForMe || onDeleteForAll || onReply) && (
+        {(onEdit || onDeleteForMe || onDeleteForAll || onReply || onForward) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10">
@@ -271,6 +272,11 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
               {onReply && (
                 <DropdownMenuItem onClick={onReply}>
                   <Reply className="h-4 w-4 mr-2" /> Responder
+                </DropdownMenuItem>
+              )}
+              {onForward && !isDeleted && (
+                <DropdownMenuItem onClick={onForward}>
+                  <Forward className="h-4 w-4 mr-2" /> Encaminhar
                 </DropdownMenuItem>
               )}
               {canEdit && onEdit && (

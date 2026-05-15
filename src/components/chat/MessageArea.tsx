@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Upload } from 'lucide-react';
+import { ForwardMessageDialog, type ForwardMessageData } from './ForwardMessageDialog';
 
 export interface ChatMessage {
   id: string;
@@ -68,6 +69,7 @@ interface MessageAreaProps {
   onDeleteConversation?: () => void;
   onRenameConversation?: (newName: string) => void;
   onRegisterContact?: () => void;
+  conversationId?: string | null;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -77,7 +79,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact, conversationId }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -85,6 +87,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const dragCounterRef = useRef(0);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [forwardingMsg, setForwardingMsg] = useState<ForwardMessageData | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const bubbleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -314,6 +317,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   onDeleteForMe={onDeleteMessageForMe ? () => onDeleteMessageForMe(msg.id) : undefined}
                   onDeleteForAll={onDeleteMessageForAll ? () => onDeleteMessageForAll(msg.id) : undefined}
                   onReply={() => setReplyingTo(msg)}
+                  onForward={() => setForwardingMsg({ id: msg.id, content: msg.content, message_type: msg.message_type, media_url: msg.media_url || null })}
                   replySnapshot={msg.reply_to_snapshot || undefined}
                   replyToId={msg.reply_to_id || undefined}
                   onJumpToReply={jumpToMessage}
@@ -400,6 +404,14 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ForwardMessageDialog
+        open={!!forwardingMsg}
+        onOpenChange={(o) => { if (!o) setForwardingMsg(null); }}
+        message={forwardingMsg}
+        currentConversationId={conversationId}
+        senderName={currentUserName}
+      />
     </div>
   );
 }
