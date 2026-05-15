@@ -496,6 +496,7 @@ export default function Chat() {
   const [attachSocietyOpen, setAttachSocietyOpen] = useState(false);
   const [registerContactOpen, setRegisterContactOpen] = useState(false);
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
+  useEffect(() => { setTaskPanelOpen(false); }, [activeConvId]);
 
   const sendLocation = async (lat: number, lng: number) => {
     if (!user || !activeConvId || isClosed) return;
@@ -812,7 +813,7 @@ export default function Chat() {
       )}
       {showMessages && (
         <div className="flex-1 flex min-w-0">
-          <div className={`flex-1 flex flex-col min-w-0 ${taskPanelOpen ? 'hidden md:flex' : ''}`}>
+          <div className="flex-1 flex flex-col min-w-0">
           <MessageArea
             conversationName={activeConvName}
             messages={messages}
@@ -841,25 +842,25 @@ export default function Chat() {
             onRegisterContact={() => setRegisterContactOpen(true)}
             conversationId={activeConvId}
             onRequestTask={() => setTaskPanelOpen(true)}
+            rightPanel={taskPanelOpen ? (
+              <>
+                <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
+                  <h2 className="text-base font-semibold">Solicitar tarefa</h2>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setTaskPanelOpen(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto p-4">
+                  <TaskRequestForm
+                    defaultClientId={activeConv?.clientId || null}
+                    restrictToPhone={activeConv?.whatsappPhone || null}
+                    onCreated={() => setTaskPanelOpen(false)}
+                  />
+                </div>
+              </>
+            ) : null}
           />
           </div>
-          {taskPanelOpen && (
-            <div className="w-full md:w-[420px] border-l bg-background flex flex-col shrink-0 min-h-0 h-full">
-              <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
-                <h2 className="text-base font-semibold">Solicitar tarefa</h2>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setTaskPanelOpen(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4">
-                <TaskRequestForm
-                  defaultClientId={activeConv?.clientId || null}
-                  restrictToPhone={activeConv?.whatsappPhone || null}
-                  onCreated={() => setTaskPanelOpen(false)}
-                />
-              </div>
-            </div>
-          )}
         </div>
       )}
       </div>

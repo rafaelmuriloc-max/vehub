@@ -73,6 +73,7 @@ interface MessageAreaProps {
   onRegisterContact?: () => void;
   conversationId?: string | null;
   onRequestTask?: () => void;
+  rightPanel?: React.ReactNode;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -82,7 +83,7 @@ function formatDateLabel(dateStr: string) {
   return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
-export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact, conversationId, onRequestTask }: MessageAreaProps) {
+export function MessageArea({ conversationName, messages, currentUserId, onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, isGroup, avatarUrl, currentUserName, companyNames, isClosed, onCloseTicket, onReopenTicket, onTransferTicket, whatsappPhone, onBack, isAdmin, onEditMessage, onDeleteMessageForMe, onDeleteMessageForAll, onDeleteConversation, onRenameConversation, onRegisterContact, conversationId, onRequestTask, rightPanel }: MessageAreaProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -297,6 +298,8 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
         )}
       </div>
 
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
       {/* Messages */}
       <div
         className="flex-1 overflow-y-auto px-2 py-2 md:px-4"
@@ -388,6 +391,13 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
           keyboardOpen={keyboardInset > 0}
         />
       )}
+      </div>
+        </div>
+        {rightPanel && (
+          <aside className="w-full md:w-[420px] border-l bg-background flex flex-col shrink-0 min-h-0 overflow-hidden">
+            {rightPanel}
+          </aside>
+        )}
       </div>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
