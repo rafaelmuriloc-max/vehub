@@ -1589,6 +1589,7 @@ export type Database = {
           notify_whatsapp: boolean
           priority: Database["public"]["Enums"]["task_priority"]
           status: Database["public"]["Enums"]["task_status"]
+          task_number: number
           template_id: string | null
           title: string
           updated_at: string
@@ -1608,6 +1609,7 @@ export type Database = {
           notify_whatsapp?: boolean
           priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
+          task_number?: number
           template_id?: string | null
           title: string
           updated_at?: string
@@ -1627,6 +1629,7 @@ export type Database = {
           notify_whatsapp?: boolean
           priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
+          task_number?: number
           template_id?: string | null
           title?: string
           updated_at?: string
