@@ -69,6 +69,7 @@ export default function Tasks() {
   const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
   const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'], description: '' });
   const [requestFiles, setRequestFiles] = useState<File[]>([]);
+  const [requestCustomTitle, setRequestCustomTitle] = useState('');
   const [uploading, setUploading] = useState(false);
   const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
   const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
@@ -104,9 +105,12 @@ export default function Tasks() {
   }
 
   function openNew() {
-    setEditing(null);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [] });
-    setDialogOpen(true);
+    setRequestTemplate(null);
+    setRequestCustomTitle('');
+    const due = new Date(); due.setDate(due.getDate() + 7);
+    setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium', description: '' });
+    setRequestFiles([]);
+    setRequestOpen(true);
   }
 
   async function openEdit(task: Task) {
@@ -311,6 +315,7 @@ export default function Tasks() {
 
   function openRequest(tpl: TaskTemplate) {
     setRequestTemplate(tpl);
+    setRequestCustomTitle('');
     const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
     setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium', description: tpl.description || '' });
     setRequestFiles([]);
@@ -318,24 +323,27 @@ export default function Tasks() {
   }
   async function handleRequest(e: React.FormEvent) {
     e.preventDefault();
-    if (!requestTemplate || !requestForm.client_id) {
+    if (!requestForm.client_id) {
       toast({ title: 'Selecione o cliente', variant: 'destructive' }); return;
+    }
+    if (!requestTemplate && !requestCustomTitle.trim()) {
+      toast({ title: 'Informe o nome ou selecione uma tarefa cadastrada', variant: 'destructive' }); return;
     }
     setUploading(true);
     const { data, error } = await supabase.from('tasks').insert({
-      title: requestTemplate.name,
+      title: requestTemplate ? requestTemplate.name : requestCustomTitle.trim(),
       description: requestForm.description || null,
       status: 'todo',
       priority: requestForm.priority,
       due_date: requestForm.due_date || null,
       client_id: requestForm.client_id,
-      department_id: requestTemplate.department_id,
-      template_id: requestTemplate.id,
+      department_id: requestTemplate?.department_id || null,
+      template_id: requestTemplate?.id || null,
       created_by: user?.id,
-      notify_whatsapp: !!requestTemplate.notify_whatsapp,
-      notify_email: !!requestTemplate.notify_email,
-      notify_message: requestTemplate.notify_message || null,
-      notify_email_subject: requestTemplate.notify_email_subject || null,
+      notify_whatsapp: !!requestTemplate?.notify_whatsapp,
+      notify_email: !!requestTemplate?.notify_email,
+      notify_message: requestTemplate?.notify_message || null,
+      notify_email_subject: requestTemplate?.notify_email_subject || null,
     } as any).select('id').single();
     if (error) { setUploading(false); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     if (requestForm.assigned_to.length > 0 && data?.id) {
@@ -716,8 +724,39 @@ export default function Tasks() {
       {/* Solicitar Dialog */}
       <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Solicitar: {requestTemplate?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{requestTemplate ? `Solicitar: ${requestTemplate.name}` : 'Nova Tarefa'}</DialogTitle></DialogHeader>
           <form onSubmit={handleRequest} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tarefa cadastrada (opcional)</Label>
+              <Select
+                value={requestTemplate?.id || 'none'}
+                onValueChange={(v) => {
+                  if (v === 'none') {
+                    setRequestTemplate(null);
+                  } else {
+                    const tpl = templates.find(t => t.id === v) || null;
+                    setRequestTemplate(tpl);
+                    if (tpl) {
+                      const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
+                      setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0] }));
+                      setRequestCustomTitle('');
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione uma tarefa do cadastro" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Nenhuma (digitar nome livre) —</SelectItem>
+                  {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {!requestTemplate && (
+              <div className="space-y-2">
+                <Label>Nome da tarefa *</Label>
+                <Input value={requestCustomTitle} onChange={e => setRequestCustomTitle(e.target.value)} placeholder="Ex.: Enviar declaração para o cliente" />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Cliente *</Label>
               <Select value={requestForm.client_id} onValueChange={v => setRequestForm({ ...requestForm, client_id: v })}>
