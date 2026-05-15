@@ -1,31 +1,44 @@
 ## Objetivo
 
-Ao selecionar mensagens da conversa no formulário de solicitar tarefa:
-- **Mensagens de texto** → anexar ao campo **Descrição** da tarefa (em vez de virar um arquivo .txt).
-- **Mídias/arquivos** → continuar sendo anexados como arquivos em `task_attachments` (comportamento atual).
+Ao clicar no card de uma tarefa dentro do painel de tarefas pendentes do chat, abrir o **mesmo dialog de edição** usado no Kanban (em vez de abrir `/tasks?id=...` em nova aba).
 
-## Mudanças (apenas em `src/components/chat/TaskRequestForm.tsx`)
+## Contexto
 
-1. **Pré-visualização ao selecionar (no `MessagePicker.onConfirm`)**:
-   - Após `setPickedItems(items)`, montar um bloco de texto com as mensagens de texto selecionadas, ordenadas cronologicamente, no formato:
-     ```
-     --- Mensagens da conversa ---
-     [dd/mm/aaaa hh:mm] Fulano:
-     conteúdo da mensagem
-     
-     [dd/mm/aaaa hh:mm] Beltrano:
-     conteúdo da mensagem
-     ```
-   - Atualizar `requestForm.description`:
-     - Remover qualquer bloco anterior delimitado por `--- Mensagens da conversa ---` ... fim do texto.
-     - Concatenar a descrição existente (preservando o que o usuário digitou) com o novo bloco.
-   - Se nenhuma mensagem de texto foi selecionada, apenas remover o bloco anterior (caso exista).
+- Hoje, em `PendingTasksPanel.tsx`, o card chama `window.open('/tasks?id=...')`.
+- O dialog de edição vive **inline** dentro de `src/pages/Tasks.tsx` (linhas 586–695) e depende de várias funções/estados locais (`form`, `editAttachments`, `uploadEditFiles`, `downloadAttachment`, `removeAttachment`, `handleSave`, `profiles`, `clients`, `departments`, `assignments`).
 
-2. **No `handleSubmit`**:
-   - Remover totalmente o trecho que cria o arquivo `mensagens-da-conversa-{timestamp}.txt` e o insere em `task_attachments` (linhas 184–210).
-   - Manter o loop que faz download/re-upload das **mídias** selecionadas como anexos (comportamento atual).
-   - A descrição enviada na criação da tarefa (`requestForm.description`) já incluirá as mensagens de texto, conforme passo 1.
+Para reutilizar exatamente o mesmo dialog no chat, vamos extrair a edição em um componente autocontido.
 
-3. **UX**: o usuário ainda pode editar manualmente a descrição depois da seleção; o bloco fica visível no `Textarea`.
+## Mudanças
 
-Sem alterações em schema, RLS, edge functions ou outros arquivos.
+### 1. Novo `src/components/tasks/TaskEditDialog.tsx`
+
+Componente reutilizável que recebe:
+```ts
+{ open: boolean; onOpenChange: (v: boolean) => void; taskId: string | null; onSaved?: () => void }
+```
+
+Internamente:
+- Ao abrir com `taskId`, carrega em paralelo: `tasks` (a tarefa), `task_assignments` (do task), `task_attachments` (do task), `profiles`, `clients`, `departments`.
+- Renderiza exatamente o mesmo formulário de edição já existente em `Tasks.tsx`:
+  - Título, Descrição, Status, Prioridade, Prazo, Cliente, Departamento, Atribuir a (badges).
+  - Aviso de notificação WhatsApp/E-mail.
+  - Listas de anexos `input` (Anexos da solicitação) e `output` (Anexos para o cliente), com download (signed URL), remoção e upload.
+- Funções internas: `handleSave`, `uploadFiles(direction)`, `downloadAttachment`, `removeAttachment` — replicando a lógica atual de `Tasks.tsx`.
+- Ao salvar com sucesso: fecha e dispara `onSaved?.()`.
+
+### 2. `src/components/chat/PendingTasksPanel.tsx`
+
+- Importar `TaskEditDialog`.
+- Adicionar estado `editingTaskId: string | null`.
+- Substituir o `onClick` do card:
+  - **De**: `onClick={() => window.open('/tasks?id=...', '_blank')}`
+  - **Para**: `onClick={() => setEditingTaskId(task.id)}`
+- Renderizar `<TaskEditDialog open={!!editingTaskId} onOpenChange={(v) => !v && setEditingTaskId(null)} taskId={editingTaskId} onSaved={loadTasks} />` no final do componente.
+- Manter `e.stopPropagation()` nos botões internos (mover status, anexar arquivo, excluir) para não disparar a abertura do dialog.
+
+### 3. `src/pages/Tasks.tsx` (sem refactor obrigatório)
+
+Mantém seu dialog inline atual — não precisamos mexer agora. Em uma iteração futura pode-se trocar pelo novo `TaskEditDialog` para deduplicar.
+
+Sem mudanças em schema, RLS, edge functions ou rotas.
