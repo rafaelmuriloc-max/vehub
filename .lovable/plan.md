@@ -1,23 +1,12 @@
 ## Objetivo
 
-Aplicar a cor cadastrada do usuário (`profiles.tag_color`) também na tag de "Atribuído" dos cards de tarefas (página `/tasks`). Hoje essas tags renderizam como `Badge variant="outline"` neutra (cinza), independentemente da cor configurada.
+Aplicar a cor cadastrada do usuário (`profiles.tag_color`) na tag "Atribuído" também nos cards de tarefas pendentes exibidos dentro da conversa (`PendingTasksPanel`), igual ao que já foi feito no Kanban de tarefas.
 
-## Diagnóstico
+## Mudanças (apenas `src/components/chat/PendingTasksPanel.tsx`)
 
-- `src/pages/Tasks.tsx` carrega `profiles` apenas com `user_id, full_name` e renderiza o nome do atribuído em `<Badge variant="outline">` nas linhas 437 e 518.
-- A cor por usuário existe em `profiles.tag_color` (cadastrada em Configurações → Usuários) e já é usada no chat. Falta apenas pintar essa mesma cor no card de tarefa.
+1. Trocar o `select('user_id, full_name')` em `profiles` por `select('user_id, full_name, tag_color')`.
+2. Substituir o `profileMap: Record<string, string>` por `Record<string, { name: string; color: string | null }>` e atualizar o `setProfileMap` correspondente.
+3. Ajustar os usos de `profileMap[uid]` (no "Solicitado em ... por ..." e no badge de atribuído) para ler `.name`.
+4. Reescrever o `<Badge variant="outline">` do atribuído usando o mesmo padrão do `Tasks.tsx`: helper local `getReadableTextColor` + componente `AssigneeBadge` (cor de fundo do `tag_color`, texto com contraste YIQ; fallback `outline` quando o usuário não tem cor).
 
-## Mudanças (apenas UI em `src/pages/Tasks.tsx`)
-
-1. Estender o `type Profile` para incluir `tag_color: string | null` e adicionar `tag_color` no `select` da query de `profiles` em `loadData`.
-2. Criar helper local `getProfileColor(uid)` que retorna o `tag_color` do perfil (ou `null`).
-3. Reutilizar o mesmo padrão visual usado no `ConversationList`:
-   - Quando o usuário tem `tag_color` válido (`#rgb` ou `#rrggbb`): aplicar `style={{ backgroundColor, color: textoLegível }}` com cálculo YIQ para contraste; manter o badge sem borda.
-   - Quando não tem cor: manter o `Badge variant="outline"` atual (cinza neutro).
-4. Adicionar utilitário `getReadableTextColor(hex)` no topo do arquivo (cópia do helper já usado em `ConversationList.tsx`) — sem nova dependência.
-5. Aplicar nas duas ocorrências do badge "Atribuído" (linhas 437 e 518).
-
-## Fora de escopo
-
-- Não alterar schema, RPC, RLS nem Edge Functions.
-- Não mexer em outros locais que listam atribuídos (somente o card de tarefa indicado pelo usuário). Se desejar depois, replicamos para `PendingTasksPanel` e Lista mensal.
+Sem mudanças de schema, RPC ou edge functions.
