@@ -13,11 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
 
 type Task = {
   id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
   created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
+  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null;
+  notify_email_subject?: string | null; notify_sent_at?: string | null;
 };
 type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
@@ -47,6 +50,7 @@ export default function Tasks() {
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as Task['status'], priority: 'medium' as Task['priority'],
     due_date: '', client_id: '', assigned_to: [] as string[],
+    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '',
   });
 
   // Templates state
@@ -96,7 +100,8 @@ export default function Tasks() {
 
   function openNew() {
     setEditing(null);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [] });
+    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [],
+      notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '' });
     setDialogOpen(true);
   }
 
@@ -106,6 +111,10 @@ export default function Tasks() {
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
       assigned_to: assignments[task.id] || [],
+      notify_whatsapp: !!task.notify_whatsapp,
+      notify_email: !!task.notify_email,
+      notify_message: task.notify_message || '',
+      notify_email_subject: task.notify_email_subject || '',
     });
     setEditNewFiles([]);
     setEditAttachments([]);
@@ -179,14 +188,19 @@ export default function Tasks() {
     const payload = {
       title: form.title, description: form.description || null, status: form.status,
       priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
+      notify_whatsapp: form.notify_whatsapp,
+      notify_email: form.notify_email,
+      notify_message: form.notify_message || null,
+      notify_email_subject: form.notify_email_subject || null,
     };
     let error;
     let taskId: string;
+    const wasDone = editing?.status === 'done';
     if (editing) {
       taskId = editing.id;
-      ({ error } = await supabase.from('tasks').update(payload).eq('id', editing.id));
+      ({ error } = await supabase.from('tasks').update(payload as any).eq('id', editing.id));
     } else {
-      const { data, error: err } = await supabase.from('tasks').insert({ ...payload, created_by: user?.id }).select('id').single();
+      const { data, error: err } = await supabase.from('tasks').insert({ ...payload, created_by: user?.id } as any).select('id').single();
       error = err;
       taskId = data?.id || '';
     }
@@ -198,12 +212,36 @@ export default function Tasks() {
       await supabase.from('task_assignments').insert(form.assigned_to.map(uid => ({ task_id: taskId, user_id: uid })));
     }
 
-    setDialogOpen(false); loadData(); toast({ title: editing ? 'Tarefa atualizada' : 'Tarefa criada' });
+    setDialogOpen(false);
+    if (form.status === 'done' && !wasDone && (form.notify_whatsapp || form.notify_email)) {
+      await triggerNotify(taskId);
+    }
+    loadData();
+    toast({ title: editing ? 'Tarefa atualizada' : 'Tarefa criada' });
   }
 
   async function moveTask(taskId: string, newStatus: Task['status']) {
+    const prev = tasks.find(t => t.id === taskId);
     await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+    if (newStatus === 'done' && prev?.status !== 'done' && (prev?.notify_whatsapp || prev?.notify_email) && !prev?.notify_sent_at) {
+      await triggerNotify(taskId);
+    }
     loadData();
+  }
+
+  async function triggerNotify(taskId: string) {
+    try {
+      const { data, error } = await supabase.functions.invoke('task-notify-client', { body: { taskId } });
+      if (error) { toast({ title: 'Falha ao notificar cliente', description: error.message, variant: 'destructive' }); return; }
+      const w = data?.whatsapp; const e = data?.email;
+      const msgs: string[] = [];
+      if (w) msgs.push(w.ok ? 'WhatsApp enviado' : `WhatsApp: ${w.error}`);
+      if (e) msgs.push(e.ok ? 'E-mail enviado' : `E-mail: ${e.error}`);
+      const anyOk = (w?.ok) || (e?.ok);
+      toast({ title: anyOk ? 'Cliente notificado' : 'Falha ao notificar cliente', description: msgs.join(' • '), variant: anyOk ? 'default' : 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao notificar cliente', description: err.message, variant: 'destructive' });
+    }
   }
 
   const today = new Date().toISOString().split('T')[0];
@@ -541,6 +579,44 @@ export default function Tasks() {
             </div>
             {editing && (
               <>
+                <div className="space-y-3 border rounded-md p-3 bg-muted/30">
+                  <Label className="text-sm font-semibold">Notificar cliente ao concluir</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="notify-wa" className="text-sm font-normal">Enviar por WhatsApp</Label>
+                    <Switch id="notify-wa" checked={form.notify_whatsapp} onCheckedChange={v => setForm(f => ({ ...f, notify_whatsapp: v }))} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="notify-em" className="text-sm font-normal">Enviar por E-mail</Label>
+                    <Switch id="notify-em" checked={form.notify_email} onCheckedChange={v => setForm(f => ({ ...f, notify_email: v }))} />
+                  </div>
+                  {(form.notify_whatsapp || form.notify_email) && (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Mensagem</Label>
+                        <Textarea
+                          value={form.notify_message}
+                          onChange={e => setForm({ ...form, notify_message: e.target.value })}
+                          rows={4}
+                          placeholder="Texto enviado ao cliente quando a tarefa for concluída..."
+                        />
+                      </div>
+                      {form.notify_email && (
+                        <div className="space-y-1">
+                          <Label className="text-xs">Assunto do e-mail</Label>
+                          <Input
+                            value={form.notify_email_subject}
+                            onChange={e => setForm({ ...form, notify_email_subject: e.target.value })}
+                            placeholder={`Documentos da tarefa: ${form.title || ''}`}
+                          />
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Os arquivos da seção "Anexos para o cliente" serão enviados junto.
+                        {editing?.notify_sent_at && ' (Já enviado anteriormente — não será reenviado.)'}
+                      </p>
+                    </>
+                  )}
+                </div>
                 {(['input', 'output'] as const).map(dir => {
                   const list = editAttachments.filter(a => (a.direction || 'input') === dir);
                   return (

@@ -1570,6 +1570,11 @@ export type Database = {
           description: string | null
           due_date: string | null
           id: string
+          notify_email: boolean
+          notify_email_subject: string | null
+          notify_message: string | null
+          notify_sent_at: string | null
+          notify_whatsapp: boolean
           priority: Database["public"]["Enums"]["task_priority"]
           status: Database["public"]["Enums"]["task_status"]
           template_id: string | null
@@ -1584,6 +1589,11 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           id?: string
+          notify_email?: boolean
+          notify_email_subject?: string | null
+          notify_message?: string | null
+          notify_sent_at?: string | null
+          notify_whatsapp?: boolean
           priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
           template_id?: string | null
@@ -1598,6 +1608,11 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           id?: string
+          notify_email?: boolean
+          notify_email_subject?: string | null
+          notify_message?: string | null
+          notify_sent_at?: string | null
+          notify_whatsapp?: boolean
           priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
           template_id?: string | null
