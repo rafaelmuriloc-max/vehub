@@ -332,7 +332,7 @@ export default function Tasks() {
         </TabsList>
 
         <TabsContent value="kanban">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             {statusColumns.map(col => (
               <div key={col} className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{statusLabels[col]}
@@ -364,6 +364,20 @@ export default function Tasks() {
                             ))}
                           </div>
                         )}
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t mt-1">
+                          <div className="flex gap-1 text-xs text-muted-foreground">
+                            {(attachmentCounts[task.id]?.input || 0) > 0 && (
+                              <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{attachmentCounts[task.id].input}</span>
+                            )}
+                            {(attachmentCounts[task.id]?.output || 0) > 0 && (
+                              <span className="flex items-center gap-0.5 text-primary"><Upload className="h-3 w-3" />{attachmentCounts[task.id].output}</span>
+                            )}
+                          </div>
+                          <label className="cursor-pointer text-xs flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+                            <Upload className="h-3 w-3" />Para o cliente
+                            <input type="file" multiple className="hidden" onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
+                          </label>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
