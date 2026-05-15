@@ -216,7 +216,9 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
             <button
               key={conv.id}
               onClick={() => onSelect(conv.id)}
-               className="w-full gap-3 pl-2 md:pl-3 pr-2 md:pr-3 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors bg-white flex items-center justify-start border-b border-border/60 last:border-b-0 rounded-lg"
+               className={`w-full gap-3 pl-2 md:pl-3 pr-2 md:pr-3 py-2.5 md:py-3 hover:bg-[#F0F2F5] dark:hover:bg-zinc-800 transition-colors flex items-center justify-start border-b border-border/60 last:border-b-0 rounded-lg ${
+                 conv.id === activeId ? 'bg-[#F0F2F5] dark:bg-zinc-800' : 'bg-white dark:bg-zinc-900'
+               }`}
             >
               <Avatar className="h-11 w-11 md:h-12 md:w-12 shrink-0">
                 {conv.avatarUrl && <AvatarImage src={conv.avatarUrl} alt={conv.name} />}
