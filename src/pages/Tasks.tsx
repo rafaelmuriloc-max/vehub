@@ -300,6 +300,14 @@ export default function Tasks() {
     if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     loadData(); toast({ title: 'Removida' });
   }
+  async function deleteTask(id: string) {
+    if (!confirm('Excluir esta tarefa? Esta ação não pode ser desfeita.')) return;
+    await supabase.from('task_attachments').delete().eq('task_id', id);
+    await supabase.from('task_assignments').delete().eq('task_id', id);
+    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    loadTasks(); toast({ title: 'Tarefa excluída' });
+  }
 
   function openRequest(tpl: TaskTemplate) {
     setRequestTemplate(tpl);
@@ -423,10 +431,15 @@ export default function Tasks() {
                               <span className="flex items-center gap-0.5 text-primary"><Upload className="h-3 w-3" />{attachmentCounts[task.id].output}</span>
                             )}
                           </div>
-                          <label className="cursor-pointer text-xs flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
-                            <Upload className="h-3 w-3" />Para o cliente
-                            <input type="file" multiple className="hidden" onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
-                          </label>
+                          <div className="flex items-center gap-1">
+                            <label className="cursor-pointer text-xs flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+                              <Upload className="h-3 w-3" />Para o cliente
+                              <input type="file" multiple className="hidden" onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
+                            </label>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -474,6 +487,9 @@ export default function Tasks() {
                     {assignments[task.id]?.map(uid => (
                       <Badge key={uid} variant="outline" className="text-xs">{getProfileName(uid)}</Badge>
                     ))}
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive ml-2" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
