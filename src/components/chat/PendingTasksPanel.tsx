@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
-import { X, ListTodo, Paperclip, Upload, Trash2 } from 'lucide-react';
+import { X, ListTodo, Paperclip, Upload, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 function getReadableTextColor(hex: string): string {
   let h = hex.replace('#', '');
@@ -84,14 +85,20 @@ const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { 
 
 export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [profileMap, setProfileMap] = useState<Record<string, { name: string; color: string | null }>>({});
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, { input: number; output: number }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const onCountChangeRef = useRef(onCountChange);
   onCountChangeRef.current = onCountChange;
+
+  useEffect(() => {
+    if (currentIndex >= tasks.length) setCurrentIndex(0);
+  }, [tasks.length, currentIndex]);
 
   const loadAttachmentCounts = useCallback(async (taskIds: string[]) => {
     if (taskIds.length === 0) { setAttachmentCounts({}); return; }
