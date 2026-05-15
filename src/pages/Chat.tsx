@@ -499,10 +499,12 @@ export default function Chat() {
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const [pendingTasksOpen, setPendingTasksOpen] = useState(true);
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
+  const [pendingTasksProbed, setPendingTasksProbed] = useState(false);
   useEffect(() => {
     setTaskPanelOpen(false);
     setPendingTasksOpen(true);
     setPendingTasksCount(0);
+    setPendingTasksProbed(false);
   }, [activeConvId]);
 
   const sendLocation = async (lat: number, lng: number) => {
@@ -865,11 +867,11 @@ export default function Chat() {
                   />
                 </div>
               </>
-            ) : (pendingTasksOpen && pendingTasksCount > 0 && activeConv?.whatsappPhone ? (
+            ) : (pendingTasksOpen && activeConv?.whatsappPhone && (!pendingTasksProbed || pendingTasksCount > 0) ? (
               <PendingTasksPanel
                 phone={activeConv.whatsappPhone}
                 onClose={() => setPendingTasksOpen(false)}
-                onCountChange={setPendingTasksCount}
+                onCountChange={(n) => { setPendingTasksCount(n); setPendingTasksProbed(true); }}
               />
             ) : null)}
           />
