@@ -1,40 +1,21 @@
-## Triagens aguardando primeiro atendimento
+## Não fechar chamados sem 1ª resposta do atendente
 
-Quando uma conversa é atribuída (pela Gisele OU manualmente por um admin), ela permanece na aba **Espera** com a tag colorida do atendente designado. Assim que o atendente envia a 1ª resposta, ela migra automaticamente para a aba **Chat** dele.
+Hoje o `chat-inactivity-monitor` envia aviso após 30 min sem mensagem e fecha após mais 5 min, mesmo em chamados que ainda não tiveram a primeira resposta do atendente atribuído. Isso causa fechamentos indevidos de chamados recém-transferidos.
 
-### 1. Banco
+### Mudança
 
-Migration:
-- `chat_conversations.awaiting_first_reply boolean NOT NULL DEFAULT false`.
-- Trigger `BEFORE UPDATE` em `chat_conversations`: quando `assigned_to` muda de NULL → não-NULL, setar `awaiting_first_reply = true`. (Cobre Gisele e atribuição manual sem precisar mexer em cada call site.)
-- Trigger `AFTER INSERT` em `chat_messages`: se mensagem é saída (`message_type IN ('text','whatsapp_outgoing')`), `sender_id` = `chat_conversations.assigned_to` e `awaiting_first_reply = true` → setar `awaiting_first_reply = false`.
-- Atualizar a função `get_chat_inbox`:
-  - `mine`: `assigned_to = p_user AND status='open' AND awaiting_first_reply = false`
-  - `in_progress` (Espera): `status='open' AND (assigned_to IS NULL OR awaiting_first_reply = true)`
-  - Adicionar `awaiting_first_reply` ao retorno.
+Em `supabase/functions/chat-inactivity-monitor/index.ts`, adicionar filtro `.eq('awaiting_first_reply', false)` na query principal que busca conversas candidatas a aviso/fechamento.
 
-### 2. Edge Function `chat-triage-agent`
+Efeito:
+- Conversas com `awaiting_first_reply = true` (atribuídas mas sem resposta do atendente) ficam imunes ao timer de 30 + 5 min.
+- Assim que o atendente envia a 1ª mensagem, o trigger `trg_chat_msg_clear_awaiting` zera o flag e o ciclo normal de inatividade volta a valer.
+- Conversas sem `assigned_to` continuam fora do escopo do monitor (já são ignoradas).
 
-Nenhuma mudança lógica necessária — o trigger cuida do flag quando `assigned_to` é gravado. Só validar que o update de transferência continua atômico.
+### Memória
 
-### 3. UI — `ConversationList.tsx`
-
-- Estender o tipo de conversa com `awaitingFirstReply` e ler do RPC.
-- Na aba **Espera**, quando `assigned_to_name` existe, exibir badge com `assigned_to_color` + nome do atendente (formato: "Aguardando {Nome}"), substituindo/complementando o indicador atual de tempo de espera.
-- Conversas sem `assigned_to` continuam mostrando "Aguardando atendimento" como hoje.
-
-### 4. Contadores
-
-- `mineCount` em `Chat.tsx` já vem do RPC `mine`, então será automaticamente menor (exclui as awaiting). OK.
-- Badge da aba Espera passa a incluir as awaiting.
-
-### Detalhes técnicos
-
-- Trigger evita mexer em todos os pontos de UI/edge que atribuem. Atribuição via UPDATE direto é o caminho atual em todo lugar.
-- Reabertura de chamado: se um admin reatribuir a outro atendente (NULL → user OU user → user2), o trigger marca novamente como awaiting. Comportamento desejado.
-- Realtime: `chat_conversations` já tem realtime; o flip de `awaiting_first_reply` dispara update e a UI move o card entre abas naturalmente.
+Atualizar `mem://features/chat/inactivity-auto-close` registrando a exceção: o timer só roda depois da 1ª resposta do atendente.
 
 ### Fora de escopo
 
-- Notificação push extra para o atendente quando recebe uma triagem (pode ser próximo passo).
-- Timeout automático para reatribuir se o atendente não responder em X minutos.
+- `chat-waiting-alert` (aviso de espera longa) permanece inalterado.
+- Nenhuma mudança em UI, triggers ou RPC.
