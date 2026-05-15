@@ -53,7 +53,7 @@ export default function Tasks() {
 
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as Task['status'], priority: 'medium' as Task['priority'],
-    due_date: '', client_id: '', assigned_to: [] as string[],
+    due_date: '', client_id: '', department_id: '', assigned_to: [] as string[],
   });
 
   // Templates state
@@ -119,6 +119,7 @@ export default function Tasks() {
     setForm({
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
+      department_id: task.department_id || '',
       assigned_to: assignments[task.id] || [],
     });
     setEditNewFiles([]);
@@ -193,6 +194,7 @@ export default function Tasks() {
     const payload = {
       title: form.title, description: form.description || null, status: form.status,
       priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
+      department_id: form.department_id || null,
     };
     let error;
     let taskId: string;
