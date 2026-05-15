@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
  import { CheckCheck, MapPin, Contact, ArrowDownToLine, Ban, Pencil, Trash2, Check, X, Reply, Sparkles, Loader2, RefreshCw, Forward } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AudioMessage } from './AudioMessage';
@@ -13,6 +13,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-mobile';
+
+const LONG_PRESS_MS = 2000;
 
 interface MessageBubbleProps {
   content: string;
@@ -136,6 +139,43 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
   const [retrying, setRetrying] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+    };
+  }, []);
+
+  const hasMenu = !!(onEdit || onDeleteForMe || onDeleteForAll || onReply || onForward);
+
+  const clearLongPress = () => {
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchStart = () => {
+    if (!isMobile || !hasMenu) return;
+    longPressFired.current = false;
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      setMenuOpen(true);
+    }, LONG_PRESS_MS);
+  };
+
+  const handleTouchEnd = () => {
+    clearLongPress();
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (longPressFired.current) e.preventDefault();
+  };
 
   const retryTranscription = async () => {
     if (!messageId || retrying) return;
@@ -255,17 +295,23 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   return (
      <div ref={bubbleRef} className={`${showOnRight ? 'flex items-center justify-end pr-[42px]' : 'flex justify-start pl-[42px]'} mb-1 transition-colors ${highlight ? 'bg-yellow-200/40 rounded-lg' : ''}`}>
-      <div
+       <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        onContextMenu={handleContextMenu}
+        style={isMobile ? { WebkitTouchCallout: 'none', WebkitUserSelect: 'none' } : undefined}
         className={`group relative ${mediaKind === 'audio' ? 'w-[85%] sm:w-auto sm:max-w-[65%]' : 'max-w-[80%] sm:max-w-[65%]'} px-[12px] py-1.5 rounded-lg shadow-sm ${
           showOnRight
             ? 'bg-[#DCF8C6] dark:bg-emerald-800 text-foreground rounded-tr-none rounded-2xl'
             : 'bg-white dark:bg-zinc-800 text-foreground rounded-tl-none text-left my-[10px] rounded-2xl'
         }`}
       >
-        {(onEdit || onDeleteForMe || onDeleteForAll || onReply || onForward) && (
-          <DropdownMenu>
+        {hasMenu && (
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
-               <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10">
+               <button className="absolute top-1 right-1 opacity-0 sm:group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 z-10 hidden sm:block">
                 <ArrowDownToLine className="lucide lucide-arrow-down-to-line h-3.5 w-3.5 text-muted-foreground mx-0 my-0 mr-0 px-0" />
                </button>
             </DropdownMenuTrigger>
