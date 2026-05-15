@@ -1537,6 +1537,10 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          notify_email: boolean
+          notify_email_subject: string | null
+          notify_message: string | null
+          notify_whatsapp: boolean
           updated_at: string
         }
         Insert: {
@@ -1547,6 +1551,10 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          notify_email?: boolean
+          notify_email_subject?: string | null
+          notify_message?: string | null
+          notify_whatsapp?: boolean
           updated_at?: string
         }
         Update: {
@@ -1557,6 +1565,10 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          notify_email?: boolean
+          notify_email_subject?: string | null
+          notify_message?: string | null
+          notify_whatsapp?: boolean
           updated_at?: string
         }
         Relationships: []

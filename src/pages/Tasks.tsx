@@ -25,7 +25,10 @@ type Task = {
 type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
-type TaskTemplate = { id: string; name: string; department_id: string; description: string | null; default_due_days: number };
+type TaskTemplate = {
+  id: string; name: string; department_id: string; description: string | null; default_due_days: number;
+  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null;
+};
 type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null; direction?: 'input' | 'output' };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
@@ -50,13 +53,15 @@ export default function Tasks() {
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as Task['status'], priority: 'medium' as Task['priority'],
     due_date: '', client_id: '', assigned_to: [] as string[],
-    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '',
   });
 
   // Templates state
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
-  const [templateForm, setTemplateForm] = useState({ name: '', department_id: '', description: '', default_due_days: '7' });
+  const [templateForm, setTemplateForm] = useState({
+    name: '', department_id: '', description: '', default_due_days: '7',
+    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '',
+  });
   const [templateFilterDept, setTemplateFilterDept] = useState<string>('all');
 
   // Solicitar state
@@ -100,8 +105,7 @@ export default function Tasks() {
 
   function openNew() {
     setEditing(null);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [],
-      notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '' });
+    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [] });
     setDialogOpen(true);
   }
 
@@ -111,10 +115,6 @@ export default function Tasks() {
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
       assigned_to: assignments[task.id] || [],
-      notify_whatsapp: !!task.notify_whatsapp,
-      notify_email: !!task.notify_email,
-      notify_message: task.notify_message || '',
-      notify_email_subject: task.notify_email_subject || '',
     });
     setEditNewFiles([]);
     setEditAttachments([]);
@@ -188,10 +188,6 @@ export default function Tasks() {
     const payload = {
       title: form.title, description: form.description || null, status: form.status,
       priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
-      notify_whatsapp: form.notify_whatsapp,
-      notify_email: form.notify_email,
-      notify_message: form.notify_message || null,
-      notify_email_subject: form.notify_email_subject || null,
     };
     let error;
     let taskId: string;
@@ -213,7 +209,7 @@ export default function Tasks() {
     }
 
     setDialogOpen(false);
-    if (form.status === 'done' && !wasDone && (form.notify_whatsapp || form.notify_email)) {
+    if (form.status === 'done' && !wasDone && editing && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
       await triggerNotify(taskId);
     }
     loadData();
@@ -260,12 +256,20 @@ export default function Tasks() {
 
   function openNewTemplate() {
     setEditingTemplate(null);
-    setTemplateForm({ name: '', department_id: '', description: '', default_due_days: '7' });
+    setTemplateForm({ name: '', department_id: '', description: '', default_due_days: '7',
+      notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '' });
     setTemplateDialogOpen(true);
   }
   function openEditTemplate(tpl: TaskTemplate) {
     setEditingTemplate(tpl);
-    setTemplateForm({ name: tpl.name, department_id: tpl.department_id, description: tpl.description || '', default_due_days: String(tpl.default_due_days) });
+    setTemplateForm({
+      name: tpl.name, department_id: tpl.department_id, description: tpl.description || '',
+      default_due_days: String(tpl.default_due_days),
+      notify_whatsapp: !!tpl.notify_whatsapp,
+      notify_email: !!tpl.notify_email,
+      notify_message: tpl.notify_message || '',
+      notify_email_subject: tpl.notify_email_subject || '',
+    });
     setTemplateDialogOpen(true);
   }
   async function handleSaveTemplate(e: React.FormEvent) {
@@ -278,10 +282,14 @@ export default function Tasks() {
       department_id: templateForm.department_id,
       description: templateForm.description || null,
       default_due_days: parseInt(templateForm.default_due_days) || 7,
+      notify_whatsapp: templateForm.notify_whatsapp,
+      notify_email: templateForm.notify_email,
+      notify_message: templateForm.notify_message || null,
+      notify_email_subject: templateForm.notify_email_subject || null,
     };
     const { error } = editingTemplate
-      ? await supabase.from('task_templates').update(payload).eq('id', editingTemplate.id)
-      : await supabase.from('task_templates').insert({ ...payload, created_by: user?.id });
+      ? await supabase.from('task_templates').update(payload as any).eq('id', editingTemplate.id)
+      : await supabase.from('task_templates').insert({ ...payload, created_by: user?.id } as any);
     if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     setTemplateDialogOpen(false); loadData();
     toast({ title: editingTemplate ? 'Tarefa atualizada' : 'Tarefa cadastrada' });
@@ -316,6 +324,10 @@ export default function Tasks() {
       department_id: requestTemplate.department_id,
       template_id: requestTemplate.id,
       created_by: user?.id,
+      notify_whatsapp: !!requestTemplate.notify_whatsapp,
+      notify_email: !!requestTemplate.notify_email,
+      notify_message: requestTemplate.notify_message || null,
+      notify_email_subject: requestTemplate.notify_email_subject || null,
     } as any).select('id').single();
     if (error) { setUploading(false); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     if (requestForm.assigned_to.length > 0 && data?.id) {
@@ -579,44 +591,15 @@ export default function Tasks() {
             </div>
             {editing && (
               <>
-                <div className="space-y-3 border rounded-md p-3 bg-muted/30">
-                  <Label className="text-sm font-semibold">Notificar cliente ao concluir</Label>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="notify-wa" className="text-sm font-normal">Enviar por WhatsApp</Label>
-                    <Switch id="notify-wa" checked={form.notify_whatsapp} onCheckedChange={v => setForm(f => ({ ...f, notify_whatsapp: v }))} />
+                {(editing.notify_whatsapp || editing.notify_email) && (
+                  <div className="text-xs text-muted-foreground border rounded-md p-2 bg-muted/30">
+                    Ao concluir, o cliente será notificado por
+                    {editing.notify_whatsapp ? ' WhatsApp' : ''}
+                    {editing.notify_whatsapp && editing.notify_email ? ' e' : ''}
+                    {editing.notify_email ? ' E-mail' : ''}.
+                    {editing.notify_sent_at && ' (Já enviado.)'}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="notify-em" className="text-sm font-normal">Enviar por E-mail</Label>
-                    <Switch id="notify-em" checked={form.notify_email} onCheckedChange={v => setForm(f => ({ ...f, notify_email: v }))} />
-                  </div>
-                  {(form.notify_whatsapp || form.notify_email) && (
-                    <>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Mensagem</Label>
-                        <Textarea
-                          value={form.notify_message}
-                          onChange={e => setForm({ ...form, notify_message: e.target.value })}
-                          rows={4}
-                          placeholder="Texto enviado ao cliente quando a tarefa for concluída..."
-                        />
-                      </div>
-                      {form.notify_email && (
-                        <div className="space-y-1">
-                          <Label className="text-xs">Assunto do e-mail</Label>
-                          <Input
-                            value={form.notify_email_subject}
-                            onChange={e => setForm({ ...form, notify_email_subject: e.target.value })}
-                            placeholder={`Documentos da tarefa: ${form.title || ''}`}
-                          />
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Os arquivos da seção "Anexos para o cliente" serão enviados junto.
-                        {editing?.notify_sent_at && ' (Já enviado anteriormente — não será reenviado.)'}
-                      </p>
-                    </>
-                  )}
-                </div>
+                )}
                 {(['input', 'output'] as const).map(dir => {
                   const list = editAttachments.filter(a => (a.direction || 'input') === dir);
                   return (
@@ -657,7 +640,7 @@ export default function Tasks() {
 
       {/* Template CRUD Dialog */}
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingTemplate ? 'Editar Tarefa Cadastrada' : 'Nova Tarefa Cadastrada'}</DialogTitle></DialogHeader>
           <form onSubmit={handleSaveTemplate} className="space-y-4">
             <div className="space-y-2"><Label>Nome *</Label><Input value={templateForm.name} onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })} required /></div>
@@ -672,6 +655,43 @@ export default function Tasks() {
             </div>
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} /></div>
             <div className="space-y-2"><Label>Prazo de entrega (dias)</Label><Input type="number" min="1" value={templateForm.default_due_days} onChange={e => setTemplateForm({ ...templateForm, default_due_days: e.target.value })} /></div>
+            <div className="space-y-3 border rounded-md p-3 bg-muted/30">
+              <Label className="text-sm font-semibold">Notificar cliente ao concluir</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="tpl-notify-wa" className="text-sm font-normal">Enviar por WhatsApp</Label>
+                <Switch id="tpl-notify-wa" checked={templateForm.notify_whatsapp} onCheckedChange={v => setTemplateForm(f => ({ ...f, notify_whatsapp: v }))} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="tpl-notify-em" className="text-sm font-normal">Enviar por E-mail</Label>
+                <Switch id="tpl-notify-em" checked={templateForm.notify_email} onCheckedChange={v => setTemplateForm(f => ({ ...f, notify_email: v }))} />
+              </div>
+              {(templateForm.notify_whatsapp || templateForm.notify_email) && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Mensagem</Label>
+                    <Textarea
+                      value={templateForm.notify_message}
+                      onChange={e => setTemplateForm({ ...templateForm, notify_message: e.target.value })}
+                      rows={4}
+                      placeholder="Texto enviado ao cliente quando a tarefa for concluída..."
+                    />
+                  </div>
+                  {templateForm.notify_email && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Assunto do e-mail</Label>
+                      <Input
+                        value={templateForm.notify_email_subject}
+                        onChange={e => setTemplateForm({ ...templateForm, notify_email_subject: e.target.value })}
+                        placeholder={`Documentos da tarefa: ${templateForm.name || ''}`}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Os arquivos anexados como "Para o cliente" serão enviados junto.
+                  </p>
+                </>
+              )}
+            </div>
             <Button type="submit" className="w-full">{editingTemplate ? 'Salvar' : 'Cadastrar'}</Button>
           </form>
         </DialogContent>
