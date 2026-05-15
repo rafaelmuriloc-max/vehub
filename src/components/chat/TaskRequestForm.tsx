@@ -5,7 +5,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Paperclip, X } from 'lucide-react';
@@ -15,7 +14,7 @@ type TaskTemplate = {
   notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null;
 };
 type Client = { id: string; company_name: string };
-type Profile = { user_id: string; full_name: string | null };
+type Profile = { user_id: string; full_name: string | null; department_id: string | null };
 
 interface TaskRequestFormProps {
   defaultClientId?: string | null;
@@ -48,7 +47,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, onCreated 
       const [{ data: tpl }, { data: c }, { data: p }] = await Promise.all([
         supabase.from('task_templates').select('*').order('name'),
         supabase.from('clients').select('id, company_name').order('company_name'),
-        supabase.from('profiles').select('user_id, full_name'),
+        supabase.from('profiles').select('user_id, full_name, department_id'),
       ]);
       setTemplates((tpl as TaskTemplate[]) || []);
       setClients((c as Client[]) || []);
@@ -147,8 +146,10 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, onCreated 
               setRequestTemplate(tpl);
               if (tpl) {
                 const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
-                setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0] }));
+                setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0], assigned_to: [] }));
                 setRequestCustomTitle('');
+              } else {
+                setRequestForm(f => ({ ...f, assigned_to: [] }));
               }
             }
           }}
@@ -196,16 +197,18 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, onCreated 
       </div>
       <div className="space-y-2">
         <Label>Atribuir a (opcional — vazio = livre para o departamento)</Label>
-        <div className="flex flex-wrap gap-2">
-          {profiles.map(p => (
-            <Badge key={p.user_id} variant={requestForm.assigned_to.includes(p.user_id) ? 'default' : 'outline'}
-              className="cursor-pointer" onClick={() => {
-                setRequestForm(f => ({ ...f, assigned_to: f.assigned_to.includes(p.user_id) ? f.assigned_to.filter(x => x !== p.user_id) : [...f.assigned_to, p.user_id] }));
-              }}>
-              {p.full_name || 'Sem nome'}
-            </Badge>
-          ))}
-        </div>
+        <Select
+          value={requestForm.assigned_to[0] || 'none'}
+          onValueChange={(v) => setRequestForm(f => ({ ...f, assigned_to: v === 'none' ? [] : [v] }))}
+        >
+          <SelectTrigger><SelectValue placeholder="Selecione um responsável" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">— Livre para o departamento —</SelectItem>
+            {profiles
+              .filter(p => !requestTemplate?.department_id || p.department_id === requestTemplate.department_id)
+              .map(p => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || 'Sem nome'}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-2">
         <Label className="flex items-center gap-2"><Paperclip className="h-4 w-4" />Anexos (documentos/imagens)</Label>
