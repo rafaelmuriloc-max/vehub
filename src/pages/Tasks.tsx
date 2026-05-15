@@ -13,11 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
 
 type Task = {
   id: string; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
   created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
+  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null;
+  notify_email_subject?: string | null; notify_sent_at?: string | null;
 };
 type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
@@ -47,6 +50,7 @@ export default function Tasks() {
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as Task['status'], priority: 'medium' as Task['priority'],
     due_date: '', client_id: '', assigned_to: [] as string[],
+    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '',
   });
 
   // Templates state
@@ -96,7 +100,8 @@ export default function Tasks() {
 
   function openNew() {
     setEditing(null);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [] });
+    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [],
+      notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '' });
     setDialogOpen(true);
   }
 
@@ -106,6 +111,10 @@ export default function Tasks() {
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
       assigned_to: assignments[task.id] || [],
+      notify_whatsapp: !!task.notify_whatsapp,
+      notify_email: !!task.notify_email,
+      notify_message: task.notify_message || '',
+      notify_email_subject: task.notify_email_subject || '',
     });
     setEditNewFiles([]);
     setEditAttachments([]);
