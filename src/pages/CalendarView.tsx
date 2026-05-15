@@ -836,17 +836,20 @@ export default function CalendarView() {
             )}
           </CardHeader>
           <CardContent>
+            {(() => { return null; })()}
             {!selectedDay ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <CalendarDays className="h-12 w-12 text-muted-foreground/40 mb-3" />
                 <p className="text-muted-foreground text-sm">Selecione um dia no calendário</p>
               </div>
-            ) : selectedEvents.length === 0 ? (
+            ) : selectedEvents.length === 0 && getTasksForDay(selectedDay).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <CheckSquare className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-muted-foreground text-sm">Nenhuma obrigação neste dia</p>
+                <p className="text-muted-foreground text-sm">Nada agendado neste dia</p>
               </div>
             ) : (
+              <>
+              {selectedEvents.length > 0 && (
               <Tabs defaultValue="pending">
                 <TabsList className="mb-4 w-full grid grid-cols-2">
                   <TabsTrigger value="pending">
