@@ -118,6 +118,7 @@ Deno.serve(async (req) => {
       .from("chat_conversations")
       .select("id, name, whatsapp_phone, client_id, assigned_to, last_inactivity_alert_at, updated_at")
       .eq("status", "open")
+      .eq("awaiting_first_reply", false)
       .not("assigned_to", "is", null);
 
     if (error) throw error;
