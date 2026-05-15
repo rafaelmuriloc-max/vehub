@@ -781,7 +781,11 @@ export default function Chat() {
   return (
     <div
       className="flex flex-col w-full overflow-hidden bg-background md:h-screen"
-      style={isMobile ? { height: viewportHeight } : undefined}
+      style={
+        isMobile
+          ? { height: viewportHeight, paddingTop: 'env(safe-area-inset-top)' }
+          : undefined
+      }
     >
       <EnableNotificationsBanner />
       <div className="flex flex-1 min-h-0 w-full overflow-hidden">
