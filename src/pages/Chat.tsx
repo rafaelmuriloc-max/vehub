@@ -15,7 +15,6 @@ import { AttachFromSystemDialog } from '@/components/chat/AttachFromSystemDialog
 import { AttachSocietyDocumentsDialog } from '@/components/chat/AttachSocietyDocumentsDialog';
 import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
 import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
-import { useVisualViewport } from '@/hooks/useVisualViewportHeight';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
