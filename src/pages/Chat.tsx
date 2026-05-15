@@ -15,7 +15,7 @@ import { AttachFromSystemDialog } from '@/components/chat/AttachFromSystemDialog
 import { AttachSocietyDocumentsDialog } from '@/components/chat/AttachSocietyDocumentsDialog';
 import { EnableNotificationsBanner } from '@/components/chat/EnableNotificationsBanner';
 import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
-import { useVisualViewportHeight } from '@/hooks/useVisualViewportHeight';
+import { useVisualViewport } from '@/hooks/useVisualViewportHeight';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -23,7 +23,7 @@ export type ChatTab = 'mine' | 'in_progress' | 'all';
 export default function Chat() {
   const { user, profile, isAdmin } = useAuth();
   const isMobile = useIsMobile();
-  const viewportHeight = useVisualViewportHeight();
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useVisualViewport();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -783,7 +783,14 @@ export default function Chat() {
       className="flex flex-col w-full overflow-hidden bg-background md:h-screen"
       style={
         isMobile
-          ? { height: viewportHeight, paddingTop: 'env(safe-area-inset-top)' }
+          ? {
+              position: 'fixed',
+              top: viewportOffsetTop,
+              left: 0,
+              right: 0,
+              height: viewportHeight,
+              paddingTop: 'env(safe-area-inset-top)',
+            }
           : undefined
       }
     >
