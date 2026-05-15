@@ -60,7 +60,10 @@ export function ForwardMessageDialog({ open, onOpenChange, message, currentConve
     .filter(c => {
       if (!search.trim()) return true;
       const q = search.toLowerCase();
-      return (c.name || '').toLowerCase().includes(q) || (c.whatsapp_phone || '').includes(search.replace(/\D/g, ''));
+      const digits = search.replace(/\D/g, '');
+      const nameMatch = (c.name || '').toLowerCase().includes(q);
+      const phoneMatch = digits.length > 0 && (c.whatsapp_phone || '').includes(digits);
+      return nameMatch || phoneMatch;
     });
 
   const toggle = (id: string) => {

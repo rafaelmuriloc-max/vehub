@@ -1,7 +1,7 @@
-# Encaminhar para qualquer conversa
+# Corrigir busca por nome no encaminhar
 
-Remover o filtro `status = 'open'` em `ForwardMessageDialog.tsx` para que a busca traga todas as conversas (abertas e fechadas), mantendo a ordenação por `updated_at` desc e o limite de 200.
+O filtro atual em `ForwardMessageDialog.tsx` faz `phone.includes(search.replace(/\D/g,''))`, que vira `phone.includes('')` (sempre `true`) quando o termo é só letras — anulando o filtro por nome.
 
-## Arquivo
+## Mudança
 
-- `src/components/chat/ForwardMessageDialog.tsx` — remover `.eq('status', 'open')` na query de carregamento das conversas.
+- `src/components/chat/ForwardMessageDialog.tsx`: aplicar match de telefone apenas se `searchDigits.length > 0`. O match por nome continua via `c.name.includes(q)`.
