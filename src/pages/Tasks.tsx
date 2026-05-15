@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type Task = {
@@ -58,6 +58,8 @@ export default function Tasks() {
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
   const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'] });
+  const [requestFiles, setRequestFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -181,6 +183,7 @@ export default function Tasks() {
     setRequestTemplate(tpl);
     const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
     setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium' });
+    setRequestFiles([]);
     setRequestOpen(true);
   }
   async function handleRequest(e: React.FormEvent) {
@@ -188,6 +191,7 @@ export default function Tasks() {
     if (!requestTemplate || !requestForm.client_id) {
       toast({ title: 'Selecione o cliente', variant: 'destructive' }); return;
     }
+    setUploading(true);
     const { data, error } = await supabase.from('tasks').insert({
       title: requestTemplate.name,
       description: requestTemplate.description || null,
@@ -199,10 +203,34 @@ export default function Tasks() {
       template_id: requestTemplate.id,
       created_by: user?.id,
     } as any).select('id').single();
-    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    if (error) { setUploading(false); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     if (requestForm.assigned_to.length > 0 && data?.id) {
       await supabase.from('task_assignments').insert(requestForm.assigned_to.map(uid => ({ task_id: data.id, user_id: uid })));
     }
+    if (data?.id && requestFiles.length > 0) {
+      const failed: string[] = [];
+      for (const file of requestFiles) {
+        const safe = file.name
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^\w.\-]+/g, '_');
+        const path = `tasks/${data.id}/${Date.now()}_${safe}`;
+        const up = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || undefined });
+        if (up.error) { failed.push(file.name); continue; }
+        const ins = await supabase.from('task_attachments').insert({
+          task_id: data.id,
+          file_url: path,
+          file_name: file.name,
+          file_type: file.type || null,
+          file_size: file.size,
+          uploaded_by: user?.id,
+        } as any);
+        if (ins.error) failed.push(file.name);
+      }
+      if (failed.length > 0) {
+        toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
+      }
+    }
+    setUploading(false);
     setRequestOpen(false); loadData();
     toast({ title: 'Tarefa solicitada' });
   }
@@ -490,7 +518,34 @@ export default function Tasks() {
                 ))}
               </div>
             </div>
-            <Button type="submit" className="w-full">Solicitar Tarefa</Button>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2"><Paperclip className="h-4 w-4" />Anexos (documentos/imagens)</Label>
+              <Input
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                onChange={(e) => {
+                  const fs = Array.from(e.target.files || []);
+                  setRequestFiles(prev => [...prev, ...fs]);
+                  e.target.value = '';
+                }}
+              />
+              {requestFiles.length > 0 && (
+                <div className="space-y-1">
+                  {requestFiles.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-sm bg-muted px-2 py-1 rounded">
+                      <span className="truncate">{f.name} <span className="text-muted-foreground text-xs">({(f.size / 1024).toFixed(0)} KB)</span></span>
+                      <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setRequestFiles(prev => prev.filter((_, j) => j !== i))}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button type="submit" className="w-full" disabled={uploading}>
+              {uploading ? 'Enviando…' : 'Solicitar Tarefa'}
+            </Button>
           </form>
         </DialogContent>
       </Dialog>
