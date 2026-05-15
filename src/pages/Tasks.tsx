@@ -640,7 +640,7 @@ export default function Tasks() {
 
       {/* Template CRUD Dialog */}
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingTemplate ? 'Editar Tarefa Cadastrada' : 'Nova Tarefa Cadastrada'}</DialogTitle></DialogHeader>
           <form onSubmit={handleSaveTemplate} className="space-y-4">
             <div className="space-y-2"><Label>Nome *</Label><Input value={templateForm.name} onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })} required /></div>
@@ -655,6 +655,43 @@ export default function Tasks() {
             </div>
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} /></div>
             <div className="space-y-2"><Label>Prazo de entrega (dias)</Label><Input type="number" min="1" value={templateForm.default_due_days} onChange={e => setTemplateForm({ ...templateForm, default_due_days: e.target.value })} /></div>
+            <div className="space-y-3 border rounded-md p-3 bg-muted/30">
+              <Label className="text-sm font-semibold">Notificar cliente ao concluir</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="tpl-notify-wa" className="text-sm font-normal">Enviar por WhatsApp</Label>
+                <Switch id="tpl-notify-wa" checked={templateForm.notify_whatsapp} onCheckedChange={v => setTemplateForm(f => ({ ...f, notify_whatsapp: v }))} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="tpl-notify-em" className="text-sm font-normal">Enviar por E-mail</Label>
+                <Switch id="tpl-notify-em" checked={templateForm.notify_email} onCheckedChange={v => setTemplateForm(f => ({ ...f, notify_email: v }))} />
+              </div>
+              {(templateForm.notify_whatsapp || templateForm.notify_email) && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Mensagem</Label>
+                    <Textarea
+                      value={templateForm.notify_message}
+                      onChange={e => setTemplateForm({ ...templateForm, notify_message: e.target.value })}
+                      rows={4}
+                      placeholder="Texto enviado ao cliente quando a tarefa for concluída..."
+                    />
+                  </div>
+                  {templateForm.notify_email && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Assunto do e-mail</Label>
+                      <Input
+                        value={templateForm.notify_email_subject}
+                        onChange={e => setTemplateForm({ ...templateForm, notify_email_subject: e.target.value })}
+                        placeholder={`Documentos da tarefa: ${templateForm.name || ''}`}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Os arquivos anexados como "Para o cliente" serão enviados junto.
+                  </p>
+                </>
+              )}
+            </div>
             <Button type="submit" className="w-full">{editingTemplate ? 'Salvar' : 'Cadastrar'}</Button>
           </form>
         </DialogContent>
