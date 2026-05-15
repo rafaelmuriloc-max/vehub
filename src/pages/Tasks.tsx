@@ -69,6 +69,7 @@ export default function Tasks() {
   const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
   const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'], description: '' });
   const [requestFiles, setRequestFiles] = useState<File[]>([]);
+  const [requestCustomTitle, setRequestCustomTitle] = useState('');
   const [uploading, setUploading] = useState(false);
   const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
   const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
@@ -104,9 +105,12 @@ export default function Tasks() {
   }
 
   function openNew() {
-    setEditing(null);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', client_id: '', assigned_to: [] });
-    setDialogOpen(true);
+    setRequestTemplate(null);
+    setRequestCustomTitle('');
+    const due = new Date(); due.setDate(due.getDate() + 7);
+    setRequestForm({ client_id: '', due_date: due.toISOString().split('T')[0], assigned_to: [], priority: 'medium', description: '' });
+    setRequestFiles([]);
+    setRequestOpen(true);
   }
 
   async function openEdit(task: Task) {
