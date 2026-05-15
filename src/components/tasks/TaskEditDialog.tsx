@@ -168,7 +168,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader><DialogTitle>Editar Tarefa</DialogTitle></DialogHeader>
         {loading && <p className="text-sm text-muted-foreground py-6 text-center">Carregando…</p>}
         {!loading && !editing && <p className="text-sm text-muted-foreground py-6 text-center">Tarefa não encontrada.</p>}
@@ -176,7 +176,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2"><Label>Título *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required /></div>
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={v => setForm({ ...form, status: v as TaskStatus })}>
@@ -208,7 +208,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label>Departamento</Label>
                 <Select value={form.department_id || 'none'} onValueChange={v => setForm({ ...form, department_id: v === 'none' ? '' : v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione o departamento" /></SelectTrigger>
@@ -263,9 +263,9 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-1">
                     <Input type="file" multiple onChange={e => setEditNewFiles(Array.from(e.target.files || []))} className="text-xs" />
-                    <Button type="button" size="sm" disabled={uploading || editNewFiles.length === 0} onClick={() => uploadEditFiles(dir)}>
+                    <Button type="button" size="sm" className="w-full sm:w-auto" disabled={uploading || editNewFiles.length === 0} onClick={() => uploadEditFiles(dir)}>
                       {uploading ? 'Enviando...' : 'Anexar'}
                     </Button>
                   </div>
