@@ -10,6 +10,16 @@ import { ptBR } from 'date-fns/locale';
 import { NewConversationDialog } from './NewConversationDialog';
 import type { ChatTab } from '@/pages/Chat';
 
+function getReadableTextColor(hex: string): string {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 160 ? '#0f172a' : '#ffffff';
+}
+
 export interface ConversationItem {
   id: string;
   name: string;
