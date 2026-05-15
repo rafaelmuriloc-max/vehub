@@ -22,6 +22,10 @@ interface TaskRow {
   client_id: string | null;
   clients: { company_name: string } | null;
   task_assignments: { user_id: string }[];
+  status?: string;
+  notify_whatsapp?: boolean;
+  notify_email?: boolean;
+  notify_sent_at?: string | null;
 }
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
@@ -96,7 +100,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
         }
         const { data } = await supabase
           .from('tasks')
-          .select('id,title,priority,due_date,client_id,clients(company_name),task_assignments(user_id)')
+          .select('id,title,priority,due_date,client_id,status,notify_whatsapp,notify_email,notify_sent_at,clients(company_name),task_assignments(user_id)')
           .in('client_id', ids)
           .eq('status', 'todo')
           .order('due_date', { ascending: true, nullsFirst: false });
@@ -126,10 +130,35 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
   }, [phone, loadAttachmentCounts]);
 
   async function moveTask(taskId: string, newStatus: string) {
+    const prev = tasks.find(t => t.id === taskId);
     setBusyId(taskId);
     const { error } = await supabase.from('tasks').update({ status: newStatus } as any).eq('id', taskId);
+    if (error) { setBusyId(null); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+
+    if (newStatus === 'done' && prev && prev.status !== 'done'
+        && (prev.notify_whatsapp || prev.notify_email)
+        && !prev.notify_sent_at) {
+      try {
+        const { data, error: nErr } = await supabase.functions.invoke('task-notify-client', { body: { taskId } });
+        if (nErr) {
+          toast({ title: 'Falha ao notificar cliente', description: nErr.message, variant: 'destructive' });
+        } else {
+          const w = (data as any)?.whatsapp; const e = (data as any)?.email;
+          const msgs: string[] = [];
+          if (w) msgs.push(w.ok ? 'WhatsApp enviado' : `WhatsApp: ${w.error}`);
+          if (e) msgs.push(e.ok ? 'E-mail enviado' : `E-mail: ${e.error}`);
+          const anyOk = (w?.ok) || (e?.ok);
+          toast({
+            title: anyOk ? 'Cliente notificado' : 'Falha ao notificar cliente',
+            description: msgs.join(' • '),
+            variant: anyOk ? 'default' : 'destructive',
+          });
+        }
+      } catch (err: any) {
+        toast({ title: 'Erro ao notificar cliente', description: err.message, variant: 'destructive' });
+      }
+    }
     setBusyId(null);
-    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     setTasks(prev => {
       const next = prev.filter(t => t.id !== taskId);
       onCountChangeRef.current?.(next.length);
