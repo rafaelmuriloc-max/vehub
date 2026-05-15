@@ -19,6 +19,7 @@ import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Upload } from 'lucide-react';
 import { ForwardMessageDialog, type ForwardMessageData } from './ForwardMessageDialog';
+import { useVisualViewport } from '@/hooks/useVisualViewportHeight';
 
 export interface ChatMessage {
   id: string;
