@@ -15,6 +15,7 @@ type TaskTemplate = {
 };
 type Client = { id: string; company_name: string };
 type Profile = { user_id: string; full_name: string | null; department_id: string | null };
+type Department = { id: string; name: string };
 
 interface TaskRequestFormProps {
   defaultClientId?: string | null;
@@ -30,6 +31,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [linkedClientIds, setLinkedClientIds] = useState<string[] | null>(null);
 
   const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
@@ -40,20 +42,23 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
     assigned_to: [] as string[],
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     description: '',
+    department_id: '',
   });
   const [requestFiles, setRequestFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [{ data: tpl }, { data: c }, { data: p }] = await Promise.all([
+      const [{ data: tpl }, { data: c }, { data: p }, { data: d }] = await Promise.all([
         supabase.from('task_templates').select('*').order('name'),
         supabase.from('clients').select('id, company_name').order('company_name'),
         supabase.from('profiles').select('user_id, full_name, department_id'),
+        supabase.from('departments').select('id, name').order('name'),
       ]);
       setTemplates((tpl as TaskTemplate[]) || []);
       setClients((c as Client[]) || []);
       setProfiles((p as Profile[]) || []);
+      setDepartments((d as Department[]) || []);
     })();
   }, []);
 
@@ -107,7 +112,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       priority: requestForm.priority,
       due_date: requestForm.due_date || null,
       client_id: requestForm.client_id,
-      department_id: requestTemplate?.department_id || null,
+      department_id: requestTemplate?.department_id || requestForm.department_id || null,
       template_id: requestTemplate?.id || null,
       created_by: user?.id,
       notify_whatsapp: !!requestTemplate?.notify_whatsapp,
@@ -145,7 +150,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
     setUploading(false);
     setRequestTemplate(null);
     setRequestCustomTitle('');
-    setRequestForm({ client_id: defaultClientId || '', due_date: '', assigned_to: [], priority: 'medium', description: '' });
+    setRequestForm({ client_id: defaultClientId || '', due_date: '', assigned_to: [], priority: 'medium', description: '', department_id: '' });
     setRequestFiles([]);
     toast({ title: 'Tarefa solicitada' });
     onCreated?.();
