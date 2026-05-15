@@ -23,6 +23,7 @@ type Profile = { user_id: string; full_name: string | null };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type TaskTemplate = { id: string; name: string; department_id: string; description: string | null; default_due_days: number };
+type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
@@ -60,6 +61,8 @@ export default function Tasks() {
   const [requestForm, setRequestForm] = useState({ client_id: '', due_date: '', assigned_to: [] as string[], priority: 'medium' as Task['priority'] });
   const [requestFiles, setRequestFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
+  const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -88,14 +91,56 @@ export default function Tasks() {
     setDialogOpen(true);
   }
 
-  function openEdit(task: Task) {
+  async function openEdit(task: Task) {
     setEditing(task);
     setForm({
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
       assigned_to: assignments[task.id] || [],
     });
+    setEditNewFiles([]);
+    setEditAttachments([]);
     setDialogOpen(true);
+    const { data } = await supabase.from('task_attachments').select('*').eq('task_id', task.id).order('created_at', { ascending: true });
+    setEditAttachments((data as TaskAttachment[]) || []);
+  }
+
+  async function downloadAttachment(att: TaskAttachment) {
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(att.file_url, 60);
+    if (error || !data?.signedUrl) { toast({ title: 'Erro ao baixar', description: error?.message, variant: 'destructive' }); return; }
+    window.open(data.signedUrl, '_blank');
+  }
+
+  async function removeAttachment(att: TaskAttachment) {
+    if (!confirm('Remover este anexo?')) return;
+    await supabase.storage.from('documents').remove([att.file_url]);
+    const { error } = await supabase.from('task_attachments').delete().eq('id', att.id);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    setEditAttachments(prev => prev.filter(a => a.id !== att.id));
+  }
+
+  async function uploadEditFiles() {
+    if (!editing || editNewFiles.length === 0) return;
+    setUploading(true);
+    const failed: string[] = [];
+    const inserted: TaskAttachment[] = [];
+    for (const file of editNewFiles) {
+      const safe = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.\-]+/g, '_');
+      const path = `tasks/${editing.id}/${Date.now()}_${safe}`;
+      const up = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || undefined });
+      if (up.error) { failed.push(file.name); continue; }
+      const { data, error } = await supabase.from('task_attachments').insert({
+        task_id: editing.id, file_url: path, file_name: file.name,
+        file_type: file.type || null, file_size: file.size, uploaded_by: user?.id,
+      } as any).select('*').single();
+      if (error || !data) { failed.push(file.name); continue; }
+      inserted.push(data as TaskAttachment);
+    }
+    setEditAttachments(prev => [...prev, ...inserted]);
+    setEditNewFiles([]);
+    setUploading(false);
+    if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
+    else toast({ title: 'Anexos adicionados' });
   }
 
   async function handleSave(e: React.FormEvent) {
