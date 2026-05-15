@@ -18,6 +18,14 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 const LONG_PRESS_MS = 2000;
 
+const triggerHaptic = (pattern: number | number[] = 30) => {
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(pattern);
+    }
+  } catch {}
+};
+
 interface MessageBubbleProps {
   content: string;
   timestamp: string;
@@ -193,6 +201,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
     clearLongPress();
     longPressTimer.current = window.setTimeout(() => {
       longPressFired.current = true;
+      triggerHaptic(40);
       setMenuOpen(true);
     }, LONG_PRESS_MS);
   };
@@ -207,6 +216,7 @@ export function MessageBubble({ content, timestamp, isMine, isRead, senderName, 
 
   const closeMobileMenu = () => setMenuOpen(false);
   const runAndClose = (fn?: () => void) => {
+    triggerHaptic(15);
     if (fn) fn();
     setMenuOpen(false);
   };
