@@ -188,10 +188,6 @@ export default function Tasks() {
     const payload = {
       title: form.title, description: form.description || null, status: form.status,
       priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
-      notify_whatsapp: form.notify_whatsapp,
-      notify_email: form.notify_email,
-      notify_message: form.notify_message || null,
-      notify_email_subject: form.notify_email_subject || null,
     };
     let error;
     let taskId: string;
@@ -213,7 +209,7 @@ export default function Tasks() {
     }
 
     setDialogOpen(false);
-    if (form.status === 'done' && !wasDone && (form.notify_whatsapp || form.notify_email)) {
+    if (form.status === 'done' && !wasDone && editing && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
       await triggerNotify(taskId);
     }
     loadData();
@@ -260,12 +256,20 @@ export default function Tasks() {
 
   function openNewTemplate() {
     setEditingTemplate(null);
-    setTemplateForm({ name: '', department_id: '', description: '', default_due_days: '7' });
+    setTemplateForm({ name: '', department_id: '', description: '', default_due_days: '7',
+      notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '' });
     setTemplateDialogOpen(true);
   }
   function openEditTemplate(tpl: TaskTemplate) {
     setEditingTemplate(tpl);
-    setTemplateForm({ name: tpl.name, department_id: tpl.department_id, description: tpl.description || '', default_due_days: String(tpl.default_due_days) });
+    setTemplateForm({
+      name: tpl.name, department_id: tpl.department_id, description: tpl.description || '',
+      default_due_days: String(tpl.default_due_days),
+      notify_whatsapp: !!tpl.notify_whatsapp,
+      notify_email: !!tpl.notify_email,
+      notify_message: tpl.notify_message || '',
+      notify_email_subject: tpl.notify_email_subject || '',
+    });
     setTemplateDialogOpen(true);
   }
   async function handleSaveTemplate(e: React.FormEvent) {
@@ -278,10 +282,14 @@ export default function Tasks() {
       department_id: templateForm.department_id,
       description: templateForm.description || null,
       default_due_days: parseInt(templateForm.default_due_days) || 7,
+      notify_whatsapp: templateForm.notify_whatsapp,
+      notify_email: templateForm.notify_email,
+      notify_message: templateForm.notify_message || null,
+      notify_email_subject: templateForm.notify_email_subject || null,
     };
     const { error } = editingTemplate
-      ? await supabase.from('task_templates').update(payload).eq('id', editingTemplate.id)
-      : await supabase.from('task_templates').insert({ ...payload, created_by: user?.id });
+      ? await supabase.from('task_templates').update(payload as any).eq('id', editingTemplate.id)
+      : await supabase.from('task_templates').insert({ ...payload, created_by: user?.id } as any);
     if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     setTemplateDialogOpen(false); loadData();
     toast({ title: editingTemplate ? 'Tarefa atualizada' : 'Tarefa cadastrada' });
@@ -316,6 +324,10 @@ export default function Tasks() {
       department_id: requestTemplate.department_id,
       template_id: requestTemplate.id,
       created_by: user?.id,
+      notify_whatsapp: !!requestTemplate.notify_whatsapp,
+      notify_email: !!requestTemplate.notify_email,
+      notify_message: requestTemplate.notify_message || null,
+      notify_email_subject: requestTemplate.notify_email_subject || null,
     } as any).select('id').single();
     if (error) { setUploading(false); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     if (requestForm.assigned_to.length > 0 && data?.id) {
