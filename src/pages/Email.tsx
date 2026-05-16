@@ -202,7 +202,7 @@ export default function Email() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] -m-4 md:-m-6 bg-background">
+    <div className="flex h-[100dvh] -m-4 md:-m-6 bg-background">
       {/* Sidebar 2-coluna estilo Gmail */}
       <aside className="w-64 shrink-0 border-r bg-muted/20 hidden md:flex flex-col overflow-hidden">
         <div className="p-3">
