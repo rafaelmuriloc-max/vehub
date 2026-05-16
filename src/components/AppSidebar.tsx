@@ -13,9 +13,8 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Separator } from '@/components/ui/separator';
 
 const menuItems = [
-  { title: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { title: 'Clientes', icon: Users, path: '/clients' },
-  { title: 'Financeiro', icon: DollarSign, path: '/financial' },
+  { title: 'Financeiro', icon: DollarSign, path: '/' },
   { title: 'Documentos', icon: FileText, path: '/documents' },
   { title: 'Notas Fiscais', icon: Receipt, path: '/invoices' },
   { title: 'Fiscal', icon: Scale, path: '/fiscal' },
@@ -43,7 +42,7 @@ export function AppSidebar() {
 
   const visibleMenuItems = isAdmin
     ? menuItems
-    : menuItems.filter(i => i.path !== '/' && i.path !== '/financial');
+    : menuItems.filter(i => i.path !== '/');
 
   return (
     <Sidebar
