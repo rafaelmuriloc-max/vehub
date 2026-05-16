@@ -445,18 +445,26 @@ function MessageReader({
         </Button>
       </div>
 
-      <div className="px-4 py-3 border-b">
-        <h2 className="text-lg font-semibold mb-2">{message.subject || '(sem assunto)'}</h2>
-        <div className="text-sm">
-          <div><strong>De:</strong> {message.from_name ? `${message.from_name} <${message.from_email}>` : message.from_email}</div>
-          <div><strong>Para:</strong> {message.to_emails?.join(', ')}</div>
-          {message.cc_emails?.length > 0 && (
-            <div><strong>Cc:</strong> {message.cc_emails.join(', ')}</div>
-          )}
-          <div className="text-xs text-muted-foreground mt-1">{new Date(message.received_at).toLocaleString('pt-BR')}</div>
+      <div className="px-4 py-2 border-b">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-base font-semibold leading-tight">{message.subject || '(sem assunto)'}</h2>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {new Date(message.received_at).toLocaleString('pt-BR')}
+          </span>
         </div>
-        <div className="mt-2">
-          <ClientLinkPopover message={message} />
+        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+          <span><strong className="text-foreground/80">De:</strong> {message.from_name ? `${message.from_name} <${message.from_email}>` : message.from_email}</span>
+          <span>·</span>
+          <span className="truncate"><strong className="text-foreground/80">Para:</strong> {message.to_emails?.join(', ')}</span>
+          {message.cc_emails?.length > 0 && (
+            <>
+              <span>·</span>
+              <span><strong className="text-foreground/80">Cc:</strong> {message.cc_emails.join(', ')}</span>
+            </>
+          )}
+          <span className="ml-auto">
+            <ClientLinkPopover message={message} />
+          </span>
         </div>
       </div>
 
