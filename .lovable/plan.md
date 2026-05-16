@@ -1,33 +1,33 @@
-# Mover Dashboard para dentro de Financeiro
+# Mover Documentos e Tarefas para dentro do Calendário
 
 ## Objetivo
-Consolidar todas as informações do Dashboard (KPIs, gráficos de fluxo de caixa, distribuição de clientes e evolução de clientes/MRR) dentro da página Financeiro, removendo a rota `/` separada do Dashboard.
+Consolidar as páginas Documentos e Tarefas em sub-views do Calendário, acessíveis por dois botões no canto superior direito da página.
 
 ## Mudanças
 
-### 1. `src/pages/Financial.tsx`
-- Adicionar saudação ("Bom dia/tarde/noite, Nome") no topo, igual ao Dashboard.
-- Substituir os 4 KPIs atuais pelos 8 cards do Dashboard (Receita do Mês, Despesas, Saldo, Clientes Ativos, MRR, Churn Rate, Tarefas Pendentes, Tarefas Atrasadas) — manter o estilo atual com borda lateral.
-- Reorganizar as abas:
-  - **Lançamentos** (mantida)
-  - **Fluxo de Caixa** (já existe — manter)
-  - **Visão Geral** (nova): gráficos do Dashboard — Distribuição de Clientes (pizza), Evolução de Clientes e Evolução do MRR.
-- Carregar dados extras já necessários: `clients` (status, monthly_value, datas) e `tasks` (status, due_date) junto com o `loadData` atual.
+### 1. `src/pages/CalendarView.tsx`
+- Adicionar estado local `view: 'calendar' | 'documents' | 'tasks'` (default `calendar`).
+- No header da página (topo, ao lado direito do título), adicionar dois `Button` com ícones (`FileText` "Documentos" e `CheckSquare` "Tarefas"). Quando ativos, alternam para a respectiva view; quando inativos, voltam ao calendário.
+- Renderizar condicionalmente:
+  - `calendar` → conteúdo atual (Tabs do calendário / cronograma / lista).
+  - `documents` → `<DocumentsView />` (componente extraído).
+  - `tasks` → `<TasksView />` (componente extraído).
 
-### 2. `src/App.tsx`
-- Rota `/` passa a renderizar `Financial` em vez de `Dashboard`.
-- Remover import e rota separada de `Dashboard`.
-- Remover rota `/financial` (ou manter como alias para `/`).
+### 2. Extrair conteúdo de páginas em componentes
+- `src/pages/Documents.tsx` → renomear export padrão para um componente reutilizável `DocumentsView` (mantendo arquivo) **ou** simplesmente importar o `Documents` atual como componente dentro do CalendarView. Optaremos por importar diretamente os componentes existentes (`Documents`, `Tasks`) e renderizá-los sem o wrapper de página — eles já são auto-contidos.
+- Não modificar a lógica interna de Documentos/Tarefas.
 
-### 3. `src/components/AppLayout.tsx`
-- Atualizar `pageTitles`: `/` → "Financeiro"; remover entrada `/financial`.
-- Ajustar o redirect de não-admin: hoje redireciona `/` e `/financial` para `/calendar` — manter esse comportamento (não-admin não vê Financeiro).
+### 3. `src/App.tsx`
+- Remover as rotas `/documents` e `/tasks` (passam a viver dentro de `/calendar`).
+- Manter imports apenas se ainda usados em outros lugares; caso contrário, remover.
 
 ### 4. `src/components/AppSidebar.tsx`
-- Remover item "Dashboard" do menu; manter apenas "Financeiro" apontando para `/`.
+- Remover os itens "Documentos" e "Tarefas" do menu lateral.
 
-### 5. `src/pages/Dashboard.tsx`
-- Apagar o arquivo.
+### 5. `src/components/AppLayout.tsx`
+- Remover `/documents` e `/tasks` do mapa `pageTitles`.
 
-## Observação
-A funcionalidade do Financeiro (CRUD de lançamentos, filtros, diálogo) é preservada integralmente. Nada de backend muda.
+## Observações
+- Nenhuma alteração de backend, schema ou edge functions.
+- Botões no topo direito usam estilo `variant="outline"` quando inativos e `variant="default"` quando ativos, com ícone + label (label oculto em mobile via `hidden sm:inline`).
+- Links externos para `/documents` ou `/tasks` deixarão de funcionar; ao remover rotas, qualquer acesso direto cairá no NotFound. Se houver links internos relevantes, redirecionar para `/calendar`.

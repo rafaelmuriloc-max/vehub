@@ -8,10 +8,8 @@ import { AppLayout } from "@/components/AppLayout";
 import Auth from "./pages/Auth";
 import Clients from "./pages/Clients";
 import Financial from "./pages/Financial";
-import Tasks from "./pages/Tasks";
 import CalendarView from "./pages/CalendarView";
 import Obligations from "./pages/Obligations";
-import Documents from "./pages/Documents";
 import Invoices from "./pages/Invoices";
 import Settings from "./pages/Settings";
 import DocumentTypes from "./pages/DocumentTypes";
@@ -39,14 +37,12 @@ const App = () => (
               <Route path="/" element={<Financial />} />
               <Route path="/clients" element={<Clients />} />
               <Route path="/obligations" element={<Obligations />} />
-              <Route path="/documents" element={<Documents />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/invoices/emit" element={<InvoiceEmit />} />
               <Route path="/fiscal" element={<Fiscal />} />
               <Route path="/integra-contador" element={<IntegraContador />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/email" element={<Email />} />
-              <Route path="/tasks" element={<Tasks />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/document-types" element={<DocumentTypes />} />

@@ -98,7 +98,7 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
   );
 }
 
-export default function CalendarView() {
+function CalendarMain() {
   const { toast } = useToast();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
@@ -1420,6 +1420,49 @@ export default function CalendarView() {
         taskId={editingTaskId}
         onSaved={() => loadData()}
       />
+    </div>
+  );
+}
+
+import { useState as _useState } from 'react';
+import Documents from './Documents';
+import Tasks from './Tasks';
+import { FileText as _FileTextIcon, CheckSquare as _CheckSquareIcon, CalendarDays as _CalendarDaysIcon } from 'lucide-react';
+import { Button as _ToggleButton } from '@/components/ui/button';
+
+export default function CalendarView() {
+  const [view, setView] = _useState<'calendar' | 'documents' | 'tasks'>('calendar');
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end gap-2">
+        <_ToggleButton
+          variant={view === 'calendar' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setView('calendar')}
+        >
+          <_CalendarDaysIcon className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Calendário</span>
+        </_ToggleButton>
+        <_ToggleButton
+          variant={view === 'documents' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setView('documents')}
+        >
+          <_FileTextIcon className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Documentos</span>
+        </_ToggleButton>
+        <_ToggleButton
+          variant={view === 'tasks' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setView('tasks')}
+        >
+          <_CheckSquareIcon className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Tarefas</span>
+        </_ToggleButton>
+      </div>
+      {view === 'calendar' && <CalendarMain />}
+      {view === 'documents' && <Documents />}
+      {view === 'tasks' && <Tasks />}
     </div>
   );
 }
