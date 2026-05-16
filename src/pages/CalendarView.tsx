@@ -98,7 +98,7 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
   );
 }
 
-export default function CalendarView() {
+function CalendarMain() {
   const { toast } = useToast();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
