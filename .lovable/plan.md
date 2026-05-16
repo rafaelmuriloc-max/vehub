@@ -1,84 +1,55 @@
-# Treinamento da Gisele com Prompts e Aprendizado
+## Objetivo
 
-Decisões confirmadas:
-- ✅ Manter o limite atual de 5 turnos
-- ✅ Pré-popular `triage_system_prompt` e `triage_prompt` com base no conteúdo atual (descrição + keywords)
-- ✅ Seleção simples por recência/balanceamento (sem embeddings)
-- ✅ Janela de confirmação automática: **30 minutos** (antes era 24h)
+Reduzir custo de IA e acelerar a importação. O usuário define o **contexto** antes do upload; à IA cabe apenas identificar a **empresa (CNPJ)** e, quando mais de um tipo for permitido, **escolher qual tipo** entre os pré-selecionados.
 
-## 1. Prompts editáveis
+## Novo fluxo de pré-seleção (em ordem)
 
-### Prompt global da Gisele
-Novo campo `company_settings.triage_system_prompt` (text). Editável em **Configurações → Empresa** (nova seção "Triagem da Gisele"). Conterá persona, tom, regras, o que pode/não pode responder.
+Diálogo aberto ao clicar em "Importar" — `ImportSetupDialog`:
 
-### Prompt por departamento
-Em `departments`, adicionar coluna `triage_prompt` (text). Editado na aba Departamentos — substitui visualmente o campo de keywords (mantemos `triage_keywords` no banco por compatibilidade, mas oculto da UI).
+1. **Departamento** (Select) — lista de `departments`. Respeita o departamento do usuário (employee vê só o seu).
+2. **Competência** (input month).
+3. **Obrigação** (Combobox) — `obligations` filtradas por `department_id` e pela `competence_rule`/recorrência aplicável à competência escolhida.
+4. **Tipo(s) de documento** (multi-select com checkboxes) — pré-carrega todos os `document_types` vinculados às `obligation_activities` (tipo `document`) daquela obrigação. Por padrão **todos vêm marcados**; o usuário pode desmarcar. Quando a obrigação tem só um tipo, o multi-select aparece já travado nesse único item. Quando não houver tipos cadastrados, fallback para Combobox aberto contra todos os `document_types`.
 
-A edge function `chat-triage-agent` passa a montar o system prompt assim:
+Após confirmar, o usuário escolhe N arquivos.
 
-```
-[triage_system_prompt da empresa]
+## Lógica por arquivo
 
-Departamentos disponíveis:
-- <id> — <nome>: <triage_prompt>
-...
+Contexto fixo: `departmentId`, `referenceMonth`, `obligationId`, `allowedDocTypeIds[]`.
 
-Exemplos de triagens anteriores bem-sucedidas:
-1. Cliente disse: "..." → Departamento: ...
-...
-```
+1. **Identificar empresa**:
+   - Regiões configuradas (`extraction_config.cnpj_region`) → CNPJ.
+   - Fallback regex local sobre o texto do PDF.
+   - Fallback IA enxuta (`classify-document` modo `cnpj_only`) — só pede o CNPJ.
+2. **Escolher tipo de documento**:
+   - Se `allowedDocTypeIds.length === 1` → usa direto, **zero IA**.
+   - Se > 1 → tenta casar pelo nome via regiões/texto (`extractTextFromCachedRegion` + match com `name` dos tipos permitidos). Se falhar, chama `classify-document` modo `pick_doctype` passando **apenas os nomes dos tipos permitidos** (lista curta = prompt curto).
+3. Importa: grava `documents` com `client_id`, `document_type_id`, `reference_month`, e `linked_obligation_id` = obrigação escolhida. Cria/usa a `obligation_instance` daquela competência.
+4. Se empresa não casar OU tipo não puder ser decidido → `DocumentReviewDialog` simplificado pedindo só o que faltou (empresa e/ou tipo), com competência/obrigação já travadas.
 
-## 2. Aprendizado contínuo
+## Mudanças técnicas
 
-### 2a. Captura automática
-Toda vez que a Gisele chama `transfer`, gravamos em nova tabela `triage_learnings`:
-- `conversation_id`, `user_messages` (texto do cliente até a transferência), `chosen_department_id`, `summary`, `outcome` (`auto_confirmed` | `corrected` | `rejected`), `corrected_department_id`, `created_at`, `confirmed_at`
+**Frontend**
+- `src/pages/Documents.tsx`
+  - Botão "Importar" abre `ImportSetupDialog` antes do file picker.
+  - Novo estado `importContext: { departmentId, referenceMonth, obligationId, allowedDocTypeIds[] }`.
+  - `handleUpload` consome esse contexto; remove dedução de tipo/competência no caminho feliz.
+  - `importDocument` recebe `obligationId` e grava `linked_obligation_id` direto (auto-associate por activity vira fallback).
+- Novo `src/components/documents/ImportSetupDialog.tsx`
+  - Carrega `departments`, `obligations`, `obligation_activities` (com `document_type_id`) e `document_types`.
+  - Etapas 1→4 em uma única tela (Selects empilhados) com validação progressiva: campo só habilita após o anterior estar preenchido.
+  - Multi-select de tipos com "Selecionar todos / Limpar".
+- `src/components/DocumentReviewDialog.tsx`
+  - Aceitar props `lockedReferenceMonth`, `lockedObligationId`, e `allowedDocTypeIds` (filtra o Select de tipo); oculta campos travados.
 
-Também setamos `chat_conversations.triaged_department_id` para detectar reatribuição posterior.
+**Edge Function**
+- `supabase/functions/classify-document/index.ts`
+  - Modos novos: `cnpj_only` (retorna `{ cnpj }`) e `pick_doctype` (recebe lista curta de nomes e retorna `{ document_type_name }`).
+  - Mantém modo completo para compatibilidade.
 
-### 2b. Confirmação automática (30 min)
-Novo cron `triage-learning-reconcile` rodando a cada **5 minutos**:
-- Para learnings com `outcome=auto_confirmed` criados há **>30 min**: verifica se o departamento atual da conversa ainda bate. Se admin/atendente moveu para outro depto, marca `outcome=corrected` + `corrected_department_id`. Se foi rejeitado/fechado sem aceitar, marca `rejected`.
+**Banco** — sem alterações de schema.
 
-### 2c. Correção manual
-No cabeçalho do chat (quando triada pela Gisele), botão "Corrigir triagem" → escolhe o depto certo. Move a conversa e grava `corrected` em `triage_learnings`.
+## Fora de escopo
 
-### 2d. Few-shot no prompt
-A cada execução, a função busca até **8 exemplos** de `triage_learnings`:
-- `outcome in ('auto_confirmed','corrected')`
-- mais recentes, balanceados por departamento (usando `corrected_department_id` quando houver)
-- Injeta no system prompt como exemplos texto → departamento
-
-### 2e. Painel "Treinamento da Gisele" (Configurações)
-Nova aba mostra:
-- Total de triagens nas últimas 30 dias, taxa de acerto (auto_confirmed/total)
-- Lista das últimas correções (mensagem do cliente, departamento escolhido pela Gisele × departamento correto)
-- Botão "Esquecer" para remover ruído da base de aprendizado
-
-## 3. Mudanças técnicas
-
-**Migration (schema):**
-- `ALTER TABLE company_settings ADD COLUMN triage_system_prompt text`
-- `ALTER TABLE departments ADD COLUMN triage_prompt text`
-- `ALTER TABLE chat_conversations ADD COLUMN triaged_department_id uuid`
-- `CREATE TABLE triage_learnings (...)` com RLS: admins leem/deletam, service role insere/atualiza
-
-**Migration (data, via insert tool):**
-- Popular `triage_system_prompt` com prompt padrão da Gisele (baseado no system prompt atual codado na edge function)
-- Popular `departments.triage_prompt` concatenando `description` + `triage_keywords` quando existirem
-
-**Edge function `chat-triage-agent`:**
-- Montar system prompt a partir de `triage_system_prompt` + `departments.triage_prompt`
-- Buscar e injetar exemplos de `triage_learnings`
-- Ao executar `transfer`, gravar em `triage_learnings` (`outcome=auto_confirmed`) e setar `triaged_department_id`
-
-**Nova edge function `triage-learning-reconcile`** + cron a cada 5 minutos (via insert tool — não migration — porque contém URL do projeto e anon key).
-
-**Frontend:**
-- `CompanyTab.tsx`: nova seção "Triagem da Gisele" com textarea grande para `triage_system_prompt`
-- `DepartmentsTab.tsx`: substituir textarea de keywords por textarea de `triage_prompt` com legenda explicativa
-- `MessageArea.tsx` (cabeçalho do chat): botão "Corrigir triagem" condicional
-- `Settings.tsx`: nova aba "Treinamento Gisele" com métricas e correções
-
-## Próximo passo
-Ao aprovar, vou rodar a migration de schema, depois popular os dados padrão e criar/atualizar a edge function + UI.
+- Tela de Tipos de Documento e anotador de regiões permanecem inalterados.
+- Importação por chat/email não muda.
