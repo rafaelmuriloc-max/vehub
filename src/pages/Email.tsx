@@ -202,7 +202,7 @@ export default function Email() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] -m-4 md:-m-6 bg-background">
+    <div className="flex h-[100dvh] -m-4 md:-m-6 bg-background">
       {/* Sidebar 2-coluna estilo Gmail */}
       <aside className="w-64 shrink-0 border-r bg-muted/20 hidden md:flex flex-col overflow-hidden">
         <div className="p-3">
@@ -257,7 +257,7 @@ export default function Email() {
       </aside>
 
       {/* Coluna principal */}
-      <main className="flex-1 min-w-0 flex flex-col">
+      <main className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Toolbar */}
         <div className="flex items-center gap-2 border-b px-3 py-2">
           {selectedId && (
