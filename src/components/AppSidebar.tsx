@@ -15,13 +15,11 @@ import { Separator } from '@/components/ui/separator';
 const menuItems = [
   { title: 'Clientes', icon: Users, path: '/clients' },
   { title: 'Financeiro', icon: DollarSign, path: '/' },
-  { title: 'Documentos', icon: FileText, path: '/documents' },
   { title: 'Notas Fiscais', icon: Receipt, path: '/invoices' },
   { title: 'Fiscal', icon: Scale, path: '/fiscal' },
   { title: 'Integra Contador', icon: Plug, path: '/integra-contador' },
   { title: 'Chat', icon: MessageCircle, path: '/chat' },
   { title: 'E-mail', icon: Mail, path: '/email' },
-  { title: 'Tarefas', icon: CheckSquare, path: '/tasks' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
 ];
 
