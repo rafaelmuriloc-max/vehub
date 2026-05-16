@@ -70,7 +70,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     isActive={location.pathname === item.path}
                     onClick={() => navigate(item.path)}
-                    className="transition-colors duration-150"
+                    className="transition-colors duration-150 [&>svg]:transition-colors hover:[&>svg]:text-sidebar-primary data-[active=true]:[&>svg]:text-sidebar-primary"
                   >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
@@ -97,7 +97,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     isActive={location.pathname === '/'}
                     onClick={() => navigate('/')}
-                    className="transition-colors duration-150"
+                    className="transition-colors duration-150 [&>svg]:transition-colors hover:[&>svg]:text-sidebar-primary data-[active=true]:[&>svg]:text-sidebar-primary"
                   >
                     <DollarSign className="h-4 w-4" />
                     <span>Financeiro</span>
@@ -107,7 +107,7 @@ export function AppSidebar() {
               <Collapsible defaultOpen={isCadastroActive} className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={isCadastroActive}>
+                    <SidebarMenuButton isActive={isCadastroActive} className="[&>svg]:transition-colors hover:[&>svg]:text-sidebar-primary data-[active=true]:[&>svg]:text-sidebar-primary">
                       <Building2 className="h-4 w-4" />
                       <span>Cadastro</span>
                       <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />

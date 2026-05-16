@@ -1,11 +1,10 @@
-Reordenar o array `menuItems` em `src/components/AppSidebar.tsx` para que **Chat** seja o primeiro item do menu, seguido por Fiscal, E-mail e Calendário.
+Adicionar classes Tailwind ao `SidebarMenuButton` dos itens do menu (e do botão "Cadastro") em `src/components/AppSidebar.tsx` para deixar o ícone laranja no hover e quando o item estiver ativo.
 
-```text
-Menu
-├── Chat        ← novo 1º
-├── Fiscal
-├── E-mail
-└── Calendário
+Classe a aplicar:
+```
+[&>svg]:transition-colors hover:[&>svg]:text-sidebar-primary data-[active=true]:[&>svg]:text-sidebar-primary
 ```
 
-Sem mudanças de rota, comportamento ou estilo.
+`--sidebar-primary` já é o laranja Velocitä (#E8710A). O texto permanece como está; apenas o `<svg>` muda de cor.
+
+Sem mudanças em outras páginas, rotas ou no submenu de Cadastro (que não usa ícones).
