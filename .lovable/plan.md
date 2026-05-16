@@ -1,21 +1,33 @@
-Quando a tarefa é marcada como concluída e dispara a notificação para o cliente, a mensagem (WhatsApp e e-mail) deve ser assinada com o nome do usuário que concluiu a tarefa, exibido em **negrito acima** do corpo da mensagem.
+# Mover Dashboard para dentro de Financeiro
+
+## Objetivo
+Consolidar todas as informações do Dashboard (KPIs, gráficos de fluxo de caixa, distribuição de clientes e evolução de clientes/MRR) dentro da página Financeiro, removendo a rota `/` separada do Dashboard.
 
 ## Mudanças
 
-**`supabase/functions/task-notify-client/index.ts`**
+### 1. `src/pages/Financial.tsx`
+- Adicionar saudação ("Bom dia/tarde/noite, Nome") no topo, igual ao Dashboard.
+- Substituir os 4 KPIs atuais pelos 8 cards do Dashboard (Receita do Mês, Despesas, Saldo, Clientes Ativos, MRR, Churn Rate, Tarefas Pendentes, Tarefas Atrasadas) — manter o estilo atual com borda lateral.
+- Reorganizar as abas:
+  - **Lançamentos** (mantida)
+  - **Fluxo de Caixa** (já existe — manter)
+  - **Visão Geral** (nova): gráficos do Dashboard — Distribuição de Clientes (pizza), Evolução de Clientes e Evolução do MRR.
+- Carregar dados extras já necessários: `clients` (status, monthly_value, datas) e `tasks` (status, due_date) junto com o `loadData` atual.
 
-1. Usar o usuário autenticado da requisição (`user.id`) como "quem concluiu", buscando `profiles.full_name` desse `user_id` (em vez de só usar `task.created_by` para a variável `responsavel`).
-2. Montar um cabeçalho com o nome do usuário e prefixar a mensagem final:
-   - **WhatsApp** (texto enviado via Meta Cloud API): `*Nome do Usuário*\n\n` + mensagem renderizada. O `*...*` é a sintaxe oficial de negrito do WhatsApp.
-   - **E-mail** (HTML): `<p><strong>Nome do Usuário</strong></p>` antes do `<p>` com o corpo.
-3. Manter `responsavel` no `templateVars` apontando para o nome do usuário que concluiu (para `{{responsavel}}` em templates já refletir quem fechou).
-4. Não alterar template salvo do usuário; o nome é adicionado em runtime apenas.
+### 2. `src/App.tsx`
+- Rota `/` passa a renderizar `Financial` em vez de `Dashboard`.
+- Remover import e rota separada de `Dashboard`.
+- Remover rota `/financial` (ou manter como alias para `/`).
 
-## Frontend
+### 3. `src/components/AppLayout.tsx`
+- Atualizar `pageTitles`: `/` → "Financeiro"; remover entrada `/financial`.
+- Ajustar o redirect de não-admin: hoje redireciona `/` e `/financial` para `/calendar` — manter esse comportamento (não-admin não vê Financeiro).
 
-Nenhuma mudança — `TaskEditDialog` já chama `task-notify-client` quando a tarefa muda para `done`, e o JWT do usuário logado vai junto.
+### 4. `src/components/AppSidebar.tsx`
+- Remover item "Dashboard" do menu; manter apenas "Financeiro" apontando para `/`.
 
-## Observações
+### 5. `src/pages/Dashboard.tsx`
+- Apagar o arquivo.
 
-- Sem mudanças em schema, RLS ou outras funções.
-- Sem mudanças em fluxo de anexos.
+## Observação
+A funcionalidade do Financeiro (CRUD de lançamentos, filtros, diálogo) é preservada integralmente. Nada de backend muda.
