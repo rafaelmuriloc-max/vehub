@@ -39,6 +39,7 @@ interface CompanyData {
   agent_offhours_message?: string | null;
   triage_enabled?: boolean | null;
   triage_fallback_department_id?: string | null;
+  triage_system_prompt?: string | null;
 }
 
 export function CompanyTab() {
@@ -412,6 +413,7 @@ function ServiceHoursCard({
   );
   const [triageEnabled, setTriageEnabled] = useState(!!data.triage_enabled);
   const [fallbackDept, setFallbackDept] = useState<string>(data.triage_fallback_department_id || '');
+  const [triagePrompt, setTriagePrompt] = useState<string>(data.triage_system_prompt || '');
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
@@ -427,10 +429,10 @@ function ServiceHoursCard({
         toast({ title: 'Selecione um departamento de fallback', description: 'A triagem precisa de um departamento padrão para encaminhar quando a IA não conseguir classificar.', variant: 'destructive' });
         return;
       }
-      const { data: depWithKw } = await supabase.from('departments').select('id, triage_keywords');
-      const withKw = (depWithKw as any[] | null)?.filter(d => d.triage_keywords && d.triage_keywords.trim().length > 0).length || 0;
-      if (withKw === 0) {
-        toast({ title: 'Configure palavras-chave', description: 'Nenhum departamento possui palavras-chave para triagem. Edite os departamentos antes de ativar.', variant: 'destructive' });
+      const { data: depWithKw } = await supabase.from('departments').select('id, triage_keywords, triage_prompt');
+      const withGuidance = (depWithKw as any[] | null)?.filter(d => (d.triage_prompt && d.triage_prompt.trim()) || (d.triage_keywords && d.triage_keywords.trim())).length || 0;
+      if (withGuidance === 0) {
+        toast({ title: 'Configure as instruções dos departamentos', description: 'Nenhum departamento tem instrução para a Gisele. Edite os departamentos antes de ativar.', variant: 'destructive' });
         return;
       }
     }
@@ -445,6 +447,7 @@ function ServiceHoursCard({
       agent_offhours_message: offMsg || null,
       triage_enabled: triageEnabled,
       triage_fallback_department_id: fallbackDept || null,
+      triage_system_prompt: triagePrompt || null,
     };
     const { error } = await supabase.from('company_settings').update(patch).eq('id', data.id);
     setSaving(false);
@@ -557,6 +560,20 @@ function ServiceHoursCard({
             </select>
             <p className="text-xs text-muted-foreground">
               Usado quando a IA não consegue identificar o departamento após algumas trocas de mensagem.
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Prompt da Gisele (treinamento)</Label>
+            <Textarea
+              value={triagePrompt}
+              onChange={e => setTriagePrompt(e.target.value)}
+              rows={10}
+              placeholder={`Você é {agent_name}, recepcionista virtual da Velocitä Contabilidade no WhatsApp.\n\nSua única função é fazer a TRIAGEM da conversa: descobrir educadamente o que o cliente precisa e identificar para qual departamento transferir.\n\nRegras:\n- Seja breve, cordial e em português brasileiro.\n- Não responda dúvidas técnicas, fiscais ou contábeis — apenas faça a triagem.\n- Se a primeira mensagem for um cumprimento, cumprimente de volta e pergunte como pode ajudar.\n- Quando souber o departamento com confiança, transfira. Caso contrário, faça uma pergunta de esclarecimento.`}
+              disabled={!admin}
+            />
+            <p className="text-xs text-muted-foreground">
+              Define a persona, o tom e as regras da Gisele. Use <code>{'{agent_name}'}</code> para inserir o nome do agente. Se deixar em branco, usamos o prompt padrão. A Gisele também aprende com as conversas reais e usa exemplos passados para melhorar com o tempo.
             </p>
           </div>
         </div>
