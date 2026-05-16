@@ -11,7 +11,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useToast } from '@/hooks/use-toast';
 import {
   Inbox, Star, Send, Archive, Trash2, Mail, MailOpen, RefreshCw, Loader2,
-  Pencil, Reply, Forward, Paperclip, Building2, ArrowLeft, X,
+  Pencil, Reply, Forward, Paperclip, Building2, ArrowLeft, X, Tag, FileText, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +56,12 @@ const FOLDERS: { id: Folder; label: string; icon: any }[] = [
   { id: 'archived', label: 'Arquivados', icon: Archive },
   { id: 'trash', label: 'Lixeira', icon: Trash2 },
 ];
+
+const SYSTEM_LABELS = new Set([
+  'INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'UNREAD', 'STARRED', 'IMPORTANT',
+  'CATEGORY_PERSONAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL',
+  'CATEGORY_UPDATES', 'CATEGORY_FORUMS', 'CHAT',
+]);
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -144,6 +150,14 @@ export default function Email() {
 
   const selected = useMemo(() => messages.find(m => m.id === selectedId) || null, [messages, selectedId]);
 
+  const userLabels = useMemo(() => {
+    const set = new Set<string>();
+    messages.forEach(m => (m.labels || []).forEach(l => {
+      if (!SYSTEM_LABELS.has(l) && !l.startsWith('CATEGORY_')) set.add(l);
+    }));
+    return Array.from(set).sort();
+  }, [messages]);
+
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -170,134 +184,124 @@ export default function Email() {
     }
   };
 
+  const openReply = (forward: boolean) => {
+    if (!selected) return;
+    setComposeInit({
+      to: forward ? [] : [selected.from_email || ''],
+      subject: (forward ? 'Fwd: ' : 'Re: ') + (selected.subject || ''),
+      html: `<br><br><blockquote style="border-left:2px solid #ccc;padding-left:8px;color:#555">
+        <p><strong>De:</strong> ${selected.from_name || ''} &lt;${selected.from_email || ''}&gt;<br>
+        <strong>Data:</strong> ${new Date(selected.received_at).toLocaleString('pt-BR')}<br>
+        <strong>Assunto:</strong> ${selected.subject || ''}</p>
+        ${selected.body_html || `<pre>${selected.body_text || ''}</pre>`}
+      </blockquote>`,
+      inReplyTo: selected.gmail_message_id,
+      threadId: selected.gmail_thread_id || undefined,
+    });
+    setComposeOpen(true);
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] -m-4 md:-m-6">
-      <div className="flex items-center justify-between border-b px-4 py-2 gap-2">
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => { setComposeInit({}); setComposeOpen(true); }}>
-            <Pencil className="h-4 w-4 mr-1" /> Compor
+    <div className="flex h-[calc(100vh-6rem)] -m-4 md:-m-6 bg-background">
+      {/* Sidebar 2-coluna estilo Gmail */}
+      <aside className="w-64 shrink-0 border-r bg-muted/20 hidden md:flex flex-col overflow-hidden">
+        <div className="p-3">
+          <Button
+            onClick={() => { setComposeInit({}); setComposeOpen(true); }}
+            className="w-full h-12 rounded-2xl shadow-sm justify-start gap-3 text-sm font-medium"
+          >
+            <Pencil className="h-4 w-4" /> Escrever
           </Button>
         </div>
-        <div className="flex items-center gap-2 flex-1 max-w-md">
+        <nav className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
+          {FOLDERS.map(f => {
+            const Icon = f.icon;
+            const active = folder === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => { setFolder(f.id); setSelectedId(null); }}
+                className={cn(
+                  'w-full flex items-center gap-3 pl-6 pr-3 py-2 rounded-r-full text-sm transition-colors',
+                  active
+                    ? 'bg-primary/15 text-primary font-semibold'
+                    : 'hover:bg-muted text-foreground/80',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left truncate">{f.label}</span>
+                {f.id === 'inbox' && counts.unread > 0 && (
+                  <span className="text-xs font-semibold">{counts.unread}</span>
+                )}
+              </button>
+            );
+          })}
+
+          {userLabels.length > 0 && (
+            <div className="pt-4">
+              <div className="px-6 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+                Marcadores
+              </div>
+              {userLabels.map(l => (
+                <div
+                  key={l}
+                  className="flex items-center gap-3 pl-6 pr-3 py-2 rounded-r-full text-sm hover:bg-muted text-foreground/80"
+                >
+                  <Tag className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 text-left truncate">{l}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </nav>
+      </aside>
+
+      {/* Coluna principal */}
+      <main className="flex-1 min-w-0 flex flex-col">
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 border-b px-3 py-2">
+          {selectedId && (
+            <Button size="icon" variant="ghost" onClick={() => setSelectedId(null)}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <Button size="icon" variant="ghost" onClick={handleSync} disabled={syncing} title="Atualizar">
+            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
           <Input
-            placeholder="Buscar..."
+            placeholder="Buscar e-mails..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8"
+            className="h-9 max-w-md ml-2"
           />
+          <div className="flex-1" />
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            {filtered.length} {filtered.length === 1 ? 'e-mail' : 'e-mails'}
+          </span>
         </div>
-        <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing}>
-          {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-        </Button>
-      </div>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
-        <aside className="w-56 border-r bg-muted/30 hidden md:block overflow-y-auto">
-          <nav className="p-2 space-y-1">
-            {FOLDERS.map(f => {
-              const Icon = f.icon;
-              const active = folder === f.id;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => { setFolder(f.id); setSelectedId(null); }}
-                  className={cn(
-                    'w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors',
-                    active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="flex-1 text-left">{f.label}</span>
-                  {f.id === 'inbox' && counts.unread > 0 && (
-                    <Badge variant={active ? 'secondary' : 'default'} className="ml-auto h-5">
-                      {counts.unread}
-                    </Badge>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-
-        {/* List */}
-        <section className={cn(
-          'border-r overflow-y-auto',
-          selectedId ? 'hidden md:block md:w-[380px]' : 'flex-1 md:w-[380px] md:flex-none',
-        )}>
-          {loading ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Nenhum e-mail.</div>
-          ) : (
-            <ul>
-              {filtered.map(m => (
-                <li
-                  key={m.id}
-                  onClick={() => openMessage(m)}
-                  className={cn(
-                    'border-b cursor-pointer px-3 py-2 hover:bg-muted/50 transition-colors',
-                    selectedId === m.id && 'bg-muted',
-                    !m.is_read && !m.is_sent && 'bg-blue-50/40 dark:bg-blue-950/20',
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={cn('text-sm truncate', !m.is_read && !m.is_sent && 'font-semibold')}>
-                      {m.is_sent
-                        ? `Para: ${m.to_emails?.[0] || '—'}`
-                        : (m.from_name || m.from_email || '—')}
-                    </span>
-                    <span className="text-xs text-muted-foreground shrink-0">{fmtDate(m.received_at)}</span>
-                  </div>
-                  <div className={cn('text-sm truncate', !m.is_read && !m.is_sent && 'font-medium')}>
-                    {m.subject || '(sem assunto)'}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                    {m.has_attachments && <Paperclip className="h-3 w-3 inline" />}
-                    {m.is_starred && <Star className="h-3 w-3 inline text-yellow-500 fill-yellow-500" />}
-                    <span className="truncate">{m.snippet}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Reader */}
-        <section className={cn('flex-1 overflow-y-auto', !selectedId && 'hidden md:block')}>
-          {selected ? (
-            <MessageReader
-              message={selected}
-              onClose={() => setSelectedId(null)}
-              onModify={(action) => modify(selected.id, action)}
-              onReply={(forward) => {
-                setComposeInit({
-                  to: forward ? [] : [selected.from_email || ''],
-                  subject: (forward ? 'Fwd: ' : 'Re: ') + (selected.subject || ''),
-                  html: `<br><br><blockquote style="border-left:2px solid #ccc;padding-left:8px;color:#555">
-                    <p><strong>De:</strong> ${selected.from_name || ''} &lt;${selected.from_email || ''}&gt;<br>
-                    <strong>Data:</strong> ${new Date(selected.received_at).toLocaleString('pt-BR')}<br>
-                    <strong>Assunto:</strong> ${selected.subject || ''}</p>
-                    ${selected.body_html || `<pre>${selected.body_text || ''}</pre>`}
-                  </blockquote>`,
-                  inReplyTo: selected.gmail_message_id,
-                  threadId: selected.gmail_thread_id || undefined,
-                });
-                setComposeOpen(true);
-              }}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              <div className="text-center">
-                <Mail className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p>Selecione um e-mail para visualizar</p>
-              </div>
-            </div>
-          )}
-        </section>
-      </div>
+        {/* Conteúdo: lista OU leitor */}
+        {selected ? (
+          <MessageReader
+            message={selected}
+            onClose={() => setSelectedId(null)}
+            onModify={(action) => modify(selected.id, action)}
+            onReply={openReply}
+          />
+        ) : loading ? (
+          <div className="p-8 text-center text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">Nenhum e-mail.</div>
+        ) : (
+          <ul className="flex-1 overflow-y-auto divide-y">
+            {filtered.map(m => (
+              <EmailRow key={m.id} m={m} onOpen={() => openMessage(m)} onModify={modify} />
+            ))}
+          </ul>
+        )}
+      </main>
 
       <ComposeDialog
         open={composeOpen}
@@ -306,6 +310,62 @@ export default function Email() {
         onSent={() => { setComposeOpen(false); load(); }}
       />
     </div>
+  );
+}
+
+// =====================================================================
+
+function EmailRow({
+  m, onOpen, onModify,
+}: {
+  m: EmailMessage;
+  onOpen: () => void;
+  onModify: (id: string, action: string) => void;
+}) {
+  const unread = !m.is_read && !m.is_sent;
+  const senderLabel = m.is_sent
+    ? `Para: ${m.to_emails?.[0] || '—'}`
+    : (m.from_name || m.from_email || '—');
+  return (
+    <li
+      onClick={onOpen}
+      className={cn(
+        'group flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors',
+        'hover:shadow-sm hover:z-10 relative',
+        unread ? 'bg-background' : 'bg-muted/30',
+        'hover:bg-muted/60',
+      )}
+    >
+      <button
+        onClick={(e) => { e.stopPropagation(); onModify(m.id, m.is_starred ? 'unstar' : 'star'); }}
+        className="shrink-0 text-muted-foreground hover:text-yellow-500"
+      >
+        <Star className={cn('h-4 w-4', m.is_starred && 'fill-yellow-500 text-yellow-500')} />
+      </button>
+
+      <div className={cn('w-44 shrink-0 truncate text-sm', unread && 'font-semibold text-foreground')}>
+        {senderLabel}
+      </div>
+
+      <div className="flex-1 min-w-0 flex items-center gap-2 text-sm">
+        <span className={cn('truncate', unread ? 'font-semibold text-foreground' : 'text-foreground/90')}>
+          {m.subject || '(sem assunto)'}
+        </span>
+        <span className="text-muted-foreground truncate hidden sm:inline">
+          — {m.snippet}
+        </span>
+      </div>
+
+      {m.has_attachments && (
+        <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-background text-xs text-muted-foreground shrink-0">
+          <FileText className="h-3 w-3" /> anexo
+        </span>
+      )}
+
+      <div className="shrink-0 w-16 text-right text-xs text-muted-foreground tabular-nums">
+        {fmtDate(m.received_at)}
+      </div>
+    </li>
   );
 }
 
