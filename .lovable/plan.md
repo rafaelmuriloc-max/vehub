@@ -1,10 +1,12 @@
-Adicionar classes Tailwind ao `SidebarMenuButton` dos itens do menu (e do botão "Cadastro") em `src/components/AppSidebar.tsx` para deixar o ícone laranja no hover e quando o item estiver ativo.
+Adicionar regras em `src/index.css` que forçam o `<svg>` dentro dos botões do menu lateral a ficar laranja (`--sidebar-primary`) nos estados `:hover` e `data-[active=true]`:
 
-Classe a aplicar:
+```css
+[data-sidebar="menu-button"]:hover > svg,
+[data-sidebar="menu-button"][data-active="true"] > svg {
+  color: hsl(var(--sidebar-primary));
+}
 ```
-[&>svg]:transition-colors hover:[&>svg]:text-sidebar-primary data-[active=true]:[&>svg]:text-sidebar-primary
-```
 
-`--sidebar-primary` já é o laranja Velocitä (#E8710A). O texto permanece como está; apenas o `<svg>` muda de cor.
+Remover as classes utilitárias equivalentes que adicionei em `src/components/AppSidebar.tsx` (que não estão tendo efeito por causa de merge/precedência) para deixar a regra única no CSS global.
 
-Sem mudanças em outras páginas, rotas ou no submenu de Cadastro (que não usa ícones).
+Sem mudanças no submenu de Cadastro (sem ícones) e sem alteração em rotas/comportamento.
