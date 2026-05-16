@@ -1,4 +1,4 @@
-import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, Plug, MessageCircle, Mail } from 'lucide-react';
+import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -15,7 +15,6 @@ import { Separator } from '@/components/ui/separator';
 const menuItems = [
   { title: 'Financeiro', icon: DollarSign, path: '/' },
   { title: 'Fiscal', icon: Scale, path: '/fiscal' },
-  { title: 'Integra Contador', icon: Plug, path: '/integra-contador' },
   { title: 'Chat', icon: MessageCircle, path: '/chat' },
   { title: 'E-mail', icon: Mail, path: '/email' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },

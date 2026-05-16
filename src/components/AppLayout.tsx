@@ -10,7 +10,6 @@ const pageTitles: Record<string, string> = {
   '/clients': 'Clientes',
   '/invoices/emit': 'Emitir NFS-e',
   '/fiscal': 'Fiscal',
-  '/integra-contador': 'Integra Contador',
   '/calendar': 'Calendário',
   '/settings': 'Configurações',
   '/settings/document-types': 'Tipos de Documento',

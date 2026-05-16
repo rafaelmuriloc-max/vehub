@@ -15,7 +15,6 @@ import Settings from "./pages/Settings";
 import DocumentTypes from "./pages/DocumentTypes";
 import InvoiceEmit from "./pages/InvoiceEmit";
 import Fiscal from "./pages/Fiscal";
-import IntegraContador from "./pages/IntegraContador";
 import Chat from "./pages/Chat";
 import ChatPopup from "./pages/ChatPopup";
 import Email from "./pages/Email";
@@ -39,7 +38,6 @@ const App = () => (
               <Route path="/obligations" element={<Obligations />} />
               <Route path="/invoices/emit" element={<InvoiceEmit />} />
               <Route path="/fiscal" element={<Fiscal />} />
-              <Route path="/integra-contador" element={<IntegraContador />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/email" element={<Email />} />
               <Route path="/calendar" element={<CalendarView />} />
