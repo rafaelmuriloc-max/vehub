@@ -7,6 +7,18 @@ const corsHeaders = {
 
 const MAX_TURNS = 5;
 
+const DEFAULT_SYSTEM_PROMPT = `Você é {agent_name}, recepcionista virtual da Velocitä Contabilidade no WhatsApp.
+
+Sua única função é fazer a TRIAGEM da conversa: descobrir educadamente o que o cliente precisa e identificar para qual departamento transferir.
+
+Regras:
+- Seja breve, cordial e em português brasileiro.
+- Não responda dúvidas técnicas, fiscais ou contábeis — apenas faça a triagem.
+- Se a primeira mensagem for um simples cumprimento (\"oi\", \"bom dia\"), cumprimente de volta e pergunte como pode ajudar.
+- Quando souber o departamento com confiança, use a tool \"transfer\". Caso contrário, use \"ask_user\" para perguntar.
+- Considere o contexto de toda a conversa, não apenas a última mensagem.
+- Use os exemplos aprendidos abaixo (quando houver) como referência de roteamento correto.`;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -61,7 +73,7 @@ Deno.serve(async (req) => {
     // Settings (must be enabled)
     const { data: settings } = await supabase
       .from("company_settings")
-      .select("agent_name, triage_enabled, triage_fallback_department_id")
+      .select("agent_name, triage_enabled, triage_fallback_department_id, triage_system_prompt")
       .limit(1).maybeSingle();
     if (!settings?.triage_enabled) {
       await supabase.from("chat_conversations")
@@ -75,7 +87,7 @@ Deno.serve(async (req) => {
     // Departments
     const { data: depts } = await supabase
       .from("departments")
-      .select("id, name, description, triage_keywords")
+      .select("id, name, description, triage_keywords, triage_prompt")
       .order("name");
     if (!depts || depts.length === 0) {
       await supabase.from("chat_conversations")
@@ -94,20 +106,60 @@ Deno.serve(async (req) => {
       .limit(30);
     const history = (msgs || []).reverse();
 
+    // Build system prompt: company-wide editable prompt + per-department prompts
+    const systemPromptTemplate = (settings as any).triage_system_prompt || DEFAULT_SYSTEM_PROMPT;
+    const systemBase = systemPromptTemplate.replaceAll("{agent_name}", agentName);
+
+    const deptLines = depts.map((d: any) => {
+      const guidance = d.triage_prompt
+        || [d.description, d.triage_keywords].filter(Boolean).join(" — ")
+        || "(sem instrução)";
+      return `- ${d.id} — ${d.name}: ${guidance}`;
+    }).join("\n");
+
+    // Fetch up to 8 most recent learnings, balanced by department
+    let examplesBlock = "";
+    try {
+      const { data: learnings } = await supabase
+        .from("triage_learnings")
+        .select("user_messages, chosen_department_id, corrected_department_id, outcome")
+        .in("outcome", ["auto_confirmed", "corrected"])
+        .order("created_at", { ascending: false })
+        .limit(40);
+      const deptName = new Map(depts.map((d: any) => [d.id, d.name]));
+      const perDept: Record<string, any[]> = {};
+      (learnings || []).forEach((l: any) => {
+        const did = l.corrected_department_id || l.chosen_department_id;
+        if (!did || !deptName.has(did)) return;
+        (perDept[did] ||= []).push(l);
+      });
+      const picked: { text: string; dept: string }[] = [];
+      let added = true;
+      while (added && picked.length < 8) {
+        added = false;
+        for (const did of Object.keys(perDept)) {
+          if (picked.length >= 8) break;
+          const l = perDept[did].shift();
+          if (l) {
+            const snippet = String(l.user_messages || "").trim().replace(/\s+/g, " ").slice(0, 240);
+            picked.push({ text: snippet, dept: deptName.get(did) as string });
+            added = true;
+          }
+        }
+      }
+      if (picked.length) {
+        examplesBlock = "\n\nExemplos de triagens anteriores bem-sucedidas:\n" +
+          picked.map((p, i) => `${i + 1}. Cliente: "${p.text}" → Departamento: ${p.dept}`).join("\n");
+      }
+    } catch (e) {
+      console.warn("learnings fetch failed:", (e as Error).message);
+    }
+
+    const systemContent =
+      `${systemBase}\n\nDepartamentos disponíveis (id — nome — instrução de quando usar):\n${deptLines}${examplesBlock}`;
+
     const aiMessages: any[] = [
-      {
-        role: "system",
-        content:
-          `Você é ${agentName}, recepcionista virtual da Velocitä Contabilidade no WhatsApp. ` +
-          `Sua única função é fazer a TRIAGEM da conversa: descobrir educadamente o que o cliente precisa e identificar para qual departamento transferir. ` +
-          `Seja breve, cordial e em português brasileiro. Não responda dúvidas técnicas, fiscais ou contábeis — apenas triagem. ` +
-          `Se a primeira mensagem for um simples cumprimento ("oi", "bom dia"), cumprimente de volta e pergunte como pode ajudar. ` +
-          `Quando souber o departamento com confiança, use a tool "transfer". Caso contrário, use "ask_user" para perguntar. ` +
-          `Departamentos disponíveis (id — nome — palavras-chave):\n` +
-          depts.map((d) =>
-            `- ${d.id} — ${d.name}${d.triage_keywords ? " — " + d.triage_keywords : (d.description ? " — " + d.description : "")}`
-          ).join("\n"),
-      },
+      { role: "system", content: systemContent },
       ...history.map((m) => ({
         role: m.message_type?.startsWith("whatsapp_incoming") ? "user" : "assistant",
         content: m.content || "",
@@ -253,12 +305,34 @@ Deno.serve(async (req) => {
     const updates: Record<string, unknown> = {
       triage_status: "done",
       triage_department_id: targetDept.id,
+      triaged_department_id: targetDept.id,
       triage_summary: summary,
       updated_at: new Date().toISOString(),
     };
     if (assignee) updates.assigned_to = assignee.user_id;
 
     await supabase.from("chat_conversations").update(updates).eq("id", conversation_id);
+
+    // Record this triage as a learning example (will be reconciled in 30 minutes)
+    try {
+      const userText = history
+        .filter((m) => m.message_type?.startsWith("whatsapp_incoming"))
+        .map((m) => m.content || "")
+        .join(" \n")
+        .trim()
+        .slice(0, 2000);
+      if (userText) {
+        await supabase.from("triage_learnings").insert({
+          conversation_id,
+          user_messages: userText,
+          chosen_department_id: targetDept.id,
+          summary,
+          outcome: "auto_confirmed",
+        });
+      }
+    } catch (e) {
+      console.warn("learning insert failed:", (e as Error).message);
+    }
 
     const assigneeName = assignee?.full_name?.split(" ")[0] || "um atendente";
     const transferText = assignee

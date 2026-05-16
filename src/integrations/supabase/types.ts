@@ -35,6 +35,7 @@ export type Database = {
           triage_status: string
           triage_summary: string | null
           triage_turns: number
+          triaged_department_id: string | null
           updated_at: string
           waiting_since: string | null
           whatsapp_phone: string | null
@@ -59,6 +60,7 @@ export type Database = {
           triage_status?: string
           triage_summary?: string | null
           triage_turns?: number
+          triaged_department_id?: string | null
           updated_at?: string
           waiting_since?: string | null
           whatsapp_phone?: string | null
@@ -83,6 +85,7 @@ export type Database = {
           triage_status?: string
           triage_summary?: string | null
           triage_turns?: number
+          triaged_department_id?: string | null
           updated_at?: string
           waiting_since?: string | null
           whatsapp_phone?: string | null
@@ -521,6 +524,7 @@ export type Database = {
           service_timezone: string
           triage_enabled: boolean
           triage_fallback_department_id: string | null
+          triage_system_prompt: string | null
           updated_at: string
         }
         Insert: {
@@ -558,6 +562,7 @@ export type Database = {
           service_timezone?: string
           triage_enabled?: boolean
           triage_fallback_department_id?: string | null
+          triage_system_prompt?: string | null
           updated_at?: string
         }
         Update: {
@@ -595,6 +600,7 @@ export type Database = {
           service_timezone?: string
           triage_enabled?: boolean
           triage_fallback_department_id?: string | null
+          triage_system_prompt?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -635,6 +641,7 @@ export type Database = {
           id: string
           name: string
           triage_keywords: string | null
+          triage_prompt: string | null
         }
         Insert: {
           created_at?: string
@@ -642,6 +649,7 @@ export type Database = {
           id?: string
           name: string
           triage_keywords?: string | null
+          triage_prompt?: string | null
         }
         Update: {
           created_at?: string
@@ -649,6 +657,7 @@ export type Database = {
           id?: string
           name?: string
           triage_keywords?: string | null
+          triage_prompt?: string | null
         }
         Relationships: []
       }
@@ -1768,6 +1777,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      triage_learnings: {
+        Row: {
+          chosen_department_id: string | null
+          confirmed_at: string | null
+          conversation_id: string | null
+          corrected_department_id: string | null
+          created_at: string
+          id: string
+          outcome: string
+          summary: string | null
+          user_messages: string
+        }
+        Insert: {
+          chosen_department_id?: string | null
+          confirmed_at?: string | null
+          conversation_id?: string | null
+          corrected_department_id?: string | null
+          created_at?: string
+          id?: string
+          outcome?: string
+          summary?: string | null
+          user_messages: string
+        }
+        Update: {
+          chosen_department_id?: string | null
+          confirmed_at?: string | null
+          conversation_id?: string | null
+          corrected_department_id?: string | null
+          created_at?: string
+          id?: string
+          outcome?: string
+          summary?: string | null
+          user_messages?: string
+        }
+        Relationships: []
       }
       user_push_subscriptions: {
         Row: {
