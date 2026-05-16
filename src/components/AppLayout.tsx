@@ -6,9 +6,8 @@ import { Separator } from '@/components/ui/separator';
 import { useChatNotification } from '@/hooks/useChatNotification';
 
 const pageTitles: Record<string, string> = {
-  '/': 'Dashboard',
+  '/': 'Financeiro',
   '/clients': 'Clientes',
-  '/financial': 'Financeiro',
   '/documents': 'Documentos',
   '/invoices': 'Notas Fiscais',
   '/invoices/emit': 'Emitir NFS-e',
@@ -28,7 +27,7 @@ export function AppLayout() {
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Carregando...</p></div>;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!isAdmin && (location.pathname === '/' || location.pathname === '/financial')) {
+  if (!isAdmin && location.pathname === '/') {
     return <Navigate to="/calendar" replace />;
   }
 

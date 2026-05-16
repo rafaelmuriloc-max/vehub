@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
 import Financial from "./pages/Financial";
 import Tasks from "./pages/Tasks";
@@ -37,9 +36,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/chat/popup" element={<ChatPopup />} />
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Financial />} />
               <Route path="/clients" element={<Clients />} />
-              <Route path="/financial" element={<Financial />} />
               <Route path="/obligations" element={<Obligations />} />
               <Route path="/documents" element={<Documents />} />
               <Route path="/invoices" element={<Invoices />} />
