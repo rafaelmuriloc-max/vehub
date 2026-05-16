@@ -258,27 +258,24 @@ export default function Email() {
 
       {/* Coluna principal */}
       <main className="flex-1 min-w-0 flex flex-col">
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 border-b px-3 py-2">
-          {selectedId && (
-            <Button size="icon" variant="ghost" onClick={() => setSelectedId(null)}>
-              <ArrowLeft className="h-4 w-4" />
+        {/* Toolbar (oculta ao ler e-mail para maximizar área de leitura) */}
+        {!selected && (
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <Button size="icon" variant="ghost" onClick={handleSync} disabled={syncing} title="Atualizar">
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </Button>
-          )}
-          <Button size="icon" variant="ghost" onClick={handleSync} disabled={syncing} title="Atualizar">
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
-          <Input
-            placeholder="Buscar e-mails..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 max-w-md ml-2"
-          />
-          <div className="flex-1" />
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            {filtered.length} {filtered.length === 1 ? 'e-mail' : 'e-mails'}
-          </span>
-        </div>
+            <Input
+              placeholder="Buscar e-mails..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 max-w-md ml-2"
+            />
+            <div className="flex-1" />
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              {filtered.length} {filtered.length === 1 ? 'e-mail' : 'e-mails'}
+            </span>
+          </div>
+        )}
 
         {/* Conteúdo: lista OU leitor */}
         {selected ? (
@@ -448,18 +445,26 @@ function MessageReader({
         </Button>
       </div>
 
-      <div className="px-4 py-3 border-b">
-        <h2 className="text-lg font-semibold mb-2">{message.subject || '(sem assunto)'}</h2>
-        <div className="text-sm">
-          <div><strong>De:</strong> {message.from_name ? `${message.from_name} <${message.from_email}>` : message.from_email}</div>
-          <div><strong>Para:</strong> {message.to_emails?.join(', ')}</div>
-          {message.cc_emails?.length > 0 && (
-            <div><strong>Cc:</strong> {message.cc_emails.join(', ')}</div>
-          )}
-          <div className="text-xs text-muted-foreground mt-1">{new Date(message.received_at).toLocaleString('pt-BR')}</div>
+      <div className="px-4 py-2 border-b">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-base font-semibold leading-tight">{message.subject || '(sem assunto)'}</h2>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {new Date(message.received_at).toLocaleString('pt-BR')}
+          </span>
         </div>
-        <div className="mt-2">
-          <ClientLinkPopover message={message} />
+        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+          <span><strong className="text-foreground/80">De:</strong> {message.from_name ? `${message.from_name} <${message.from_email}>` : message.from_email}</span>
+          <span>·</span>
+          <span className="truncate"><strong className="text-foreground/80">Para:</strong> {message.to_emails?.join(', ')}</span>
+          {message.cc_emails?.length > 0 && (
+            <>
+              <span>·</span>
+              <span><strong className="text-foreground/80">Cc:</strong> {message.cc_emails.join(', ')}</span>
+            </>
+          )}
+          <span className="ml-auto">
+            <ClientLinkPopover message={message} />
+          </span>
         </div>
       </div>
 

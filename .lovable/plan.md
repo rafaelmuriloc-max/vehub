@@ -1,62 +1,27 @@
-## Redesign da página E-mail — Layout Gmail (2 colunas)
+## Aumentar área de leitura do e-mail
 
-Reestruturar `src/pages/Email.tsx` para replicar o layout do Gmail mostrado na referência:
+No `MessageReader` (`src/pages/Email.tsx`), o corpo da mensagem (iframe) está apertado porque o header do e-mail (assunto, de/para, data, vincular cliente) ocupa muito espaço fixo e o iframe usa apenas o restante.
 
-### Layout
+### Mudanças
 
-```
-┌──────────────┬──────────────────────────────────────────────┐
-│              │  ☐ ⟳ ⋮                       1–50 de N  ‹ ›  │
-│  ✏ Escrever  ├──────────────────────────────────────────────┤
-│              │  [Principal] [Promoções] [Social] [Updates]  │
-│ 📥 Entrada N │──────────────────────────────────────────────│
-│ ⭐ Estrela   │  ☐ ⭐ Remetente   Assunto — preview     hora │
-│ 🕐 Adiados   │  ☐ ⭐ Remetente   Assunto — preview     hora │
-│ ➤ Enviados   │  ...                                          │
-│ 📄 Rascunhos │                                               │
-│ ⌄ Mais       │                                               │
-│              │                                               │
-│ Marcadores + │                                               │
-│  • Label 1   │                                               │
-│  • Label 2   │                                               │
-└──────────────┴──────────────────────────────────────────────┘
-```
+1. **Compactar o header do leitor**
+   - Reduzir padding (`px-4 py-3` → `px-6 py-2`)
+   - Colocar metadados (De, Para, Data) em linha única menor; mover "Vincular cliente" para a toolbar superior
+   - Assunto mantém destaque mas com menos margem
 
-- **Coluna 1 (sidebar 256px)**: botão "Escrever" arredondado, lista de pastas com contadores, seção "Marcadores" com labels do Gmail
-- **Coluna 2 (flex)**: barra de ações no topo (selecionar tudo, refresh, paginação), abas de categoria (Principal / Promoções / Social / Atualizações), lista de e-mails estilo Gmail (linha única: checkbox, estrela, remetente em negrito se não lido, assunto + snippet inline, anexos como chips PDF, horário à direita)
+2. **Remover toolbar superior duplicada da página quando o e-mail está aberto**
+   - Quando há `selected`, esconder a barra de busca/contador da página (`main > toolbar`) e deixar só a do `MessageReader` (que já tem voltar, estrela, marcar, arquivar, lixeira, responder, encaminhar)
+   - Isso devolve ~50px de altura ao iframe
 
-### Abrir e-mail
+3. **Iframe ocupa todo o espaço restante**
+   - Garantir `flex-1 min-h-0` no container do iframe e `h-full w-full` no iframe (já está, mas confirmar após compactação)
+   - Aumentar largura: remover qualquer max-width; iframe usa 100% da coluna principal
 
-Ao clicar numa linha, o conteúdo do e-mail abre **substituindo a lista** (mesma coluna 2), com:
-- Barra superior: voltar (←), arquivar, lixeira, marcar não lido, estrela
-- Assunto grande + labels
-- Cabeçalho do remetente (avatar inicial, nome, e-mail, data)
-- Corpo HTML em iframe sandboxed
-- Anexos como cards
-- Botões Responder / Encaminhar no rodapé
+4. **Anexos compactos**
+   - Barra de anexos no rodapé com `py-1.5` em vez de `py-2`
 
-A sidebar permanece visível. Não há coluna de leitura separada — é toggle lista ↔ leitor na coluna 2 (padrão Gmail mobile/atual).
+Resultado: a área visível do corpo do e-mail ganha tipicamente 80-120px de altura e usa toda a largura da coluna principal.
 
-### Componentes
+### Arquivo
 
-- `src/pages/Email.tsx` — orquestra estado (folder, selectedId, category)
-- `src/components/email/EmailSidebar.tsx` — sidebar com Escrever + pastas + marcadores
-- `src/components/email/EmailListView.tsx` — toolbar + tabs + lista densa estilo Gmail
-- `src/components/email/EmailRow.tsx` — linha única com snippet inline e chips de anexo
-- `src/components/email/EmailReaderView.tsx` — visualização full-width do e-mail aberto
-- `EmailCompose.tsx` — dialog reaproveitado
-
-### Detalhes visuais
-
-- Linha não lida: fundo branco, remetente/assunto em **bold**
-- Linha lida: fundo `muted/30`, texto regular
-- Hover: sombra sutil + ações revelam (arquivar/lixeira/marcar)
-- Anexos: chip pill com ícone PDF + nome truncado
-- Categorias (Principal/Promoções/Social/Atualizações): hardcoded por enquanto, baseado em labels do Gmail (`CATEGORY_PERSONAL`, `CATEGORY_PROMOTIONS`, `CATEGORY_SOCIAL`, `CATEGORY_UPDATES`)
-- Marcadores do Gmail: ler `labels` dos `email_messages` e renderizar os user labels distintos
-
-### Fora do escopo
-
-- Sem mudanças de backend / edge functions / schema
-- Sem threads
-- Mantém realtime, compose, attachments existentes
+- `src/pages/Email.tsx` — apenas ajustes no componente `MessageReader` e na condicional da toolbar do `<main>`.
