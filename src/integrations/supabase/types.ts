@@ -506,6 +506,9 @@ export type Database = {
           digital_certificate_password: string | null
           digital_certificate_url: string | null
           email: string | null
+          gmail_connected_email: string | null
+          gmail_last_history_id: string | null
+          gmail_last_sync_at: string | null
           id: string
           logo_url: string | null
           phone: string | null
@@ -540,6 +543,9 @@ export type Database = {
           digital_certificate_password?: string | null
           digital_certificate_url?: string | null
           email?: string | null
+          gmail_connected_email?: string | null
+          gmail_last_history_id?: string | null
+          gmail_last_sync_at?: string | null
           id?: string
           logo_url?: string | null
           phone?: string | null
@@ -574,6 +580,9 @@ export type Database = {
           digital_certificate_password?: string | null
           digital_certificate_url?: string | null
           email?: string | null
+          gmail_connected_email?: string | null
+          gmail_last_history_id?: string | null
+          gmail_last_sync_at?: string | null
           id?: string
           logo_url?: string | null
           phone?: string | null
@@ -724,6 +733,47 @@ export type Database = {
           },
         ]
       }
+      email_attachments: {
+        Row: {
+          created_at: string
+          filename: string
+          gmail_attachment_id: string | null
+          id: string
+          message_id: string
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string | null
+        }
+        Insert: {
+          created_at?: string
+          filename: string
+          gmail_attachment_id?: string | null
+          id?: string
+          message_id: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+        }
+        Update: {
+          created_at?: string
+          filename?: string
+          gmail_attachment_id?: string | null
+          id?: string
+          message_id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_logs: {
         Row: {
           body_html: string | null
@@ -766,6 +816,81 @@ export type Database = {
           sent_at?: string
           status?: string
           subject?: string
+        }
+        Relationships: []
+      }
+      email_messages: {
+        Row: {
+          body_html: string | null
+          body_text: string | null
+          cc_emails: string[]
+          client_id: string | null
+          created_at: string
+          from_email: string | null
+          from_name: string | null
+          gmail_message_id: string
+          gmail_thread_id: string | null
+          has_attachments: boolean
+          id: string
+          is_archived: boolean
+          is_read: boolean
+          is_sent: boolean
+          is_starred: boolean
+          is_trashed: boolean
+          labels: string[]
+          received_at: string
+          snippet: string | null
+          subject: string | null
+          to_emails: string[]
+          updated_at: string
+        }
+        Insert: {
+          body_html?: string | null
+          body_text?: string | null
+          cc_emails?: string[]
+          client_id?: string | null
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          gmail_message_id: string
+          gmail_thread_id?: string | null
+          has_attachments?: boolean
+          id?: string
+          is_archived?: boolean
+          is_read?: boolean
+          is_sent?: boolean
+          is_starred?: boolean
+          is_trashed?: boolean
+          labels?: string[]
+          received_at?: string
+          snippet?: string | null
+          subject?: string | null
+          to_emails?: string[]
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string | null
+          cc_emails?: string[]
+          client_id?: string | null
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          gmail_message_id?: string
+          gmail_thread_id?: string | null
+          has_attachments?: boolean
+          id?: string
+          is_archived?: boolean
+          is_read?: boolean
+          is_sent?: boolean
+          is_starred?: boolean
+          is_trashed?: boolean
+          labels?: string[]
+          received_at?: string
+          snippet?: string | null
+          subject?: string | null
+          to_emails?: string[]
+          updated_at?: string
         }
         Relationships: []
       }
