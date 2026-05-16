@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
-interface Department { id: string; name: string; description: string | null; triage_keywords?: string | null; smtp_email?: string | null; smtp_password?: string | null; }
+interface Department { id: string; name: string; description: string | null; triage_keywords?: string | null; triage_prompt?: string | null; smtp_email?: string | null; smtp_password?: string | null; }
 
 export function DepartmentsTab() {
   const { isAdmin: admin } = useAuth();
@@ -20,11 +20,11 @@ export function DepartmentsTab() {
   const [triageEnabled, setTriageEnabled] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', triage_keywords: '', smtp_email: '', smtp_password: '' });
+  const [form, setForm] = useState({ name: '', description: '', triage_prompt: '', smtp_email: '', smtp_password: '' });
   const [showPassword, setShowPassword] = useState(false);
 
   const fetch = async () => {
-    const { data: depts } = await supabase.from('departments').select('id, name, description, triage_keywords').order('name');
+    const { data: depts } = await supabase.from('departments').select('id, name, description, triage_keywords, triage_prompt').order('name');
     if (!depts) return;
     const { data: creds } = await supabase.from('department_credentials' as any).select('department_id, smtp_email, smtp_password');
     const credMap = new Map<string, { smtp_email: string | null; smtp_password: string | null }>();
@@ -36,11 +36,11 @@ export function DepartmentsTab() {
 
   useEffect(() => { fetch(); }, []);
 
-  const openNew = () => { setEditing(null); setForm({ name: '', description: '', triage_keywords: '', smtp_email: '', smtp_password: '' }); setShowPassword(false); setOpen(true); };
-  const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '', triage_keywords: d.triage_keywords || '', smtp_email: d.smtp_email || '', smtp_password: d.smtp_password || '' }); setShowPassword(false); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ name: '', description: '', triage_prompt: '', smtp_email: '', smtp_password: '' }); setShowPassword(false); setOpen(true); };
+  const openEdit = (d: Department) => { setEditing(d); setForm({ name: d.name, description: d.description || '', triage_prompt: d.triage_prompt || d.triage_keywords || '', smtp_email: d.smtp_email || '', smtp_password: d.smtp_password || '' }); setShowPassword(false); setOpen(true); };
 
   const handleSave = async () => {
-    const deptPayload: any = { name: form.name, description: form.description || null, triage_keywords: form.triage_keywords || null };
+    const deptPayload: any = { name: form.name, description: form.description || null, triage_prompt: form.triage_prompt || null };
     let deptId = editing?.id;
     if (editing) {
       const { error } = await supabase.from('departments').update(deptPayload).eq('id', editing.id);
@@ -72,12 +72,12 @@ export function DepartmentsTab() {
         {admin && <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" />Novo</Button>}
       </CardHeader>
       <CardContent>
-        {triageEnabled && items.some(d => !d.triage_keywords) && (
+        {triageEnabled && items.some(d => !d.triage_prompt && !d.triage_keywords) && (
           <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
             <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" />
             <div>
-              A triagem automática está ativa, mas <strong>{items.filter(d => !d.triage_keywords).length}</strong> departamento(s) sem palavras-chave.
-              Sem isso, a IA pode classificar errado e cair no fallback. Edite cada departamento e preencha o campo <em>Palavras-chave para triagem por IA</em>.
+              A triagem automática está ativa, mas <strong>{items.filter(d => !d.triage_prompt && !d.triage_keywords).length}</strong> departamento(s) sem instrução para a Gisele.
+              Sem isso, ela pode classificar errado e cair no fallback. Edite cada departamento e preencha o campo <em>Instrução para a Gisele</em>.
             </div>
           </div>
         )}
@@ -116,15 +116,15 @@ export function DepartmentsTab() {
             <div><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
             <div><Label>Descrição</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
             <div>
-              <Label>Palavras-chave para triagem por IA</Label>
+              <Label>Instrução para a Gisele (quando transferir para este departamento)</Label>
               <Textarea
-                value={form.triage_keywords}
-                onChange={e => setForm({ ...form, triage_keywords: e.target.value })}
-                rows={2}
-                placeholder="Ex.: notas fiscais, NFe, NFSe, ICMS, impostos, escrituração fiscal"
+                value={form.triage_prompt}
+                onChange={e => setForm({ ...form, triage_prompt: e.target.value })}
+                rows={4}
+                placeholder="Ex.: Transfira para este departamento qualquer dúvida sobre folha de pagamento, admissão, demissão, férias, eSocial, FGTS, holerite, vale-transporte e benefícios."
               />
               <p className="text-xs text-muted-foreground mt-1">
-                A IA usa essas palavras para decidir quando rotear conversas para este departamento.
+                Escreva em linguagem natural quando a Gisele deve escolher este departamento. Quanto mais específico, melhor o roteamento.
               </p>
             </div>
             <div><Label>E-mail SMTP</Label><Input type="email" placeholder="departamento@escritorio.com" value={form.smtp_email} onChange={e => setForm({ ...form, smtp_email: e.target.value })} /></div>
