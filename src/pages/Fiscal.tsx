@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Scale, Receipt } from 'lucide-react';
+import { Scale, Receipt, Plug } from 'lucide-react';
 import SituacaoFiscalTab from '@/components/integra-contador/SituacaoFiscalTab';
 import Invoices from './Invoices';
+import IntegraContador from './IntegraContador';
 
 export default function Fiscal() {
-  const [view, setView] = useState<'situacao' | 'notas'>('situacao');
+  const [view, setView] = useState<'situacao' | 'notas' | 'integra'>('situacao');
 
   return (
     <div className="space-y-4">
@@ -26,6 +27,14 @@ export default function Fiscal() {
           <Receipt className="h-4 w-4 sm:mr-2" />
           <span className="hidden sm:inline">Notas Fiscais</span>
         </Button>
+        <Button
+          variant={view === 'integra' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setView('integra')}
+        >
+          <Plug className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Integra Contador</span>
+        </Button>
       </div>
 
       {view === 'situacao' && (
@@ -40,6 +49,7 @@ export default function Fiscal() {
         </div>
       )}
       {view === 'notas' && <Invoices />}
+      {view === 'integra' && <IntegraContador />}
     </div>
   );
 }

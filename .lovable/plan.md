@@ -1,23 +1,23 @@
-# Mover "Notas Fiscais" para dentro de "Fiscal"
+# Mover "Integra Contador" para dentro de "Fiscal"
 
 ## Mudanças
 
 ### `src/pages/Fiscal.tsx`
-- Adicionar estado `view: 'situacao' | 'notas'` (default `situacao`).
-- Adicionar dois botões no canto superior direito (`Situação Fiscal`, `Notas Fiscais`), estilo idêntico ao do CalendarView (variant `default` quando ativo, `outline` quando inativo; ícone + label oculto em mobile).
-- Renderizar `<SituacaoFiscalTab />` ou `<Invoices />` conforme `view`.
-- Importar o componente `Invoices` de `./Invoices`.
+- Estender o estado `view` para `'situacao' | 'notas' | 'integra'`.
+- Adicionar um terceiro botão no canto superior direito: "Integra Contador" (ícone `Plug`), mesmo estilo dos demais.
+- Renderizar `<IntegraContador />` quando `view === 'integra'`.
+- Importar o componente `IntegraContador` de `./IntegraContador`.
 
 ### `src/App.tsx`
-- Remover a rota `/invoices` (mantida `/invoices/emit` para emissão de NFS-e, que continua acessível por link/botão dentro da view de Notas).
-- Remover o import de `Invoices` se não for usado em outro lugar.
+- Remover a rota `/integra-contador` e o import correspondente.
 
 ### `src/components/AppSidebar.tsx`
-- Remover o item "Notas Fiscais" do `menuItems`.
+- Remover o item "Integra Contador" do `menuItems`.
+- Remover `Plug` do import do `lucide-react` se não for mais usado.
 
 ### `src/components/AppLayout.tsx`
-- Remover `/invoices` de `pageTitles`.
+- Remover `/integra-contador` do mapa `pageTitles`.
 
 ## Observações
-- A página `InvoiceEmit` (`/invoices/emit`) permanece — botões internos de Notas Fiscais que navegam para ela continuam funcionando.
-- Nenhuma mudança de schema, RLS ou edge functions.
+- Nenhuma alteração de backend, schema ou edge functions.
+- Links externos diretos para `/integra-contador` deixarão de funcionar.
