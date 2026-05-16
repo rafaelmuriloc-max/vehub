@@ -8,12 +8,10 @@ import { useChatNotification } from '@/hooks/useChatNotification';
 const pageTitles: Record<string, string> = {
   '/': 'Financeiro',
   '/clients': 'Clientes',
-  '/documents': 'Documentos',
   '/invoices': 'Notas Fiscais',
   '/invoices/emit': 'Emitir NFS-e',
   '/fiscal': 'Fiscal',
   '/integra-contador': 'Integra Contador',
-  '/tasks': 'Tarefas',
   '/calendar': 'Calendário',
   '/settings': 'Configurações',
   '/settings/document-types': 'Tipos de Documento',
