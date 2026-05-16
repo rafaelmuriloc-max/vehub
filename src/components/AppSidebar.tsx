@@ -1,4 +1,4 @@
-import { Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Receipt, Scale, Plug, MessageCircle, Mail } from 'lucide-react';
+import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Receipt, Scale, Plug, MessageCircle, Mail } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -13,7 +13,6 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Separator } from '@/components/ui/separator';
 
 const menuItems = [
-  { title: 'Clientes', icon: Users, path: '/clients' },
   { title: 'Financeiro', icon: DollarSign, path: '/' },
   { title: 'Notas Fiscais', icon: Receipt, path: '/invoices' },
   { title: 'Fiscal', icon: Scale, path: '/fiscal' },
@@ -24,6 +23,7 @@ const menuItems = [
 ];
 
 const cadastroSubItems = [
+  { title: 'Clientes', path: '/clients' },
   { title: 'Meu Escritório', path: '/settings' },
   { title: 'Obrigações', path: '/obligations' },
   { title: 'Tipos de Documento', path: '/settings/document-types' },
