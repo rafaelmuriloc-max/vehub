@@ -258,27 +258,24 @@ export default function Email() {
 
       {/* Coluna principal */}
       <main className="flex-1 min-w-0 flex flex-col">
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 border-b px-3 py-2">
-          {selectedId && (
-            <Button size="icon" variant="ghost" onClick={() => setSelectedId(null)}>
-              <ArrowLeft className="h-4 w-4" />
+        {/* Toolbar (oculta ao ler e-mail para maximizar área de leitura) */}
+        {!selected && (
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <Button size="icon" variant="ghost" onClick={handleSync} disabled={syncing} title="Atualizar">
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </Button>
-          )}
-          <Button size="icon" variant="ghost" onClick={handleSync} disabled={syncing} title="Atualizar">
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
-          <Input
-            placeholder="Buscar e-mails..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 max-w-md ml-2"
-          />
-          <div className="flex-1" />
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            {filtered.length} {filtered.length === 1 ? 'e-mail' : 'e-mails'}
-          </span>
-        </div>
+            <Input
+              placeholder="Buscar e-mails..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 max-w-md ml-2"
+            />
+            <div className="flex-1" />
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              {filtered.length} {filtered.length === 1 ? 'e-mail' : 'e-mails'}
+            </span>
+          </div>
+        )}
 
         {/* Conteúdo: lista OU leitor */}
         {selected ? (
