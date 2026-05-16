@@ -13,8 +13,8 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Separator } from '@/components/ui/separator';
 
 const menuItems = [
-  { title: 'Fiscal', icon: Scale, path: '/fiscal' },
   { title: 'Chat', icon: MessageCircle, path: '/chat' },
+  { title: 'Fiscal', icon: Scale, path: '/fiscal' },
   { title: 'E-mail', icon: Mail, path: '/email' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
 ];
