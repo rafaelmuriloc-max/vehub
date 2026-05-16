@@ -257,7 +257,7 @@ export default function Email() {
       </aside>
 
       {/* Coluna principal */}
-      <main className="flex-1 min-w-0 flex flex-col">
+      <main className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Toolbar */}
         <div className="flex items-center gap-2 border-b px-3 py-2">
           {selectedId && (
