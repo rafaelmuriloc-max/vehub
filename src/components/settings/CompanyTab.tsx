@@ -11,6 +11,7 @@ import { Upload, Download, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react
 import forge from 'node-forge';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { GmailCard } from './GmailCard';
 
 interface CompanyData {
   id?: string;
@@ -381,6 +382,8 @@ export function CompanyTab() {
         data={data}
         onSaved={(patch) => setData(prev => ({ ...prev, ...patch }))}
       />
+
+      <GmailCard admin={admin} />
     </div>
   );
 }
