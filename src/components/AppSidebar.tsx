@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Receipt, Scale, Plug, MessageCircle, Mail } from 'lucide-react';
+import { Users, DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Receipt, Scale, Plug, MessageCircle, Mail } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
