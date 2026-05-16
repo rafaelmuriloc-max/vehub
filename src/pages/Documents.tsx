@@ -13,6 +13,7 @@ import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { ptBR } from 'date-fns/locale';
 import * as pdfjs from 'pdfjs-dist';
 import DocumentReviewDialog, { type AiExtraction, type ReviewData } from '@/components/DocumentReviewDialog';
+import ImportSetupDialog, { type ImportContext } from '@/components/documents/ImportSetupDialog';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -217,6 +218,8 @@ export default function Documents() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [relinking, setRelinking] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [importContext, setImportContext] = useState<ImportContext | null>(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -260,6 +263,8 @@ export default function Documents() {
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const ctx = importContext;
+    if (!ctx) { e.target.value = ''; return; }
 
     const fileList = Array.from(files);
     setAnalyzing(true);
@@ -268,78 +273,108 @@ export default function Documents() {
     const pendingReview: ReviewData[] = [];
     let importedCount = 0;
 
+    const refMonthIso = ctx.referenceMonth + '-01';
+    const allowedTypes = documentTypes.filter(dt => ctx.allowedDocTypeIds.includes(dt.id));
+    const allowedById = new Map(allowedTypes.map(dt => [dt.id, dt] as const));
+
+    function pickTypeFromText(text: string): string {
+      if (!text) return '';
+      const lower = text.toLowerCase();
+      for (const dt of allowedTypes) {
+        const words = dt.name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        if (words.length > 0 && words.every(w => lower.includes(w))) return dt.id;
+      }
+      return '';
+    }
+
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       setUploadProgress({ current: i + 1, total: fileList.length });
 
       try {
         const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-
-        // 1. Try region-based extraction first (no AI needed)
+        let pdfText = '';
         if (isPdf) {
-          const regionMatch = await tryExtractByRegions(file, documentTypes, matchClient);
-          if (regionMatch && regionMatch.clientId && regionMatch.docTypeId) {
-            const refMonth = regionMatch.referenceMonth || '';
-            if (isValidRefMonth(refMonth)) {
-              await importDocument(file, regionMatch.clientId, regionMatch.docTypeId, refMonth + '-01');
-              importedCount++;
-              continue;
-            } else {
-              // Got client + type but no month — send to review with partial data
-              pendingReview.push({
-                file,
-                extraction: { cnpj: '', company_name: '', reference_month: '', document_type_name: documentTypes.find(dt => dt.id === regionMatch.docTypeId)?.name || '' },
-                matchedClientId: regionMatch.clientId,
-                matchedDocTypeId: regionMatch.docTypeId,
-                referenceMonth: '',
-              });
-              continue;
-            }
+          try { pdfText = await extractPdfText(file); } catch { pdfText = ''; }
+        }
+
+        // --- Identify company (CNPJ) ---
+        let clientId = '';
+        let detectedCnpj = '';
+
+        // 1) Region-based CNPJ
+        if (isPdf) {
+          for (const dt of allowedTypes) {
+            const region = dt.extraction_config?.cnpj_region;
+            if (!region) continue;
+            try {
+              const txt = await extractTextFromRegion(file, region);
+              const cnpj = extractCnpjFromText(txt);
+              if (cnpj) {
+                detectedCnpj = cnpj;
+                clientId = matchClient(cnpj);
+                if (clientId) break;
+              }
+            } catch { /* ignore */ }
           }
         }
 
-        // 2. Fallback: AI classification
-        let text = '';
-        if (isPdf) {
-          text = await extractPdfText(file);
+        // 2) Regex on full text
+        if (!clientId && pdfText) {
+          const cnpj = extractCnpjFromText(pdfText);
+          if (cnpj) {
+            detectedCnpj = detectedCnpj || cnpj;
+            clientId = matchClient(cnpj);
+          }
         }
 
-        if (!text.trim()) {
-          pendingReview.push({
-            file,
-            extraction: { cnpj: '', company_name: '', reference_month: '', document_type_name: '' },
-            matchedClientId: '',
-            matchedDocTypeId: '',
-            referenceMonth: '',
-          });
-          continue;
+        // 3) AI lean fallback (cnpj_only)
+        if (!clientId && pdfText.trim()) {
+          try {
+            const { data: aiResult } = await supabase.functions.invoke('classify-document', {
+              body: { mode: 'cnpj_only', text: pdfText },
+            });
+            if (aiResult?.cnpj) {
+              detectedCnpj = aiResult.cnpj;
+              clientId = matchClient(aiResult.cnpj);
+            }
+          } catch (e) { console.warn('cnpj_only fallback failed', e); }
         }
 
-        const { data: aiResult, error: aiError } = await supabase.functions.invoke('classify-document', {
-          body: {
-            text,
-            document_types: documentTypes.map(dt => ({ name: dt.name, description: dt.description })),
-          },
-        });
+        // --- Pick document type ---
+        let docTypeId = '';
+        if (allowedTypes.length === 1) {
+          docTypeId = allowedTypes[0].id;
+        } else if (allowedTypes.length > 1) {
+          docTypeId = pickTypeFromText(pdfText);
+          if (!docTypeId && pdfText.trim()) {
+            try {
+              const { data: aiResult } = await supabase.functions.invoke('classify-document', {
+                body: {
+                  mode: 'pick_doctype',
+                  text: pdfText,
+                  document_types: allowedTypes.map(dt => ({ name: dt.name, description: dt.description })),
+                },
+              });
+              if (aiResult?.document_type_name) {
+                const match = allowedTypes.find(dt => dt.name.toLowerCase().trim() === String(aiResult.document_type_name).toLowerCase().trim());
+                if (match) docTypeId = match.id;
+              }
+            } catch (e) { console.warn('pick_doctype fallback failed', e); }
+          }
+        }
 
-        if (aiError) throw new Error(aiError.message || 'Erro na classificação');
-
-        const extraction: AiExtraction = {
-          cnpj: aiResult?.cnpj || '',
-          company_name: aiResult?.company_name || '',
-          reference_month: aiResult?.reference_month || '',
-          document_type_name: aiResult?.document_type_name || '',
-        };
-
-        const matchedClientId = matchClient(extraction.cnpj);
-        const matchedDocTypeId = matchDocType(extraction.document_type_name);
-        const referenceMonth = extraction.reference_month || '';
-
-        if (matchedClientId && matchedDocTypeId && isValidRefMonth(referenceMonth)) {
-          await importDocument(file, matchedClientId, matchedDocTypeId, referenceMonth + '-01');
+        if (clientId && docTypeId) {
+          await importDocument(file, clientId, docTypeId, refMonthIso, ctx.obligationId);
           importedCount++;
         } else {
-          pendingReview.push({ file, extraction, matchedClientId, matchedDocTypeId, referenceMonth });
+          pendingReview.push({
+            file,
+            extraction: { cnpj: detectedCnpj, company_name: '', reference_month: ctx.referenceMonth, document_type_name: docTypeId ? (allowedById.get(docTypeId)?.name || '') : '' },
+            matchedClientId: clientId,
+            matchedDocTypeId: docTypeId,
+            referenceMonth: ctx.referenceMonth,
+          });
         }
       } catch (err: any) {
         toast({ title: `Erro ao analisar ${file.name}`, description: err.message, variant: 'destructive' });
@@ -359,7 +394,7 @@ export default function Documents() {
     } else if (importedCount > 0) {
       toast({ title: `${importedCount} documento(s) importado(s) com sucesso!` });
     }
-  }, [clients, documentTypes]);
+  }, [clients, documentTypes, importContext]);
 
   async function handleReviewConfirm({ file, clientId, docTypeId, referenceMonth }: { file: File; clientId: string; docTypeId: string; referenceMonth: string }) {
     if (!isValidRefMonth(referenceMonth)) {
@@ -368,7 +403,7 @@ export default function Documents() {
     }
     setConfirming(true);
     try {
-      await importDocument(file, clientId, docTypeId, referenceMonth + '-01');
+      await importDocument(file, clientId, docTypeId, referenceMonth + '-01', importContext?.obligationId);
       // Move to next in queue
       const remaining = reviewQueue.slice(1);
       if (remaining.length > 0) {
@@ -415,7 +450,7 @@ export default function Documents() {
     return (completions?.length || 0) >= acts.length;
   }
 
-  async function importDocument(file: File, clientId: string, docTypeId: string, refMonth: string) {
+  async function importDocument(file: File, clientId: string, docTypeId: string, refMonth: string, presetObligationId?: string) {
     const path = `${clientId}/${refMonth}/${docTypeId}/${sanitizeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
     if (uploadError) throw uploadError;
@@ -430,15 +465,17 @@ export default function Documents() {
     } as any).select('id').single();
     if (insertError) throw insertError;
 
-    // Auto-associate obligations
-    const { data: matchingActivities } = await supabase
+    // Auto-associate obligations. When the user pre-selected an obligation, restrict to it.
+    let matchingActivitiesQuery = supabase
       .from('obligation_activities')
       .select('id, obligation_id')
       .eq('type', 'document')
       .eq('document_type_id', docTypeId);
+    if (presetObligationId) matchingActivitiesQuery = matchingActivitiesQuery.eq('obligation_id', presetObligationId);
+    const { data: matchingActivities } = await matchingActivitiesQuery;
 
     let associatedCount = 0;
-    let linkedObligationId: string | null = null;
+    let linkedObligationId: string | null = presetObligationId || null;
 
     if (matchingActivities && matchingActivities.length > 0) {
       const obligationIds = [...new Set(matchingActivities.map(a => a.obligation_id))];
@@ -717,22 +754,26 @@ export default function Documents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Documentos</h1>
-          <p className="text-muted-foreground">Importação inteligente com extração por modelo e IA como fallback</p>
+          <p className="text-muted-foreground">Pré-selecione obrigação e tipo — a IA só identifica a empresa</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={relinkDocuments} disabled={relinking}>
             {relinking ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Revinculando...</> : 'Revincular Documentos'}
           </Button>
-          <label className="cursor-pointer">
-            <input type="file" className="hidden" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple onChange={handleUpload} disabled={analyzing} />
-            <Button asChild disabled={analyzing}>
-              <span>
-                {analyzing && uploadProgress
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando {uploadProgress.current}/{uploadProgress.total}...</>
-                  : <><Upload className="h-4 w-4 mr-2" />Enviar Arquivos</>}
-              </span>
-            </Button>
-          </label>
+          <input
+            id="documents-file-input"
+            type="file"
+            className="hidden"
+            accept=".pdf,.xml,.jpg,.jpeg,.png"
+            multiple
+            onChange={handleUpload}
+            disabled={analyzing}
+          />
+          <Button onClick={() => setSetupOpen(true)} disabled={analyzing}>
+            {analyzing && uploadProgress
+              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisando {uploadProgress.current}/{uploadProgress.total}...</>
+              : <><Upload className="h-4 w-4 mr-2" />Importar Documentos</>}
+          </Button>
         </div>
       </div>
 
@@ -788,6 +829,23 @@ export default function Documents() {
         confirming={confirming}
         queueTotal={reviewQueue.length}
         onSkip={handleSkipReview}
+        lockedReferenceMonth={importContext?.referenceMonth}
+        allowedDocTypeIds={importContext?.allowedDocTypeIds}
+        obligationName={obligations.find(o => o.id === importContext?.obligationId)?.name}
+      />
+
+      <ImportSetupDialog
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        onConfirm={(ctx) => {
+          setImportContext(ctx);
+          setSetupOpen(false);
+          // Open native file picker after context is set
+          setTimeout(() => {
+            const input = document.getElementById('documents-file-input') as HTMLInputElement | null;
+            input?.click();
+          }, 50);
+        }}
       />
     </div>
   );

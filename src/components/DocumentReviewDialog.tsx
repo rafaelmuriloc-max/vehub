@@ -31,12 +31,21 @@ interface Props {
   confirming: boolean;
   queueTotal?: number;
   onSkip?: () => void;
+  lockedReferenceMonth?: string; // YYYY-MM
+  allowedDocTypeIds?: string[];
+  obligationName?: string;
 }
 
-export default function DocumentReviewDialog({ open, onOpenChange, data, documentTypes, clients, onConfirm, confirming, queueTotal, onSkip }: Props) {
+export default function DocumentReviewDialog({ open, onOpenChange, data, documentTypes, clients, onConfirm, confirming, queueTotal, onSkip, lockedReferenceMonth, allowedDocTypeIds, obligationName }: Props) {
   if (!data) return null;
 
   const { file, extraction, matchedClientId, matchedDocTypeId, referenceMonth } = data;
+  const filteredDocTypes = allowedDocTypeIds && allowedDocTypeIds.length > 0
+    ? documentTypes.filter(dt => allowedDocTypeIds.includes(dt.id))
+    : documentTypes;
+  const effectiveRefMonth = lockedReferenceMonth || referenceMonth;
+  const lockType = !!allowedDocTypeIds && allowedDocTypeIds.length === 1;
+  const lockMonth = !!lockedReferenceMonth;
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -44,8 +53,8 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
     onConfirm({
       file,
       clientId: fd.get('clientId') as string,
-      docTypeId: fd.get('docTypeId') as string,
-      referenceMonth: fd.get('referenceMonth') as string,
+      docTypeId: (fd.get('docTypeId') as string) || (lockType ? allowedDocTypeIds![0] : ''),
+      referenceMonth: (fd.get('referenceMonth') as string) || effectiveRefMonth,
     });
   };
 
@@ -71,10 +80,12 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
           <DialogDescription>
             Arquivo: <strong>{file.name}</strong>
             {extraction.company_name && <> — Empresa detectada: <strong>{extraction.company_name}</strong></>}
+            {obligationName && <> — Obrigação: <strong>{obligationName}</strong></>}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!lockType && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Label>Tipo de Documento</Label>
@@ -83,13 +94,14 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
             <Select name="docTypeId" defaultValue={matchedDocTypeId} required>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {documentTypes.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.name}</SelectItem>)}
+                {filteredDocTypes.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.name}</SelectItem>)}
               </SelectContent>
             </Select>
             {extraction.document_type_name && !matchedDocTypeId && (
               <p className="text-xs text-muted-foreground">IA detectou: "{extraction.document_type_name}" (não encontrado no cadastro)</p>
             )}
           </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -107,6 +119,7 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
             )}
           </div>
 
+          {!lockMonth && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Label>Competência</Label>
@@ -117,6 +130,7 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
               <p className="text-xs text-muted-foreground">IA detectou: {extraction.reference_month}</p>
             )}
           </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={confirming}>
