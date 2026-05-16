@@ -37,7 +37,6 @@ const App = () => (
               <Route path="/" element={<Financial />} />
               <Route path="/clients" element={<Clients />} />
               <Route path="/obligations" element={<Obligations />} />
-              <Route path="/invoices" element={<Invoices />} />
               <Route path="/invoices/emit" element={<InvoiceEmit />} />
               <Route path="/fiscal" element={<Fiscal />} />
               <Route path="/integra-contador" element={<IntegraContador />} />
