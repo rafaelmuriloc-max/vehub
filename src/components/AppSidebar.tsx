@@ -13,7 +13,6 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Separator } from '@/components/ui/separator';
 
 const menuItems = [
-  { title: 'Financeiro', icon: DollarSign, path: '/' },
   { title: 'Fiscal', icon: Scale, path: '/fiscal' },
   { title: 'Chat', icon: MessageCircle, path: '/chat' },
   { title: 'E-mail', icon: Mail, path: '/email' },
@@ -36,9 +35,7 @@ export function AppSidebar() {
   const isCadastroActive = cadastroSubItems.some(item => location.pathname === item.path);
   const unreadCount = useUnreadCount();
 
-  const visibleMenuItems = isAdmin
-    ? menuItems
-    : menuItems.filter(i => i.path !== '/');
+  const visibleMenuItems = menuItems;
 
   return (
     <Sidebar
@@ -95,6 +92,18 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">Administração</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={location.pathname === '/'}
+                    onClick={() => navigate('/')}
+                    className="transition-colors duration-150"
+                  >
+                    <DollarSign className="h-4 w-4" />
+                    <span>Financeiro</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               <Collapsible defaultOpen={isCadastroActive} className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>

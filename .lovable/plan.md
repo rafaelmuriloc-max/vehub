@@ -1,23 +1,13 @@
-# Mover "Integra Contador" para dentro de "Fiscal"
+# Mover "Financeiro" para o menu Administração
 
-## Mudanças
-
-### `src/pages/Fiscal.tsx`
-- Estender o estado `view` para `'situacao' | 'notas' | 'integra'`.
-- Adicionar um terceiro botão no canto superior direito: "Integra Contador" (ícone `Plug`), mesmo estilo dos demais.
-- Renderizar `<IntegraContador />` quando `view === 'integra'`.
-- Importar o componente `IntegraContador` de `./IntegraContador`.
-
-### `src/App.tsx`
-- Remover a rota `/integra-contador` e o import correspondente.
+## Mudança
 
 ### `src/components/AppSidebar.tsx`
-- Remover o item "Integra Contador" do `menuItems`.
-- Remover `Plug` do import do `lucide-react` se não for mais usado.
-
-### `src/components/AppLayout.tsx`
-- Remover `/integra-contador` do mapa `pageTitles`.
+- Remover `{ title: 'Financeiro', icon: DollarSign, path: '/' }` de `menuItems`.
+- Dentro do `SidebarGroup` "Administração", adicionar um `SidebarMenuItem` para "Financeiro" (ícone `DollarSign`, path `/`) como item de menu direto — irmão do `Collapsible` "Cadastro".
+- O item respeita o gating de admin: usar `{isAdmin && (...)}` para renderizar apenas para administradores (mesmo critério atual de `visibleMenuItems`).
+- Manter `DollarSign` no import.
 
 ## Observações
-- Nenhuma alteração de backend, schema ou edge functions.
-- Links externos diretos para `/integra-contador` deixarão de funcionar.
+- Rota e permissões inalteradas — apenas a posição visual no sidebar muda.
+- Nada de backend.
