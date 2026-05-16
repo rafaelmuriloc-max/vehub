@@ -142,7 +142,7 @@ export function AppSidebar() {
             <p className="text-xs text-sidebar-foreground/50 truncate">{profile?.job_title || 'Funcionário'}</p>
           </div>
           <button onClick={signOut} className="text-sidebar-foreground/50 hover:text-sidebar-primary transition-colors">
-            <LogOut className="h-4 w-4" />
+            <LogOut className="lucide lucide-log-out h-4 text-amber-600 mx-0 px-0 w-[16px] text-right" />
           </button>
         </div>
       </SidebarFooter>
