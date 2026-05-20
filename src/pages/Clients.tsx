@@ -100,7 +100,6 @@ async function classifyAnexoByAI(mainCnae: string): Promise<string> {
   }
 }
 
-type Client = {
 const TAX_REGIME_LABELS: Record<string, string> = {
   simples_nacional: 'Simples Nacional',
   lucro_presumido: 'Lucro Presumido',
