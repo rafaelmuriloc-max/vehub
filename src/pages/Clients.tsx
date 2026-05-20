@@ -1375,6 +1375,7 @@ export default function Clients() {
                 <TableHead>Código SCI</TableHead>
                 <TableHead>Empresa</TableHead>
                 <TableHead>Documento</TableHead>
+                <TableHead>Regime</TableHead>
                 <TableHead>Contato</TableHead>
                 <TableHead>Valor Mensal</TableHead>
                 <TableHead>Status</TableHead>
@@ -1388,6 +1389,13 @@ export default function Clients() {
                   <TableCell>{c.sci_code || '-'}</TableCell>
                   <TableCell className="font-medium">{c.company_name}</TableCell>
                   <TableCell>{c.document || '-'}</TableCell>
+                  <TableCell>
+                    {c.tax_regime ? (
+                      <Badge variant="outline" className="text-xs">{taxRegimeLabels[c.tax_regime] || c.tax_regime}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>{c.contact_name || '-'}</TableCell>
                   <TableCell>R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge></TableCell>
@@ -1420,7 +1428,7 @@ export default function Clients() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
