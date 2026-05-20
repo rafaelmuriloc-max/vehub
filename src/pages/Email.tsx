@@ -446,12 +446,23 @@ function MessageReader({
   const downloadAttachment = async (att: Attachment) => {
     setDownloadingId(att.id);
     try {
-      const { data, error } = await supabase.functions.invoke('gmail-attachment', {
-        body: { attachmentRowId: att.id },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada');
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-attachment`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ attachmentRowId: att.id, mode: 'bytes' }),
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      window.open(data.url, '_blank');
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch (e: any) {
       toast({ title: 'Erro ao baixar', description: e.message, variant: 'destructive' });
     } finally { setDownloadingId(null); }
