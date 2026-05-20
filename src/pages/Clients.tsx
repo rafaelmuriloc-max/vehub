@@ -1391,7 +1391,7 @@ export default function Clients() {
                   <TableCell>{c.document || '-'}</TableCell>
                   <TableCell>
                     {c.tax_regime ? (
-                      <Badge variant="outline" className="text-xs">{taxRegimeLabels[c.tax_regime] || c.tax_regime}</Badge>
+                      <Badge variant="outline" className="text-xs">{TAX_REGIME_LABELS[c.tax_regime] || c.tax_regime}</Badge>
                     ) : (
                       <span className="text-muted-foreground text-xs">—</span>
                     )}
