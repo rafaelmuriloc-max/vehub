@@ -100,6 +100,13 @@ async function classifyAnexoByAI(mainCnae: string): Promise<string> {
   }
 }
 
+const TAX_REGIME_LABELS: Record<string, string> = {
+  simples_nacional: 'Simples Nacional',
+  lucro_presumido: 'Lucro Presumido',
+  lucro_real: 'Lucro Real',
+  mei: 'MEI',
+};
+
 type Client = {
   id: string; company_name: string; sci_code: string | null; document: string | null; contact_name: string | null;
   contact_email: string | null; contact_phone: string | null; address: string | null;
@@ -1375,6 +1382,7 @@ export default function Clients() {
                 <TableHead>Código SCI</TableHead>
                 <TableHead>Empresa</TableHead>
                 <TableHead>Documento</TableHead>
+                <TableHead>Regime</TableHead>
                 <TableHead>Contato</TableHead>
                 <TableHead>Valor Mensal</TableHead>
                 <TableHead>Status</TableHead>
@@ -1388,6 +1396,13 @@ export default function Clients() {
                   <TableCell>{c.sci_code || '-'}</TableCell>
                   <TableCell className="font-medium">{c.company_name}</TableCell>
                   <TableCell>{c.document || '-'}</TableCell>
+                  <TableCell>
+                    {c.tax_regime ? (
+                      <Badge variant="outline" className="text-xs">{TAX_REGIME_LABELS[c.tax_regime] || c.tax_regime}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>{c.contact_name || '-'}</TableCell>
                   <TableCell>R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge></TableCell>
@@ -1420,7 +1435,7 @@ export default function Clients() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
