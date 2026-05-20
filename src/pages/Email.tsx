@@ -466,10 +466,63 @@ function MessageReader({
       });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
+      const typedBlob = att.mime_type ? blob.slice(0, blob.size, att.mime_type) : blob;
+      const blobUrl = URL.createObjectURL(typedBlob);
+      const safeName = att.filename.replace(/[<>&"']/g, '');
+      const mime = att.mime_type || 'application/octet-stream';
+
+      // Try to render viewer page inside the already-opened tab.
+      // Avoid navigating the tab to a blob: URL (blocked by some extensions / ERR_BLOCKED_BY_CLIENT).
+      let rendered = false;
       if (win && !win.closed) {
-        win.location.replace(blobUrl);
-      } else {
+        try {
+          const doc = win.document;
+          doc.open();
+          doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${safeName}</title>
+            <style>
+              html,body{margin:0;height:100%;background:#1a1a1a;color:#eee;font-family:sans-serif}
+              header{display:flex;align-items:center;gap:12px;padding:8px 16px;background:#222;border-bottom:1px solid #333}
+              header .name{flex:1;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+              header a{background:#E8710A;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px}
+              .viewer{position:absolute;top:48px;left:0;right:0;bottom:0}
+              iframe,embed,img{width:100%;height:100%;border:0;background:#fff}
+              img{object-fit:contain;background:#1a1a1a}
+              .fallback{padding:32px;text-align:center}
+            </style></head><body>
+            <header>
+              <div class="name">${safeName}</div>
+              <a id="dl" href="#" download="${safeName}">Baixar</a>
+            </header>
+            <div class="viewer" id="viewer"></div>
+            </body></html>`);
+          doc.close();
+          const dlLink = doc.getElementById('dl') as HTMLAnchorElement | null;
+          if (dlLink) {
+            dlLink.href = blobUrl;
+            (dlLink as any).download = safeName;
+          }
+          const viewer = doc.getElementById('viewer');
+          if (viewer) {
+            if (mime.startsWith('image/')) {
+              const img = doc.createElement('img');
+              img.src = blobUrl;
+              viewer.appendChild(img);
+            } else if (mime === 'application/pdf' || mime.startsWith('text/') || mime.startsWith('video/') || mime.startsWith('audio/')) {
+              const iframe = doc.createElement('iframe');
+              iframe.src = blobUrl;
+              viewer.appendChild(iframe);
+            } else {
+              viewer.innerHTML = `<div class="fallback">Este tipo de arquivo não pode ser visualizado no navegador.<br><br>Use o botão <strong>Baixar</strong> acima.</div>`;
+            }
+          }
+          rendered = true;
+        } catch (e) {
+          console.warn('viewer render failed', e);
+        }
+      }
+
+      if (!rendered) {
+        if (win && !win.closed) win.close();
         const a = document.createElement('a');
         a.href = blobUrl;
         a.download = att.filename;
@@ -478,7 +531,7 @@ function MessageReader({
         a.click();
         a.remove();
       }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5 * 60_000);
     } catch (e: any) {
       if (win && !win.closed) win.close();
       toast({ title: 'Erro ao baixar', description: e.message, variant: 'destructive' });
