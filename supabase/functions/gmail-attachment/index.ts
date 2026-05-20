@@ -30,7 +30,8 @@ Deno.serve(async (req) => {
     if (!userData?.user) return new Response("unauthorized", { status: 401, headers: corsHeaders });
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { attachmentRowId } = await req.json();
+    const body = await req.json();
+    const { attachmentRowId, mode } = body as { attachmentRowId: string; mode?: "bytes" | "url" };
     const { data: att, error } = await supabase
       .from("email_attachments")
       .select("id, message_id, filename, mime_type, gmail_attachment_id, storage_path, email_messages(gmail_message_id)")
@@ -58,6 +59,21 @@ Deno.serve(async (req) => {
       });
       if (upErr) throw upErr;
       await supabase.from("email_attachments").update({ storage_path: storagePath }).eq("id", att.id);
+    }
+
+    if (mode === "bytes") {
+      const { data: blob, error: dlErr } = await supabase.storage.from("email-attachments").download(storagePath);
+      if (dlErr || !blob) throw (dlErr || new Error("download failed"));
+      const ab = await blob.arrayBuffer();
+      const safeName = sanitize(att.filename);
+      return new Response(ab, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": att.mime_type || "application/octet-stream",
+          "Content-Disposition": `inline; filename="${safeName}"`,
+          "Cache-Control": "private, max-age=60",
+        },
+      });
     }
 
     const { data: signed, error: signErr } = await supabase.storage.from("email-attachments").createSignedUrl(storagePath, 300);
