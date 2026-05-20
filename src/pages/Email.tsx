@@ -15,7 +15,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Folder = 'inbox' | 'starred' | 'sent' | 'archived' | 'trash';
+type Folder = 'inbox' | 'inbox_fiscal' | 'inbox_pessoal' | 'starred' | 'sent' | 'archived' | 'trash';
+
+const FISCAL_EMAIL = 'fiscal.velocita@gmail.com';
+const PESSOAL_EMAIL = 'pessoal.velocita@gmail.com';
 
 interface EmailMessage {
   id: string;
@@ -57,6 +60,11 @@ const FOLDERS: { id: Folder; label: string; icon: any }[] = [
   { id: 'trash', label: 'Lixeira', icon: Trash2 },
 ];
 
+const INBOX_SUBFOLDERS: { id: Folder; label: string; email: string }[] = [
+  { id: 'inbox_fiscal', label: 'Fiscal', email: FISCAL_EMAIL },
+  { id: 'inbox_pessoal', label: 'Pessoal', email: PESSOAL_EMAIL },
+];
+
 const SYSTEM_LABELS = new Set([
   'INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'UNREAD', 'STARRED', 'IMPORTANT',
   'CATEGORY_PERSONAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL',
@@ -83,14 +91,26 @@ export default function Email() {
   const [syncing, setSyncing] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<Partial<ComposeInit>>({});
-  const [counts, setCounts] = useState<{ unread: number }>({ unread: 0 });
+  const [counts, setCounts] = useState<{ unread: number; fiscal: number; pessoal: number }>({ unread: 0, fiscal: 0, pessoal: 0 });
 
   const load = useCallback(async () => {
     setLoading(true);
     let q = supabase.from('email_messages').select('*').order('received_at', { ascending: false }).limit(200);
     switch (folder) {
       case 'inbox':
-        q = q.eq('is_trashed', false).eq('is_archived', false).eq('is_sent', false);
+        q = q.eq('is_trashed', false).eq('is_archived', false).eq('is_sent', false)
+          .not('to_emails', 'cs', `{${FISCAL_EMAIL}}`)
+          .not('cc_emails', 'cs', `{${FISCAL_EMAIL}}`)
+          .not('to_emails', 'cs', `{${PESSOAL_EMAIL}}`)
+          .not('cc_emails', 'cs', `{${PESSOAL_EMAIL}}`);
+        break;
+      case 'inbox_fiscal':
+        q = q.eq('is_trashed', false).eq('is_archived', false).eq('is_sent', false)
+          .or(`to_emails.cs.{${FISCAL_EMAIL}},cc_emails.cs.{${FISCAL_EMAIL}}`);
+        break;
+      case 'inbox_pessoal':
+        q = q.eq('is_trashed', false).eq('is_archived', false).eq('is_sent', false)
+          .or(`to_emails.cs.{${PESSOAL_EMAIL}},cc_emails.cs.{${PESSOAL_EMAIL}}`);
         break;
       case 'starred':
         q = q.eq('is_starred', true).eq('is_trashed', false);
@@ -115,11 +135,24 @@ export default function Email() {
   }, [folder, toast]);
 
   const loadUnread = useCallback(async () => {
-    const { count } = await supabase
+    const base = () => supabase
       .from('email_messages')
       .select('id', { count: 'exact', head: true })
       .eq('is_read', false).eq('is_trashed', false).eq('is_archived', false).eq('is_sent', false);
-    setCounts({ unread: count || 0 });
+    const [inboxRes, fiscalRes, pessoalRes] = await Promise.all([
+      base()
+        .not('to_emails', 'cs', `{${FISCAL_EMAIL}}`)
+        .not('cc_emails', 'cs', `{${FISCAL_EMAIL}}`)
+        .not('to_emails', 'cs', `{${PESSOAL_EMAIL}}`)
+        .not('cc_emails', 'cs', `{${PESSOAL_EMAIL}}`),
+      base().or(`to_emails.cs.{${FISCAL_EMAIL}},cc_emails.cs.{${FISCAL_EMAIL}}`),
+      base().or(`to_emails.cs.{${PESSOAL_EMAIL}},cc_emails.cs.{${PESSOAL_EMAIL}}`),
+    ]);
+    setCounts({
+      unread: inboxRes.count || 0,
+      fiscal: fiscalRes.count || 0,
+      pessoal: pessoalRes.count || 0,
+    });
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -218,8 +251,8 @@ export default function Email() {
             const Icon = f.icon;
             const active = folder === f.id;
             return (
+              <div key={f.id}>
               <button
-                key={f.id}
                 onClick={() => { setFolder(f.id); setSelectedId(null); }}
                 className={cn(
                   'w-full flex items-center gap-3 pl-6 pr-3 py-2 rounded-r-full text-sm transition-colors',
@@ -234,6 +267,27 @@ export default function Email() {
                   <span className="text-xs font-semibold">{counts.unread}</span>
                 )}
               </button>
+              {f.id === 'inbox' && INBOX_SUBFOLDERS.map(sf => {
+                const sfActive = folder === sf.id;
+                const unread = sf.id === 'inbox_fiscal' ? counts.fiscal : counts.pessoal;
+                return (
+                  <button
+                    key={sf.id}
+                    onClick={() => { setFolder(sf.id); setSelectedId(null); }}
+                    className={cn(
+                      'w-full flex items-center gap-3 pl-12 pr-3 py-2 rounded-r-full text-sm transition-colors',
+                      sfActive
+                        ? 'bg-primary/15 text-primary font-semibold'
+                        : 'hover:bg-muted text-foreground/80',
+                    )}
+                  >
+                    <Tag className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-left truncate">{sf.label}</span>
+                    {unread > 0 && <span className="text-xs font-semibold">{unread}</span>}
+                  </button>
+                );
+              })}
+              </div>
             );
           })}
 

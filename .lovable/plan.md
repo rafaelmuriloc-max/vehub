@@ -1,28 +1,22 @@
-## Problema
+## Subpastas na Caixa de entrada
 
-O erro `new row violates row-level security policy` ao importar documentos é causado pela política RLS da tabela `public.documents`, que hoje permite `INSERT`/`UPDATE`/`DELETE` apenas para usuários com papel `admin`. Funcionários (papel `employee`), que são quem mais importa documentos no dia a dia, ficam bloqueados.
+Adicionar duas subpastas dentro de "Caixa de entrada", filtrando pelos destinatários `fiscal.velocita@gmail.com` e `pessoal.velocita@gmail.com`.
 
-Políticas atuais:
-- INSERT: `has_role(auth.uid(), 'admin')`
-- UPDATE: `has_role(auth.uid(), 'admin')`
-- DELETE: `has_role(auth.uid(), 'admin')`
-- SELECT: todos autenticados
+### Comportamento
+- **Caixa de entrada** (raiz) → mostra apenas e-mails que **não** são endereçados a `fiscal.velocita@gmail.com` nem `pessoal.velocita@gmail.com` (em `to_emails` ou `cc_emails`).
+- **Fiscal** → e-mails cujo `to_emails`/`cc_emails` contenha `fiscal.velocita@gmail.com`.
+- **Pessoal** → e-mails cujo `to_emails`/`cc_emails` contenha `pessoal.velocita@gmail.com`.
+- Cada subpasta exibe seu próprio contador de não lidos; o contador da inbox raiz também exclui os e-mails que pertencem às subpastas.
+- Subpastas aparecem indentadas abaixo de "Caixa de entrada" na sidebar.
 
-Storage do bucket `documents` já permite upload para qualquer autenticado — então o upload do arquivo funciona, mas o `INSERT` na tabela falha logo em seguida (foi isso que apareceu no toast do print).
+### Implementação
+- Apenas frontend, em `src/pages/Email.tsx`.
+- Estender `Folder` com `inbox_fiscal` e `inbox_pessoal`.
+- Em `load()`:
+  - `inbox` → adicionar filtro `.not('to_emails', 'cs', '{fiscal.velocita@gmail.com}')` e idem para pessoal (e o mesmo em `cc_emails`).
+  - `inbox_fiscal` / `inbox_pessoal` → `.or('to_emails.cs.{email},cc_emails.cs.{email}')`.
+- `loadUnread()` passa a calcular 3 contadores (inbox, fiscal, pessoal) com os mesmos filtros.
+- Renderizar as duas subpastas com ícone (`Tag`) indentadas, mantendo estilo atual.
 
-## Correção
-
-Migration ajustando as políticas da tabela `public.documents`:
-
-1. **INSERT** — permitir qualquer usuário autenticado, exigindo apenas que `uploaded_by = auth.uid()` (garante rastreabilidade).
-2. **UPDATE** — permitir admin OU o próprio `uploaded_by` (necessário para o passo de vinculação que grava `linked_obligation_id` logo após o insert).
-3. **DELETE** — manter restrito a admin.
-4. **SELECT** — manter como está.
-
-Isso libera tanto o fluxo novo (`ImportSetupDialog` → `importDocument`) quanto a re-vinculação subsequente, sem afetar a leitura nem abrir exclusão para não-admins.
-
-## Out of scope
-
-- Não mexer no bucket de Storage (já está OK).
-- Não alterar lógica de `importDocument` / `ImportSetupDialog` — o código está correto, só falta permissão.
-- Não alterar políticas de outras tabelas.
+### Sem mudanças
+- Sem migration, sem edge function, sem aplicação de labels reais no Gmail (apenas filtro visual no app).
