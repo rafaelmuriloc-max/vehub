@@ -1,21 +1,47 @@
-## Plano
+## Objetivo
 
-O bloqueio continua porque o Chrome/extensão está bloqueando a navegação direta para `blob:` em uma nova aba. A requisição do anexo está funcionando (`gmail-attachment` retorna 200 e entrega o PDF), então a correção deve evitar abrir `blob:` diretamente.
+Hoje cada usuário tem apenas um departamento (`profiles.department_id`). Vamos permitir vincular o usuário a **vários departamentos** ou a **todos** (acesso irrestrito).
 
-### 1. Trocar a estratégia de abertura no frontend
-- Em `src/pages/Email.tsx`, alterar `downloadAttachment` para não redirecionar a aba para `blobUrl`.
-- Em vez disso, baixar o arquivo como bytes e criar uma página HTML intermediária na aba já aberta.
-- Essa página usará um `<iframe>`/`<embed>` apontando para o blob internamente, mantendo a URL da aba como `about:blank`/documento criado, não `blob:`.
-- Adicionar botão/estado de fallback para download quando o navegador não conseguir visualizar o arquivo inline.
+## Regra de negócio
 
-### 2. Fallback seguro para download
-- Se a janela não abrir ou se o tipo de arquivo não for visualizável, acionar download por `<a download>`.
-- Manter toast de erro caso a função retorne falha.
-- Manter `URL.revokeObjectURL` após tempo suficiente para não invalidar a visualização rapidamente.
+- Lista vazia de departamentos = **acesso a todos** (mantém o comportamento atual de `department_id NULL`).
+- Lista com 1+ departamentos = acesso somente àqueles.
+- Admin continua vendo tudo, independente da vinculação.
 
-### 3. Sem alterações no backend
-- Não alterar a Edge Function `gmail-attachment`, pois ela já está retornando corretamente os bytes do anexo.
+## Banco de dados (migration)
 
-### Resultado esperado
-- Clicar no anexo abre uma aba visualizável sem cair na tela `ERR_BLOCKED_BY_CLIENT`.
-- Se o navegador/extensão bloquear a visualização inline, o usuário ainda recebe o arquivo por download.
+1. Nova tabela `profile_departments`:
+   - `user_id uuid` + `department_id uuid` (PK composta)
+   - RLS: SELECT para autenticados; INSERT/UPDATE/DELETE só para admin.
+2. Backfill: copiar `profiles.department_id` atual (quando não-nulo) para `profile_departments`.
+3. Atualizar a função `user_can_access_department(_user_id, _department_id)`:
+   - Admin → true
+   - `_department_id` nulo → true
+   - Sem nenhuma linha em `profile_departments` para o usuário → true (= "todos")
+   - Caso contrário → true só se existir linha `(user_id, department_id)`.
+4. Manter `profiles.department_id` por compatibilidade como "departamento principal" (opcional, usado em locais que ainda dependem dele, ex.: `TaskRequestForm`, `ImportSetupDialog`, round-robin do `chat-triage-agent`). Será preenchido com o primeiro departamento selecionado (ou null para "todos").
+
+## UI – `src/components/settings/UsersTab.tsx`
+
+- Substituir o `Select` único de "Departamento" por um seletor múltiplo (popover + checkboxes) com:
+  - Checkbox "Todos os departamentos" (limpa a seleção e desabilita os demais).
+  - Lista de departamentos com checkbox.
+- Na tabela de usuários, coluna "Departamento" passa a mostrar:
+  - "Todos" se vazio
+  - Nome único se 1
+  - "Fiscal, Contábil +2" se vários (com tooltip listando todos).
+- Carregar `profile_departments` no `fetchData` e gravar diff (insert/delete) ao salvar (edit) ou após criar (create).
+
+## Edge function – `supabase/functions/manage-user/index.ts`
+
+- Aceitar `department_ids: string[]` (além de manter `department_id` por compat).
+- Em `create`/`update`: substituir as linhas de `profile_departments` do usuário pelo novo conjunto. Atualizar `profiles.department_id` com o primeiro item (ou null).
+
+## Impacto em código existente
+
+Sem mudanças funcionais necessárias nos componentes que leem `profiles.department_id` (Tasks, ImportSetup, triage round-robin). Eles continuam funcionando com o "departamento principal". Apenas a RLS via `user_can_access_department` passa a respeitar a lista completa.
+
+## Fora de escopo
+
+- Não mexer no fluxo de triagem da Gisele agora (round-robin continua usando `department_id` principal).
+- Não mexer em outras telas além de Configurações → Usuários.
