@@ -101,6 +101,14 @@ async function classifyAnexoByAI(mainCnae: string): Promise<string> {
 }
 
 type Client = {
+const TAX_REGIME_LABELS: Record<string, string> = {
+  simples_nacional: 'Simples Nacional',
+  lucro_presumido: 'Lucro Presumido',
+  lucro_real: 'Lucro Real',
+  mei: 'MEI',
+};
+
+type Client = {
   id: string; company_name: string; sci_code: string | null; document: string | null; contact_name: string | null;
   contact_email: string | null; contact_phone: string | null; address: string | null;
   status: 'active' | 'inactive' | 'churned'; monthly_value: number; start_date: string | null;
