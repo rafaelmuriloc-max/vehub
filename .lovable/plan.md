@@ -1,16 +1,13 @@
-## Abrir anexos via blob URL (evitar ERR_BLOCKED_BY_CLIENT)
+## Corrigir aba bloqueada ao abrir anexo
 
-### Backend — `supabase/functions/gmail-attachment/index.ts`
-- Aceitar `mode: 'bytes'` no body.
-- Quando `mode === 'bytes'`: baixar do bucket `email-attachments` via `storage.download(path)` e retornar os bytes com `Content-Type` do anexo e `Content-Disposition: inline; filename="..."`.
-- Fora desse modo, manter o comportamento atual (JSON com `signedUrl`).
+**Causa:** `window.open(blobUrl)` é chamado depois de `await fetch(...)`, então o navegador perde o gesto do usuário e bloqueia o pop-up.
 
 ### Frontend — `src/pages/Email.tsx` (`downloadAttachment`)
-- Substituir `supabase.functions.invoke` + `window.open(signedUrl)` por:
-  - `fetch` direto a `${VITE_SUPABASE_URL}/functions/v1/gmail-attachment` com `Authorization: Bearer <access_token>` (da sessão) e body `{ attachmentRowId, mode: 'bytes' }`.
-  - Ler como `blob`, criar `URL.createObjectURL(blob)` e `window.open(blobUrl, '_blank')`.
-  - `setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)`.
-- Aba nova passa a usar `blob:https://vehub.lovable.app/...`, que adblockers não bloqueiam.
+- Abrir a aba **antes** de qualquer `await`: `const win = window.open('about:blank', '_blank')`.
+- Escrever um "Carregando..." no `win.document` para feedback.
+- Após obter o blob, fazer `win.location.replace(blobUrl)`.
+- Se `win` for `null` (pop-up bloqueado pelo usuário), fallback: criar `<a href={blobUrl} download={filename}>`, anexar ao DOM, `.click()` e remover — força download direto.
+- Manter `URL.revokeObjectURL(blobUrl)` após ~60s.
 
 ### Sem mudanças
-- Sem migration, sem alterações no bucket ou em `email_attachments`.
+- Edge function `gmail-attachment` permanece como está (já serve bytes).

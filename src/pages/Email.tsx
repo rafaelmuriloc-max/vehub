@@ -445,6 +445,12 @@ function MessageReader({
 
   const downloadAttachment = async (att: Attachment) => {
     setDownloadingId(att.id);
+    const win = window.open('about:blank', '_blank');
+    if (win) {
+      try {
+        win.document.write('<title>Carregando anexo...</title><body style="font-family:sans-serif;padding:24px;color:#555">Carregando anexo...</body>');
+      } catch {}
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
@@ -461,9 +467,20 @@ function MessageReader({
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      window.open(blobUrl, '_blank');
+      if (win && !win.closed) {
+        win.location.replace(blobUrl);
+      } else {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = att.filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch (e: any) {
+      if (win && !win.closed) win.close();
       toast({ title: 'Erro ao baixar', description: e.message, variant: 'destructive' });
     } finally { setDownloadingId(null); }
   };
