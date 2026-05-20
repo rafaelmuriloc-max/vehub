@@ -686,7 +686,7 @@ function CalendarMain() {
         }
 
         const cards = [
-          { label: 'A Fazer', value: todo, icon: ListChecks, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+          { label: 'A Fazer', value: todo, icon: ListChecks, color: 'text-white', bg: 'bg-red-50 dark:bg-red-950/30 text-[#fefbfb]', textColor: 'text-white' },
           { label: 'Após Início', value: afterAlert, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/30' },
           { label: 'Após Meta', value: afterTarget, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/30' },
           { label: 'Atrasadas', value: overdue, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/30' },
@@ -699,7 +699,7 @@ function CalendarMain() {
               <div key={c.label} className={`rounded-xl border p-4 ${c.bg}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <c.icon className={`h-4 w-4 ${c.color}`} />
-                  <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
+                  <span className={`text-xs font-medium text-muted-foreground ${c.textColor || ''}`}>{c.label}</span>
                 </div>
                 <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
                 {c.sub && <p className="text-[10px] text-muted-foreground mt-1">{c.sub}</p>}
