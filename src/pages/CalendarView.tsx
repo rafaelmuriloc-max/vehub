@@ -685,24 +685,49 @@ function CalendarMain() {
           }
         }
 
+        const doneTotal = doneOnTime + doneLate;
+        const grandTotal = todo + afterAlert + afterTarget + overdue + doneTotal;
+        const pct = (v: number) => grandTotal > 0 ? Math.round((v / grandTotal) * 100) : 0;
         const cards = [
-          { label: 'A Fazer', value: todo, icon: ListChecks, color: 'text-white', bg: 'bg-red-50 dark:bg-red-950/30 text-[#fefbfb]', textColor: 'text-white' },
-          { label: 'Após Início', value: afterAlert, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/30' },
-          { label: 'Após Meta', value: afterTarget, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/30' },
-          { label: 'Atrasadas', value: overdue, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/30' },
-          { label: 'Concluídas', value: doneOnTime + doneLate, icon: CheckSquare, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950/30', sub: `${doneOnTime} no prazo / ${doneLate} fora` },
+          { label: 'A Fazer', value: todo, icon: ListChecks, sub: todo === 0 ? 'Nenhuma pendência' : 'Aguardando início', pct: pct(todo),
+            bg: 'bg-blue-50/60 dark:bg-blue-950/20', border: 'border-blue-100 dark:border-blue-900/40',
+            iconBg: 'bg-blue-600', labelText: 'text-blue-700 dark:text-blue-300', valueText: 'text-blue-900 dark:text-blue-100',
+            subText: 'text-blue-600/70 dark:text-blue-300/60', track: 'bg-blue-200/50 dark:bg-blue-900/40', bar: 'bg-blue-600' },
+          { label: 'Após Início', value: afterAlert, icon: Clock, sub: afterAlert === 0 ? 'Nenhuma pendência' : 'Em andamento', pct: pct(afterAlert),
+            bg: 'bg-amber-50/60 dark:bg-amber-950/20', border: 'border-amber-100 dark:border-amber-900/40',
+            iconBg: 'bg-amber-500', labelText: 'text-amber-700 dark:text-amber-300', valueText: 'text-amber-900 dark:text-amber-100',
+            subText: 'text-amber-600/70 dark:text-amber-300/60', track: 'bg-amber-200/50 dark:bg-amber-900/40', bar: 'bg-amber-500' },
+          { label: 'Após Meta', value: afterTarget, icon: AlertTriangle, sub: afterTarget === 0 ? 'Sem alertas' : 'Requer atenção', pct: pct(afterTarget),
+            bg: 'bg-orange-50/60 dark:bg-orange-950/20', border: 'border-orange-100 dark:border-orange-900/40',
+            iconBg: 'bg-orange-500', labelText: 'text-orange-700 dark:text-orange-300', valueText: 'text-orange-900 dark:text-orange-100',
+            subText: 'text-orange-600/70 dark:text-orange-300/60', track: 'bg-orange-200/50 dark:bg-orange-900/40', bar: 'bg-orange-500' },
+          { label: 'Atrasadas', value: overdue, icon: AlertTriangle, sub: overdue === 0 ? 'Tudo em dia' : 'Crítico', pct: pct(overdue),
+            bg: 'bg-red-50/60 dark:bg-red-950/20', border: 'border-red-100 dark:border-red-900/40',
+            iconBg: 'bg-red-600', labelText: 'text-red-700 dark:text-red-300', valueText: 'text-red-900 dark:text-red-100',
+            subText: 'text-red-600/70 dark:text-red-300/60', track: 'bg-red-200/50 dark:bg-red-900/40', bar: 'bg-red-600' },
+          { label: 'Concluídas', value: doneTotal, icon: CheckSquare, sub: `${doneOnTime} no prazo • ${doneLate} fora`, pct: pct(doneTotal),
+            bg: 'bg-emerald-50/60 dark:bg-emerald-950/20', border: 'border-emerald-100 dark:border-emerald-900/40',
+            iconBg: 'bg-emerald-600', labelText: 'text-emerald-700 dark:text-emerald-300', valueText: 'text-emerald-900 dark:text-emerald-100',
+            subText: 'text-emerald-600/70 dark:text-emerald-300/60', track: 'bg-emerald-200/50 dark:bg-emerald-900/40', bar: 'bg-emerald-600' },
         ];
 
         return (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {cards.map(c => (
-              <div key={c.label} className={`rounded-xl border p-4 ${c.bg}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <c.icon className={`h-4 w-4 ${c.color}`} />
-                  <span className={`text-xs font-medium text-muted-foreground ${c.textColor || ''}`}>{c.label}</span>
+              <div key={c.label} className={`relative rounded-2xl border p-5 flex flex-col transition-all hover:shadow-lg hover:-translate-y-0.5 ${c.bg} ${c.border}`}>
+                <div className="flex items-start gap-3 mb-3">
+                  <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center text-white shadow-md ${c.iconBg}`}>
+                    <c.icon className="h-6 w-6" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className={`font-semibold text-xs sm:text-sm tracking-wide ${c.labelText}`}>{c.label}</span>
+                    <span className={`text-2xl sm:text-3xl font-bold leading-tight ${c.valueText}`}>{c.value}</span>
+                  </div>
                 </div>
-                <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
-                {c.sub && <p className="text-[10px] text-muted-foreground mt-1">{c.sub}</p>}
+                <p className={`text-[11px] font-medium mb-3 mt-auto truncate ${c.subText}`}>{c.sub}</p>
+                <div className={`w-full h-1.5 rounded-full overflow-hidden ${c.track}`}>
+                  <div className={`${c.bar} h-full rounded-full transition-all`} style={{ width: `${c.pct}%` }} />
+                </div>
               </div>
             ))}
           </div>
