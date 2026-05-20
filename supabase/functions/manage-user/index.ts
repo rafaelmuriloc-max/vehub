@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     const { action } = body;
 
     if (action === "create" || action === "invite") {
-      const { email, password, full_name, job_title, department_id, role, tag_color } = body;
+      const { email, password, full_name, job_title, department_id, department_ids, role, tag_color } = body;
       if (!email || !password) {
         return new Response(JSON.stringify({ error: "Email e senha são obrigatórios" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -62,13 +62,22 @@ Deno.serve(async (req) => {
 
       const userId = created.user.id;
 
+      const deptList: string[] = Array.isArray(department_ids)
+        ? department_ids.filter((x: unknown) => typeof x === "string" && x.length > 0)
+        : (department_id ? [department_id] : []);
+      const primaryDept = deptList[0] ?? null;
+
       // Update profile (created by trigger handle_new_user)
-      if (job_title || department_id || tag_color !== undefined) {
-        await adminClient.from("profiles").update({
-          job_title: job_title || null,
-          department_id: department_id || null,
-          ...(tag_color !== undefined ? { tag_color: tag_color || null } : {}),
-        }).eq("user_id", userId);
+      await adminClient.from("profiles").update({
+        job_title: job_title || null,
+        department_id: primaryDept,
+        ...(tag_color !== undefined ? { tag_color: tag_color || null } : {}),
+      }).eq("user_id", userId);
+
+      if (deptList.length > 0) {
+        await adminClient.from("profile_departments").insert(
+          deptList.map((d) => ({ user_id: userId, department_id: d }))
+        );
       }
 
       // Update role if admin
@@ -80,18 +89,38 @@ Deno.serve(async (req) => {
     }
 
     if (action === "update") {
-      const { user_id, full_name, job_title, department_id, role, tag_color } = body;
+      const { user_id, full_name, job_title, department_id, department_ids, role, tag_color } = body;
       if (!user_id) {
         return new Response(JSON.stringify({ error: "user_id is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       const profileUpdate: Record<string, unknown> = {};
       if (full_name !== undefined) profileUpdate.full_name = full_name || null;
       if (job_title !== undefined) profileUpdate.job_title = job_title || null;
-      if (department_id !== undefined) profileUpdate.department_id = department_id || null;
       if (tag_color !== undefined) profileUpdate.tag_color = tag_color || null;
+
+      let deptList: string[] | null = null;
+      if (Array.isArray(department_ids)) {
+        deptList = department_ids.filter((x: unknown) => typeof x === "string" && x.length > 0);
+      } else if (department_id !== undefined) {
+        deptList = department_id ? [department_id] : [];
+      }
+      if (deptList !== null) {
+        profileUpdate.department_id = deptList[0] ?? null;
+      }
+
       if (Object.keys(profileUpdate).length > 0) {
         await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
       }
+
+      if (deptList !== null) {
+        await adminClient.from("profile_departments").delete().eq("user_id", user_id);
+        if (deptList.length > 0) {
+          await adminClient.from("profile_departments").insert(
+            deptList.map((d) => ({ user_id, department_id: d }))
+          );
+        }
+      }
+
       if (role === "admin" || role === "employee") {
         await adminClient.from("user_roles").update({ role }).eq("user_id", user_id);
       }
