@@ -19,6 +19,19 @@ type Modalidade = {
   origem: 'RFB' | 'PGFN';
 };
 
+// Mapeia o serviço de pedidos (PEDIDOSPARC*) para os serviços de
+// "parcelas para impressão" e "emissão de DAS" da mesma modalidade.
+const PARCELAS_SERVICES: Record<string, { idSistema: string; parcelasService: string; emitirService: string } | undefined> = {
+  PEDIDOSPARC163: { idSistema: 'PARCSN',      parcelasService: 'PARCELASPARAIMPRESSAO164', emitirService: 'EMITIRDAS166' },
+  PEDIDOSPARC173: { idSistema: 'PARCSN-ESP',  parcelasService: 'PARCELASPARAIMPRESSAO174', emitirService: 'EMITIRDAS176' },
+  PEDIDOSPARC183: { idSistema: 'PERTSN',      parcelasService: 'PARCELASPARAIMPRESSAO184', emitirService: 'EMITIRDAS186' },
+  PEDIDOSPARC193: { idSistema: 'RELPSN',      parcelasService: 'PARCELASPARAIMPRESSAO194', emitirService: 'EMITIRDAS196' },
+  PEDIDOSPARC203: { idSistema: 'PARCMEI',     parcelasService: 'PARCELASPARAIMPRESSAO204', emitirService: 'EMITIRDAS206' },
+  PEDIDOSPARC213: { idSistema: 'PARCMEI-ESP', parcelasService: 'PARCELASPARAIMPRESSAO214', emitirService: 'EMITIRDAS216' },
+  PEDIDOSPARC223: { idSistema: 'PERTMEI',     parcelasService: 'PARCELASPARAIMPRESSAO224', emitirService: 'EMITIRDAS226' },
+  PEDIDOSPARC233: { idSistema: 'RELPMEI',     parcelasService: 'PARCELASPARAIMPRESSAO234', emitirService: 'EMITIRDAS236' },
+};
+
 const MODALIDADES: Modalidade[] = [
   // Receita Federal — Simples Nacional / MEI
   { idSistema: 'PARCSN', idServico: 'PEDIDOSPARC163', label: 'RFB - Ordinário SN', origem: 'RFB' },
