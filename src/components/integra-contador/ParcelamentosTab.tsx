@@ -22,15 +22,17 @@ type Modalidade = {
 // Mapeia o serviço de pedidos (PEDIDOSPARC*) para os serviços de
 // "parcelas para impressão" e "emissão de DAS" da mesma modalidade.
 const PARCELAS_SERVICES: Record<string, { idSistema: string; parcelasService: string; emitirService: string } | undefined> = {
-  PEDIDOSPARC163: { idSistema: 'PARCSN',      parcelasService: 'PARCELASPARAIMPRESSAO164', emitirService: 'EMITIRDAS166' },
-  PEDIDOSPARC173: { idSistema: 'PARCSN-ESP',  parcelasService: 'PARCELASPARAIMPRESSAO174', emitirService: 'EMITIRDAS176' },
-  PEDIDOSPARC183: { idSistema: 'PERTSN',      parcelasService: 'PARCELASPARAIMPRESSAO184', emitirService: 'EMITIRDAS186' },
-  PEDIDOSPARC193: { idSistema: 'RELPSN',      parcelasService: 'PARCELASPARAIMPRESSAO194', emitirService: 'EMITIRDAS196' },
-  PEDIDOSPARC203: { idSistema: 'PARCMEI',     parcelasService: 'PARCELASPARAIMPRESSAO204', emitirService: 'EMITIRDAS206' },
-  PEDIDOSPARC213: { idSistema: 'PARCMEI-ESP', parcelasService: 'PARCELASPARAIMPRESSAO214', emitirService: 'EMITIRDAS216' },
-  PEDIDOSPARC223: { idSistema: 'PERTMEI',     parcelasService: 'PARCELASPARAIMPRESSAO224', emitirService: 'EMITIRDAS226' },
-  PEDIDOSPARC233: { idSistema: 'RELPMEI',     parcelasService: 'PARCELASPARAIMPRESSAO234', emitirService: 'EMITIRDAS236' },
+  PEDIDOSPARC163: { idSistema: 'PARCSN',      parcelasService: 'PARCELASPARAGERAR162', emitirService: 'GERARDAS161' },
+  PEDIDOSPARC173: { idSistema: 'PARCSN-ESP',  parcelasService: 'PARCELASPARAGERAR172', emitirService: 'GERARDAS171' },
+  PEDIDOSPARC183: { idSistema: 'PERTSN',      parcelasService: 'PARCELASPARAGERAR182', emitirService: 'GERARDAS181' },
+  PEDIDOSPARC193: { idSistema: 'RELPSN',      parcelasService: 'PARCELASPARAGERAR192', emitirService: 'GERARDAS191' },
+  PEDIDOSPARC203: { idSistema: 'PARCMEI',     parcelasService: 'PARCELASPARAGERAR202', emitirService: 'GERARDAS201' },
+  PEDIDOSPARC213: { idSistema: 'PARCMEI-ESP', parcelasService: 'PARCELASPARAGERAR212', emitirService: 'GERARDAS211' },
+  PEDIDOSPARC223: { idSistema: 'PERTMEI',     parcelasService: 'PARCELASPARAGERAR222', emitirService: 'GERARDAS221' },
+  PEDIDOSPARC233: { idSistema: 'RELPMEI',     parcelasService: 'PARCELASPARAGERAR232', emitirService: 'GERARDAS231' },
 };
+
+const ENCERRADO_REGEX = /encerrad|liquidad|rescind|cancelad/i;
 
 const MODALIDADES: Modalidade[] = [
   // Receita Federal — Simples Nacional / MEI
@@ -403,6 +405,9 @@ export default function ParcelamentosTab() {
   async function loadParcelas(row: ParcRow) {
     const map = PARCELAS_SERVICES[row.modalidade];
     if (!map) { setParcelas([]); setParcelasError(null); return; }
+    if (row.situacao && ENCERRADO_REGEX.test(row.situacao)) {
+      setParcelas([]); setParcelasError(null); return;
+    }
     setParcelasLoading(true);
     setParcelasError(null);
     setParcelas([]);
