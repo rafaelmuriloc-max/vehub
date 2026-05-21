@@ -1410,6 +1410,7 @@ export type Database = {
           modalidade: string
           modalidade_label: string | null
           numero_parcelamento: string | null
+          origem: string
           parcelas_pagas: number | null
           parcelas_total: number | null
           raw_response: Json | null
@@ -1427,6 +1428,7 @@ export type Database = {
           modalidade: string
           modalidade_label?: string | null
           numero_parcelamento?: string | null
+          origem?: string
           parcelas_pagas?: number | null
           parcelas_total?: number | null
           raw_response?: Json | null
@@ -1444,6 +1446,7 @@ export type Database = {
           modalidade?: string
           modalidade_label?: string | null
           numero_parcelamento?: string | null
+          origem?: string
           parcelas_pagas?: number | null
           parcelas_total?: number | null
           raw_response?: Json | null
