@@ -348,6 +348,8 @@ function CalendarMain() {
   }
 
   function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
+    const inst = instances.find(i => i.id === instanceId) || deletedInstances.find(i => i.id === instanceId);
+    if (inst?.status === 'done') return true;
     const oblActivities = activities.filter(a => a.obligation_id === obligationId);
     if (oblActivities.length === 0) return false;
     return oblActivities.every(act => {
@@ -367,6 +369,8 @@ function CalendarMain() {
   }
 
   function isQuickCompleted(instanceId: string, obligationId: string): boolean {
+    const inst = instances.find(i => i.id === instanceId) || deletedInstances.find(i => i.id === instanceId);
+    if (inst?.completion_kind === 'quick') return true;
     const oblActivities = activities.filter(a => a.obligation_id === obligationId);
     if (oblActivities.length === 0) return false;
     const comps = oblActivities.map(act => completions.find(c => c.instance_id === instanceId && c.activity_id === act.id));
