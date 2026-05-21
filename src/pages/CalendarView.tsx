@@ -27,7 +27,7 @@ type Obligation = { id: string; name: string; department_id: string; alert_day: 
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
-type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
+type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null };
 type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null };
 
 type CalendarEvent = {
