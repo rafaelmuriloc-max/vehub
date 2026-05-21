@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 
-import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, ShieldAlert, Building2, Briefcase, FileText, Save } from 'lucide-react';
+import { Plus, Search, Loader2, Upload, Download, Trash2, FileCheck, Eye, Pencil, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, ShieldAlert, Building2, Briefcase, FileText, Save, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
@@ -176,6 +176,8 @@ export default function Clients() {
   const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact[]>>({});
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [allObligations, setAllObligations] = useState<ObligationOption[]>([]);
   const [selectedObligations, setSelectedObligations] = useState<Set<string>>(new Set());
@@ -950,10 +952,67 @@ export default function Clients() {
     return matchSearch && matchStatus;
   });
 
+  // Sorting
+  const getSortValue = (c: Client, key: string): { v: number | string; empty: boolean } => {
+    switch (key) {
+      case 'sci_code': {
+        const raw = (c.sci_code || '').trim();
+        if (!raw) return { v: Infinity, empty: true };
+        const n = Number(raw);
+        return Number.isFinite(n) ? { v: n, empty: false } : { v: Infinity, empty: false };
+      }
+      case 'company_name': return { v: (c.company_name || '').toLowerCase(), empty: !c.company_name };
+      case 'document': return { v: (c.document || '').toLowerCase(), empty: !c.document };
+      case 'tax_regime': return { v: (TAX_REGIME_LABELS[c.tax_regime as string] || c.tax_regime || '').toLowerCase(), empty: !c.tax_regime };
+      case 'contact_name': return { v: (c.contact_name || '').toLowerCase(), empty: !c.contact_name };
+      case 'monthly_value': return { v: Number(c.monthly_value || 0), empty: c.monthly_value == null };
+      case 'status': return { v: (statusLabels[c.status] || '').toLowerCase(), empty: !c.status };
+      case 'digital_certificate_expiry': {
+        if (!c.digital_certificate_expiry) return { v: Infinity, empty: true };
+        return { v: new Date(c.digital_certificate_expiry + 'T00:00:00').getTime(), empty: false };
+      }
+      default: return { v: '', empty: true };
+    }
+  };
+  const sorted = (sortKey && sortDir) ? [...filtered].sort((a, b) => {
+    const av = getSortValue(a, sortKey);
+    const bv = getSortValue(b, sortKey);
+    if (av.empty && bv.empty) return 0;
+    if (av.empty) return 1;
+    if (bv.empty) return -1;
+    let cmp = 0;
+    if (typeof av.v === 'number' && typeof bv.v === 'number') cmp = av.v - bv.v;
+    else cmp = String(av.v).localeCompare(String(bv.v), 'pt-BR');
+    return sortDir === 'asc' ? cmp : -cmp;
+  }) : filtered;
+
   // Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paginatedClients = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginatedClients = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const toggleSort = (key: string) => {
+    if (sortKey !== key) { setSortKey(key); setSortDir('asc'); return; }
+    if (sortDir === 'asc') { setSortDir('desc'); return; }
+    if (sortDir === 'desc') { setSortKey(null); setSortDir(null); return; }
+    setSortDir('asc');
+  };
+  const SortableHead = ({ column, label }: { column: string; label: string }) => {
+    const active = sortKey === column;
+    const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+    return (
+      <TableHead>
+        <button
+          type="button"
+          onClick={() => toggleSort(column)}
+          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+        >
+          {label}
+          <Icon className={`h-3.5 w-3.5 ${active ? 'text-foreground' : 'text-muted-foreground/60'}`} />
+        </button>
+      </TableHead>
+    );
+  };
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [search, filterStatus]);
@@ -1379,14 +1438,14 @@ export default function Clients() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Código SCI</TableHead>
-                <TableHead>Empresa</TableHead>
-                <TableHead>Documento</TableHead>
-                <TableHead>Regime</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Valor Mensal</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Venc. Certificado</TableHead>
+                <SortableHead column="sci_code" label="Código SCI" />
+                <SortableHead column="company_name" label="Empresa" />
+                <SortableHead column="document" label="Documento" />
+                <SortableHead column="tax_regime" label="Regime" />
+                <SortableHead column="contact_name" label="Contato" />
+                <SortableHead column="monthly_value" label="Valor Mensal" />
+                <SortableHead column="status" label="Status" />
+                <SortableHead column="digital_certificate_expiry" label="Venc. Certificado" />
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
