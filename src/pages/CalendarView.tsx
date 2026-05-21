@@ -944,6 +944,7 @@ function CalendarMain() {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                             const isSelected = selectedInstanceIds.has(ev.instanceId);
+                            const quick = completed && isQuickCompleted(ev.instanceId, ev.obligationId);
                             return (
                               <div
                                 key={idx}
@@ -951,7 +952,9 @@ function CalendarMain() {
                                 className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
                                   ${isSelected ? 'ring-2 ring-primary/50' : ''}
                                   ${completed
-                                    ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
+                                    ? (quick
+                                        ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
+                                        : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
                                     : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
@@ -987,7 +990,7 @@ function CalendarMain() {
                                 <div className="flex items-center justify-between mt-2">
                                   <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
                                   {progress.total > 0 && (
-                                    <span className={`text-[10px] font-medium ${completed ? 'text-sky-600 dark:text-sky-400' : 'text-muted-foreground'}`}>
+                                    <span className={`text-[10px] font-medium ${completed ? (quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400') : 'text-muted-foreground'}`}>
                                       {progress.completed}/{progress.total} atividades
                                     </span>
                                   )}
