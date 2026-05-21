@@ -1438,14 +1438,14 @@ export default function Clients() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Código SCI</TableHead>
-                <TableHead>Empresa</TableHead>
-                <TableHead>Documento</TableHead>
-                <TableHead>Regime</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Valor Mensal</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Venc. Certificado</TableHead>
+                <SortableHead column="sci_code" label="Código SCI" />
+                <SortableHead column="company_name" label="Empresa" />
+                <SortableHead column="document" label="Documento" />
+                <SortableHead column="tax_regime" label="Regime" />
+                <SortableHead column="contact_name" label="Contato" />
+                <SortableHead column="monthly_value" label="Valor Mensal" />
+                <SortableHead column="status" label="Status" />
+                <SortableHead column="digital_certificate_expiry" label="Venc. Certificado" />
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
