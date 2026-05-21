@@ -27,7 +27,7 @@ type Obligation = { id: string; name: string; department_id: string; alert_day: 
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
-type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null };
+type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null };
 type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null };
 
 type CalendarEvent = {
@@ -173,7 +173,7 @@ function CalendarMain() {
       if (slice.length === 0) continue;
       const { data } = await supabase
         .from('obligation_activity_completions')
-        .select('id, instance_id, activity_id, completed, file_url')
+        .select('id, instance_id, activity_id, completed, file_url, notes')
         .in('instance_id', slice);
       if (data) allComps.push(...(data as Completion[]));
     }
@@ -329,6 +329,14 @@ function CalendarMain() {
       return comp?.completed === true;
     }).length;
     return { completed: completedCount, total: oblActivities.length, percent: Math.round((completedCount / oblActivities.length) * 100) };
+  }
+
+  function isQuickCompleted(instanceId: string, obligationId: string): boolean {
+    const oblActivities = activities.filter(a => a.obligation_id === obligationId);
+    if (oblActivities.length === 0) return false;
+    const comps = oblActivities.map(act => completions.find(c => c.instance_id === instanceId && c.activity_id === act.id));
+    if (comps.some(c => !c?.completed)) return false;
+    return comps.every(c => c?.notes === 'quick_complete');
   }
 
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
@@ -524,9 +532,9 @@ function CalendarMain() {
       for (const act of oblActs) {
         const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
         if (existing) {
-          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: nowIso }).eq('id', existing.id);
+          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: nowIso, notes: 'quick_complete' }).eq('id', existing.id);
         } else {
-          await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso });
+          await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
         }
       }
       await loadData();
@@ -936,6 +944,7 @@ function CalendarMain() {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                             const isSelected = selectedInstanceIds.has(ev.instanceId);
+                            const quick = completed && isQuickCompleted(ev.instanceId, ev.obligationId);
                             return (
                               <div
                                 key={idx}
@@ -943,7 +952,9 @@ function CalendarMain() {
                                 className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
                                   ${isSelected ? 'ring-2 ring-primary/50' : ''}
                                   ${completed
-                                    ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
+                                    ? (quick
+                                        ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
+                                        : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
                                     : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
@@ -979,7 +990,7 @@ function CalendarMain() {
                                 <div className="flex items-center justify-between mt-2">
                                   <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
                                   {progress.total > 0 && (
-                                    <span className={`text-[10px] font-medium ${completed ? 'text-sky-600 dark:text-sky-400' : 'text-muted-foreground'}`}>
+                                    <span className={`text-[10px] font-medium ${completed ? (quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400') : 'text-muted-foreground'}`}>
                                       {progress.completed}/{progress.total} atividades
                                     </span>
                                   )}
@@ -1203,11 +1214,12 @@ function CalendarMain() {
                       {paginatedMonthCompleted.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
+                        const quick = isQuickCompleted(ev.instanceId, ev.obligationId);
                         return (
                           <div
                             key={idx}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${quick ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800' : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'} ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
                           >
                             <div className="flex items-center gap-3">
                               <Checkbox
@@ -1237,7 +1249,7 @@ function CalendarMain() {
                             <div className="flex items-center justify-between mt-2">
                               <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
                               {progress.total > 0 && (
-                                <span className="text-[10px] font-medium text-sky-600 dark:text-sky-400">
+                                <span className={`text-[10px] font-medium ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
                                   {progress.completed}/{progress.total} atividades
                                 </span>
                               )}
