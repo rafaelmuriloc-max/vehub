@@ -692,6 +692,10 @@ export default function ParcelamentosTab() {
                   <div className="text-sm text-muted-foreground">
                     Modalidade sem suporte a emissão de guia.
                   </div>
+                ) : detailRow.situacao && ENCERRADO_REGEX.test(detailRow.situacao) ? (
+                  <div className="text-sm text-muted-foreground">
+                    Parcelamento encerrado — sem parcelas a emitir.
+                  </div>
                 ) : parcelasLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" /> Carregando parcelas...
@@ -699,7 +703,7 @@ export default function ParcelamentosTab() {
                 ) : parcelasError ? (
                   <div className="text-sm text-destructive">{parcelasError}</div>
                 ) : parcelas.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Nenhuma parcela em aberto.</div>
+                  <div className="text-sm text-muted-foreground">Nenhuma parcela em aberto até hoje.</div>
                 ) : (
                   <Table>
                     <TableHeader>
