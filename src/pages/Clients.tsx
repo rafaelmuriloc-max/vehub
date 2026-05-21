@@ -176,6 +176,8 @@ export default function Clients() {
   const [deptContacts, setDeptContacts] = useState<Record<string, DeptContact[]>>({});
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [allObligations, setAllObligations] = useState<ObligationOption[]>([]);
   const [selectedObligations, setSelectedObligations] = useState<Set<string>>(new Set());
