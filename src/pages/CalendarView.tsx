@@ -560,13 +560,13 @@ function CalendarMain() {
     const ids = Array.from(selectedInstanceIds);
     const allInstances = [...instances, ...deletedInstances];
     const nowIso = new Date().toISOString();
-    let done = 0, already = 0, noActs = 0, errors = 0;
+    let done = 0, already = 0, skippedDeleted = 0, errors = 0;
     for (const instanceId of ids) {
       const inst = allInstances.find(i => i.id === instanceId);
       if (!inst) { errors++; continue; }
+      if (inst.deleted_at) { skippedDeleted++; continue; }
       if (isInstanceCompleted(instanceId, inst.obligation_id)) { already++; continue; }
       const oblActs = activities.filter(a => a.obligation_id === inst.obligation_id);
-      if (oblActs.length === 0) { noActs++; continue; }
       try {
         for (const act of oblActs) {
           const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
@@ -576,6 +576,7 @@ function CalendarMain() {
             await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
           }
         }
+        await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
         done++;
       } catch {
         errors++;
@@ -583,7 +584,7 @@ function CalendarMain() {
     }
     const parts = [`${done} concluída(s)`];
     if (already) parts.push(`${already} já concluída(s)`);
-    if (noActs) parts.push(`${noActs} sem atividades`);
+    if (skippedDeleted) parts.push(`${skippedDeleted} excluída(s) ignorada(s)`);
     if (errors) parts.push(`${errors} com erro`);
     toast({ title: 'Conclusão em massa', description: parts.join(' • ') });
     clearSelection();
@@ -614,10 +615,6 @@ function CalendarMain() {
 
   async function quickCompleteInstance(instanceId: string, obligationId: string) {
     const oblActs = activities.filter(a => a.obligation_id === obligationId);
-    if (oblActs.length === 0) {
-      toast({ title: 'Sem atividades configuradas', description: 'Esta obrigação não possui atividades.', variant: 'destructive' });
-      return;
-    }
     const nowIso = new Date().toISOString();
     try {
       for (const act of oblActs) {
@@ -628,6 +625,7 @@ function CalendarMain() {
           await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
         }
       }
+      await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
       await loadData();
       toast({ title: 'Obrigação concluída' });
     } catch (e: any) {
