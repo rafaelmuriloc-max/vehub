@@ -552,6 +552,41 @@ function CalendarMain() {
     await loadData();
   }
 
+  async function quickCompleteSelectedInstances() {
+    const ids = Array.from(selectedInstanceIds);
+    const allInstances = [...instances, ...deletedInstances];
+    const nowIso = new Date().toISOString();
+    let done = 0, already = 0, noActs = 0, errors = 0;
+    for (const instanceId of ids) {
+      const inst = allInstances.find(i => i.id === instanceId);
+      if (!inst) { errors++; continue; }
+      if (isInstanceCompleted(instanceId, inst.obligation_id)) { already++; continue; }
+      const oblActs = activities.filter(a => a.obligation_id === inst.obligation_id);
+      if (oblActs.length === 0) { noActs++; continue; }
+      try {
+        for (const act of oblActs) {
+          const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+          if (existing) {
+            await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: nowIso, notes: 'quick_complete' }).eq('id', existing.id);
+          } else {
+            await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
+          }
+        }
+        done++;
+      } catch {
+        errors++;
+      }
+    }
+    const parts = [`${done} concluída(s)`];
+    if (already) parts.push(`${already} já concluída(s)`);
+    if (noActs) parts.push(`${noActs} sem atividades`);
+    if (errors) parts.push(`${errors} com erro`);
+    toast({ title: 'Conclusão em massa', description: parts.join(' • ') });
+    clearSelection();
+    setShowBulkCompleteConfirm(false);
+    await loadData();
+  }
+
   async function restoreInstance(instanceId: string) {
     const { error } = await supabase.from('obligation_instances').update({ deleted_at: null }).eq('id', instanceId);
     if (error) {
