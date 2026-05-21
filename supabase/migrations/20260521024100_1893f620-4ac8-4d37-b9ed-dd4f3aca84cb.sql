@@ -1,0 +1,2 @@
+ALTER TABLE public.obligation_instances ADD COLUMN IF NOT EXISTS deleted_at timestamptz NULL;
+CREATE INDEX IF NOT EXISTS idx_obligation_instances_active ON public.obligation_instances (reference_month) WHERE deleted_at IS NULL;

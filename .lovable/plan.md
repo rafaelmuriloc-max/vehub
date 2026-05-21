@@ -1,25 +1,28 @@
 ## Objetivo
 
-Diferenciar visualmente, na lista de concluídas do calendário, as obrigações finalizadas pelo botão "Concluir" (azul) das concluídas via fluxo normal com anexo/atividades (verde).
+Adicionar uma aba "Excluídas" no calendário mostrando obrigações excluídas (soft delete), com possibilidade de restaurar.
 
-## Abordagem
+## Mudanças
 
-Como não há coluna dedicada para marcar "conclusão rápida", usar o campo `notes` das `obligation_activity_completions` como marcador.
+### 1. Banco (migração)
+- Adicionar coluna `deleted_at timestamptz NULL` em `obligation_instances`.
+- Índice parcial `where deleted_at is null` para performance.
 
-### 1. `quickCompleteInstance` em `src/pages/CalendarView.tsx`
-- Ao inserir/atualizar registros em `obligation_activity_completions`, gravar `notes: 'quick_complete'` em todas as atividades concluídas pelo botão.
+### 2. Soft delete em `CalendarView.tsx`
+- Substituir os `.delete()` em `deleteInstance()` e no bulk delete por `update({ deleted_at: now })` em `obligation_instances`. Manter as completions (não apagar).
+- Em `loadData()` (linha 151), filtrar `.is('deleted_at', null)` ao listar instâncias do mês.
+- Criar uma segunda query (lazy, só quando a aba "Excluídas" é aberta) que busca instâncias com `deleted_at not null` no mês visível.
 
-### 2. Detecção do tipo de conclusão
-- Criar helper `isQuickCompleted(instanceId)`:
-  - Pega todas as completions da instância.
-  - Retorna `true` somente se houver ao menos uma e **todas** tiverem `notes === 'quick_complete'`.
-- Para instâncias sem atividades cadastradas (concluídas via quick complete que cria nada), tratar como quick (azul).
+### 3. UI — nova aba "Excluídas"
+- Hoje o mês tem tabs "A fazer / Atrasados / Concluídos" (3 cards). Adicionar 4ª tab **Excluídas** (cinza).
+- Reaproveitar o mesmo card-list da aba de concluídas, com fundo `bg-muted/40 border-dashed` e badge cinza.
+- Cada item terá botão **Restaurar** (ícone `Undo2`) ao invés de Concluir, que faz `update({ deleted_at: null })` e recarrega.
+- Botão lixeira na aba Excluídas executa hard delete (igual hoje).
+- Paginação reaproveita o padrão das outras abas.
 
-### 3. Aplicar estilo condicional
-Nas duas listas de concluídas (dia e mês) em `CalendarView.tsx`:
-- Se `isQuickCompleted(inst.id)` → manter `bg-sky-50 border-sky-200` + `text-sky-600` no progresso.
-- Caso contrário → voltar para `bg-green-50 border-green-200` + `text-green-600`.
+### 4. Demais telas
+- Não alterar `Obligations.tsx`, `Documents.tsx`, `ClientObligationsTab.tsx` etc. nesta entrega. Se necessário ocultar excluídas globalmente, fica para depois — escopo aqui é só o calendário.
 
-### Fora do escopo
-- Sem mudanças de schema, RLS, ou em outras telas.
-- Sem alterar a lógica de pendentes.
+## Fora do escopo
+- Nada de mudanças na lista do dia (só na visão mensal).
+- Sem alterar RLS além do necessário (coluna nova só precisa de update permitido — já coberto pelas policies atuais de admin).
