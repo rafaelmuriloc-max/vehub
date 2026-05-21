@@ -1,0 +1,1 @@
+DELETE FROM public.parcelamento_results WHERE origem = 'PGFN' OR modalidade LIKE 'OBTERPARC24%';
