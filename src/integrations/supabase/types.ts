@@ -1278,6 +1278,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           client_id: string
+          completion_kind: string | null
           created_at: string
           deleted_at: string | null
           due_date: string | null
@@ -1289,6 +1290,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           client_id: string
+          completion_kind?: string | null
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null
@@ -1300,6 +1302,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           client_id?: string
+          completion_kind?: string | null
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null

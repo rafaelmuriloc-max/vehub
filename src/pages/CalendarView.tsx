@@ -22,7 +22,7 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
-type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null };
+type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
@@ -151,7 +151,7 @@ function CalendarMain() {
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
     const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
-      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at')
+      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at, status, completion_kind')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
@@ -348,6 +348,8 @@ function CalendarMain() {
   }
 
   function isInstanceCompleted(instanceId: string, obligationId: string): boolean {
+    const inst = instances.find(i => i.id === instanceId) || deletedInstances.find(i => i.id === instanceId);
+    if (inst?.status === 'done') return true;
     const oblActivities = activities.filter(a => a.obligation_id === obligationId);
     if (oblActivities.length === 0) return false;
     return oblActivities.every(act => {
@@ -367,6 +369,8 @@ function CalendarMain() {
   }
 
   function isQuickCompleted(instanceId: string, obligationId: string): boolean {
+    const inst = instances.find(i => i.id === instanceId) || deletedInstances.find(i => i.id === instanceId);
+    if (inst?.completion_kind === 'quick') return true;
     const oblActivities = activities.filter(a => a.obligation_id === obligationId);
     if (oblActivities.length === 0) return false;
     const comps = oblActivities.map(act => completions.find(c => c.instance_id === instanceId && c.activity_id === act.id));
@@ -389,6 +393,11 @@ function CalendarMain() {
         completed: true,
         completed_at: new Date().toISOString(),
       });
+    }
+
+    // If user is un-checking an activity, clear quick-complete marker on the instance
+    if (currentlyCompleted) {
+      await supabase.from('obligation_instances').update({ status: 'pending', completion_kind: null }).eq('id', detailInstanceId);
     }
 
     // Auto-start chain
@@ -556,13 +565,13 @@ function CalendarMain() {
     const ids = Array.from(selectedInstanceIds);
     const allInstances = [...instances, ...deletedInstances];
     const nowIso = new Date().toISOString();
-    let done = 0, already = 0, noActs = 0, errors = 0;
+    let done = 0, already = 0, skippedDeleted = 0, errors = 0;
     for (const instanceId of ids) {
       const inst = allInstances.find(i => i.id === instanceId);
       if (!inst) { errors++; continue; }
+      if (inst.deleted_at) { skippedDeleted++; continue; }
       if (isInstanceCompleted(instanceId, inst.obligation_id)) { already++; continue; }
       const oblActs = activities.filter(a => a.obligation_id === inst.obligation_id);
-      if (oblActs.length === 0) { noActs++; continue; }
       try {
         for (const act of oblActs) {
           const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
@@ -572,6 +581,7 @@ function CalendarMain() {
             await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
           }
         }
+        await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
         done++;
       } catch {
         errors++;
@@ -579,7 +589,7 @@ function CalendarMain() {
     }
     const parts = [`${done} concluída(s)`];
     if (already) parts.push(`${already} já concluída(s)`);
-    if (noActs) parts.push(`${noActs} sem atividades`);
+    if (skippedDeleted) parts.push(`${skippedDeleted} excluída(s) ignorada(s)`);
     if (errors) parts.push(`${errors} com erro`);
     toast({ title: 'Conclusão em massa', description: parts.join(' • ') });
     clearSelection();
@@ -610,10 +620,6 @@ function CalendarMain() {
 
   async function quickCompleteInstance(instanceId: string, obligationId: string) {
     const oblActs = activities.filter(a => a.obligation_id === obligationId);
-    if (oblActs.length === 0) {
-      toast({ title: 'Sem atividades configuradas', description: 'Esta obrigação não possui atividades.', variant: 'destructive' });
-      return;
-    }
     const nowIso = new Date().toISOString();
     try {
       for (const act of oblActs) {
@@ -624,6 +630,7 @@ function CalendarMain() {
           await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
         }
       }
+      await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
       await loadData();
       toast({ title: 'Obrigação concluída' });
     } catch (e: any) {
