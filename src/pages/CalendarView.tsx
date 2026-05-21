@@ -1322,6 +1322,51 @@ function CalendarMain() {
                   </>
                 )}
               </TabsContent>
+
+              <TabsContent value="deleted">
+                {deletedMonthEvents.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <Trash2 className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação excluída neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthDeleted.map((ev, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/40 transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-14 shrink-0 text-sm font-semibold text-muted-foreground line-through">
+                              {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-muted-foreground truncate line-through">{ev.obligationName} | {ev.competenceLabel}</p>
+                              <p className="text-xs text-muted-foreground/80 truncate mt-0.5">
+                                <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground">Excluída</Badge>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" title="Restaurar" onClick={e => { e.stopPropagation(); restoreInstance(ev.instanceId); }}>
+                                <Undo2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" title="Excluir permanentemente" onClick={e => { e.stopPropagation(); hardDeleteInstance(ev.instanceId); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <PaginationBlock page={monthDeletedPage} totalPages={monthDeletedTotalPages} total={deletedMonthEvents.length} onPageChange={setMonthDeletedPage} />
+                  </>
+                )}
+              </TabsContent>
             </Tabs>
           )}
         </CardContent>
