@@ -22,7 +22,7 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
-type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null };
+type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
@@ -151,7 +151,7 @@ function CalendarMain() {
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
     const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
-      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at')
+      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at, status, completion_kind')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
