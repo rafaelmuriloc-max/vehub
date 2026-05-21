@@ -1399,6 +1399,60 @@ export type Database = {
           },
         ]
       }
+      parcelamento_results: {
+        Row: {
+          client_id: string
+          consulted_at: string
+          created_at: string
+          data_pedido: string | null
+          error_message: string | null
+          id: string
+          modalidade: string
+          modalidade_label: string | null
+          numero_parcelamento: string | null
+          parcelas_pagas: number | null
+          parcelas_total: number | null
+          raw_response: Json | null
+          situacao: string | null
+          status: string
+          valor_total: number | null
+        }
+        Insert: {
+          client_id: string
+          consulted_at?: string
+          created_at?: string
+          data_pedido?: string | null
+          error_message?: string | null
+          id?: string
+          modalidade: string
+          modalidade_label?: string | null
+          numero_parcelamento?: string | null
+          parcelas_pagas?: number | null
+          parcelas_total?: number | null
+          raw_response?: Json | null
+          situacao?: string | null
+          status?: string
+          valor_total?: number | null
+        }
+        Update: {
+          client_id?: string
+          consulted_at?: string
+          created_at?: string
+          data_pedido?: string | null
+          error_message?: string | null
+          id?: string
+          modalidade?: string
+          modalidade_label?: string | null
+          numero_parcelamento?: string | null
+          parcelas_pagas?: number | null
+          parcelas_total?: number | null
+          raw_response?: Json | null
+          situacao?: string | null
+          status?: string
+          valor_total?: number | null
+        }
+        Relationships: []
+      }
       partners: {
         Row: {
           active: boolean
