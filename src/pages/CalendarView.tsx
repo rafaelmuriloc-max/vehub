@@ -513,6 +513,29 @@ function CalendarMain() {
     await loadData();
   }
 
+  async function quickCompleteInstance(instanceId: string, obligationId: string) {
+    const oblActs = activities.filter(a => a.obligation_id === obligationId);
+    if (oblActs.length === 0) {
+      toast({ title: 'Sem atividades configuradas', description: 'Esta obrigação não possui atividades.', variant: 'destructive' });
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    try {
+      for (const act of oblActs) {
+        const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+        if (existing) {
+          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: nowIso }).eq('id', existing.id);
+        } else {
+          await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso });
+        }
+      }
+      await loadData();
+      toast({ title: 'Obrigação concluída' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao concluir', description: e?.message ?? String(e), variant: 'destructive' });
+    }
+  }
+
   const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
   const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
   const dayPendingTotalPages = Math.ceil(dayEventsPending.length / DAY_ITEMS_PER_PAGE);
