@@ -128,6 +128,7 @@ function CalendarMain() {
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showBulkCompleteConfirm, setShowBulkCompleteConfirm] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
