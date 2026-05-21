@@ -128,6 +128,13 @@ export default {
   			lg: 'var(--shadow-lg)',
   			xl: 'var(--shadow-xl)',
   			'2xl': 'var(--shadow-2xl)'
+  		},
+  		fontSize: {
+  			kpi: ['48px', { lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '700' }],
+  			section: ['32px', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '700' }],
+  			menu: ['16px', { lineHeight: '1.4', fontWeight: '500' }],
+  			body: ['15px', { lineHeight: '1.5' }],
+  			label: ['13px', { lineHeight: '1.4', fontWeight: '500' }],
   		}
   	}
   },

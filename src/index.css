@@ -39,7 +39,7 @@
     --input: 220 15% 88%;
     --ring: 28 82% 53%;
 
-    --radius: 0.75rem;
+    --radius: 1.25rem;
 
     --sidebar-background: 220 50% 12%;
     --sidebar-foreground: 220 15% 90%;
@@ -139,6 +139,23 @@
 
   body {
     @apply bg-background text-foreground font-sans;
+    font-feature-settings: 'cv11', 'ss01', 'tnum';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+}
+
+@layer utilities {
+  .tabular-nums-strong {
+    font-feature-settings: 'tnum', 'cv11';
+    font-variant-numeric: tabular-nums;
   }
 }
 
