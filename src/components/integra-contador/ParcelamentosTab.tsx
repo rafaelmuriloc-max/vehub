@@ -149,6 +149,10 @@ export default function ParcelamentosTab() {
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [detailRow, setDetailRow] = useState<ParcRow | null>(null);
+  const [parcelas, setParcelas] = useState<Array<{ parcela: string; valor: number | null }>>([]);
+  const [parcelasLoading, setParcelasLoading] = useState(false);
+  const [parcelasError, setParcelasError] = useState<string | null>(null);
+  const [emittingParcela, setEmittingParcela] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -362,6 +366,119 @@ export default function ParcelamentosTab() {
     if (parc.status === 'error') return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Erro</Badge>;
     if (parc.status === 'no_data') return <Badge variant="secondary" className="gap-1"><CheckCircle2 className="h-3 w-3" />Sem parcelamentos</Badge>;
     return <Badge className="gap-1 bg-primary"><CheckCircle2 className="h-3 w-3" />{parc.situacao || 'Em parcelamento'}</Badge>;
+  }
+
+  function currentYyyymm(): string {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function formatParcelaLabel(yyyymm: string): string {
+    if (/^\d{6}$/.test(yyyymm)) return `${yyyymm.slice(4, 6)}/${yyyymm.slice(0, 4)}`;
+    return yyyymm;
+  }
+
+  function extractParcelasList(raw: any): Array<{ parcela: string; valor: number | null }> {
+    let dados = raw?.dados ?? raw?.data?.dados ?? raw?.pedidoDados?.dados ?? raw;
+    if (typeof dados === 'string') {
+      try { dados = JSON.parse(dados); } catch { return []; }
+    }
+    let lista: any[] = [];
+    if (Array.isArray(dados)) lista = dados;
+    else if (Array.isArray(dados?.listaParcelas)) lista = dados.listaParcelas;
+    else if (Array.isArray(dados?.parcelas)) lista = dados.parcelas;
+    else {
+      for (const k of Object.keys(dados || {})) {
+        if (Array.isArray(dados[k])) { lista = dados[k]; break; }
+      }
+    }
+    return lista
+      .map((p: any) => ({
+        parcela: String(p?.parcela ?? p?.numeroParcela ?? p?.competencia ?? '').replace(/\D/g, '').slice(0, 6),
+        valor: Number(p?.valor ?? p?.valorParcela ?? p?.valorTotal ?? 0) || null,
+      }))
+      .filter((p) => /^\d{6}$/.test(p.parcela));
+  }
+
+  async function loadParcelas(row: ParcRow) {
+    const map = PARCELAS_SERVICES[row.modalidade];
+    if (!map) { setParcelas([]); setParcelasError(null); return; }
+    setParcelasLoading(true);
+    setParcelasError(null);
+    setParcelas([]);
+    try {
+      const { data, error } = await supabase.functions.invoke('integra-contador', {
+        body: {
+          client_id: row.client_id,
+          idSistema: map.idSistema,
+          idServico: map.parcelasService,
+          tipo: 'Consultar',
+          dados: '',
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) {
+        const msgs = data?.data?.mensagens?.map((m: any) => m.texto).join('; ');
+        throw new Error(msgs || data?.error || 'Falha ao obter parcelas');
+      }
+      const lista = extractParcelasList(data?.data || data);
+      const limite = currentYyyymm();
+      const abertas = lista.filter((p) => p.parcela <= limite);
+      abertas.sort((a, b) => a.parcela.localeCompare(b.parcela));
+      setParcelas(abertas);
+    } catch (err: any) {
+      setParcelasError(err?.message || String(err));
+    } finally {
+      setParcelasLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (detailRow && detailRow.status === 'success') {
+      loadParcelas(detailRow);
+    } else {
+      setParcelas([]);
+      setParcelasError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailRow?.id]);
+
+  async function handleGerarGuia(parcelaYyyymm: string) {
+    if (!detailRow) return;
+    const map = PARCELAS_SERVICES[detailRow.modalidade];
+    if (!map) return;
+    setEmittingParcela(parcelaYyyymm);
+    try {
+      const { data, error } = await supabase.functions.invoke('integra-contador', {
+        body: {
+          client_id: detailRow.client_id,
+          idSistema: map.idSistema,
+          idServico: map.emitirService,
+          tipo: 'Emitir',
+          dados: JSON.stringify({ parcelaParaEmitir: parcelaYyyymm }),
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) {
+        const msgs = data?.data?.mensagens?.map((m: any) => m.texto).join('; ');
+        throw new Error(msgs || data?.error || 'Falha ao gerar guia');
+      }
+      let payload: any = data?.data?.dados ?? data?.data;
+      if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch { /* keep */ } }
+      const pdfB64: string | undefined = payload?.docArrecadacaoPdfB64 ?? payload?.pdf ?? payload?.documento;
+      if (!pdfB64) throw new Error('PDF não retornado pelo SERPRO');
+      const a = document.createElement('a');
+      a.href = `data:application/pdf;base64,${pdfB64}`;
+      a.download = `DAS-${parcelaYyyymm}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast({ title: 'Guia gerada', description: `Parcela ${formatParcelaLabel(parcelaYyyymm)}` });
+    } catch (err: any) {
+      toast({ title: 'Erro ao gerar guia', description: err?.message, variant: 'destructive' });
+    } finally {
+      setEmittingParcela(null);
+    }
   }
 
   return (
