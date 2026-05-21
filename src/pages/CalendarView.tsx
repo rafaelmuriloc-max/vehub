@@ -150,7 +150,7 @@ function CalendarMain() {
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
     const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
-      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month')
+      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
@@ -159,15 +159,18 @@ function CalendarMain() {
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
         .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
-    const monthInstances = (instRes.data as Instance[]) || [];
+    const allMonthInstances = (instRes.data as Instance[]) || [];
+    const monthInstances = allMonthInstances.filter(i => !i.deleted_at);
+    const monthDeleted = allMonthInstances.filter(i => !!i.deleted_at);
     setInstances(monthInstances);
+    setDeletedInstances(monthDeleted);
     setObligations((oblRes.data as Obligation[]) || []);
     setClients((cliRes.data as Client[]) || []);
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
     setTasks((taskRes.data as TaskRow[]) || []);
     // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
-    const ids = monthInstances.map(i => i.id);
+    const ids = allMonthInstances.map(i => i.id);
     const allComps: Completion[] = [];
     const CHUNK = 200;
     for (let i = 0; i < ids.length; i += CHUNK) {
