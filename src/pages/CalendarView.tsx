@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
@@ -22,7 +22,7 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
-type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string };
+type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
 type Client = { id: string; company_name: string };
 type Department = { id: string; name: string };
@@ -101,6 +101,7 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
 function CalendarMain() {
   const { toast } = useToast();
   const [instances, setInstances] = useState<Instance[]>([]);
+  const [deletedInstances, setDeletedInstances] = useState<Instance[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -117,6 +118,7 @@ function CalendarMain() {
   const [dayCompletedPage, setDayCompletedPage] = useState(1);
   const [monthPendingPage, setMonthPendingPage] = useState(1);
   const [monthCompletedPage, setMonthCompletedPage] = useState(1);
+  const [monthDeletedPage, setMonthDeletedPage] = useState(1);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
@@ -148,7 +150,7 @@ function CalendarMain() {
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
     const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
-      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month')
+      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
       supabase.from('clients').select('id, company_name'),
@@ -157,15 +159,18 @@ function CalendarMain() {
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
         .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
-    const monthInstances = (instRes.data as Instance[]) || [];
+    const allMonthInstances = (instRes.data as Instance[]) || [];
+    const monthInstances = allMonthInstances.filter(i => !i.deleted_at);
+    const monthDeleted = allMonthInstances.filter(i => !!i.deleted_at);
     setInstances(monthInstances);
+    setDeletedInstances(monthDeleted);
     setObligations((oblRes.data as Obligation[]) || []);
     setClients((cliRes.data as Client[]) || []);
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
     setTasks((taskRes.data as TaskRow[]) || []);
     // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
-    const ids = monthInstances.map(i => i.id);
+    const ids = allMonthInstances.map(i => i.id);
     const allComps: Completion[] = [];
     const CHUNK = 200;
     for (let i = 0; i < ids.length; i += CHUNK) {
@@ -297,6 +302,35 @@ function CalendarMain() {
     }
     return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
+
+  const deletedMonthEvents = useMemo(() => {
+    const result: CalendarEvent[] = [];
+    for (const inst of deletedInstances) {
+      const obl = oblMap.get(inst.obligation_id);
+      if (!obl) continue;
+      const client = clientMap.get(inst.client_id);
+      if (!client) continue;
+      const dept = deptMap.get(obl.department_id);
+      if (!dept) continue;
+      if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
+      if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
+      if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+      const refDate = new Date(inst.reference_month + 'T00:00:00');
+      const compDate = obl.competence_rule === 'previous'
+        ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
+        : refDate;
+      const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const competenceLabel = `${names[compDate.getMonth()]}/${compDate.getFullYear()}`;
+      const refDay = (obl.due_day ?? obl.target_day ?? obl.alert_day ?? 1);
+      const date = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
+      result.push({
+        clientId: client.id, clientName: client.company_name,
+        obligationName: obl.name, deptName: dept.name,
+        type: 'due', date, instanceId: inst.id, obligationId: obl.id, competenceLabel,
+      });
+    }
+    return result.sort((a, b) => a.date.localeCompare(b.date));
+  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
 
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
   useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient]);
@@ -500,9 +534,8 @@ function CalendarMain() {
 
   async function deleteInstance() {
     if (!deleteInstanceId) return;
-    await supabase.from('obligation_activity_completions').delete().eq('instance_id', deleteInstanceId);
-    await supabase.from('obligation_instances').delete().eq('id', deleteInstanceId);
-    toast({ title: 'Obrigação excluída com sucesso' });
+    await supabase.from('obligation_instances').update({ deleted_at: new Date().toISOString() }).eq('id', deleteInstanceId);
+    toast({ title: 'Obrigação movida para Excluídas' });
     setDeleteInstanceId(null);
     if (detailInstanceId === deleteInstanceId) setDetailInstanceId(null);
     await loadData();
@@ -510,14 +543,32 @@ function CalendarMain() {
 
   async function deleteSelectedInstances() {
     const ids = Array.from(selectedInstanceIds);
-    for (const id of ids) {
-      await supabase.from('obligation_activity_completions').delete().eq('instance_id', id);
-      await supabase.from('obligation_instances').delete().eq('id', id);
-    }
-    toast({ title: `${ids.length} obrigação(ões) excluída(s) com sucesso` });
+    await supabase.from('obligation_instances').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+    toast({ title: `${ids.length} obrigação(ões) movida(s) para Excluídas` });
     clearSelection();
     setShowBulkDeleteConfirm(false);
     if (detailInstanceId && ids.includes(detailInstanceId)) setDetailInstanceId(null);
+    await loadData();
+  }
+
+  async function restoreInstance(instanceId: string) {
+    const { error } = await supabase.from('obligation_instances').update({ deleted_at: null }).eq('id', instanceId);
+    if (error) {
+      toast({ title: 'Erro ao restaurar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Obrigação restaurada' });
+    await loadData();
+  }
+
+  async function hardDeleteInstance(instanceId: string) {
+    await supabase.from('obligation_activity_completions').delete().eq('instance_id', instanceId);
+    const { error } = await supabase.from('obligation_instances').delete().eq('id', instanceId);
+    if (error) {
+      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Obrigação excluída permanentemente' });
     await loadData();
   }
 
@@ -556,6 +607,8 @@ function CalendarMain() {
   const monthCompletedTotalPages = Math.ceil(monthEventsCompleted.length / ITEMS_PER_PAGE);
   const paginatedMonthPending = monthEventsPending.slice((monthPendingPage - 1) * ITEMS_PER_PAGE, monthPendingPage * ITEMS_PER_PAGE);
   const paginatedMonthCompleted = monthEventsCompleted.slice((monthCompletedPage - 1) * ITEMS_PER_PAGE, monthCompletedPage * ITEMS_PER_PAGE);
+  const monthDeletedTotalPages = Math.ceil(deletedMonthEvents.length / ITEMS_PER_PAGE);
+  const paginatedMonthDeleted = deletedMonthEvents.slice((monthDeletedPage - 1) * ITEMS_PER_PAGE, monthDeletedPage * ITEMS_PER_PAGE);
 
   // Dialog progress
   const dialogProgress = detailInstance
@@ -1076,7 +1129,7 @@ function CalendarMain() {
           </div>
         </CardHeader>
         <CardContent>
-          {monthEvents.length === 0 ? (
+          {monthEvents.length === 0 && deletedMonthEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <p className="text-muted-foreground text-sm">Nenhuma obrigação com data de meta neste mês</p>
@@ -1091,6 +1144,10 @@ function CalendarMain() {
                 <TabsTrigger value="completed">
                   Concluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="deleted">
+                  Excluídas
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
                 </TabsTrigger>
               </TabsList>
 
@@ -1262,6 +1319,51 @@ function CalendarMain() {
                       })}
                     </div>
                     <PaginationBlock page={monthCompletedPage} totalPages={monthCompletedTotalPages} total={monthEventsCompleted.length} onPageChange={setMonthCompletedPage} />
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="deleted">
+                {deletedMonthEvents.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <Trash2 className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação excluída neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthDeleted.map((ev, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/40 transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-14 shrink-0 text-sm font-semibold text-muted-foreground line-through">
+                              {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-muted-foreground truncate line-through">{ev.obligationName} | {ev.competenceLabel}</p>
+                              <p className="text-xs text-muted-foreground/80 truncate mt-0.5">
+                                <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground">Excluída</Badge>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" title="Restaurar" onClick={e => { e.stopPropagation(); restoreInstance(ev.instanceId); }}>
+                                <Undo2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" title="Excluir permanentemente" onClick={e => { e.stopPropagation(); hardDeleteInstance(ev.instanceId); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <PaginationBlock page={monthDeletedPage} totalPages={monthDeletedTotalPages} total={deletedMonthEvents.length} onPageChange={setMonthDeletedPage} />
                   </>
                 )}
               </TabsContent>

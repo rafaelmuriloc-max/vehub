@@ -1279,6 +1279,7 @@ export type Database = {
           assigned_to: string | null
           client_id: string
           created_at: string
+          deleted_at: string | null
           due_date: string | null
           id: string
           obligation_id: string
@@ -1289,6 +1290,7 @@ export type Database = {
           assigned_to?: string | null
           client_id: string
           created_at?: string
+          deleted_at?: string | null
           due_date?: string | null
           id?: string
           obligation_id: string
@@ -1299,6 +1301,7 @@ export type Database = {
           assigned_to?: string | null
           client_id?: string
           created_at?: string
+          deleted_at?: string | null
           due_date?: string | null
           id?: string
           obligation_id?: string
