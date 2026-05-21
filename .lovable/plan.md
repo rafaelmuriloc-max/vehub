@@ -1,25 +1,51 @@
-## Correção dos códigos SERPRO de parcelamento
+## Abas RFB e PGFN dentro de Parcelamentos
 
-A consulta de parcelas e a emissão de guia falharam com "Identificação do sistema ou serviço inválida" porque os códigos usados (`PARCELASPARAIMPRESSAO16x` / `EMITIRDAS16x`) não existem no catálogo. Os corretos, confirmados pela documentação SERPRO e por `src/pages/IntegraContador.tsx`, são:
+Reorganizar o `ParcelamentosTab` em duas sub-abas (`Tabs` do shadcn) com a mesma UX (busca, filtros, seleção em massa, tabela, diálogo de detalhes), trocando apenas a fonte dos dados.
 
-| Modalidade   | Pedidos         | Parcelas p/ gerar      | Emitir DAS    |
-|--------------|-----------------|------------------------|---------------|
-| PARCSN       | PEDIDOSPARC163  | PARCELASPARAGERAR162   | GERARDAS161   |
-| PARCSN-ESP   | PEDIDOSPARC173  | PARCELASPARAGERAR172   | GERARDAS171   |
-| PERTSN       | PEDIDOSPARC183  | PARCELASPARAGERAR182   | GERARDAS181   |
-| RELPSN       | PEDIDOSPARC193  | PARCELASPARAGERAR192   | GERARDAS191   |
-| PARCMEI      | PEDIDOSPARC203  | PARCELASPARAGERAR202   | GERARDAS201   |
-| PARCMEI-ESP  | PEDIDOSPARC213  | PARCELASPARAGERAR212   | GERARDAS211   |
-| PERTMEI      | PEDIDOSPARC223  | PARCELASPARAGERAR222   | GERARDAS221   |
-| RELPMEI      | PEDIDOSPARC233  | PARCELASPARAGERAR232   | GERARDAS231   |
+### 1. Estrutura visual
 
-## Mudanças
+`src/components/integra-contador/ParcelamentosTab.tsx`
 
-Arquivo único: `src/components/integra-contador/ParcelamentosTab.tsx`
+```text
+ParcelamentosTab
+└── Tabs (defaultValue="rfb")
+    ├── TabsList: [RFB | PGFN]
+    ├── TabsContent value="rfb"  → <RfbParcelamentos />
+    └── TabsContent value="pgfn" → <PgfnParcelamentos />
+```
 
-1. Reescrever a tabela `PARCELAS_SERVICES` com os códigos acima (`parcelasService` = `PARCELASPARAGERAR{x}2`, `emitirService` = `GERARDAS{x}1`).
-2. Em `extractParcelasList`, aceitar também o shape `listaParcelas[].parcela` / `valor` retornado por `PARCELASPARAGERAR` (já há fallback genérico, mas reforçar).
-3. No diálogo de detalhes: se `detailRow.situacao` casar com `/encerrad|liquidad|rescind/i`, exibir aviso "Parcelamento encerrado — sem parcelas a emitir" e não disparar a consulta.
-4. Quando a API responder lista vazia, mostrar "Nenhuma parcela em aberto até hoje" em vez de erro vermelho.
+Extrair o conteúdo atual para um componente `RfbParcelamentos` (lógica intacta — Integra Contador SERPRO, 8 modalidades RFB). Criar `PgfnParcelamentos` em arquivo irmão.
 
-Sem alterações em banco, edge function ou outros arquivos.
+### 2. Aba PGFN — integração via REGULARIZE
+
+O portal REGULARIZE (https://www.regularize.pgfn.gov.br) exige login com e-CNPJ ICP-Brasil ou gov.br e não tem API pública. A automação será feita por **edge function que faz scraping autenticado via proxy** usando o mesmo padrão já usado para NFe:
+
+- Nova edge function `pgfn-parcelamentos`
+  - Recebe `client_id`
+  - Carrega o certificado A1 do cliente da tabela `digital_certificates`
+  - Encaminha para o proxy PHP da Hostinger (`PGFN_PROXY_URL`, novo secret) que executa o login mTLS no REGULARIZE e devolve a lista de parcelamentos em aberto + parcelas pendentes
+  - Persiste em nova tabela `pgfn_parcelamento_results` espelhando `parcelamento_results`
+- Nova tabela `pgfn_parcelamento_results` (mesmo shape: client_id, modalidade, numero, situacao, data_pedido, valor_total, parcelas_pagas, parcelas_total, raw_response, status, error_message, consulted_at) com RLS idêntica.
+- Modalidades PGFN exibidas: "Negociação PGFN" (genérica) + as que o scraper conseguir identificar (Ordinário, ATD, NDP, NDF, Transação Excepcional).
+- Botão "Gerar guia" abre o DARF/DAS retornado pelo proxy em PDF base64.
+
+### 3. Pré-requisitos (bloqueantes para PGFN funcionar)
+
+1. Hospedar script PHP no proxy Hostinger que faça login no REGULARIZE com o certificado e exponha endpoints `/parcelamentos` e `/parcela-guia`.
+2. Criar secret `PGFN_PROXY_URL` e `PGFN_PROXY_TOKEN`.
+3. Aplicar migração da tabela `pgfn_parcelamento_results`.
+
+Sem o item 1, a aba PGFN ficará renderizada mas a consulta retornará erro "Proxy PGFN não configurado". O scraping em si depende de engenharia externa (PHP + cURL com `--cert`) fora do código React/Edge.
+
+### Arquivos afetados
+
+- `src/components/integra-contador/ParcelamentosTab.tsx` — wrapper com Tabs
+- `src/components/integra-contador/RfbParcelamentos.tsx` — novo (move conteúdo atual)
+- `src/components/integra-contador/PgfnParcelamentos.tsx` — novo
+- `supabase/functions/pgfn-parcelamentos/index.ts` — novo
+- migração: `pgfn_parcelamento_results` + RLS
+- secrets: `PGFN_PROXY_URL`, `PGFN_PROXY_TOKEN`
+
+### Observação importante
+
+Reforço que **não existe API oficial PGFN**; toda automação depende de manter um proxy PHP que faz scraping autenticado no REGULARIZE. Se o portal mudar, quebra. Alternativa mais robusta é deixar PGFN como entrada manual — posso refazer o plano nesse formato se preferir.
