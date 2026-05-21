@@ -1,37 +1,45 @@
 ## Objetivo
-Aplicar a tipografia Inter já configurada no projeto com os refinamentos profissionais sugeridos (peso, tracking, espaçamento, números tabulares), no estilo Linear/Stripe.
+Permitir marcar uma obrigação como concluída diretamente pela lista do calendário (sem abrir o detalhe, sem anexar documentos nem fazer atividades) e destacar as obrigações concluídas em azul claro em vez de verde.
 
-## Diagnóstico
-A fonte Inter já está importada (`src/index.css` linha 1) e configurada em `tailwind.config.ts` (`fontFamily.sans`). Faltam apenas os refinamentos de uso: line-height respirado, tracking negativo em títulos, números tabulares (`tnum`) para KPIs/tabelas e ativação de ligaduras Inter (`cv11`, `ss01`).
+## Mudanças em `src/pages/CalendarView.tsx`
 
-## Mudanças
+### 1. Nova função `quickCompleteInstance(instanceId, obligationId)`
+- Buscar todas as atividades da obrigação em `oblActivities` (já carregado).
+- Para cada atividade, fazer upsert em `obligation_activity_completions`:
+  - Se já existe completion → `UPDATE { completed: true, completed_at: now() }`.
+  - Senão → `INSERT { instance_id, activity_id, completed: true, completed_at: now() }`.
+- Após sucesso, recarregar `completions` do estado e exibir toast "Obrigação concluída".
+- Caso a obrigação não tenha atividades cadastradas, criar uma única "completion vazia" (com `activity_id` nulo não é possível pelo schema → nesse caso apenas mostrar toast informativo "Sem atividades configuradas"). 
 
-### Arquivo: `src/index.css`
-1. **Bloco `@layer base` global** — aplicar no `html, body`:
-   - `font-family: var(--font-sans);`
-   - `font-feature-settings: 'cv11', 'ss01', 'tnum';` (números alinhados em todo o sistema)
-   - `-webkit-font-smoothing: antialiased;`
-   - `text-rendering: optimizeLegibility;`
-   - `line-height: 1.5;`
-2. **Títulos `h1, h2, h3, h4`** — `letter-spacing: -0.02em;` e `line-height: 1.2;` (tracking levemente negativo).
-3. **Classe utilitária `.tabular-nums-strong`** para KPIs/cards numéricos: `font-feature-settings: 'tnum', 'cv11'; font-variant-numeric: tabular-nums;`
-4. **Ajuste do `--radius`** de `0.75rem` (12px) para `1.25rem` (20px), conforme a recomendação visual (cards mais "air").
-5. **Sutil suavização do background** — manter `--background: 220 20% 97%` (já é off-white próximo a #F8FAFC).
+### 2. Botão "Concluir" nas linhas pendentes
+Adicionar, ao lado do `Trash2`, nos 3 locais onde a linha pendente é renderizada:
+- Lista do dia (`paginatedDayPending` — bloco do tab pending dentro do `[pending, completed].map`).
+- Lista do mês pendentes (`paginatedMonthPending`).
 
-### Arquivo: `tailwind.config.ts`
-- Adicionar escala de tamanho coerente em `theme.extend.fontSize`:
-   - `kpi: ['48px', { lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '700' }]`
-   - `section: ['32px', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '700' }]`
-   - `menu: ['16px', { lineHeight: '1.4', fontWeight: '500' }]`
-   - `body: ['15px', { lineHeight: '1.5' }]`
-   - `label: ['13px', { lineHeight: '1.4', fontWeight: '500' }]`
+Botão:
+```tsx
+<Button
+  variant="ghost"
+  size="icon"
+  className="h-6 w-6 text-muted-foreground hover:text-emerald-600"
+  title="Concluir obrigação"
+  onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}
+>
+  <Check className="h-3.5 w-3.5" />
+</Button>
+```
+- Renderizar somente quando `!completed` (na lista do dia o template é compartilhado entre pending/completed; usar `{!completed && ...}`).
 
-### Onde aplicar
-- KPIs principais (cards de resumo do `/calendar`, dashboard, financeiro): adicionar `tabular-nums` no número.
-- Títulos de página (`text-2xl`/`text-3xl` em `Clients.tsx`, `CalendarView.tsx`, `Dashboard`, etc.): herdam o tracking negativo automaticamente via `h1/h2`.
-- Menus do sidebar (`AppSidebar.tsx`): herdam o `font-medium` global via classes existentes.
+### 3. Destaque azul claro em obrigações concluídas
+Substituir as classes verdes pelas azuis (mesma intensidade) nos 3 locais:
+- Lista do dia (linha 922-925): `bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800` → `bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800`.
+- Texto de progresso da lista do dia (linha 954): `text-green-600 dark:text-green-400` → `text-sky-600 dark:text-sky-400`.
+- Lista do mês concluídas (linha 1179): mesmas substituições do bg/border.
+- Texto de progresso do mês concluídas (linha 1209): mesma substituição de cor.
+
+Não alterar a paleta dos cards de resumo nem outros indicadores verdes (ex.: ícones de "concluído com sucesso" em outras telas).
 
 ## Fora do escopo
-- Sem troca de paleta de cores.
-- Sem alteração de componentes ou lógica.
-- Sem importação de novas fontes (Plus Jakarta / Manrope não serão adicionadas — o usuário concluiu que Inter é a melhor escolha).
+- Sem alteração de schema ou RLS.
+- Sem mudança em filtros, paginação, contadores ou cards de resumo.
+- Sem mudança em outras páginas.
