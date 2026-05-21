@@ -44,13 +44,9 @@ const MODALIDADES: Modalidade[] = [
   { idSistema: 'PARCMEI-ESP', idServico: 'PEDIDOSPARC213', label: 'RFB - Especial MEI', origem: 'RFB' },
   { idSistema: 'PERTMEI', idServico: 'PEDIDOSPARC223', label: 'RFB - PERT-MEI', origem: 'RFB' },
   { idSistema: 'RELPMEI', idServico: 'PEDIDOSPARC233', label: 'RFB - RELP-MEI', origem: 'RFB' },
-  // PGFN — Dívida Ativa da União
-  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC241', label: 'PGFN - Ordinário', origem: 'PGFN' },
-  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC242', label: 'PGFN - Simplificado', origem: 'PGFN' },
-  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC243', label: 'PGFN - PERT', origem: 'PGFN' },
-  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC244', label: 'PGFN - Negociação Excepcional', origem: 'PGFN' },
-  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC245', label: 'PGFN - Transação Extraordinária', origem: 'PGFN' },
-  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC246', label: 'PGFN - Transação Excepcional', origem: 'PGFN' },
+  // PGFN — Dívida Ativa da União: NÃO há serviço público no Integra Contador SERPRO
+  // (sistema PARCMEPN/OBTERPARC24x retorna "Identificação do sistema ou serviço inválida").
+  // Para PGFN, consultar diretamente o portal REGULARIZE.
 ];
 
 type Client = {
