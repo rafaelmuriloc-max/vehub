@@ -173,7 +173,7 @@ function CalendarMain() {
       if (slice.length === 0) continue;
       const { data } = await supabase
         .from('obligation_activity_completions')
-        .select('id, instance_id, activity_id, completed, file_url')
+        .select('id, instance_id, activity_id, completed, file_url, notes')
         .in('instance_id', slice);
       if (data) allComps.push(...(data as Completion[]));
     }
