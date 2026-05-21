@@ -101,6 +101,7 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
 function CalendarMain() {
   const { toast } = useToast();
   const [instances, setInstances] = useState<Instance[]>([]);
+  const [deletedInstances, setDeletedInstances] = useState<Instance[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -117,6 +118,7 @@ function CalendarMain() {
   const [dayCompletedPage, setDayCompletedPage] = useState(1);
   const [monthPendingPage, setMonthPendingPage] = useState(1);
   const [monthCompletedPage, setMonthCompletedPage] = useState(1);
+  const [monthDeletedPage, setMonthDeletedPage] = useState(1);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
