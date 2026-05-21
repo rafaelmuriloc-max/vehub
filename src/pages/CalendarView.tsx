@@ -607,6 +607,8 @@ function CalendarMain() {
   const monthCompletedTotalPages = Math.ceil(monthEventsCompleted.length / ITEMS_PER_PAGE);
   const paginatedMonthPending = monthEventsPending.slice((monthPendingPage - 1) * ITEMS_PER_PAGE, monthPendingPage * ITEMS_PER_PAGE);
   const paginatedMonthCompleted = monthEventsCompleted.slice((monthCompletedPage - 1) * ITEMS_PER_PAGE, monthCompletedPage * ITEMS_PER_PAGE);
+  const monthDeletedTotalPages = Math.ceil(deletedMonthEvents.length / ITEMS_PER_PAGE);
+  const paginatedMonthDeleted = deletedMonthEvents.slice((monthDeletedPage - 1) * ITEMS_PER_PAGE, monthDeletedPage * ITEMS_PER_PAGE);
 
   // Dialog progress
   const dialogProgress = detailInstance
