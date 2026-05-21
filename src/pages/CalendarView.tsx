@@ -1584,6 +1584,10 @@ function CalendarMain() {
       {selectedInstanceIds.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-card border rounded-lg shadow-lg px-4 py-3 flex items-center gap-3">
           <span className="text-sm font-medium">{selectedInstanceIds.size} selecionado(s)</span>
+          <Button variant="default" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowBulkCompleteConfirm(true)}>
+            <Check className="h-3.5 w-3.5 mr-1" />
+            Concluir selecionados
+          </Button>
           <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Excluir selecionados
@@ -1608,6 +1612,24 @@ function CalendarMain() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={deleteSelectedInstances} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir {selectedInstanceIds.size}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Complete Confirmation */}
+      <AlertDialog open={showBulkCompleteConfirm} onOpenChange={setShowBulkCompleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Concluir {selectedInstanceIds.size} obrigação(ões)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja concluir {selectedInstanceIds.size} obrigação(ões) selecionada(s)? Todas as atividades serão marcadas como concluídas automaticamente, sem anexos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={quickCompleteSelectedInstances} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              Concluir {selectedInstanceIds.size}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
