@@ -1207,7 +1207,7 @@ function CalendarMain() {
                           <div
                             key={idx}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
                           >
                             <div className="flex items-center gap-3">
                               <Checkbox
@@ -1237,7 +1237,7 @@ function CalendarMain() {
                             <div className="flex items-center justify-between mt-2">
                               <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
                               {progress.total > 0 && (
-                                <span className="text-[10px] font-medium text-green-600 dark:text-green-400">
+                                <span className="text-[10px] font-medium text-sky-600 dark:text-sky-400">
                                   {progress.completed}/{progress.total} atividades
                                 </span>
                               )}
