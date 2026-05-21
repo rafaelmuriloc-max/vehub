@@ -1,37 +1,31 @@
-## Problema
+## Ordenação por coluna na lista de clientes
 
-Ao concluir obrigações em massa, algumas não aparecem na aba "Concluídas" por dois motivos:
+Adicionar setas de ordenação no cabeçalho da tabela em `src/pages/Clients.tsx`, permitindo ordenar por qualquer coluna com ciclo asc → desc → sem ordenação.
 
-1. **Obrigações sem atividades configuradas**: a função `quickCompleteSelectedInstances` pula essas instâncias (conta como "sem atividades") e não grava nenhuma marcação de conclusão. Como `isInstanceCompleted` também devolve `false` quando a obrigação não tem atividades, elas nunca aparecem como concluídas.
-2. **Instâncias excluídas selecionadas em massa**: quando a seleção inclui itens da aba "Excluídas", eles são marcados como concluídos mas continuam com `deleted_at` preenchido, então não aparecem na lista do mês.
-3. **Fonte da verdade frágil**: a "conclusão" hoje depende de existir 1 completion por atividade. Isso é frágil para conclusão rápida/em massa.
+### Comportamento
+- Clique no cabeçalho alterna o sentido (asc/desc) e, no terceiro clique, remove a ordenação.
+- Ícone exibido: `ArrowUpDown` (neutro), `ArrowUp` (asc) e `ArrowDown` (desc) ao lado do título.
+- Apenas uma coluna ordenada por vez.
+- Coluna "Ações" não recebe seta.
 
-## Solução
+### Colunas ordenáveis
+- Código SCI — numérico natural (1, 2, 3, …, 10, 100). Implementado convertendo `sci_code` para número quando possível; valores não numéricos vão para o fim. Vazios sempre por último.
+- Empresa — alfabética (localeCompare pt-BR).
+- Documento — string.
+- Regime — usa o label de `TAX_REGIME_LABELS`.
+- Contato — string.
+- Valor Mensal — numérico.
+- Status — pelo label de `statusLabels`.
+- Venc. Certificado — por data (timestamp); sem certificado fica por último.
 
-Usar o campo `obligation_instances.status` como fonte oficial da conclusão (já existe na tabela) e marcar adicionalmente um campo de marcador "quick" para manter a cor azul.
+### Implementação técnica
+- Novo estado: `sortKey: string | null` e `sortDir: 'asc' | 'desc' | null`.
+- Função `sortedClients` derivada de `filtered` antes do `paginatedClients` (linha 956). Ordenação estável; nulos/vazios empurrados para o fim independentemente do sentido.
+- `paginatedClients` passa a fatiar `sortedClients`.
+- Componente local `SortableHead` recebendo `column`, `label` e renderizando `<TableHead>` clicável com ícone do `lucide-react`.
+- Comparador SCI: `const n = Number(v); return Number.isFinite(n) ? n : Infinity` para garantir ordem natural 1, 2, 3 (sem zero-padding).
 
-### Mudanças
-
-1. **Banco** (`src/integrations/supabase`): migração adicionando coluna `completion_kind text` em `obligation_instances` (valores: `null`, `quick`, `full`). Sem alteração destrutiva.
-
-2. **`src/pages/CalendarView.tsx`**:
-   - Em `quickCompleteSelectedInstances` e `quickCompleteInstance`:
-     - Sempre atualizar `obligation_instances` com `status='done'` e `completion_kind='quick'`, independentemente de existirem atividades.
-     - Restaurar `deleted_at=null` se a instância estava excluída (ou bloquear a ação para itens da aba Excluídas — preferência do usuário).
-     - Continuar marcando completions com `notes='quick_complete'` quando houver atividades (para consistência).
-   - Em `isInstanceCompleted`:
-     - Retornar `true` quando `instance.status === 'done'` OU quando todas as atividades estão concluídas (mantém retrocompatibilidade).
-   - Em `isQuickCompleted`:
-     - Retornar `true` quando `instance.completion_kind === 'quick'` OU pelo critério atual (notes).
-   - Em fluxos que "desfazem" conclusão (toggle individual), zerar `status` e `completion_kind` da instância.
-   - Carregar os campos novos em `loadData` (já busca instances).
-
-3. **Aba "Excluídas"**: desabilitar o botão de "Concluir selecionadas" quando a seleção contém itens excluídos, ou perguntar ao usuário se prefere que a ação restaure + conclua.
-
-## Pergunta antes de implementar
-
-Quando uma obrigação está na aba **Excluídas** e o usuário seleciona ela junto com outras e clica em "Concluir em massa", o que deve acontecer?
-
-- (A) Ignorar as excluídas (só conclui as não-excluídas)
-- (B) Restaurar automaticamente e concluir
-- (C) Bloquear a ação inteira e avisar
+### Fora de escopo
+- Persistência da ordenação (não salva entre sessões).
+- Ordenação multi-coluna.
+- Mudanças no card view mobile (linha 1446) — mantém a ordem atual.
