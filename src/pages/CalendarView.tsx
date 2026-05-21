@@ -331,6 +331,14 @@ function CalendarMain() {
     return { completed: completedCount, total: oblActivities.length, percent: Math.round((completedCount / oblActivities.length) * 100) };
   }
 
+  function isQuickCompleted(instanceId: string, obligationId: string): boolean {
+    const oblActivities = activities.filter(a => a.obligation_id === obligationId);
+    if (oblActivities.length === 0) return false;
+    const comps = oblActivities.map(act => completions.find(c => c.instance_id === instanceId && c.activity_id === act.id));
+    if (comps.some(c => !c?.completed)) return false;
+    return comps.every(c => c?.notes === 'quick_complete');
+  }
+
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
     if (!detailInstanceId) return;
     const existing = getCompletion(activityId);
