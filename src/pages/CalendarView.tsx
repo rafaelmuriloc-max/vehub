@@ -524,9 +524,9 @@ function CalendarMain() {
       for (const act of oblActs) {
         const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
         if (existing) {
-          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: nowIso }).eq('id', existing.id);
+          await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: nowIso, notes: 'quick_complete' }).eq('id', existing.id);
         } else {
-          await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso });
+          await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
         }
       }
       await loadData();
