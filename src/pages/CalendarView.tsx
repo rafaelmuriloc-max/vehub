@@ -395,6 +395,11 @@ function CalendarMain() {
       });
     }
 
+    // If user is un-checking an activity, clear quick-complete marker on the instance
+    if (currentlyCompleted) {
+      await supabase.from('obligation_instances').update({ status: 'pending', completion_kind: null }).eq('id', detailInstanceId);
+    }
+
     // Auto-start chain
     if (!currentlyCompleted && detailObligation && detailInstance) {
       const oblActivities = activities.filter(a => a.obligation_id === detailObligation.id).sort((a, b) => a.order - b.order);
