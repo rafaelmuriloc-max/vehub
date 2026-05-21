@@ -16,17 +16,26 @@ type Modalidade = {
   idSistema: string;
   idServico: string;
   label: string;
+  origem: 'RFB' | 'PGFN';
 };
 
 const MODALIDADES: Modalidade[] = [
-  { idSistema: 'PARCSN', idServico: 'PEDIDOSPARC163', label: 'Ordinário SN' },
-  { idSistema: 'PARCSN-ESP', idServico: 'PEDIDOSPARC173', label: 'Especial SN' },
-  { idSistema: 'PERTSN', idServico: 'PEDIDOSPARC183', label: 'PERT-SN' },
-  { idSistema: 'RELPSN', idServico: 'PEDIDOSPARC193', label: 'RELP-SN' },
-  { idSistema: 'PARCMEI', idServico: 'PEDIDOSPARC203', label: 'Ordinário MEI' },
-  { idSistema: 'PARCMEI-ESP', idServico: 'PEDIDOSPARC213', label: 'Especial MEI' },
-  { idSistema: 'PERTMEI', idServico: 'PEDIDOSPARC223', label: 'PERT-MEI' },
-  { idSistema: 'RELPMEI', idServico: 'PEDIDOSPARC233', label: 'RELP-MEI' },
+  // Receita Federal — Simples Nacional / MEI
+  { idSistema: 'PARCSN', idServico: 'PEDIDOSPARC163', label: 'RFB - Ordinário SN', origem: 'RFB' },
+  { idSistema: 'PARCSN-ESP', idServico: 'PEDIDOSPARC173', label: 'RFB - Especial SN', origem: 'RFB' },
+  { idSistema: 'PERTSN', idServico: 'PEDIDOSPARC183', label: 'RFB - PERT-SN', origem: 'RFB' },
+  { idSistema: 'RELPSN', idServico: 'PEDIDOSPARC193', label: 'RFB - RELP-SN', origem: 'RFB' },
+  { idSistema: 'PARCMEI', idServico: 'PEDIDOSPARC203', label: 'RFB - Ordinário MEI', origem: 'RFB' },
+  { idSistema: 'PARCMEI-ESP', idServico: 'PEDIDOSPARC213', label: 'RFB - Especial MEI', origem: 'RFB' },
+  { idSistema: 'PERTMEI', idServico: 'PEDIDOSPARC223', label: 'RFB - PERT-MEI', origem: 'RFB' },
+  { idSistema: 'RELPMEI', idServico: 'PEDIDOSPARC233', label: 'RFB - RELP-MEI', origem: 'RFB' },
+  // PGFN — Dívida Ativa da União
+  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC241', label: 'PGFN - Ordinário', origem: 'PGFN' },
+  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC242', label: 'PGFN - Simplificado', origem: 'PGFN' },
+  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC243', label: 'PGFN - PERT', origem: 'PGFN' },
+  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC244', label: 'PGFN - Negociação Excepcional', origem: 'PGFN' },
+  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC245', label: 'PGFN - Transação Extraordinária', origem: 'PGFN' },
+  { idSistema: 'PARCMEPN', idServico: 'OBTERPARC246', label: 'PGFN - Transação Excepcional', origem: 'PGFN' },
 ];
 
 type Client = {
@@ -40,6 +49,7 @@ type ParcRow = {
   client_id: string;
   modalidade: string;
   modalidade_label: string | null;
+  origem?: string | null;
   numero_parcelamento: string | null;
   situacao: string | null;
   data_pedido: string | null;
@@ -120,6 +130,7 @@ export default function ParcelamentosTab() {
   const [search, setSearch] = useState('');
   const [filterModalidade, setFilterModalidade] = useState('all');
   const [filterSituacao, setFilterSituacao] = useState('all');
+  const [filterOrigem, setFilterOrigem] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [consultingId, setConsultingId] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
@@ -175,8 +186,9 @@ export default function ParcelamentosTab() {
           }
           toInsert.push({
             client_id: clientId,
-            modalidade: mod.idSistema,
+            modalidade: mod.idServico,
             modalidade_label: mod.label,
+            origem: mod.origem,
             status: 'error',
             error_message: msgs || data?.error || 'Erro desconhecido',
             raw_response: data,
@@ -192,8 +204,9 @@ export default function ParcelamentosTab() {
           const n = normalizeParc(p);
           toInsert.push({
             client_id: clientId,
-            modalidade: mod.idSistema,
+            modalidade: mod.idServico,
             modalidade_label: mod.label,
+            origem: mod.origem,
             numero_parcelamento: n.numero,
             situacao: n.situacao,
             data_pedido: n.data_pedido,
@@ -208,8 +221,9 @@ export default function ParcelamentosTab() {
       } catch (err: any) {
         toInsert.push({
           client_id: clientId,
-          modalidade: mod.idSistema,
+          modalidade: mod.idServico,
           modalidade_label: mod.label,
+          origem: mod.origem,
           status: 'error',
           error_message: err?.message || String(err),
           consulted_at: new Date().toISOString(),
@@ -297,6 +311,9 @@ export default function ParcelamentosTab() {
       if (filterModalidade !== 'all') {
         if (!it.parc || it.parc.modalidade !== filterModalidade) return false;
       }
+      if (filterOrigem !== 'all') {
+        if (!it.parc || (it.parc.origem || 'RFB') !== filterOrigem) return false;
+      }
       if (filterSituacao !== 'all') {
         if (filterSituacao === 'sem' && it.parc) return false;
         if (filterSituacao === 'com' && (!it.parc || it.parc.status !== 'success')) return false;
@@ -305,7 +322,7 @@ export default function ParcelamentosTab() {
       }
       return true;
     });
-  }, [display, search, filterModalidade, filterSituacao]);
+  }, [display, search, filterModalidade, filterOrigem, filterSituacao]);
 
   // Para seleção: lista única de clientes filtrados
   const filteredClientIds = useMemo(() => {
@@ -363,8 +380,16 @@ export default function ParcelamentosTab() {
               <SelectContent>
                 <SelectItem value="all">Todas as modalidades</SelectItem>
                 {MODALIDADES.map(m => (
-                  <SelectItem key={m.idSistema} value={m.idSistema}>{m.label}</SelectItem>
+                  <SelectItem key={m.idServico} value={m.idServico}>{m.label}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterOrigem} onValueChange={setFilterOrigem}>
+              <SelectTrigger className="md:w-36"><SelectValue placeholder="Origem" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas origens</SelectItem>
+                <SelectItem value="RFB">Receita Federal</SelectItem>
+                <SelectItem value="PGFN">PGFN</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterSituacao} onValueChange={setFilterSituacao}>
@@ -413,6 +438,7 @@ export default function ParcelamentosTab() {
                 </TableHead>
                 <TableHead>Empresa</TableHead>
                 <TableHead>CNPJ</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Modalidade</TableHead>
                 <TableHead>Nº Parc.</TableHead>
                 <TableHead>Situação</TableHead>
@@ -426,13 +452,13 @@ export default function ParcelamentosTab() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8">
+                  <TableCell colSpan={12} className="text-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                     Nenhum cliente encontrado
                   </TableCell>
                 </TableRow>
@@ -447,6 +473,11 @@ export default function ParcelamentosTab() {
                     </TableCell>
                     <TableCell className="font-medium">{it.client.company_name}</TableCell>
                     <TableCell className="font-mono text-xs">{formatCnpj(it.client.document)}</TableCell>
+                    <TableCell>
+                      {it.parc?.origem
+                        ? <Badge variant={it.parc.origem === 'PGFN' ? 'secondary' : 'outline'}>{it.parc.origem}</Badge>
+                        : '-'}
+                    </TableCell>
                     <TableCell>{it.parc?.modalidade_label || '-'}</TableCell>
                     <TableCell className="font-mono text-xs">{it.parc?.numero_parcelamento || '-'}</TableCell>
                     <TableCell>{statusBadge(it.parc)}</TableCell>
