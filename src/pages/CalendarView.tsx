@@ -303,6 +303,35 @@ function CalendarMain() {
     return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
+  const deletedMonthEvents = useMemo(() => {
+    const result: CalendarEvent[] = [];
+    for (const inst of deletedInstances) {
+      const obl = oblMap.get(inst.obligation_id);
+      if (!obl) continue;
+      const client = clientMap.get(inst.client_id);
+      if (!client) continue;
+      const dept = deptMap.get(obl.department_id);
+      if (!dept) continue;
+      if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
+      if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
+      if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+      const refDate = new Date(inst.reference_month + 'T00:00:00');
+      const compDate = obl.competence_rule === 'previous'
+        ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
+        : refDate;
+      const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const competenceLabel = `${names[compDate.getMonth()]}/${compDate.getFullYear()}`;
+      const refDay = (obl.due_day ?? obl.target_day ?? obl.alert_day ?? 1);
+      const date = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
+      result.push({
+        clientId: client.id, clientName: client.company_name,
+        obligationName: obl.name, deptName: dept.name,
+        type: 'due', date, instanceId: inst.id, obligationId: obl.id, competenceLabel,
+      });
+    }
+    return result.sort((a, b) => a.date.localeCompare(b.date));
+  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
+
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
   useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient]);
 
