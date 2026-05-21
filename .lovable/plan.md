@@ -1,26 +1,37 @@
-## Concluir em massa no calendário
+## Problema
 
-Hoje a barra flutuante de seleção em `src/pages/CalendarView.tsx` mostra apenas "Excluir selecionados" + "Limpar". Adicionar um terceiro botão "Concluir selecionados" que aplica o mesmo fluxo de `quickCompleteInstance` em lote.
+Ao concluir obrigações em massa, algumas não aparecem na aba "Concluídas" por dois motivos:
 
-### Mudanças (apenas `src/pages/CalendarView.tsx`)
+1. **Obrigações sem atividades configuradas**: a função `quickCompleteSelectedInstances` pula essas instâncias (conta como "sem atividades") e não grava nenhuma marcação de conclusão. Como `isInstanceCompleted` também devolve `false` quando a obrigação não tem atividades, elas nunca aparecem como concluídas.
+2. **Instâncias excluídas selecionadas em massa**: quando a seleção inclui itens da aba "Excluídas", eles são marcados como concluídos mas continuam com `deleted_at` preenchido, então não aparecem na lista do mês.
+3. **Fonte da verdade frágil**: a "conclusão" hoje depende de existir 1 completion por atividade. Isso é frágil para conclusão rápida/em massa.
 
-1. **Nova função `quickCompleteSelectedInstances()`**
-   - Itera `selectedInstanceIds`.
-   - Para cada `instanceId`, resolve o `obligation_id` via `instances.find(i => i.id === instanceId)` (e fallback no `monthInstances`/`deletedInstances` se necessário).
-   - Pula instâncias já concluídas (`isInstanceCompleted`) e instâncias sem atividades configuradas (acumula contador para toast).
-   - Para as restantes, reaproveita a lógica do `quickCompleteInstance`: para cada atividade da obrigação, `update` se já existir completion ou `insert` com `completed: true`, `completed_at: now`, `notes: 'quick_complete'` (mantém o destaque azul claro na aba Concluídas).
-   - Faz um único `loadData()` ao final, fecha o dialog de confirmação, chama `clearSelection()` e emite toast com `X concluída(s)` + `Y já concluídas` + `Z sem atividades` quando aplicável.
+## Solução
 
-2. **Novo estado `showBulkCompleteConfirm`** (mesmo padrão de `showBulkDeleteConfirm`).
+Usar o campo `obligation_instances.status` como fonte oficial da conclusão (já existe na tabela) e marcar adicionalmente um campo de marcador "quick" para manter a cor azul.
 
-3. **UI da barra de seleção (linhas ~1548-1577)**
-   - Inserir botão `variant="default"` com ícone `CheckCircle2` (já importado) e label **"Concluir selecionados"** antes do botão de excluir.
-   - Abre `AlertDialog` próprio com texto "Deseja concluir N obrigação(ões) selecionada(s)? As atividades serão marcadas como concluídas automaticamente."
-   - Ação confirma chamando `quickCompleteSelectedInstances`.
+### Mudanças
 
-4. **Sem mudanças** em schema, RLS, queries de carregamento, ou outras telas.
+1. **Banco** (`src/integrations/supabase`): migração adicionando coluna `completion_kind text` em `obligation_instances` (valores: `null`, `quick`, `full`). Sem alteração destrutiva.
 
-### Fora de escopo
-- Não altera o comportamento de exclusão.
-- Não toca em `Obligations.tsx`, `Documents.tsx`, etc.
-- Não muda a forma como obrigações concluídas em massa aparecem (continuam com o destaque azul claro porque usam `notes: 'quick_complete'`).
+2. **`src/pages/CalendarView.tsx`**:
+   - Em `quickCompleteSelectedInstances` e `quickCompleteInstance`:
+     - Sempre atualizar `obligation_instances` com `status='done'` e `completion_kind='quick'`, independentemente de existirem atividades.
+     - Restaurar `deleted_at=null` se a instância estava excluída (ou bloquear a ação para itens da aba Excluídas — preferência do usuário).
+     - Continuar marcando completions com `notes='quick_complete'` quando houver atividades (para consistência).
+   - Em `isInstanceCompleted`:
+     - Retornar `true` quando `instance.status === 'done'` OU quando todas as atividades estão concluídas (mantém retrocompatibilidade).
+   - Em `isQuickCompleted`:
+     - Retornar `true` quando `instance.completion_kind === 'quick'` OU pelo critério atual (notes).
+   - Em fluxos que "desfazem" conclusão (toggle individual), zerar `status` e `completion_kind` da instância.
+   - Carregar os campos novos em `loadData` (já busca instances).
+
+3. **Aba "Excluídas"**: desabilitar o botão de "Concluir selecionadas" quando a seleção contém itens excluídos, ou perguntar ao usuário se prefere que a ação restaure + conclua.
+
+## Pergunta antes de implementar
+
+Quando uma obrigação está na aba **Excluídas** e o usuário seleciona ela junto com outras e clica em "Concluir em massa", o que deve acontecer?
+
+- (A) Ignorar as excluídas (só conclui as não-excluídas)
+- (B) Restaurar automaticamente e concluir
+- (C) Bloquear a ação inteira e avisar
