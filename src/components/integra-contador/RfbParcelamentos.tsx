@@ -133,7 +133,7 @@ function normalizeParc(p: any) {
   };
 }
 
-export default function ParcelamentosTab() {
+export default function RfbParcelamentos() {
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [rows, setRows] = useState<ParcRow[]>([]);
@@ -484,13 +484,6 @@ export default function ParcelamentosTab() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Parcelamentos</h1>
-        <p className="text-muted-foreground mt-1">
-          Parcelamentos SN/MEI das empresas consultados via Integra Contador
-        </p>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Filtros</CardTitle>
