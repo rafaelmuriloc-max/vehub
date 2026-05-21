@@ -1129,7 +1129,7 @@ function CalendarMain() {
           </div>
         </CardHeader>
         <CardContent>
-          {monthEvents.length === 0 ? (
+          {monthEvents.length === 0 && deletedMonthEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <p className="text-muted-foreground text-sm">Nenhuma obrigação com data de meta neste mês</p>
@@ -1144,6 +1144,10 @@ function CalendarMain() {
                 <TabsTrigger value="completed">
                   Concluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="deleted">
+                  Excluídas
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
                 </TabsTrigger>
               </TabsList>
 
