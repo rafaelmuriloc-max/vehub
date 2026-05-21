@@ -1,28 +1,26 @@
-## Objetivo
+## Concluir em massa no calendário
 
-Adicionar uma aba "Excluídas" no calendário mostrando obrigações excluídas (soft delete), com possibilidade de restaurar.
+Hoje a barra flutuante de seleção em `src/pages/CalendarView.tsx` mostra apenas "Excluir selecionados" + "Limpar". Adicionar um terceiro botão "Concluir selecionados" que aplica o mesmo fluxo de `quickCompleteInstance` em lote.
 
-## Mudanças
+### Mudanças (apenas `src/pages/CalendarView.tsx`)
 
-### 1. Banco (migração)
-- Adicionar coluna `deleted_at timestamptz NULL` em `obligation_instances`.
-- Índice parcial `where deleted_at is null` para performance.
+1. **Nova função `quickCompleteSelectedInstances()`**
+   - Itera `selectedInstanceIds`.
+   - Para cada `instanceId`, resolve o `obligation_id` via `instances.find(i => i.id === instanceId)` (e fallback no `monthInstances`/`deletedInstances` se necessário).
+   - Pula instâncias já concluídas (`isInstanceCompleted`) e instâncias sem atividades configuradas (acumula contador para toast).
+   - Para as restantes, reaproveita a lógica do `quickCompleteInstance`: para cada atividade da obrigação, `update` se já existir completion ou `insert` com `completed: true`, `completed_at: now`, `notes: 'quick_complete'` (mantém o destaque azul claro na aba Concluídas).
+   - Faz um único `loadData()` ao final, fecha o dialog de confirmação, chama `clearSelection()` e emite toast com `X concluída(s)` + `Y já concluídas` + `Z sem atividades` quando aplicável.
 
-### 2. Soft delete em `CalendarView.tsx`
-- Substituir os `.delete()` em `deleteInstance()` e no bulk delete por `update({ deleted_at: now })` em `obligation_instances`. Manter as completions (não apagar).
-- Em `loadData()` (linha 151), filtrar `.is('deleted_at', null)` ao listar instâncias do mês.
-- Criar uma segunda query (lazy, só quando a aba "Excluídas" é aberta) que busca instâncias com `deleted_at not null` no mês visível.
+2. **Novo estado `showBulkCompleteConfirm`** (mesmo padrão de `showBulkDeleteConfirm`).
 
-### 3. UI — nova aba "Excluídas"
-- Hoje o mês tem tabs "A fazer / Atrasados / Concluídos" (3 cards). Adicionar 4ª tab **Excluídas** (cinza).
-- Reaproveitar o mesmo card-list da aba de concluídas, com fundo `bg-muted/40 border-dashed` e badge cinza.
-- Cada item terá botão **Restaurar** (ícone `Undo2`) ao invés de Concluir, que faz `update({ deleted_at: null })` e recarrega.
-- Botão lixeira na aba Excluídas executa hard delete (igual hoje).
-- Paginação reaproveita o padrão das outras abas.
+3. **UI da barra de seleção (linhas ~1548-1577)**
+   - Inserir botão `variant="default"` com ícone `CheckCircle2` (já importado) e label **"Concluir selecionados"** antes do botão de excluir.
+   - Abre `AlertDialog` próprio com texto "Deseja concluir N obrigação(ões) selecionada(s)? As atividades serão marcadas como concluídas automaticamente."
+   - Ação confirma chamando `quickCompleteSelectedInstances`.
 
-### 4. Demais telas
-- Não alterar `Obligations.tsx`, `Documents.tsx`, `ClientObligationsTab.tsx` etc. nesta entrega. Se necessário ocultar excluídas globalmente, fica para depois — escopo aqui é só o calendário.
+4. **Sem mudanças** em schema, RLS, queries de carregamento, ou outras telas.
 
-## Fora do escopo
-- Nada de mudanças na lista do dia (só na visão mensal).
-- Sem alterar RLS além do necessário (coluna nova só precisa de update permitido — já coberto pelas policies atuais de admin).
+### Fora de escopo
+- Não altera o comportamento de exclusão.
+- Não toca em `Obligations.tsx`, `Documents.tsx`, etc.
+- Não muda a forma como obrigações concluídas em massa aparecem (continuam com o destaque azul claro porque usam `notes: 'quick_complete'`).
