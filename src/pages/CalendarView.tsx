@@ -534,9 +534,8 @@ function CalendarMain() {
 
   async function deleteInstance() {
     if (!deleteInstanceId) return;
-    await supabase.from('obligation_activity_completions').delete().eq('instance_id', deleteInstanceId);
-    await supabase.from('obligation_instances').delete().eq('id', deleteInstanceId);
-    toast({ title: 'Obrigação excluída com sucesso' });
+    await supabase.from('obligation_instances').update({ deleted_at: new Date().toISOString() }).eq('id', deleteInstanceId);
+    toast({ title: 'Obrigação movida para Excluídas' });
     setDeleteInstanceId(null);
     if (detailInstanceId === deleteInstanceId) setDetailInstanceId(null);
     await loadData();
@@ -544,14 +543,32 @@ function CalendarMain() {
 
   async function deleteSelectedInstances() {
     const ids = Array.from(selectedInstanceIds);
-    for (const id of ids) {
-      await supabase.from('obligation_activity_completions').delete().eq('instance_id', id);
-      await supabase.from('obligation_instances').delete().eq('id', id);
-    }
-    toast({ title: `${ids.length} obrigação(ões) excluída(s) com sucesso` });
+    await supabase.from('obligation_instances').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+    toast({ title: `${ids.length} obrigação(ões) movida(s) para Excluídas` });
     clearSelection();
     setShowBulkDeleteConfirm(false);
     if (detailInstanceId && ids.includes(detailInstanceId)) setDetailInstanceId(null);
+    await loadData();
+  }
+
+  async function restoreInstance(instanceId: string) {
+    const { error } = await supabase.from('obligation_instances').update({ deleted_at: null }).eq('id', instanceId);
+    if (error) {
+      toast({ title: 'Erro ao restaurar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Obrigação restaurada' });
+    await loadData();
+  }
+
+  async function hardDeleteInstance(instanceId: string) {
+    await supabase.from('obligation_activity_completions').delete().eq('instance_id', instanceId);
+    const { error } = await supabase.from('obligation_instances').delete().eq('id', instanceId);
+    if (error) {
+      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Obrigação excluída permanentemente' });
     await loadData();
   }
 
