@@ -676,11 +676,70 @@ export default function ParcelamentosTab() {
               {detailRow.error_message && (
                 <div className="text-sm text-destructive">{detailRow.error_message}</div>
               )}
-              <ScrollArea className="max-h-[400px] rounded border">
-                <pre className="text-xs p-3 whitespace-pre-wrap break-all">
-                  {JSON.stringify(detailRow.raw_response, null, 2)}
-                </pre>
-              </ScrollArea>
+
+              <div className="border-t pt-3">
+                <div className="text-sm font-semibold mb-2">Parcelas em aberto até hoje</div>
+                {detailRow.origem === 'PGFN' ? (
+                  <div className="text-sm text-muted-foreground">
+                    Emissão de guia PGFN não suportada via Integra Contador.
+                  </div>
+                ) : !PARCELAS_SERVICES[detailRow.modalidade] ? (
+                  <div className="text-sm text-muted-foreground">
+                    Modalidade sem suporte a emissão de guia.
+                  </div>
+                ) : parcelasLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando parcelas...
+                  </div>
+                ) : parcelasError ? (
+                  <div className="text-sm text-destructive">{parcelasError}</div>
+                ) : parcelas.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Nenhuma parcela em aberto.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Parcela</TableHead>
+                        <TableHead>Valor</TableHead>
+                        <TableHead className="text-right">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {parcelas.map((p) => (
+                        <TableRow key={p.parcela}>
+                          <TableCell className="font-mono">{formatParcelaLabel(p.parcela)}</TableCell>
+                          <TableCell>
+                            {p.valor != null
+                              ? p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              onClick={() => handleGerarGuia(p.parcela)}
+                              disabled={emittingParcela === p.parcela}
+                            >
+                              {emittingParcela === p.parcela
+                                ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                : null}
+                              Gerar guia
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground">Resposta bruta</summary>
+                <ScrollArea className="max-h-[300px] rounded border mt-2">
+                  <pre className="text-xs p-3 whitespace-pre-wrap break-all">
+                    {JSON.stringify(detailRow.raw_response, null, 2)}
+                  </pre>
+                </ScrollArea>
+              </details>
             </div>
           )}
         </DialogContent>
