@@ -128,6 +128,7 @@ function CalendarMain() {
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showBulkCompleteConfirm, setShowBulkCompleteConfirm] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
@@ -548,6 +549,41 @@ function CalendarMain() {
     clearSelection();
     setShowBulkDeleteConfirm(false);
     if (detailInstanceId && ids.includes(detailInstanceId)) setDetailInstanceId(null);
+    await loadData();
+  }
+
+  async function quickCompleteSelectedInstances() {
+    const ids = Array.from(selectedInstanceIds);
+    const allInstances = [...instances, ...deletedInstances];
+    const nowIso = new Date().toISOString();
+    let done = 0, already = 0, noActs = 0, errors = 0;
+    for (const instanceId of ids) {
+      const inst = allInstances.find(i => i.id === instanceId);
+      if (!inst) { errors++; continue; }
+      if (isInstanceCompleted(instanceId, inst.obligation_id)) { already++; continue; }
+      const oblActs = activities.filter(a => a.obligation_id === inst.obligation_id);
+      if (oblActs.length === 0) { noActs++; continue; }
+      try {
+        for (const act of oblActs) {
+          const existing = completions.find(c => c.instance_id === instanceId && c.activity_id === act.id);
+          if (existing) {
+            await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: nowIso, notes: 'quick_complete' }).eq('id', existing.id);
+          } else {
+            await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
+          }
+        }
+        done++;
+      } catch {
+        errors++;
+      }
+    }
+    const parts = [`${done} concluída(s)`];
+    if (already) parts.push(`${already} já concluída(s)`);
+    if (noActs) parts.push(`${noActs} sem atividades`);
+    if (errors) parts.push(`${errors} com erro`);
+    toast({ title: 'Conclusão em massa', description: parts.join(' • ') });
+    clearSelection();
+    setShowBulkCompleteConfirm(false);
     await loadData();
   }
 
@@ -1548,6 +1584,10 @@ function CalendarMain() {
       {selectedInstanceIds.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-card border rounded-lg shadow-lg px-4 py-3 flex items-center gap-3">
           <span className="text-sm font-medium">{selectedInstanceIds.size} selecionado(s)</span>
+          <Button variant="default" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowBulkCompleteConfirm(true)}>
+            <Check className="h-3.5 w-3.5 mr-1" />
+            Concluir selecionados
+          </Button>
           <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Excluir selecionados
@@ -1572,6 +1612,24 @@ function CalendarMain() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={deleteSelectedInstances} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir {selectedInstanceIds.size}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Complete Confirmation */}
+      <AlertDialog open={showBulkCompleteConfirm} onOpenChange={setShowBulkCompleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Concluir {selectedInstanceIds.size} obrigação(ões)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja concluir {selectedInstanceIds.size} obrigação(ões) selecionada(s)? Todas as atividades serão marcadas como concluídas automaticamente, sem anexos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={quickCompleteSelectedInstances} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              Concluir {selectedInstanceIds.size}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
