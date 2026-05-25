@@ -428,6 +428,23 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DrivePickerDialog
+        open={drivePickerOpen}
+        onOpenChange={setDrivePickerOpen}
+        multiple
+        onPick={async (picked) => {
+          for (const df of picked) {
+            try {
+              const { blob, mimeType } = await downloadDriveFile(df.id);
+              const file = new File([blob], df.name, { type: df.mimeType || mimeType });
+              onAddPendingFiles?.([file]);
+            } catch (e: any) {
+              toast({ title: 'Erro ao baixar do Drive', description: `${df.name}: ${e.message}`, variant: 'destructive' });
+            }
+          }
+        }}
+      />
     </>
   );
 }
