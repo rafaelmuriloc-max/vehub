@@ -9,7 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Paperclip, Upload, X } from 'lucide-react';
+import { Paperclip, Upload, X, HardDrive } from 'lucide-react';
+import { DrivePickerDialog } from '@/components/drive/DrivePickerDialog';
+import { downloadDriveFile } from '@/components/drive/DriveBrowser';
 
 type TaskStatus = 'todo' | 'in_progress' | 'done';
 type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -50,6 +52,8 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
   const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>([]);
   const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [drivePickerDir, setDrivePickerDir] = useState<'input' | 'output'>('input');
 
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as TaskStatus, priority: 'medium' as TaskPriority,
@@ -268,6 +272,9 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
                     <Button type="button" size="sm" className="w-full sm:w-auto" disabled={uploading || editNewFiles.length === 0} onClick={() => uploadEditFiles(dir)}>
                       {uploading ? 'Enviando...' : 'Anexar'}
                     </Button>
+                    <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => { setDrivePickerDir(dir); setDrivePickerOpen(true); }}>
+                      <HardDrive className="h-3.5 w-3.5 mr-1" />Drive
+                    </Button>
                   </div>
                 </div>
               );
@@ -276,6 +283,39 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
           </form>
         )}
       </DialogContent>
+      <DrivePickerDialog
+        open={drivePickerOpen}
+        onOpenChange={setDrivePickerOpen}
+        multiple
+        onPick={async (picked) => {
+          if (!editing || picked.length === 0) return;
+          setUploading(true);
+          const inserted: TaskAttachment[] = [];
+          const failed: string[] = [];
+          for (const df of picked) {
+            try {
+              const { blob, mimeType } = await downloadDriveFile(df.id);
+              const safe = df.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.\-]+/g, '_');
+              const path = `tasks/${editing.id}/${Date.now()}_${safe}`;
+              const file = new File([blob], df.name, { type: df.mimeType || mimeType });
+              const up = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || undefined });
+              if (up.error) { failed.push(df.name); continue; }
+              const { data, error } = await supabase.from('task_attachments').insert({
+                task_id: editing.id, file_url: path, file_name: df.name,
+                file_type: file.type || null, file_size: file.size, uploaded_by: user?.id, direction: drivePickerDir,
+              } as any).select('*').single();
+              if (error || !data) { failed.push(df.name); continue; }
+              inserted.push(data as TaskAttachment);
+            } catch {
+              failed.push(df.name);
+            }
+          }
+          setEditAttachments(prev => [...prev, ...inserted]);
+          setUploading(false);
+          if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
+          else toast({ title: 'Anexos adicionados do Drive' });
+        }}
+      />
     </Dialog>
   );
 }
