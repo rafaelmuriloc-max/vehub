@@ -1,4 +1,4 @@
-import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail } from 'lucide-react';
+import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -16,6 +16,7 @@ const menuItems = [
   { title: 'Chat', icon: MessageCircle, path: '/chat' },
   { title: 'Fiscal', icon: Scale, path: '/fiscal' },
   { title: 'E-mail', icon: Mail, path: '/email' },
+  { title: 'Drive', icon: HardDrive, path: '/drive' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
 ];
 
