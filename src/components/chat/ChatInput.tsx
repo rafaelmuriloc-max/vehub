@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, KeyboardEvent, ClipboardEvent } from 'react';
-import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile, Reply } from 'lucide-react';
+import { Send, Plus, Image, Video, FileText, MapPin, Contact, Mic, X, Check, FolderOpen, Smile, Reply, HardDrive } from 'lucide-react';
+import { DrivePickerDialog } from '@/components/drive/DrivePickerDialog';
+import { downloadDriveFile } from '@/components/drive/DriveBrowser';
 import EmojiPicker, { EmojiStyle, type EmojiClickData } from 'emoji-picker-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -40,6 +42,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
   const [contactPhone, setContactPhone] = useState('');
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -213,6 +216,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
     { icon: Video, label: 'Vídeo', onClick: () => { setPopoverOpen(false); videoInputRef.current?.click(); } },
     { icon: Mic, label: 'Áudio', onClick: () => { setPopoverOpen(false); audioInputRef.current?.click(); } },
     { icon: FileText, label: 'Arquivo', onClick: () => { setPopoverOpen(false); fileInputRef.current?.click(); } },
+    { icon: HardDrive, label: 'Google Drive', onClick: () => { setPopoverOpen(false); setDrivePickerOpen(true); } },
     ...(onPickFromObligation ? [{ icon: FolderOpen, label: 'Anexar do sistema', onClick: () => { setPopoverOpen(false); onPickFromObligation(); } }] : []),
     { icon: MapPin, label: 'Localização', onClick: handleLocationClick },
     { icon: Contact, label: 'Contato', onClick: () => { setPopoverOpen(false); setContactDialogOpen(true); } },
