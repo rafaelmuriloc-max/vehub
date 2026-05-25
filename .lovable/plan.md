@@ -1,51 +1,82 @@
-## Abas RFB e PGFN dentro de Parcelamentos
+# Integração Google Drive (conta única do escritório)
 
-Reorganizar o `ParcelamentosTab` em duas sub-abas (`Tabs` do shadcn) com a mesma UX (busca, filtros, seleção em massa, tabela, diálogo de detalhes), trocando apenas a fonte dos dados.
+Conectar o Drive da conta Google do escritório e disponibilizar acesso completo (listar, baixar, upload, criar, mover, excluir) em duas frentes do sistema.
 
-### 1. Estrutura visual
+## 1. Conexão
 
-`src/components/integra-contador/ParcelamentosTab.tsx`
+- Linkar o connector **Google Drive** do Lovable ao projeto (uma conexão única, OAuth feito pelo admin do escritório). Os arquivos vistos serão sempre os daquela conta.
+- Todas as chamadas passam pelo gateway `https://connector-gateway.lovable.dev/google_drive/drive/v3` via Edge Function (`drive-api`) que injeta `LOVABLE_API_KEY` + `GOOGLE_DRIVE_API_KEY`.
+- Restringir uso da Edge Function a usuários autenticados (admin e employee).
+
+## 2. Edge Function `drive-api`
+
+Função única que faz proxy para o Drive, com ações:
+- `list` — lista arquivos/pastas (parâmetros: `folderId`, `q`, `pageToken`, `pageSize`, `orderBy`).
+- `get` — metadados de um arquivo.
+- `download` — baixa conteúdo (`alt=media`) e devolve como stream ou base64.
+- `upload` — multipart upload (`name`, `mimeType`, `parents`, conteúdo base64).
+- `createFolder` — cria pasta.
+- `move` — atualiza `parents` (addParents/removeParents).
+- `rename` — `PATCH /files/{id}` com novo `name`.
+- `delete` — `DELETE /files/{id}` (vai para lixeira do Drive).
+
+Validação de input com Zod e retorno padronizado `{ ok, data, error }`.
+
+## 3. Nova página `/drive`
+
+Rota adicionada no `App.tsx` + item no `AppSidebar` (ícone HardDrive).
+
+Layout:
 
 ```text
-ParcelamentosTab
-└── Tabs (defaultValue="rfb")
-    ├── TabsList: [RFB | PGFN]
-    ├── TabsContent value="rfb"  → <RfbParcelamentos />
-    └── TabsContent value="pgfn" → <PgfnParcelamentos />
+┌──────────────────────────────────────────────────┐
+│ Breadcrumb: Meu Drive › Clientes › Empresa X    │
+│ [Novo ▾] [Upload] [Buscar...........] [Atualizar]│
+├──────────────────────────────────────────────────┤
+│ Nome              │ Tipo │ Tamanho │ Modificado  │
+│ 📁 Folha 2026     │ ...  │  —      │ 22/05/2026  │
+│ 📄 contrato.pdf   │ PDF  │ 380 KB  │ 20/05/2026  │
+│   ↳ [Abrir][Baixar][Mover][Renomear][Excluir]   │
+└──────────────────────────────────────────────────┘
 ```
 
-Extrair o conteúdo atual para um componente `RfbParcelamentos` (lógica intacta — Integra Contador SERPRO, 8 modalidades RFB). Criar `PgfnParcelamentos` em arquivo irmão.
+- Tabela com paginação (`pageToken`).
+- Busca por nome (`q=name contains '...'`).
+- Drag&drop de upload na área da tabela.
+- Botão "Novo" → Pasta / Upload de arquivo.
+- Preview inline para imagens/PDF abrindo em diálogo (`webViewLink` no iframe).
+- Confirmação antes de excluir.
+- Responsivo: em mobile, vira lista de cards (segue padrão `mem://style/responsiveness-standard`).
 
-### 2. Aba PGFN — integração via REGULARIZE
+## 4. Picker reutilizável `<DrivePickerDialog>`
 
-O portal REGULARIZE (https://www.regularize.pgfn.gov.br) exige login com e-CNPJ ICP-Brasil ou gov.br e não tem API pública. A automação será feita por **edge function que faz scraping autenticado via proxy** usando o mesmo padrão já usado para NFe:
+Componente em `src/components/drive/DrivePickerDialog.tsx`:
+- Abre um diálogo com a mesma navegação por pastas e busca.
+- Permite seleção única ou múltipla (prop `multiple`).
+- Callback `onSelect(files: DriveFile[])` devolve `{ id, name, mimeType, size, webViewLink }`.
 
-- Nova edge function `pgfn-parcelamentos`
-  - Recebe `client_id`
-  - Carrega o certificado A1 do cliente da tabela `digital_certificates`
-  - Encaminha para o proxy PHP da Hostinger (`PGFN_PROXY_URL`, novo secret) que executa o login mTLS no REGULARIZE e devolve a lista de parcelamentos em aberto + parcelas pendentes
-  - Persiste em nova tabela `pgfn_parcelamento_results` espelhando `parcelamento_results`
-- Nova tabela `pgfn_parcelamento_results` (mesmo shape: client_id, modalidade, numero, situacao, data_pedido, valor_total, parcelas_pagas, parcelas_total, raw_response, status, error_message, consulted_at) com RLS idêntica.
-- Modalidades PGFN exibidas: "Negociação PGFN" (genérica) + as que o scraper conseguir identificar (Ordinário, ATD, NDP, NDF, Transação Excepcional).
-- Botão "Gerar guia" abre o DARF/DAS retornado pelo proxy em PDF base64.
+Integração inicial:
+- **Chat (`ChatInput.tsx`)** — novo item no menu de anexos "Anexar do Google Drive". Os arquivos selecionados são baixados via Edge Function e enviados como mídia normal do chat (mantém o fluxo existente de WhatsApp/Storage).
+- **Tarefas (`TaskEditDialog.tsx` / fluxo de upload de documentos da obrigação)** — botão "Anexar do Drive" ao lado do upload local. O arquivo é baixado pela Edge Function e salvo no bucket `documents` seguindo as convenções de path já usadas.
 
-### 3. Pré-requisitos (bloqueantes para PGFN funcionar)
+Os arquivos vindos do Drive viram cópias no Storage do Supabase (não link), garantindo que a obrigação/chat continue funcionando mesmo se o arquivo for movido/excluído no Drive.
 
-1. Hospedar script PHP no proxy Hostinger que faça login no REGULARIZE com o certificado e exponha endpoints `/parcelamentos` e `/parcela-guia`.
-2. Criar secret `PGFN_PROXY_URL` e `PGFN_PROXY_TOKEN`.
-3. Aplicar migração da tabela `pgfn_parcelamento_results`.
+## 5. Detalhes técnicos
 
-Sem o item 1, a aba PGFN ficará renderizada mas a consulta retornará erro "Proxy PGFN não configurado". O scraping em si depende de engenharia externa (PHP + cURL com `--cert`) fora do código React/Edge.
+- `drive-api` retorna binários como base64 para simplificar; frontend converte para `Blob` antes de enviar ao Storage.
+- Limite prático de download: ~20 MB por arquivo (configurável). Acima disso, mostrar erro e sugerir baixar direto pelo Drive.
+- Cache leve de `list` por `folderId` no React Query (5 min).
+- Erros do gateway (401/403) → toast "Reconectar Google Drive" com link para Settings.
+- Sem alterações de banco: nenhum schema novo necessário (arquivos importados reaproveitam a tabela `documents` existente).
 
-### Arquivos afetados
+## 6. Permissões
 
-- `src/components/integra-contador/ParcelamentosTab.tsx` — wrapper com Tabs
-- `src/components/integra-contador/RfbParcelamentos.tsx` — novo (move conteúdo atual)
-- `src/components/integra-contador/PgfnParcelamentos.tsx` — novo
-- `supabase/functions/pgfn-parcelamentos/index.ts` — novo
-- migração: `pgfn_parcelamento_results` + RLS
-- secrets: `PGFN_PROXY_URL`, `PGFN_PROXY_TOKEN`
+- Página `/drive`: liberada para admin e employee (mesma regra do restante do sistema).
+- Picker: idem.
+- Exclusão no Drive: restrita a admin (checagem no frontend + na Edge Function via `has_role`).
 
-### Observação importante
+## Fora do escopo
 
-Reforço que **não existe API oficial PGFN**; toda automação depende de manter um proxy PHP que faz scraping autenticado no REGULARIZE. Se o portal mudar, quebra. Alternativa mais robusta é deixar PGFN como entrada manual — posso refazer o plano nesse formato se preferir.
+- Drive por usuário ou por cliente (escolhido como "drive único do escritório").
+- Sincronização automática Drive ↔ Storage.
+- Edição inline de documentos Google (Docs/Sheets/Slides) — apenas listagem/download.
