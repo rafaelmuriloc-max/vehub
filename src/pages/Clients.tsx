@@ -1539,7 +1539,12 @@ export default function Clients() {
                   })()}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
+                  <div className="flex flex-wrap items-center gap-1 justify-end">
+                    <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
+                    {c.services_suspended && (
+                      <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200">Suspenso</Badge>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openView(c)}>
                       <Eye className="h-4 w-4" />
