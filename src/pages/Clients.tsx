@@ -21,6 +21,7 @@ import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import ContractTab from '@/components/ContractTab';
 import ClientObligationsTab from '@/components/ClientObligationsTab';
