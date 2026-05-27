@@ -1660,6 +1660,23 @@ export default function Clients() {
                   </div>
                 </div>
 
+                <div className="rounded-md border border-border p-3 flex items-start gap-3">
+                  <Switch
+                    id="services_suspended"
+                    checked={!!form.services_suspended}
+                    onCheckedChange={(v) => setForm({ ...form, services_suspended: !!v })}
+                    disabled={viewOnly}
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="services_suspended" className="cursor-pointer">
+                      Suspender serviços (inadimplência)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Quando ativo, as obrigações deste cliente serão movidas automaticamente para a aba “Suspensos” do calendário a partir do dia inicial.
+                    </p>
+                  </div>
+                </div>
+
                 <Separator />
                 <h4 className="text-sm font-semibold text-muted-foreground">Datas</h4>
                 <div className="grid grid-cols-3 gap-4">
