@@ -1439,6 +1439,7 @@ export default function Clients() {
             <SelectItem value="active">Ativos</SelectItem>
             <SelectItem value="inactive">Inativos</SelectItem>
             <SelectItem value="churned">Churned</SelectItem>
+            <SelectItem value="suspended">Suspensos</SelectItem>
           </SelectContent>
         </Select>
       </div>
