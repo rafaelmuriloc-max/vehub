@@ -725,6 +725,7 @@ export default function Clients() {
       business_classification: (c as any).business_classification || '',
       trade_name: (c as any).trade_name || '',
       simples_anexo: (c as any).simples_anexo || '',
+      services_suspended: !!(c as any).services_suspended,
     });
   }
 
