@@ -21,6 +21,7 @@ import { Progress } from '@/components/ui/progress';
 import { CnaeCombobox } from '@/components/CnaeCombobox';
 import { CnaeMultiSelect } from '@/components/CnaeMultiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import ContractTab from '@/components/ContractTab';
 import ClientObligationsTab from '@/components/ClientObligationsTab';
@@ -126,6 +127,8 @@ type Client = {
   business_classification: string | null;
   trade_name: string | null;
   simples_anexo: string | null;
+  services_suspended?: boolean;
+  services_suspended_at?: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -147,6 +150,7 @@ const emptyForm = {
   business_classification: '',
   trade_name: '',
   simples_anexo: '',
+  services_suspended: false as boolean,
 };
 
 type Department = { id: string; name: string };
@@ -722,6 +726,7 @@ export default function Clients() {
       business_classification: (c as any).business_classification || '',
       trade_name: (c as any).trade_name || '',
       simples_anexo: (c as any).simples_anexo || '',
+      services_suspended: !!(c as any).services_suspended,
     });
   }
 
@@ -862,6 +867,10 @@ export default function Clients() {
       business_classification: form.business_classification || null,
       trade_name: form.trade_name || null,
       simples_anexo: form.tax_regime === 'simples_nacional' ? (form.simples_anexo || null) : null,
+      services_suspended: !!form.services_suspended,
+      services_suspended_at: form.services_suspended
+        ? ((editing as any)?.services_suspended_at || new Date().toISOString())
+        : null,
     };
     let error;
     let clientId = editing?.id;
@@ -948,7 +957,9 @@ export default function Clients() {
 
   const filtered = clients.filter(c => {
     const matchSearch = c.company_name.toLowerCase().includes(search.toLowerCase()) || c.document?.includes(search) || c.sci_code?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'all' || c.status === filterStatus;
+    const matchStatus =
+      filterStatus === 'all' ||
+      (filterStatus === 'suspended' ? !!c.services_suspended : c.status === filterStatus);
     return matchSearch && matchStatus;
   });
 
@@ -1428,6 +1439,7 @@ export default function Clients() {
             <SelectItem value="active">Ativos</SelectItem>
             <SelectItem value="inactive">Inativos</SelectItem>
             <SelectItem value="churned">Churned</SelectItem>
+            <SelectItem value="suspended">Suspensos</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1464,7 +1476,14 @@ export default function Clients() {
                   </TableCell>
                   <TableCell>{c.contact_name || '-'}</TableCell>
                   <TableCell>R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell><Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
+                      {c.services_suspended && (
+                        <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200">Suspenso</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>{(() => {
                     if (!c.digital_certificate_expiry) return <span className="text-muted-foreground text-xs">—</span>;
                     const exp = new Date(c.digital_certificate_expiry + 'T00:00:00');
@@ -1520,7 +1539,12 @@ export default function Clients() {
                   })()}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
+                  <div className="flex flex-wrap items-center gap-1 justify-end">
+                    <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
+                    {c.services_suspended && (
+                      <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200">Suspenso</Badge>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openView(c)}>
                       <Eye className="h-4 w-4" />
@@ -1633,6 +1657,23 @@ export default function Clients() {
                         <SelectItem value="churned">Churned</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-border p-3 flex items-start gap-3">
+                  <Switch
+                    id="services_suspended"
+                    checked={!!form.services_suspended}
+                    onCheckedChange={(v) => setForm({ ...form, services_suspended: !!v })}
+                    disabled={viewOnly}
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="services_suspended" className="cursor-pointer">
+                      Suspender serviços (inadimplência)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Quando ativo, as obrigações deste cliente serão movidas automaticamente para a aba “Suspensos” do calendário a partir do dia inicial.
+                    </p>
                   </div>
                 </div>
 

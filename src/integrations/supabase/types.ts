@@ -381,6 +381,8 @@ export type Database = {
           previous_office_name: string | null
           sci_code: string | null
           secondary_activities: string | null
+          services_suspended: boolean
+          services_suspended_at: string | null
           simples_anexo: string | null
           start_date: string | null
           state_registration: string | null
@@ -429,6 +431,8 @@ export type Database = {
           previous_office_name?: string | null
           sci_code?: string | null
           secondary_activities?: string | null
+          services_suspended?: boolean
+          services_suspended_at?: string | null
           simples_anexo?: string | null
           start_date?: string | null
           state_registration?: string | null
@@ -477,6 +481,8 @@ export type Database = {
           previous_office_name?: string | null
           sci_code?: string | null
           secondary_activities?: string | null
+          services_suspended?: boolean
+          services_suspended_at?: string | null
           simples_anexo?: string | null
           start_date?: string | null
           state_registration?: string | null

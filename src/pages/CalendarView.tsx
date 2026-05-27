@@ -24,7 +24,7 @@ import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
-type Client = { id: string; company_name: string };
+type Client = { id: string; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null };
@@ -119,6 +119,7 @@ function CalendarMain() {
   const [monthPendingPage, setMonthPendingPage] = useState(1);
   const [monthCompletedPage, setMonthCompletedPage] = useState(1);
   const [monthDeletedPage, setMonthDeletedPage] = useState(1);
+  const [monthSuspendedPage, setMonthSuspendedPage] = useState(1);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
@@ -154,7 +155,7 @@ function CalendarMain() {
       supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at, status, completion_kind')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
-      supabase.from('clients').select('id, company_name'),
+      supabase.from('clients').select('id, company_name, services_suspended'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
@@ -303,6 +304,25 @@ function CalendarMain() {
     }
     return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
+
+  // Earliest date per instance (alert > target > due) used as the obligation's "initial day"
+  const instanceInitialDate = useMemo(() => {
+    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+    const monthFiltered = events.filter(e => e.date.startsWith(prefix));
+    const map = new Map<string, string>();
+    for (const ev of monthFiltered) {
+      const existing = map.get(ev.instanceId);
+      if (!existing || ev.date < existing) map.set(ev.instanceId, ev.date);
+    }
+    return map;
+  }, [events, year, month]);
+
+  const isSuspendedEvent = useCallback((ev: CalendarEvent) => {
+    const cli = clientMap.get(ev.clientId);
+    if (!cli?.services_suspended) return false;
+    const initial = instanceInitialDate.get(ev.instanceId) ?? ev.date;
+    return today >= initial;
+  }, [clientMap, instanceInitialDate, today]);
 
   const deletedMonthEvents = useMemo(() => {
     const result: CalendarEvent[] = [];
@@ -638,20 +658,23 @@ function CalendarMain() {
     }
   }
 
-  const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
-  const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
+  const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const dayPendingTotalPages = Math.ceil(dayEventsPending.length / DAY_ITEMS_PER_PAGE);
   const dayCompletedTotalPages = Math.ceil(dayEventsCompleted.length / DAY_ITEMS_PER_PAGE);
   const paginatedDayPending = dayEventsPending.slice((dayPendingPage - 1) * DAY_ITEMS_PER_PAGE, dayPendingPage * DAY_ITEMS_PER_PAGE);
   const paginatedDayCompleted = dayEventsCompleted.slice((dayCompletedPage - 1) * DAY_ITEMS_PER_PAGE, dayCompletedPage * DAY_ITEMS_PER_PAGE);
-  const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId));
-  const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
+  const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
+  const monthEventsSuspended = monthEvents.filter(ev => isSuspendedEvent(ev));
   const monthPendingTotalPages = Math.ceil(monthEventsPending.length / ITEMS_PER_PAGE);
   const monthCompletedTotalPages = Math.ceil(monthEventsCompleted.length / ITEMS_PER_PAGE);
   const paginatedMonthPending = monthEventsPending.slice((monthPendingPage - 1) * ITEMS_PER_PAGE, monthPendingPage * ITEMS_PER_PAGE);
   const paginatedMonthCompleted = monthEventsCompleted.slice((monthCompletedPage - 1) * ITEMS_PER_PAGE, monthCompletedPage * ITEMS_PER_PAGE);
   const monthDeletedTotalPages = Math.ceil(deletedMonthEvents.length / ITEMS_PER_PAGE);
   const paginatedMonthDeleted = deletedMonthEvents.slice((monthDeletedPage - 1) * ITEMS_PER_PAGE, monthDeletedPage * ITEMS_PER_PAGE);
+  const monthSuspendedTotalPages = Math.ceil(monthEventsSuspended.length / ITEMS_PER_PAGE);
+  const paginatedMonthSuspended = monthEventsSuspended.slice((monthSuspendedPage - 1) * ITEMS_PER_PAGE, monthSuspendedPage * ITEMS_PER_PAGE);
 
   // Dialog progress
   const dialogProgress = detailInstance
@@ -1172,7 +1195,7 @@ function CalendarMain() {
           </div>
         </CardHeader>
         <CardContent>
-          {monthEvents.length === 0 && deletedMonthEvents.length === 0 ? (
+          {monthEvents.length === 0 && deletedMonthEvents.length === 0 && monthEventsSuspended.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <p className="text-muted-foreground text-sm">Nenhuma obrigação com data de meta neste mês</p>
@@ -1191,6 +1214,10 @@ function CalendarMain() {
                 <TabsTrigger value="deleted">
                   Excluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="suspended">
+                  Suspensos
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsSuspended.length}</Badge>
                 </TabsTrigger>
               </TabsList>
 
@@ -1407,6 +1434,48 @@ function CalendarMain() {
                       ))}
                     </div>
                     <PaginationBlock page={monthDeletedPage} totalPages={monthDeletedTotalPages} total={deletedMonthEvents.length} onPageChange={setMonthDeletedPage} />
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="suspended">
+                {monthEventsSuspended.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <AlertTriangle className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação suspensa neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthSuspended.map((ev, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setDetailInstanceId(ev.instanceId)}
+                          className="p-3 rounded-lg border border-orange-200 bg-orange-50/60 dark:bg-orange-900/10 dark:border-orange-900/40 cursor-pointer transition-all hover:shadow-sm"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-14 shrink-0 text-sm font-semibold text-orange-700 dark:text-orange-400">
+                              {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-0 text-[10px]">
+                                Suspenso
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <PaginationBlock page={monthSuspendedPage} totalPages={monthSuspendedTotalPages} total={monthEventsSuspended.length} onPageChange={setMonthSuspendedPage} />
                   </>
                 )}
               </TabsContent>
