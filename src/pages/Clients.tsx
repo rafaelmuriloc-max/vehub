@@ -126,6 +126,8 @@ type Client = {
   business_classification: string | null;
   trade_name: string | null;
   simples_anexo: string | null;
+  services_suspended?: boolean;
+  services_suspended_at?: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -147,6 +149,7 @@ const emptyForm = {
   business_classification: '',
   trade_name: '',
   simples_anexo: '',
+  services_suspended: false as boolean,
 };
 
 type Department = { id: string; name: string };
