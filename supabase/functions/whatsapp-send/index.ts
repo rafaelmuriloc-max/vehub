@@ -60,7 +60,7 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-    const { to, type, templateName, templateLanguage, templateParams, text, chatPreview, clientId, obligationId, instanceId, mediaUrl, mediaType, mediaFilename } = await req.json();
+    const { to, type, templateName, templateLanguage, templateParams, text, chatPreview, clientId, obligationId, instanceId, mediaUrl, mediaType, mediaFilename, forceEvolutionDocument } = await req.json();
 
     if (!to) {
       return new Response(JSON.stringify({ error: "Campo 'to' é obrigatório" }), {
@@ -83,9 +83,61 @@ serve(async (req) => {
     if (cleanPhone.startsWith("0")) cleanPhone = "55" + cleanPhone.slice(1);
     if (!cleanPhone.startsWith("55")) cleanPhone = "55" + cleanPhone;
 
-    let messagePayload: Record<string, unknown>;
+    let messagePayload: Record<string, unknown> = {};
+    let wamid: string | null = null;
+    let metaData: any = null;
 
-    if (type === "template" && templateName && templateName.trim()) {
+    if (forceEvolutionDocument && mediaUrl) {
+      // Send document via Evolution API (does NOT call Meta)
+      const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+      const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
+      const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
+      if (!evolutionUrl || !evolutionKey || !evolutionInstance) {
+        return new Response(JSON.stringify({ error: "Evolution API não configurada" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const guessMime = (): string => {
+        const ext = (mediaFilename || mediaUrl || "").split(".").pop()?.toLowerCase() || "";
+        const map: Record<string, string> = {
+          pdf: "application/pdf",
+          doc: "application/msword",
+          docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          xls: "application/vnd.ms-excel",
+          xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          zip: "application/zip",
+          txt: "text/plain",
+          png: "image/png",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+        };
+        return map[ext] || "application/octet-stream";
+      };
+      const evoRes = await fetch(
+        `${evolutionUrl}/message/sendMedia/${evolutionInstance}`,
+        {
+          method: "POST",
+          headers: { apikey: evolutionKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            number: cleanPhone,
+            mediatype: "document",
+            mimetype: guessMime(),
+            media: mediaUrl,
+            fileName: mediaFilename || "documento.pdf",
+          }),
+        }
+      );
+      const evoJson = await evoRes.json().catch(() => ({}));
+      if (!evoRes.ok) {
+        console.error("Evolution sendMedia error:", JSON.stringify(evoJson));
+        return new Response(
+          JSON.stringify({ error: evoJson?.message || "Erro ao enviar documento via Evolution", details: evoJson }),
+          { status: evoRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      wamid = evoJson?.key?.id || null;
+    } else if (type === "template" && templateName && templateName.trim()) {
       messagePayload = {
         messaging_product: "whatsapp",
         to: cleanPhone,
@@ -106,32 +158,30 @@ serve(async (req) => {
       };
     }
 
-    console.log("WhatsApp payload:", JSON.stringify(messagePayload));
-
-    const metaResponse = await fetch(
-      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(messagePayload),
-      }
-    );
-
-    const metaData = await metaResponse.json();
-    console.log("Meta response status:", metaResponse.status, "body:", JSON.stringify(metaData));
-
-    if (!metaResponse.ok) {
-      console.error("Meta API error:", JSON.stringify(metaData));
-      return new Response(
-        JSON.stringify({ error: metaData.error?.message || "Erro ao enviar WhatsApp", details: metaData }),
-        { status: metaResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    if (!forceEvolutionDocument) {
+      console.log("WhatsApp payload:", JSON.stringify(messagePayload));
+      const metaResponse = await fetch(
+        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(messagePayload),
+        }
       );
+      metaData = await metaResponse.json();
+      console.log("Meta response status:", metaResponse.status, "body:", JSON.stringify(metaData));
+      if (!metaResponse.ok) {
+        console.error("Meta API error:", JSON.stringify(metaData));
+        return new Response(
+          JSON.stringify({ error: metaData.error?.message || "Erro ao enviar WhatsApp", details: metaData }),
+          { status: metaResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      wamid = metaData.messages?.[0]?.id || null;
     }
-
-    const wamid = metaData.messages?.[0]?.id || null;
 
     const supabaseService = createClient(
       Deno.env.get("SUPABASE_URL")!,

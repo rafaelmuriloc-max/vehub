@@ -1,40 +1,55 @@
 ## Objetivo
-Adicionar uma flag de **suspensão de serviços** nos clientes e refletir essa suspensão no calendário de obrigações através de uma nova aba **"Suspensos"**.
 
-## 1. Banco de dados
-Migração na tabela `clients`:
-- Nova coluna `services_suspended boolean NOT NULL DEFAULT false`
-- Nova coluna `services_suspended_at timestamptz NULL` (data da suspensão, usada como corte)
+Reorganizar o envio das obrigações no WhatsApp:
 
-Não vou alterar `obligation_instances` — a aba será derivada por join com `clients.services_suspended`.
+1. **Mensagem de texto** continua via **template da Meta** (`whatsapp-send` com `templateName` / `templateParams`), **sempre sem header de documento**.
+2. **Todos os documentos anexados** (1 ou N) passam a sair via **Evolution API** (`whatsapp-send-media`), uma mensagem por arquivo.
+3. **Anti-race**: o chain de auto-start (WhatsApp, E-mail) só dispara quando **todas as atividades `document` anteriores** já tiverem completion confirmada no banco. Subir só o PIS (ou só o COFINS) não dispara nada — só ao subir o último anexo.
 
-## 2. UI – Cadastro de Clientes (`src/pages/Clients.tsx`)
-- Adicionar switch **"Suspender serviços (inadimplência)"** no dialog de edição, ao lado de Status.
-- Mostrar badge laranja **"Suspenso"** na linha da tabela quando ativo.
-- Filtro extra: opção "Suspensos" no filtro de status.
-- Ao marcar/desmarcar, gravar `services_suspended` e `services_suspended_at = now()` (ou `null`).
+## Por que isso resolve os bugs reportados
 
-## 3. UI – Calendário (`src/pages/CalendarView.tsx`)
-Na seção de Tabs (linha ~998), passar de 2 para 3 colunas:
-- Pendentes
-- Concluídas
-- **Suspensos** (nova)
+- **Pousada Caminho dos Sonhos**: a obrigação ficou aberta porque o front fechou antes de marcar "Envia Email". O anti-race garante que o chain rode uma vez só (após o 2º upload), reduzindo a janela de falha; além disso a completion do e-mail continua sendo gravada pelo helper como hoje.
+- **Cowboy / Coração do Parque / Bela Vista**: o chain disparou no 1º upload (COFINS) e mandou só ele. Com o anti-race, o disparo só acontece quando PIS **e** COFINS estiverem anexados → ambos saem juntos.
 
-Lógica de classificação por obrigação (instance):
-- Buscar `clients.services_suspended` junto com instâncias.
-- Uma instância vai para **Suspensos** quando:
-  - cliente está com `services_suspended = true`, **e**
-  - a data atual já passou do "dia inicial da obrigação" — interpretado como `target_day` (ou, na ausência, o 1º dia do mês de referência). Antes desse dia, segue em Pendentes normalmente.
-- Instâncias suspensas saem das abas Pendentes/Concluídas.
-- Aba Suspensos lista: cliente, obrigação, vencimento, mês ref., com badge "Suspenso".
+## Mudanças
 
-A automação "no dia inicial" é puramente derivada (cálculo no frontend ao montar as listas) — sem cron, sem alterar status no DB, então funciona automaticamente conforme a data avança.
+### 1) `src/lib/sendActivityWhatsApp.ts`
+- Remover qualquer lógica de header de documento no template Meta (atual `needsMultiSend` e header `document` na 1ª chamada).
+- Fluxo novo, por destinatário:
+  1. Buscar os anexos da obrigação (mesma query atual: `obligation_activity_completions` da instance, filtradas pelas atividades `type='document'`, com `file_url` válido).
+  2. Disparar **1×** `whatsapp-send` (template Meta, sem header) com os `templateParams` atuais.
+  3. Para cada anexo, invocar `whatsapp-send-media` (Evolution) passando `to`, `mediaUrl` (URL assinada 7d), `mediaType:'document'`, `fileName`, `clientId`, `obligationId`, `instanceId`. Sem fallback para Meta.
+  4. Só marca completion (e dedup-log em `whatsapp_logs`) se template + todos os docs retornarem sucesso. Qualquer falha de doc devolve `success:false` com a lista de erros e **não** conclui a atividade.
 
-## 4. Impactos colaterais
-- Métricas existentes (MRR, contagem de ativos) não mudam — suspenso continua `status='active'` mas com flag separada. (Posso opcionalmente excluir suspensos do MRR — me avise se quiser.)
-- Geração de novas instâncias (`retention-obligation-generate` etc.) **não** é alterada: continuam sendo criadas, apenas ficam visualmente segregadas.
+### 2) `src/components/ClientObligationsTab.tsx` e `src/components/tasks/TaskEditDialog.tsx`
+- Antes do auto-start chain (em `toggleCompletion` e em `handleFileUpload`), recarregar completions do banco e bloquear avanço se houver atividade `document` anterior sem completion:
+  ```ts
+  const { data: live } = await supabase
+    .from('obligation_activity_completions')
+    .select('activity_id, completed')
+    .eq('instance_id', instanceId);
+  const pendingDoc = oblActivities
+    .filter(a => a.type === 'document' && a.order < nextAct.order)
+    .some(a => !live?.find(c => c.activity_id === a.id && c.completed));
+  if (pendingDoc) break;
+  ```
 
-## Detalhes técnicos
-- Tipo `Client` em `Clients.tsx` ganha `services_suspended` e `services_suspended_at`.
-- `CalendarView` faz join `clients(services_suspended)` no select de instâncias e particiona o array antes de renderizar cada TabsContent.
-- Aba Suspensos usa o mesmo layout de tabela das outras, com coluna extra "Suspenso desde".
+### 3) `supabase/functions/whatsapp-send-media/index.ts`
+- Sem mudança estrutural (já suporta Evolution e Meta). Apenas garantir que aceita `instanceId`, `clientId`, `obligationId` no body e registra em `whatsapp_logs`. Se faltar, adicionar.
+
+### 4) Reparo dos casos atuais (migration única)
+- Inserir completion da atividade "Envia Email" (`d8a587d7-e88a-41ef-8513-c120f0227b0e`) na instance da Caminho dos Sonhos (`7a2d971c-00c3-41cc-9a9e-66ea790884e8`) — o e-mail já saiu (log `opened`) e isso fecha a obrigação.
+- Para Cowboy / Coração do Parque / Bela Vista o usuário reenvia o DARF PIS manualmente (obrigações já estão `done`).
+
+## Fora de escopo
+
+- Não muda `sendActivityEmail.ts`.
+- Não muda templates Meta cadastrados.
+- Não toca em `services_suspended` nem na aba "Suspensos".
+
+## Validação
+
+- Subir só PIS → nada é enviado.
+- Subir COFINS depois → 1 template Meta (texto) + 2 documentos via Evolution + 1 e-mail com 2 anexos → atividades de WhatsApp/E-mail concluídas → obrigação `done`.
+- Obrigação de 1 doc só → template Meta + 1 documento via Evolution (mesmo caminho, sem ramificação).
+- Inverter a ordem dos uploads → mesmo resultado.

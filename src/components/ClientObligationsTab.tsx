@@ -180,6 +180,20 @@ export default function ClientObligationsTab({ clientId }: Props) {
           const nextComp = completions.find(c => c.instance_id === instanceId && c.activity_id === nextAct.id);
           if (nextComp?.completed) break; // already completed
 
+          // Anti-race: block if any earlier document activity is still missing
+          const priorDocs = oblActivities.filter(a => a.type === 'document' && a.order < nextAct.order);
+          if (priorDocs.length > 0) {
+            const { data: live } = await supabase
+              .from('obligation_activity_completions')
+              .select('activity_id, completed, file_url')
+              .eq('instance_id', instanceId);
+            const pending = priorDocs.some(d => {
+              const c = (live || []).find((x: any) => x.activity_id === d.id);
+              return !(c?.completed && c?.file_url);
+            });
+            if (pending) break;
+          }
+
           // Auto-send email activities
           if (nextAct.type === 'email' && nextAct.email_department_id && nextAct.email_subject && nextAct.email_body) {
             const result = await sendActivityEmail({
@@ -256,6 +270,20 @@ export default function ClientObligationsTab({ clientId }: Props) {
         if (!nextAct.auto_start) break;
         const nextComp = completions.find(c => c.instance_id === instanceId && c.activity_id === nextAct.id);
         if (nextComp?.completed) break;
+
+        // Anti-race: block if any earlier document activity is still missing
+        const priorDocs = oblActivities.filter(a => a.type === 'document' && a.order < nextAct.order);
+        if (priorDocs.length > 0) {
+          const { data: live } = await supabase
+            .from('obligation_activity_completions')
+            .select('activity_id, completed, file_url')
+            .eq('instance_id', instanceId);
+          const pending = priorDocs.some(d => {
+            const c = (live || []).find((x: any) => x.activity_id === d.id);
+            return !(c?.completed && c?.file_url);
+          });
+          if (pending) break;
+        }
 
         if (nextAct.type === 'email' && nextAct.email_department_id && nextAct.email_subject && nextAct.email_body) {
           const result = await sendActivityEmail({
