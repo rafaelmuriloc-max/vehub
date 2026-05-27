@@ -39,10 +39,24 @@ function replaceVariables(text: string, variables: Record<string, string>, musta
   return result;
 }
 
+const TEXT_ONLY_OBLIGATION_TEMPLATE = 'send_output_informations_template_3_header';
+const LEGACY_DOCUMENT_HEADER_TEMPLATES = new Set(['envio_doc']);
+const DEFAULT_OBLIGATION_TEMPLATE_PARAMS = [
+  'tratamento_contato',
+  'nome_contabilidade',
+  'cliente',
+  'nome_tipo_tarefa',
+];
+
 export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): Promise<{ success: boolean; error?: string }> {
   const { activity, instanceId, clientId, obligationName, referenceMonth, dueDay, departmentId } = params;
 
-  if (!activity.whatsapp_template_name && !activity.whatsapp_message_body) {
+  const rawTemplateName = activity.whatsapp_template_name?.trim() || '';
+  const templateName = (activity.whatsapp_has_document_header || LEGACY_DOCUMENT_HEADER_TEMPLATES.has(rawTemplateName))
+    ? TEXT_ONLY_OBLIGATION_TEMPLATE
+    : rawTemplateName;
+
+  if (!templateName && !activity.whatsapp_message_body) {
     return { success: false, error: 'Atividade de WhatsApp sem configuração completa' };
   }
 
@@ -52,7 +66,7 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     .from('whatsapp_logs')
     .select('id')
     .eq('instance_id', instanceId)
-    .eq('template_name', activity.whatsapp_template_name || '')
+    .eq('template_name', templateName || '')
     .eq('status', 'sent')
     .gte('created_at', twoMinutesAgo)
     .limit(1);
@@ -158,24 +172,27 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     };
     const sharedComponents: Record<string, unknown>[] = [];
     let chatPreview = '';
-    if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
-      if (activity.whatsapp_message_body) {
-        const matches = [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)];
-        if (matches.length > 0) {
-          sharedComponents.push({
-            type: 'body',
-            parameters: matches.map(m => ({
-              type: 'text',
-              parameter_name: m[1],
-              text: templateVars[m[1]] || '',
-            })),
-          });
-        }
-        chatPreview = activity.whatsapp_message_body.replace(
-          /\{\{(\w+)\}\}/g,
-          (_: string, name: string) => templateVars[name] ?? ''
-        );
+    if (templateName) {
+      const matches = activity.whatsapp_message_body
+        ? [...activity.whatsapp_message_body.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1])
+        : [];
+      const bodyParams = matches.length > 0
+        ? matches
+        : (templateName === TEXT_ONLY_OBLIGATION_TEMPLATE ? DEFAULT_OBLIGATION_TEMPLATE_PARAMS : []);
+      if (bodyParams.length > 0) {
+        sharedComponents.push({
+          type: 'body',
+          parameters: bodyParams.map(name => ({
+            type: 'text',
+            parameter_name: name,
+            text: templateVars[name] || '',
+          })),
+        });
       }
+      chatPreview = activity.whatsapp_message_body?.replace(
+        /\{\{(\w+)\}\}/g,
+        (_: string, name: string) => templateVars[name] ?? ''
+      ) || `Olá, ${templateVars.tratamento_contato},\n\nEssa é uma mensagem automática de ${templateVars.nome_contabilidade}\n\nReferente à empresa: ${templateVars.cliente}\n\n📌 Assunto: ${templateVars.nome_tipo_tarefa}`;
       if (activity.whatsapp_button_url && activity.whatsapp_button_url.trim()) {
         const buttonValue = hasDocuments ? instanceId : activity.whatsapp_button_url;
         sharedComponents.push({
@@ -223,9 +240,9 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
       obligationId: instanceData?.obligation_id || null,
       instanceId,
     };
-    if (activity.whatsapp_template_name && activity.whatsapp_template_name.trim()) {
+    if (templateName) {
       templateBody.type = 'template';
-      templateBody.templateName = activity.whatsapp_template_name;
+      templateBody.templateName = templateName;
       templateBody.templateLanguage = 'pt_BR';
       if (sharedComponents.length > 0) templateBody.templateParams = sharedComponents;
       if (chatPreview) templateBody.chatPreview = chatPreview;
