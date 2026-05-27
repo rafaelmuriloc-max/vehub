@@ -24,7 +24,7 @@ import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
-type Client = { id: string; company_name: string };
+type Client = { id: string; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null };
