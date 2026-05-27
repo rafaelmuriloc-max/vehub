@@ -304,6 +304,25 @@ function CalendarMain() {
     return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [events, year, month]);
 
+  // Earliest date per instance (alert > target > due) used as the obligation's "initial day"
+  const instanceInitialDate = useMemo(() => {
+    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+    const monthFiltered = events.filter(e => e.date.startsWith(prefix));
+    const map = new Map<string, string>();
+    for (const ev of monthFiltered) {
+      const existing = map.get(ev.instanceId);
+      if (!existing || ev.date < existing) map.set(ev.instanceId, ev.date);
+    }
+    return map;
+  }, [events, year, month]);
+
+  const isSuspendedEvent = useCallback((ev: CalendarEvent) => {
+    const cli = clientMap.get(ev.clientId);
+    if (!cli?.services_suspended) return false;
+    const initial = instanceInitialDate.get(ev.instanceId) ?? ev.date;
+    return today >= initial;
+  }, [clientMap, instanceInitialDate, today]);
+
   const deletedMonthEvents = useMemo(() => {
     const result: CalendarEvent[] = [];
     for (const inst of deletedInstances) {
