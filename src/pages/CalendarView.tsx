@@ -1215,6 +1215,10 @@ function CalendarMain() {
                   Excluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
                 </TabsTrigger>
+                <TabsTrigger value="suspended">
+                  Suspensos
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsSuspended.length}</Badge>
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="pending">
