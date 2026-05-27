@@ -1476,7 +1476,14 @@ export default function Clients() {
                   </TableCell>
                   <TableCell>{c.contact_name || '-'}</TableCell>
                   <TableCell>R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell><Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge className={statusColors[c.status]}>{statusLabels[c.status]}</Badge>
+                      {c.services_suspended && (
+                        <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200">Suspenso</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>{(() => {
                     if (!c.digital_certificate_expiry) return <span className="text-muted-foreground text-xs">—</span>;
                     const exp = new Date(c.digital_certificate_expiry + 'T00:00:00');
