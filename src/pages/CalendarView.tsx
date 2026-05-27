@@ -1437,6 +1437,48 @@ function CalendarMain() {
                   </>
                 )}
               </TabsContent>
+
+              <TabsContent value="suspended">
+                {monthEventsSuspended.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <AlertTriangle className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação suspensa neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthSuspended.map((ev, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setDetailInstanceId(ev.instanceId)}
+                          className="p-3 rounded-lg border border-orange-200 bg-orange-50/60 dark:bg-orange-900/10 dark:border-orange-900/40 cursor-pointer transition-all hover:shadow-sm"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-14 shrink-0 text-sm font-semibold text-orange-700 dark:text-orange-400">
+                              {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-0 text-[10px]">
+                                Suspenso
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <PaginationBlock page={monthSuspendedPage} totalPages={monthSuspendedTotalPages} total={monthEventsSuspended.length} onPageChange={setMonthSuspendedPage} />
+                  </>
+                )}
+              </TabsContent>
             </Tabs>
           )}
         </CardContent>
