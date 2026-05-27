@@ -867,6 +867,10 @@ export default function Clients() {
       business_classification: form.business_classification || null,
       trade_name: form.trade_name || null,
       simples_anexo: form.tax_regime === 'simples_nacional' ? (form.simples_anexo || null) : null,
+      services_suspended: !!form.services_suspended,
+      services_suspended_at: form.services_suspended
+        ? ((editing as any)?.services_suspended_at || new Date().toISOString())
+        : null,
     };
     let error;
     let clientId = editing?.id;
