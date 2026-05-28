@@ -165,6 +165,9 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
         </div>
       </div>
 
+      {/* Usuários Logados */}
+      <LoggedUsersPanel />
+
        {/* Tabs */}
        <div className="px-2 pt-2 pb-1 bg-white">
         <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ChatTab)}>
