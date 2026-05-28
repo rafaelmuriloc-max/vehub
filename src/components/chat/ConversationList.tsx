@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { NewConversationDialog } from './NewConversationDialog';
+import { LoggedUsersPanel } from './LoggedUsersPanel';
 import type { ChatTab } from '@/pages/Chat';
 
 function getReadableTextColor(hex: string): string {
