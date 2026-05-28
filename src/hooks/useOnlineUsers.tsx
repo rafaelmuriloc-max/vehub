@@ -12,7 +12,7 @@ interface OnlineUsersCtx {
 const Ctx = createContext<OnlineUsersCtx>({ presenceMap: new Map(), bumpActivity: () => {} });
 
 export function OnlineUsersProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -20,6 +20,12 @@ export function OnlineUsersProvider({ children }: { children: ReactNode }) {
     if (!user?.id) {
       setPresenceMap(new Map());
       return;
+    }
+
+    // Authenticate Realtime with the user's JWT — without this, Presence
+    // messages can be filtered as anonymous and other clients may not appear.
+    if (session?.access_token) {
+      try { supabase.realtime.setAuth(session.access_token); } catch {}
     }
 
     const channel = supabase.channel('online-users', {
@@ -40,25 +46,47 @@ export function OnlineUsersProvider({ children }: { children: ReactNode }) {
         }
         next.set(key, latest || Date.now());
       }
+      console.log('[presence] sync — online users:', next.size, Array.from(next.keys()));
       setPresenceMap(next);
     };
 
+    let retryTimer: number | null = null;
     channel
       .on('presence', { event: 'sync' }, recompute)
       .on('presence', { event: 'join' }, recompute)
       .on('presence', { event: 'leave' }, recompute)
       .subscribe(async (status) => {
+        console.log('[presence] channel status:', status);
         if (status === 'SUBSCRIBED') {
           await channel.track({ user_id: user.id, last_activity_at: Date.now() });
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          // Schedule a soft retry: drop and recreate via effect deps bump
+          if (retryTimer) window.clearTimeout(retryTimer);
+          retryTimer = window.setTimeout(() => {
+            try { supabase.removeChannel(channel); } catch {}
+            // Re-track by re-running effect via setAuth ping
+            if (session?.access_token) {
+              try { supabase.realtime.setAuth(session.access_token); } catch {}
+            }
+          }, 5000);
         }
       });
 
+    // Refresh Realtime auth whenever the session token rotates
+    const { data: authSub } = supabase.auth.onAuthStateChange((_evt, sess) => {
+      if (sess?.access_token) {
+        try { supabase.realtime.setAuth(sess.access_token); } catch {}
+      }
+    });
+
     return () => {
+      if (retryTimer) window.clearTimeout(retryTimer);
+      authSub.subscription.unsubscribe();
       try { channel.untrack(); } catch {}
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [user?.id]);
+  }, [user?.id, session?.access_token]);
 
   const bumpActivity = useCallback(() => {
     const ch = channelRef.current;
