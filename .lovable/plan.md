@@ -1,47 +1,35 @@
-## Indicador de Usuários Logados no Chat
+## Mudança
+Substituir o envio WhatsApp da `task-notify-client` da Meta Cloud API para a **Evolution API**, eliminando a restrição de janela de 24h que está bloqueando as notificações.
 
-Adicionar, no cabeçalho da coluna de Conversas (logo abaixo do título "Conversas"), um menu recolhível "Usuários Logados" que, ao expandir, lista os usuários do sistema com um indicador colorido de status:
+## Arquivo afetado
+`supabase/functions/task-notify-client/index.ts` (bloco `if (task.notify_whatsapp)`, ~linhas 178–226)
 
-- 🟢 **Verde** — Online (aba aberta com sessão ativa)
-- ⚪ **Cinza** — Logado mas inativo há mais de 30 min (sem enviar mensagem)
-- 🔴 **Vermelho** — Offline (sem sessão ativa)
+## Detalhes
 
-### Como detectar o status
+### Texto principal
+- `POST {EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE_NAME}`
+- Header `apikey: {EVOLUTION_API_KEY}`
+- Body `{ number, text: signedMessage }` (mantém assinatura `*Responsável*` já montada)
 
-Usar **Supabase Realtime Presence** num canal global `online-users`:
+### Cada anexo (`task_attachments` com `direction = 'output'`)
+- Gera URL assinada do bucket `documents` (7 dias)
+- `POST {EVOLUTION_API_URL}/message/sendMedia/{EVOLUTION_INSTANCE_NAME}`
+- Body `{ number, mediatype: 'document'|'image', mimetype, media: signedUrl, fileName }`
+- MIME inferido pela extensão (helper local, mesmo padrão de `whatsapp-send`)
+- Imagens (`file_type` começando com `image/`) vão como `mediatype: image`
 
-- Cada cliente, ao montar o `AppLayout` autenticado, entra no canal com `track({ user_id, last_activity_at })`.
-- `last_activity_at` é atualizado (via `channel.track(...)` novamente) sempre que o usuário **envia uma mensagem no chat** (gatilho no `ChatInput` após enviar com sucesso). Inicialmente vale `now()` no track inicial.
-- Outros clientes escutam `presence` (sync/join/leave) e mantêm um `Map<user_id, last_activity_at>`.
+### Persistência
+- Inserir uma linha em `whatsapp_logs` por envio bem-sucedido (texto e cada anexo) com `client_id`, `recipient_phone`, `body_text`, `wamid` (do retorno `key.id` do Evolution) e `sent_by`
+- `tasks.notify_sent_at` só é marcado se algum canal (whatsapp ou email) tiver `ok: true` — comportamento atual mantido
 
-Classificação por usuário (calculada na UI, reagindo a cada minuto via `setInterval`):
-- Presente no Map e `now - last_activity_at < 30min` → **verde**
-- Presente no Map e `now - last_activity_at >= 30min` → **cinza**
-- Ausente do Map → **vermelho**
+### Logging
+- `console.log` do status HTTP e do JSON retornado pelo Evolution em cada chamada, para rastrear falhas futuras
 
-Sem alterações no banco — Presence é efêmero.
+### O que NÃO muda
+- Bloco de e-mail (`smtp-send`) permanece igual
+- Frontend (`Tasks.tsx`, `PendingTasksPanel.tsx`) continua chamando `task-notify-client` sem alterações
+- Função `whatsapp-send` e `sendActivityWhatsApp` não são tocadas
+- Sem mudanças de schema; `whatsapp_logs` já aceita esses campos
+- Secrets já configurados: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`
 
-### Componentes a criar
-
-1. **`src/hooks/useOnlineUsers.tsx`** — Provider + hook.
-   - `OnlineUsersProvider` monta o canal Presence quando há sessão (usado no `AppLayout`).
-   - Expõe `{ presenceMap: Map<userId, lastActivityAt>, bumpActivity: () => void }`.
-   - `bumpActivity()` reenvia `track()` com timestamp atual.
-
-2. **`src/components/chat/LoggedUsersPanel.tsx`** — Collapsible no header do `ConversationList`, abaixo de "Conversas".
-   - Título "Usuários Logados" + chevron + contagem `(X online)`.
-   - Ao expandir: lista todos os `profiles` (já carregados) com avatar pequeno, nome e bolinha verde/cinza/vermelha. Ordena por status (verde → cinza → vermelho) e nome.
-   - Tooltip na bolinha explica o significado e mostra "Ativo há Xmin" quando aplicável.
-
-### Edições
-
-- `src/components/AppLayout.tsx` — envolver children com `<OnlineUsersProvider>`.
-- `src/components/chat/ConversationList.tsx` — montar `<LoggedUsersPanel/>` logo após o bloco de header (linha ~163), antes da busca. Buscar lista de profiles via hook próprio ou prop.
-- `src/components/chat/ChatInput.tsx` — chamar `bumpActivity()` no sucesso do envio de mensagem (texto, mídia, áudio).
-
-### Fora de escopo
-
-- Persistir "última atividade" em tabela / histórico.
-- Atualizar atividade por outros eventos (mouse/teclado fora do chat).
-- Status manual (ausente/ocupado/invisível).
-- Indicadores em outras telas além da coluna de Conversas.
+Aprove para eu implementar.
