@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { NewConversationDialog } from './NewConversationDialog';
+import { LoggedUsersPanel } from './LoggedUsersPanel';
 import type { ChatTab } from '@/pages/Chat';
 
 function getReadableTextColor(hex: string): string {
@@ -163,6 +164,9 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
           </Button>
         </div>
       </div>
+
+      {/* Usuários Logados */}
+      <LoggedUsersPanel />
 
        {/* Tabs */}
        <div className="px-2 pt-2 pb-1 bg-white">

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
+import { useOnlineUsers } from '@/hooks/useOnlineUsers';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -35,6 +36,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, onPickFromObligation, disabled, pendingFiles = [], onAddPendingFiles, onRemovePendingFile, onClearPendingFiles, replyingTo, onCancelReply, keyboardOpen = false }: ChatInputProps) {
   const [message, setMessage] = useState('');
+  const { bumpActivity } = useOnlineUsers();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
@@ -73,6 +75,7 @@ export function ChatInput({ onSend, onSendMedia, onSendLocation, onSendContact, 
       onClearPendingFiles?.();
     }
     if (trimmed) onSend(trimmed);
+    bumpActivity();
     setMessage('');
     inputRef.current?.focus();
   };
