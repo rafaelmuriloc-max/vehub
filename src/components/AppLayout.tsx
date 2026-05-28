@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Separator } from '@/components/ui/separator';
 import { useChatNotification } from '@/hooks/useChatNotification';
+import { OnlineUsersProvider } from '@/hooks/useOnlineUsers';
 
 const pageTitles: Record<string, string> = {
   '/': 'Financeiro',
@@ -30,6 +31,7 @@ export function AppLayout() {
   const pageTitle = pageTitles[location.pathname] || '';
 
   return (
+    <OnlineUsersProvider>
     <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
@@ -49,5 +51,6 @@ export function AppLayout() {
         </main>
       </div>
     </SidebarProvider>
+    </OnlineUsersProvider>
   );
 }
