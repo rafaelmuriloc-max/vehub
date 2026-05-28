@@ -175,6 +175,50 @@ Deno.serve(async (req) => {
 
     const result: Record<string, any> = { whatsapp: null, email: null };
 
+    // Resolve or create the chat conversation for this client/phone so each WhatsApp send
+    // can be reflected as a chat_messages row (otherwise nothing shows in the internal chat).
+    async function ensureConversation(toPhone: string): Promise<string | null> {
+      try {
+        if (task.client_id) {
+          const { data: byClient } = await admin
+            .from("chat_conversations")
+            .select("id")
+            .eq("client_id", task.client_id)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (byClient?.id) return byClient.id;
+        }
+        const { data: byPhone } = await admin
+          .from("chat_conversations")
+          .select("id")
+          .eq("whatsapp_phone", toPhone)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (byPhone?.id) return byPhone.id;
+        const { data: created, error: createErr } = await admin
+          .from("chat_conversations")
+          .insert({
+            name: clientName || toPhone,
+            whatsapp_phone: toPhone,
+            client_id: task.client_id || null,
+            created_by: user.id,
+            status: "open",
+          })
+          .select("id")
+          .single();
+        if (createErr) {
+          console.log("ensureConversation insert error:", createErr.message);
+          return null;
+        }
+        return created?.id || null;
+      } catch (e: any) {
+        console.log("ensureConversation error:", e.message);
+        return null;
+      }
+    }
+
     // ---------- WhatsApp via Evolution API ----------
     if (task.notify_whatsapp) {
       const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
@@ -187,6 +231,8 @@ Deno.serve(async (req) => {
         result.whatsapp = { ok: false, error: "Cliente sem telefone" };
       } else {
         const errors: string[] = [];
+        const conversationId = await ensureConversation(to);
+        const remoteJid = `${to}@s.whatsapp.net`;
         const guessMime = (name: string, type?: string | null): string => {
           if (type) return type;
           const ext = (name || "").split(".").pop()?.toLowerCase() || "";
@@ -213,7 +259,8 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ number: to, text: signedMessage }),
           });
           const j = await r.json().catch(() => ({}));
-          console.log("Evolution sendText status:", r.status, "body:", JSON.stringify(j));
+          const waId = j?.key?.id || null;
+          console.log("Evolution sendText status:", r.status, "id:", waId, "err:", r.ok ? null : (j?.message || null));
           if (!r.ok) {
             errors.push(`texto: ${j?.message || `HTTP ${r.status}`}`);
           } else {
@@ -225,9 +272,22 @@ Deno.serve(async (req) => {
               template_params: null,
               body_text: signedMessage,
               status: "sent",
-              wamid: j?.key?.id || null,
+              wamid: waId,
               sent_by: user.id,
             });
+            if (conversationId) {
+              await admin.from("chat_messages").insert({
+                conversation_id: conversationId,
+                sender_id: user.id,
+                content: signedMessage,
+                message_type: "whatsapp_outgoing",
+                channel: "whatsapp",
+                wa_message_id: waId,
+                wa_evolution_id: waId,
+                wa_remote_jid: remoteJid,
+                agent_name: responsavel || null,
+              });
+            }
           }
         } catch (e: any) {
           errors.push(`texto: ${e.message}`);
@@ -251,7 +311,8 @@ Deno.serve(async (req) => {
               }),
             });
             const j = await r.json().catch(() => ({}));
-            console.log(`Evolution sendMedia (${att.file_name}) status:`, r.status, "body:", JSON.stringify(j));
+            const waId = j?.key?.id || null;
+            console.log(`Evolution sendMedia (${att.file_name}) status:`, r.status, "id:", waId, "err:", r.ok ? null : (j?.message || null));
             if (!r.ok) {
               errors.push(`${att.file_name}: ${j?.message || `HTTP ${r.status}`}`);
             } else {
@@ -263,13 +324,33 @@ Deno.serve(async (req) => {
                 template_params: null,
                 body_text: att.file_name,
                 status: "sent",
-                wamid: j?.key?.id || null,
+                wamid: waId,
                 sent_by: user.id,
               });
+              if (conversationId) {
+                await admin.from("chat_messages").insert({
+                  conversation_id: conversationId,
+                  sender_id: user.id,
+                  content: att.file_name,
+                  message_type: isImage ? "whatsapp_image" : "whatsapp_document",
+                  channel: "whatsapp",
+                  media_url: signed.signedUrl,
+                  wa_message_id: waId,
+                  wa_evolution_id: waId,
+                  wa_remote_jid: remoteJid,
+                  agent_name: responsavel || null,
+                });
+              }
             }
           } catch (e: any) {
             errors.push(`${att.file_name}: ${e.message}`);
           }
+        }
+        if (conversationId) {
+          await admin
+            .from("chat_conversations")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", conversationId);
         }
         result.whatsapp = errors.length === 0 ? { ok: true } : { ok: false, error: errors.join(" | ") };
       }
