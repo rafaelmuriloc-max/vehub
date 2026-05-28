@@ -1,35 +1,28 @@
-## Mudança
-Substituir o envio WhatsApp da `task-notify-client` da Meta Cloud API para a **Evolution API**, eliminando a restrição de janela de 24h que está bloqueando as notificações.
+Os envios pela Evolution estão funcionando (a Juracy recebe no WhatsApp), mas a função `task-notify-client` só grava em `whatsapp_logs` e não cria registros em `chat_messages`. Por isso o chat interno não mostra o texto e os anexos.
 
-## Arquivo afetado
-`supabase/functions/task-notify-client/index.ts` (bloco `if (task.notify_whatsapp)`, ~linhas 178–226)
+O que vou fazer em `supabase/functions/task-notify-client/index.ts`:
 
-## Detalhes
+1. Localizar/garantir a conversa do cliente
+   - Buscar `chat_conversations` por `client_id` da tarefa.
+   - Se não houver, buscar por `whatsapp_phone` normalizado.
+   - Se ainda não existir, criar uma nova conversa com `client_id`, `whatsapp_phone`, `name` = nome do cliente e `created_by` = usuário autenticado.
 
-### Texto principal
-- `POST {EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE_NAME}`
-- Header `apikey: {EVOLUTION_API_KEY}`
-- Body `{ number, text: signedMessage }` (mantém assinatura `*Responsável*` já montada)
+2. Após cada `sendText` da Evolution com sucesso, inserir em `chat_messages`:
+   - `conversation_id` da conversa,
+   - `sender_id` = `user.id`,
+   - `content` = `signedMessage`,
+   - `message_type` = `whatsapp_outgoing`,
+   - `channel` = `whatsapp`,
+   - `wa_message_id` / `wa_evolution_id` = `key.id` retornado.
 
-### Cada anexo (`task_attachments` com `direction = 'output'`)
-- Gera URL assinada do bucket `documents` (7 dias)
-- `POST {EVOLUTION_API_URL}/message/sendMedia/{EVOLUTION_INSTANCE_NAME}`
-- Body `{ number, mediatype: 'document'|'image', mimetype, media: signedUrl, fileName }`
-- MIME inferido pela extensão (helper local, mesmo padrão de `whatsapp-send`)
-- Imagens (`file_type` começando com `image/`) vão como `mediatype: image`
+3. Após cada `sendMedia` com sucesso, inserir em `chat_messages`:
+   - `content` = nome do arquivo,
+   - `message_type` = `whatsapp_image` para imagens ou `whatsapp_document` para os demais,
+   - `media_url` = URL assinada (ou caminho do arquivo, igual ao padrão usado em outros pontos do app),
+   - mesmos `wa_message_id` / `wa_evolution_id`.
 
-### Persistência
-- Inserir uma linha em `whatsapp_logs` por envio bem-sucedido (texto e cada anexo) com `client_id`, `recipient_phone`, `body_text`, `wamid` (do retorno `key.id` do Evolution) e `sent_by`
-- `tasks.notify_sent_at` só é marcado se algum canal (whatsapp ou email) tiver `ok: true` — comportamento atual mantido
+4. Atualizar `chat_conversations.updated_at` (e limpar `awaiting_first_reply` se aplicável) para a conversa subir no inbox.
 
-### Logging
-- `console.log` do status HTTP e do JSON retornado pelo Evolution em cada chamada, para rastrear falhas futuras
+5. Reduzir o ruído de log do `sendMedia` (não imprimir o `body` inteiro com base64 gigante; logar só status, id e erro resumido).
 
-### O que NÃO muda
-- Bloco de e-mail (`smtp-send`) permanece igual
-- Frontend (`Tasks.tsx`, `PendingTasksPanel.tsx`) continua chamando `task-notify-client` sem alterações
-- Função `whatsapp-send` e `sendActivityWhatsApp` não são tocadas
-- Sem mudanças de schema; `whatsapp_logs` já aceita esses campos
-- Secrets já configurados: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`
-
-Aprove para eu implementar.
+Não vou alterar nenhum comportamento do envio em si — apenas refletir cada envio no chat e simplificar o log. Em seguida, validamos concluindo uma nova tarefa para a Juracy e conferindo se as mensagens aparecem na conversa.
