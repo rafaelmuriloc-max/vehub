@@ -175,48 +175,98 @@ Deno.serve(async (req) => {
 
     const result: Record<string, any> = { whatsapp: null, email: null };
 
-    // ---------- WhatsApp via Meta Cloud API ----------
+    // ---------- WhatsApp via Evolution API ----------
     if (task.notify_whatsapp) {
-      const TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-      const PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+      const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
+      const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
+      const EVO_INST = Deno.env.get("EVOLUTION_INSTANCE_NAME");
       const to = normalizePhone(phone);
-      if (!TOKEN || !PHONE_ID) {
-        result.whatsapp = { ok: false, error: "WhatsApp não configurado" };
+      if (!EVO_URL || !EVO_KEY || !EVO_INST) {
+        result.whatsapp = { ok: false, error: "Evolution API não configurada" };
       } else if (!to) {
         result.whatsapp = { ok: false, error: "Cliente sem telefone" };
       } else {
         const errors: string[] = [];
-        // Text message
+        const guessMime = (name: string, type?: string | null): string => {
+          if (type) return type;
+          const ext = (name || "").split(".").pop()?.toLowerCase() || "";
+          const map: Record<string, string> = {
+            pdf: "application/pdf",
+            doc: "application/msword",
+            docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            xls: "application/vnd.ms-excel",
+            xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            zip: "application/zip",
+            txt: "text/plain",
+            png: "image/png",
+            jpg: "image/jpeg",
+            jpeg: "image/jpeg",
+          };
+          return map[ext] || "application/octet-stream";
+        };
+
+        // 1. Texto via Evolution
         try {
-          const r = await fetch(`https://graph.facebook.com/v20.0/${PHONE_ID}/messages`, {
+          const r = await fetch(`${EVO_URL}/message/sendText/${EVO_INST}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` },
-            body: JSON.stringify({
-              messaging_product: "whatsapp",
-              to,
-              type: "text",
-              text: { body: signedMessage },
-            }),
+            headers: { apikey: EVO_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({ number: to, text: signedMessage }),
           });
-          if (!r.ok) errors.push(`texto: ${await r.text()}`);
+          const j = await r.json().catch(() => ({}));
+          console.log("Evolution sendText status:", r.status, "body:", JSON.stringify(j));
+          if (!r.ok) {
+            errors.push(`texto: ${j?.message || `HTTP ${r.status}`}`);
+          } else {
+            await admin.from("whatsapp_logs").insert({
+              client_id: task.client_id || null,
+              instance_id: null,
+              recipient_phone: to,
+              template_name: null,
+              template_params: null,
+              body_text: signedMessage,
+              status: "sent",
+              wamid: j?.key?.id || null,
+              sent_by: user.id,
+            });
+          }
         } catch (e: any) {
           errors.push(`texto: ${e.message}`);
         }
-        // Each attachment as document
+
+        // 2. Cada anexo via Evolution
         for (const att of attachments) {
-          const { data: signed } = await admin.storage.from("documents").createSignedUrl(att.file_url, 86400);
+          const { data: signed } = await admin.storage.from("documents").createSignedUrl(att.file_url, 604800);
           if (!signed?.signedUrl) { errors.push(`${att.file_name}: url`); continue; }
           const isImage = (att.file_type || "").startsWith("image/");
-          const body = isImage
-            ? { messaging_product: "whatsapp", to, type: "image", image: { link: signed.signedUrl } }
-            : { messaging_product: "whatsapp", to, type: "document", document: { link: signed.signedUrl, filename: att.file_name } };
           try {
-            const r = await fetch(`https://graph.facebook.com/v20.0/${PHONE_ID}/messages`, {
+            const r = await fetch(`${EVO_URL}/message/sendMedia/${EVO_INST}`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` },
-              body: JSON.stringify(body),
+              headers: { apikey: EVO_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                number: to,
+                mediatype: isImage ? "image" : "document",
+                mimetype: guessMime(att.file_name, att.file_type),
+                media: signed.signedUrl,
+                fileName: att.file_name,
+              }),
             });
-            if (!r.ok) errors.push(`${att.file_name}: ${await r.text()}`);
+            const j = await r.json().catch(() => ({}));
+            console.log(`Evolution sendMedia (${att.file_name}) status:`, r.status, "body:", JSON.stringify(j));
+            if (!r.ok) {
+              errors.push(`${att.file_name}: ${j?.message || `HTTP ${r.status}`}`);
+            } else {
+              await admin.from("whatsapp_logs").insert({
+                client_id: task.client_id || null,
+                instance_id: null,
+                recipient_phone: to,
+                template_name: null,
+                template_params: null,
+                body_text: att.file_name,
+                status: "sent",
+                wamid: j?.key?.id || null,
+                sent_by: user.id,
+              });
+            }
           } catch (e: any) {
             errors.push(`${att.file_name}: ${e.message}`);
           }
