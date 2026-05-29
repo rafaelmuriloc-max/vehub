@@ -97,12 +97,19 @@ export default function SimplesNacionalTab() {
   useEffect(() => { loadData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [year]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return clients;
-    return clients.filter(c =>
-      c.company_name.toLowerCase().includes(q) ||
-      (c.document || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''))
-    );
+    const normalize = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+    const tokens = normalize(q).split(/\s+/).filter(Boolean);
+    const digits = q.replace(/\D/g, '');
+    return clients.filter(c => {
+      const name = normalize(c.company_name || '');
+      const nameMatch = tokens.every(t => name.includes(t));
+      const docMatch = digits.length > 0 &&
+        (c.document || '').replace(/\D/g, '').includes(digits);
+      return nameMatch || docMatch;
+    });
   }, [clients, search]);
 
   const byClient = useMemo(() => {
