@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
 
   // Buscar clientes do Simples ativos
   const query = supabase.from("clients").select("id, company_name, document, tax_regime, status")
-    .eq("tax_regime", "Simples Nacional")
+    .in("tax_regime", ["simples_nacional", "Simples Nacional"])
     .eq("status", "active");
   if (clientId) query.eq("id", clientId);
 
