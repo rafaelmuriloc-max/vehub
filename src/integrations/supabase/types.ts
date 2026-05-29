@@ -1638,6 +1638,72 @@ export type Database = {
         }
         Relationships: []
       }
+      simples_nacional_competencias: {
+        Row: {
+          ano: number
+          client_id: string
+          competencia: string
+          comprovante_pdf_base64: string | null
+          created_at: string
+          das_pdf_base64: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          declaracao_pdf_base64: string | null
+          id: string
+          last_synced_at: string | null
+          numero_das: string | null
+          numero_declaracao: string | null
+          raw_response: Json | null
+          rba_acumulado_ano: number | null
+          rbt12: number | null
+          status: string
+          updated_at: string
+          valor_das: number | null
+        }
+        Insert: {
+          ano: number
+          client_id: string
+          competencia: string
+          comprovante_pdf_base64?: string | null
+          created_at?: string
+          das_pdf_base64?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          declaracao_pdf_base64?: string | null
+          id?: string
+          last_synced_at?: string | null
+          numero_das?: string | null
+          numero_declaracao?: string | null
+          raw_response?: Json | null
+          rba_acumulado_ano?: number | null
+          rbt12?: number | null
+          status?: string
+          updated_at?: string
+          valor_das?: number | null
+        }
+        Update: {
+          ano?: number
+          client_id?: string
+          competencia?: string
+          comprovante_pdf_base64?: string | null
+          created_at?: string
+          das_pdf_base64?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          declaracao_pdf_base64?: string | null
+          id?: string
+          last_synced_at?: string | null
+          numero_das?: string | null
+          numero_declaracao?: string | null
+          raw_response?: Json | null
+          rba_acumulado_ano?: number | null
+          rbt12?: number | null
+          status?: string
+          updated_at?: string
+          valor_das?: number | null
+        }
+        Relationships: []
+      }
       sitfis_results: {
         Row: {
           client_id: string
