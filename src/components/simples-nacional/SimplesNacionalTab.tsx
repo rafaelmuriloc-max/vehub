@@ -5,7 +5,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
 import { Loader2, RefreshCw, ChevronRight, Search, Calculator } from 'lucide-react';
 import CompetenciaRow from './CompetenciaRow';
@@ -229,7 +228,9 @@ export default function SimplesNacionalTab() {
                 <div className="flex items-center gap-2">
                   {pct1 !== null ? (
                     <>
-                      <Progress value={Math.min(pct1, 100)} className="h-2 flex-1" indicatorClassName={pctColor(pct1)} />
+                      <div className="h-2 flex-1 bg-secondary rounded-full overflow-hidden">
+                        <div className={`h-full ${pctColor(pct1)} transition-all`} style={{ width: `${Math.min(pct1, 100)}%` }} />
+                      </div>
                       <span className="text-xs tabular-nums w-12 text-right">{pct1.toFixed(1)}%</span>
                     </>
                   ) : <span className="text-xs text-muted-foreground">—</span>}
@@ -237,7 +238,9 @@ export default function SimplesNacionalTab() {
                 <div className="flex items-center gap-2">
                   {pct2 !== null ? (
                     <>
-                      <Progress value={Math.min(pct2, 100)} className="h-2 flex-1" indicatorClassName={pctColor(pct2)} />
+                      <div className="h-2 flex-1 bg-secondary rounded-full overflow-hidden">
+                        <div className={`h-full ${pctColor(pct2)} transition-all`} style={{ width: `${Math.min(pct2, 100)}%` }} />
+                      </div>
                       <span className="text-xs tabular-nums w-12 text-right">{pct2.toFixed(1)}%</span>
                     </>
                   ) : <span className="text-xs text-muted-foreground">—</span>}
