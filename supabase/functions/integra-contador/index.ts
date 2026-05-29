@@ -492,16 +492,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return jsonResponse({ error: "Token inválido" }, 401);
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isServiceCall = token === serviceRoleKey;
+
+    const supabase = isServiceCall
+      ? createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey)
+      : createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: authHeader } } }
+        );
+
+    if (!isServiceCall) {
+      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return jsonResponse({ error: "Token inválido" }, 401);
+      }
     }
 
     const body = await req.json();
