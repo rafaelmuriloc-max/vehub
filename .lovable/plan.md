@@ -1,41 +1,71 @@
-## Problema
 
-O painel "Usuários Logados" (`src/components/chat/LoggedUsersPanel.tsx`) classifica cada usuário como **Online / Inativo (>30 min) / Offline** usando o `presenceMap` do hook `useOnlineUsers`. Hoje o resultado fica errado por três motivos:
+## Visão geral
 
-1. **`last_activity_at` quase nunca é atualizado.** Só é gravado no `track()` inicial e em `ChatInput` quando o usuário envia mensagem. Quem está usando o sistema normalmente (CRM, tarefas, etc.) aparece como "Inativo" depois de 30 min, mesmo digitando.
-2. **Sair da aba = offline imediato.** Quando o tab é fechado, o presence é removido na hora, sem janela de tolerância — abas que recarregam piscam como "Offline".
-3. **Resubscribe a cada rotação de token.** O `useEffect` tem `session?.access_token` como dependência, então o canal é destruído/recriado toda vez que o Supabase rota o JWT, derrubando temporariamente o presence de todo mundo (visível nos logs: `online users: 0` logo depois de `SUBSCRIBED`).
+Nova aba **Simples Nacional** dentro de `/fiscal`, listando todos os clientes ativos com `tax_regime = 'Simples Nacional'`. Cada linha mostra RBT12 e percentuais de consumo dos sublimites (RBA/sublimite × 100). Ao expandir, aparecem as 12 competências do ano corrente com valor do DAS, status, e botões de ações via Integra Contador (SERPRO).
 
-## Solução
+Sincronização automática mensal todo **dia 20 às 23:59 (BRT)** via CRON, alimentando uma tabela de cache.
 
-### 1. Heartbeat global de atividade (`useOnlineUsers`)
-- Registrar listeners de `mousemove`, `keydown`, `click`, `touchstart`, `visibilitychange` e `focus` no `window` dentro do `OnlineUsersProvider`.
-- Manter um `lastActivityRef` em memória atualizado por esses eventos.
-- A cada 30 s (e quando a aba volta a ficar visível), chamar `channel.track({ user_id, last_activity_at: lastActivityRef.current })`. Usar throttle para não floodar o realtime.
-- Manter o `bumpActivity` exportado (atualiza o ref + força um track imediato) — `ChatInput` continua chamando.
+## Mudanças no banco
 
-### 2. Não recriar o canal quando o token rotaciona
-- Remover `session?.access_token` das deps do `useEffect` principal; deixar só `user?.id`.
-- Mover `supabase.realtime.setAuth(token)` para um `useEffect` separado que reage a `session?.access_token` sem desmontar o canal.
-- Manter o `onAuthStateChange` apenas para chamar `setAuth` no token novo.
+Nova tabela `simples_nacional_competencias`:
 
-### 3. Janela de tolerância para "offline"
-- No `LoggedUsersPanel`, manter um `lastSeenRef: Map<user_id, number>` que armazena o último `last_activity_at` visto via presence.
-- Atualizar esse mapa sempre que `presenceMap` mudar (merge: pega o maior valor).
-- `classify(lastSeen, now)`:
-  - `online`  → visto há < 2 min
-  - `idle`    → visto há ≥ 2 min e < 30 min
-  - `offline` → visto há ≥ 30 min ou nunca visto
-- Assim, recarregar a aba ou trocar token não derruba ninguém para "Offline" no painel.
+- `client_id`, `competencia` (date — 1º dia do mês), `ano`
+- `rbt12`, `rba_acumulado_ano`
+- `valor_das`, `numero_das`, `numero_declaracao`
+- `data_vencimento`, `data_pagamento`, `status` ('pago' | 'aberto' | 'sem_movimento')
+- `das_pdf_base64`, `declaracao_pdf_base64`, `comprovante_pdf_base64` (cache leve)
+- `last_synced_at`, `raw_response` (jsonb)
+- `created_at`, `updated_at`
+- Unique: (client_id, competencia)
+- RLS: SELECT autenticado; INSERT/UPDATE/DELETE só admins + service_role
+- GRANTs corretos para `authenticated` e `service_role`
 
-### 4. Ajustes de UI
-- Atualizar os tooltips (`dotLabel` / `title`) para refletir os novos limites (ex.: "Inativo há X min").
-- Manter o contador do cabeçalho (`onlineCount`) usando a nova classificação.
+CRON job (`pg_cron` + `pg_net`) agendado para `59 23 20 * *` no fuso `America/Sao_Paulo` (configurado no SQL com `TZ`), chamando edge function `simples-nacional-sync`.
 
-## Arquivos afetados
-- `src/hooks/useOnlineUsers.tsx` — heartbeat, listeners globais, separar setAuth do subscribe.
-- `src/components/chat/LoggedUsersPanel.tsx` — `lastSeenRef`, nova função `classify`, textos de status.
+## Edge functions (novas)
+
+1. **`simples-nacional-sync`** — varre todos os clientes Simples ativos, para cada um chama PGDASD `CONSDECLARACAO13` (declarações do ano), `GERARDAS12` (DAS por período) e atualiza/insere registros em `simples_nacional_competencias`. Marca `status='pago'` quando há `data_pagamento` no extrato (`CONSEXTRATO16`). Suporta execução por CRON e manual (botão "Sincronizar agora" no header da aba, apenas admin).
+
+2. **`simples-nacional-action`** — endpoint único acionado pelos botões da UI, encaminhando para o `integra-contador` existente:
+   - `gerar_guia` → PGDASD/GERARDAS12 (PDF)
+   - `recalcular` → PGDASD/TRANSDECLARACAO11 (reabre/retransmite e re-emite DAS)
+   - `ultima_declaracao` → PGDASD/CONSULTIMADECREC14 ou CONSDECLARACAO13 (PDF)
+   - `comprovante` → PGDASD/CONSEXTRATO16 (apenas se status=pago)
+   Retorna PDF base64 e atualiza a linha em `simples_nacional_competencias`.
+
+Ambas usam o certificado A1 do escritório (já configurado em `company_settings.accountant_certificate_*`) seguindo o padrão SERPRO/SITFIS existente.
+
+## Frontend
+
+- **`src/pages/Fiscal.tsx`** — adicionar botão "Simples Nacional" (ícone `Calculator`) entre Situação Fiscal e Notas Fiscais, com nova view `simples`.
+- **`src/components/simples-nacional/SimplesNacionalTab.tsx`** (novo) — tabela principal:
+  - Busca por nome/CNPJ
+  - Colunas: Nome, CNPJ (formatado `XX.XXX.XXX/XXXX-XX`), RBT12 (R$), % sublimite 3,6Mi (RBA/3.600.000), % sublimite 4,8Mi (RBA/4.800.000) com barra de progresso colorida (verde <80%, amarelo 80-100%, vermelho >100%)
+  - Header com botão "Sincronizar agora" (admin) e badge "Última sync: dd/mm às hh:mm"
+  - Linhas expansíveis (Collapsible) — ao abrir, carrega/exibe 12 competências do ano vigente
+- **`src/components/simples-nacional/CompetenciaRow.tsx`** (novo) — linha de competência:
+  - Mês/Ano (jan/2026…)
+  - Valor DAS (R$ ou "—")
+  - Status (badge: Pago verde / Em aberto laranja / Sem movimento cinza)
+  - Botões: Gerar Guia, Recalcular, Última Declaração, Comprovante (este só se pago)
+  - Cada botão chama `simples-nacional-action`, mostra toast e abre PDF em nova aba (base64 → blob)
+- Seletor de ano no topo da expansão (default = ano corrente)
+- Responsivo: em mobile esconde colunas RBT12/sublimites secundárias
+
+## Detalhes técnicos
+
+- Percentuais: `RBA_acumulado_ano / 3_600_000` e `/ 4_800_000`. Quando RBA não disponível, mostrar "—".
+- Status derivado: `data_pagamento != null` → pago; caso contrário, com base na data atual vs vencimento.
+- PDFs: padrão `Serpro Results UI` já em uso — abrir blob a partir de base64.
+- Loading skeletons na tabela e nas competências.
+- Toda chamada SERPRO usa o pattern de fallback/retry do `SERPRO SITFIS Automation`.
+
+## Memória
+
+Adicionar `mem://features/fiscal/simples-nacional-control` descrevendo a aba, tabela de cache, CRON dia 20 23:59, e mapeamento de ações SERPRO.
 
 ## Fora de escopo
-- Persistir "última vez online" no banco (atualmente é só em memória/realtime — manter assim).
-- Mudanças no `task-notify-client` ou em outros fluxos.
+
+- Edição manual de RBT12/declaração (somente leitura + ações SERPRO).
+- DEFIS anual (já existe em IntegraContador).
+- Histórico multi-ano além do seletor (mantém 1 ano por vez).
