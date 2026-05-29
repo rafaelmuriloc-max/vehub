@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -8,12 +8,15 @@ type Profile = { user_id: string; full_name: string | null; avatar_url: string |
 
 type Status = 'online' | 'idle' | 'offline';
 
-const INACTIVE_MS = 30 * 60 * 1000; // 30 minutes
+const ONLINE_MS = 2 * 60 * 1000;       // <2 min since last activity → online
+const IDLE_MS = 30 * 60 * 1000;        // 2–30 min → idle, >30 min → offline
 
-function classify(lastActivity: number | undefined, now: number): Status {
-  if (!lastActivity) return 'offline';
-  if (now - lastActivity < INACTIVE_MS) return 'online';
-  return 'idle';
+function classify(lastSeen: number | undefined, now: number): Status {
+  if (!lastSeen) return 'offline';
+  const delta = now - lastSeen;
+  if (delta < ONLINE_MS) return 'online';
+  if (delta < IDLE_MS) return 'idle';
+  return 'offline';
 }
 
 const dotClass: Record<Status, string> = {
@@ -24,7 +27,7 @@ const dotClass: Record<Status, string> = {
 
 const dotLabel: Record<Status, string> = {
   online: 'Online',
-  idle: 'Logado, inativo há mais de 30 min',
+  idle: 'Inativo',
   offline: 'Offline',
 };
 
@@ -33,6 +36,7 @@ export function LoggedUsersPanel() {
   const [open, setOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [, setTick] = useState(0);
+  const lastSeenRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     supabase
@@ -42,18 +46,30 @@ export function LoggedUsersPanel() {
       .then(({ data }) => setProfiles((data as Profile[]) || []));
   }, []);
 
-  // re-render every minute so status transitions over time
+  // merge presence into lastSeen so a brief disconnect doesn't drop a user to "offline"
   useEffect(() => {
-    const id = window.setInterval(() => setTick((t) => t + 1), 60_000);
+    const map = lastSeenRef.current;
+    presenceMap.forEach((t, userId) => {
+      const prev = map.get(userId) ?? 0;
+      if (t > prev) map.set(userId, t);
+    });
+  }, [presenceMap]);
+
+  // re-render every 30s so status transitions over time
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
     return () => window.clearInterval(id);
   }, []);
 
   const now = Date.now();
-  const enriched = profiles.map((p) => ({
-    ...p,
-    status: classify(presenceMap.get(p.user_id), now),
-    lastActivity: presenceMap.get(p.user_id),
-  }));
+  const enriched = profiles.map((p) => {
+    const lastSeen = lastSeenRef.current.get(p.user_id) ?? presenceMap.get(p.user_id);
+    return {
+      ...p,
+      status: classify(lastSeen, now),
+      lastActivity: lastSeen,
+    };
+  });
 
   const order: Record<Status, number> = { online: 0, idle: 1, offline: 2 };
   enriched.sort((a, b) => {
