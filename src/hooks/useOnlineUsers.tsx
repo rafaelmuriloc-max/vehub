@@ -11,10 +11,23 @@ interface OnlineUsersCtx {
 
 const Ctx = createContext<OnlineUsersCtx>({ presenceMap: new Map(), bumpActivity: () => {} });
 
+const HEARTBEAT_MS = 30_000; // re-track every 30s
+
 export function OnlineUsersProvider({ children }: { children: ReactNode }) {
   const { user, session } = useAuth();
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+  const lastTrackRef = useRef<number>(0);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  // Keep Realtime auth in sync with the current JWT WITHOUT recreating the channel.
+  useEffect(() => {
+    if (session?.access_token) {
+      try { supabase.realtime.setAuth(session.access_token); } catch {}
+    }
+  }, [session?.access_token]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -24,8 +37,8 @@ export function OnlineUsersProvider({ children }: { children: ReactNode }) {
 
     // Authenticate Realtime with the user's JWT — without this, Presence
     // messages can be filtered as anonymous and other clients may not appear.
-    if (session?.access_token) {
-      try { supabase.realtime.setAuth(session.access_token); } catch {}
+    if (sessionRef.current?.access_token) {
+      try { supabase.realtime.setAuth(sessionRef.current.access_token); } catch {}
     }
 
     const channel = supabase.channel('online-users', {
@@ -50,6 +63,34 @@ export function OnlineUsersProvider({ children }: { children: ReactNode }) {
       setPresenceMap(next);
     };
 
+    const trackNow = (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastTrackRef.current < 5_000) return;
+      lastTrackRef.current = now;
+      channel.track({ user_id: user.id, last_activity_at: lastActivityRef.current }).catch(() => {});
+    };
+
+    const onActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        lastActivityRef.current = Date.now();
+        trackNow(true);
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = ['mousemove', 'keydown', 'click', 'touchstart', 'focus', 'scroll'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true } as AddEventListenerOptions));
+    document.addEventListener('visibilitychange', onVisibility);
+
+    const heartbeat = window.setInterval(() => {
+      // Only re-track if there was activity since last track
+      if (lastActivityRef.current > lastTrackRef.current - HEARTBEAT_MS) {
+        trackNow();
+      }
+    }, HEARTBEAT_MS);
+
     let retryTimer: number | null = null;
     channel
       .on('presence', { event: 'sync' }, recompute)
@@ -58,40 +99,37 @@ export function OnlineUsersProvider({ children }: { children: ReactNode }) {
       .subscribe(async (status) => {
         console.log('[presence] channel status:', status);
         if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: user.id, last_activity_at: Date.now() });
+          lastActivityRef.current = Date.now();
+          trackNow(true);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           // Schedule a soft retry: drop and recreate via effect deps bump
           if (retryTimer) window.clearTimeout(retryTimer);
           retryTimer = window.setTimeout(() => {
             try { supabase.removeChannel(channel); } catch {}
-            // Re-track by re-running effect via setAuth ping
-            if (session?.access_token) {
-              try { supabase.realtime.setAuth(session.access_token); } catch {}
+            if (sessionRef.current?.access_token) {
+              try { supabase.realtime.setAuth(sessionRef.current.access_token); } catch {}
             }
           }, 5000);
         }
       });
 
-    // Refresh Realtime auth whenever the session token rotates
-    const { data: authSub } = supabase.auth.onAuthStateChange((_evt, sess) => {
-      if (sess?.access_token) {
-        try { supabase.realtime.setAuth(sess.access_token); } catch {}
-      }
-    });
-
     return () => {
       if (retryTimer) window.clearTimeout(retryTimer);
-      authSub.subscription.unsubscribe();
+      window.clearInterval(heartbeat);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, onActivity));
+      document.removeEventListener('visibilitychange', onVisibility);
       try { channel.untrack(); } catch {}
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [user?.id, session?.access_token]);
+  }, [user?.id]);
 
   const bumpActivity = useCallback(() => {
     const ch = channelRef.current;
     if (!ch || !user?.id) return;
-    ch.track({ user_id: user.id, last_activity_at: Date.now() }).catch(() => {});
+    lastActivityRef.current = Date.now();
+    lastTrackRef.current = Date.now();
+    ch.track({ user_id: user.id, last_activity_at: lastActivityRef.current }).catch(() => {});
   }, [user?.id]);
 
   return <Ctx.Provider value={{ presenceMap, bumpActivity }}>{children}</Ctx.Provider>;
