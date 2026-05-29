@@ -79,7 +79,7 @@ export default function SimplesNacionalTab() {
     const [clientsRes, compsRes] = await Promise.all([
       supabase.from('clients')
         .select('id, company_name, document')
-        .eq('tax_regime', 'Simples Nacional')
+        .in('tax_regime', ['simples_nacional', 'Simples Nacional'])
         .eq('status', 'active')
         .order('company_name'),
       supabase.from('simples_nacional_competencias' as any)
