@@ -1,60 +1,84 @@
-## Objetivo
 
-Adicionar dentro do sistema uma forma de reconectar a instância da Evolution API gerando um novo QR Code, sem precisar acessar o painel da Evolution externamente.
+## Diagnóstico
 
-## Onde ficará
+O erro `400 "Error: Connection Closed"` da Evolution API só acontece para alguns contatos porque o número enviado não corresponde ao JID realmente registrado no WhatsApp daquele contato.
 
-- Em **Configurações → Integrações** (ou aba dedicada "WhatsApp / Evolution"), criar um card **"Conexão WhatsApp (Evolution API)"** com:
-  - Status atual da instância (`open`, `connecting`, `close`).
-  - Número conectado (quando disponível).
-  - Botão **"Gerar novo QR Code"**.
-  - Botão **"Desconectar"** (logout da instância).
-  - Botão **"Reiniciar instância"** (restart).
-- Acesso restrito a **admins** (RBAC já existente).
+No Brasil, números antigos (especialmente DDDs do Sul/Sudeste cadastrados antes de 2012) não têm o nono dígito no WhatsApp, mesmo que o telefone seja salvo com o 9. Quando o sistema envia `5547997057925@s.whatsapp.net` e o JID real é `554797057925@s.whatsapp.net`, a Baileys (engine da Evolution) abre o socket, não encontra o destinatário e devolve "Connection Closed".
 
-## Fluxo do QR Code
+Os contatos que funcionam pela Meta API (dentro da janela de 24h) também funcionariam pela Evolution se o JID correto fosse usado — o Meta normaliza internamente, a Evolution não.
 
-1. Usuário clica em "Gerar novo QR Code".
-2. Frontend chama edge function `evolution-connect`.
-3. A função:
-   - Consulta `GET /instance/connectionState/{instance}` para ver o estado.
-   - Se já estiver `open`, retorna status conectado.
-   - Caso contrário, chama `GET /instance/connect/{instance}` na Evolution API, que retorna `base64` do QR Code (e/ou `pairingCode`).
-4. Frontend exibe o QR Code em um dialog e faz **polling a cada 3s** em `evolution-connection-state` até virar `open` (ou expirar em ~60s, oferecendo regenerar).
-5. Quando conectar, atualiza o status no card e fecha o dialog com toast de sucesso.
+## Solução
 
-## Edge functions novas
+Adicionar uma etapa de **resolução de JID** antes de qualquer envio pela Evolution API, usando o próprio endpoint da Evolution `POST /chat/whatsappNumbers/{instance}` que aceita uma lista de números e devolve o JID real (`jid`) e se o número existe (`exists: true`).
 
-Todas usam os secrets já configurados: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`. Tratamento de erro no mesmo padrão dos demais (`200` com `{ ok:false, transient }` em falhas 5xx/Connection Closed).
+### Fluxo novo (Evolution)
 
-- `evolution-connect` → `GET /instance/connect/{instance}` retorna `{ base64, pairingCode, code }`.
-- `evolution-connection-state` → `GET /instance/connectionState/{instance}` retorna `{ state, wuid?, profileName? }`.
-- `evolution-logout` → `DELETE /instance/logout/{instance}`.
-- `evolution-restart` → `PUT /instance/restart/{instance}`.
+```text
+1. Normalizar telefone para dígitos com 55 + DDD + (9 opcional) + 8 dígitos
+2. Chamar /chat/whatsappNumbers/{instance} com [numeroCanonico, numeroSem9]
+3. Para cada resposta exists=true, usar exatamente o "jid" devolvido
+4. Se nenhum existir, retornar { ok:false, transient:false, error:"Número não está no WhatsApp" }
+5. Enviar via /message/sendText/{instance} usando o number = JID resolvido (sem o sufixo @s.whatsapp.net)
+6. Em caso de 500/Connection Closed mesmo após resolução: 1 retry após 1s
+```
 
-## Frontend
+### Arquivos afetados
 
-- Novo componente `src/components/settings/EvolutionConnectionCard.tsx` com:
-  - Badge de status colorido (verde `open`, amarelo `connecting`, vermelho `close`).
-  - Ações com confirmação para "Desconectar" e "Reiniciar".
-- Novo dialog `src/components/settings/EvolutionQrDialog.tsx`:
-  - Mostra QR como `<img src={data:image/png;base64,...} />`.
-  - Timer regressivo e botão "Gerar novo".
-  - Polling do estado com `setInterval` limpo no unmount.
-- Integrar o card em `src/pages/Settings.tsx` (aba existente de integrações; se não houver, criar aba "WhatsApp").
+1. **`supabase/functions/whatsapp-send-text/index.ts`**
+   - Criar helper `resolveWhatsAppJid(phone)` que faz a chamada `/chat/whatsappNumbers`
+   - Usar JID resolvido nas duas ramificações que enviam via Evolution (fallback Meta→Evo e envio direto fora da janela 24h)
+   - Mensagem de erro amigável quando `exists=false`: "Este número não possui WhatsApp"
 
-## Segurança
+2. **`supabase/functions/whatsapp-send-media/index.ts`**
+   - Mesmo helper e mesma lógica
 
-- Edge functions exigem JWT do usuário e validam role `admin` via `has_role` antes de executar ações destrutivas (logout/restart). Para `connect` e `connectionState` também restringir a admin.
+3. **`supabase/functions/chat-inactivity-monitor/index.ts`**
+   - Resolver JID antes de enviar o aviso de inatividade (atualmente também loga "Connection Closed")
+
+4. **`supabase/functions/daily-cs-reminder/index.ts`**
+   - Mesma proteção, para grupos pular a resolução (grupos usam `@g.us`)
+
+5. **`supabase/functions/whatsapp-send/index.ts`** (legado, se usado)
+   - Aplicar o mesmo padrão por consistência
+
+### Detalhe técnico do helper
+
+```ts
+async function resolveWhatsAppJid(phoneDigits: string): Promise<{ jid: string | null; exists: boolean }> {
+  // Gera variantes: com 9 e sem 9 (apenas para celulares BR com 13 dígitos)
+  const variants = new Set<string>([phoneDigits]);
+  if (phoneDigits.length === 13 && phoneDigits.startsWith('55') && phoneDigits[4] === '9') {
+    variants.add(phoneDigits.slice(0, 4) + phoneDigits.slice(5)); // sem o 9
+  } else if (phoneDigits.length === 12 && phoneDigits.startsWith('55')) {
+    variants.add(phoneDigits.slice(0, 4) + '9' + phoneDigits.slice(4)); // com o 9
+  }
+
+  const r = await fetch(`${EVO_URL}/chat/whatsappNumbers/${INSTANCE}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: EVO_KEY },
+    body: JSON.stringify({ numbers: [...variants] }),
+  });
+  if (!r.ok) return { jid: null, exists: false };
+  const arr = await r.json(); // [{ exists, jid, number }]
+  const hit = (arr || []).find((x: any) => x?.exists);
+  return { jid: hit?.jid ?? null, exists: !!hit };
+}
+```
+
+O `number` passado ao `/message/sendText` passa a ser `jid.replace('@s.whatsapp.net','')` — assim o quoted reply continua usando o `remoteJid` correto.
+
+### Tratamento de erro no frontend
+
+`Chat.tsx` já trata `{ ok:false, transient }`. Não precisa mudar a UI; apenas a mensagem de toast vai ficar mais clara quando `transient=false` e o erro for "número não possui WhatsApp".
+
+## Fora do escopo
+
+- Persistir o JID resolvido em cache (otimização futura)
+- Atualizar `chat_conversations.whatsapp_phone` com o número canonizado pela Evolution
+- Mudanças no fluxo Meta API (já funciona)
 
 ## Validação
 
-1. Abrir Configurações → WhatsApp, ver status atual.
-2. Desconectar → status vira `close`.
-3. Gerar QR Code → escanear no celular → status vira `open` e dialog fecha.
-4. Logs das edge functions mostram chamadas sem 5xx persistente.
-
-## Fora de escopo
-
-- Trocar nome da instância ou criar múltiplas instâncias.
-- Configurar webhooks da Evolution (já existem).
+1. Enviar mensagem para um contato que estava falhando → verificar log "Resolved JID: 554..." e sucesso
+2. Enviar para um número fake (ex: 5511999999999) → toast "Este número não possui WhatsApp"
+3. Enviar para contato que já funcionava → continua funcionando
