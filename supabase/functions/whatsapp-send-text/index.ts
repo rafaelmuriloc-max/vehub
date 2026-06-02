@@ -264,6 +264,16 @@ Deno.serve(async (req) => {
       if (!evoPhone.startsWith("55")) evoPhone = "55" + evoPhone;
       metaPhoneDigits = evoPhone;
 
+      const resolved = await resolveEvolutionNumber(evolutionUrl, evolutionApiKey, evolutionInstance, evoPhone);
+      if (!resolved.exists || !resolved.number) {
+        return new Response(
+          JSON.stringify({ ok: false, error: `Este número não possui WhatsApp (${evoPhone})`, transient: false }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const evoNum = resolved.number;
+      metaPhoneDigits = evoNum;
+
       const evoRes = await fetch(
         `${evolutionUrl}/message/sendText/${evolutionInstance}`,
         {
@@ -273,9 +283,9 @@ Deno.serve(async (req) => {
             apikey: evolutionApiKey,
           },
           body: JSON.stringify({
-            number: evoPhone,
+            number: evoNum,
             text: signedText,
-            ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
+            ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoNum}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
           }),
         }
       );
