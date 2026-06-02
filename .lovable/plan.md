@@ -1,40 +1,60 @@
-## Diagnóstico encontrado
+## Objetivo
 
-- O cron `scheduled-messages-runner` já está ativo e rodando a cada minuto (`* * * * *`).
-- Os agendamentos de hoje foram processados no horário configurado, com `run` criado no banco.
-- O problema atual não é mais o cron: as entregas falharam no envio WhatsApp.
-- O cliente selecionado tem telefone salvo como `((4) 7) 3842-0299/ (0000) 0000-0000`; o runner apenas remove os caracteres não numéricos, gerando um número inválido para WhatsApp/Evolution API.
-- A Evolution API respondeu `400 Bad Request`, e isso ficou registrado em `scheduled_message_deliveries` como `failed`.
+Adicionar dentro do sistema uma forma de reconectar a instância da Evolution API gerando um novo QR Code, sem precisar acessar o painel da Evolution externamente.
 
-## Plano de correção
+## Onde ficará
 
-1. **Manter o cron por minuto**
-   - Confirmar no código e no banco que o job continua em `* * * * *`.
-   - O cron só acorda o runner; quem decide disparar é a Edge Function, comparando dia e horário de São Paulo.
+- Em **Configurações → Integrações** (ou aba dedicada "WhatsApp / Evolution"), criar um card **"Conexão WhatsApp (Evolution API)"** com:
+  - Status atual da instância (`open`, `connecting`, `close`).
+  - Número conectado (quando disponível).
+  - Botão **"Gerar novo QR Code"**.
+  - Botão **"Desconectar"** (logout da instância).
+  - Botão **"Reiniciar instância"** (restart).
+- Acesso restrito a **admins** (RBAC já existente).
 
-2. **Garantir disparo somente no dia e horário agendados**
-   - Ajustar o runner para comparar `send_time` com o minuto atual em `America/Sao_Paulo`.
-   - Usar tolerância mínima apenas contra atraso operacional do cron, sem transformar isso em janela de 30 minutos.
-   - Manter idempotência: um agendamento só pode criar uma execução por data agendada.
+## Fluxo do QR Code
 
-3. **Corrigir validação de telefone antes do envio**
-   - Criar uma normalização robusta para telefones brasileiros:
-     - aceitar `55DDDNÚMERO`, `DDDNÚMERO` e variações com máscara;
-     - separar múltiplos telefones digitados no mesmo campo;
-     - escolher o primeiro número válido para WhatsApp;
-     - rejeitar números fictícios como `0000` ou telefones incompletos.
-   - Priorizar contato do departamento; se não existir, usar telefone principal do cliente.
-   - Se não houver número válido, registrar `skipped` com erro claro: `Telefone inválido para WhatsApp`, em vez de tentar enviar para a Evolution API.
+1. Usuário clica em "Gerar novo QR Code".
+2. Frontend chama edge function `evolution-connect`.
+3. A função:
+   - Consulta `GET /instance/connectionState/{instance}` para ver o estado.
+   - Se já estiver `open`, retorna status conectado.
+   - Caso contrário, chama `GET /instance/connect/{instance}` na Evolution API, que retorna `base64` do QR Code (e/ou `pairingCode`).
+4. Frontend exibe o QR Code em um dialog e faz **polling a cada 3s** em `evolution-connection-state` até virar `open` (ou expirar em ~60s, oferecendo regenerar).
+5. Quando conectar, atualiza o status no card e fecha o dialog com toast de sucesso.
 
-4. **Melhorar o registro de falhas**
-   - Registrar no runner o motivo de cada agendamento ignorado ou processado: fora da data, fora do horário, já executado, sem cliente, sem telefone válido ou falha da Evolution API.
-   - Melhorar o erro salvo em `scheduled_message_deliveries` para ficar legível na tela.
+## Edge functions novas
 
-5. **Evitar reprocessamento incorreto**
-   - Quando uma execução já existe no dia, não reenviar mensagens já enviadas.
-   - Permitir retentar apenas entregas com status `failed` quando o runner for chamado de novo, sem duplicar mensagens enviadas.
+Todas usam os secrets já configurados: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`. Tratamento de erro no mesmo padrão dos demais (`200` com `{ ok:false, transient }` em falhas 5xx/Connection Closed).
 
-6. **Validar após implementar**
-   - Fazer uma chamada manual controlada do runner para verificar resposta e logs.
-   - Conferir `scheduled_message_runs` e `scheduled_message_deliveries`.
-   - Confirmar que o próximo agendamento no horário correto cria execução e entrega, ou registra uma falha clara caso o telefone seja inválido.
+- `evolution-connect` → `GET /instance/connect/{instance}` retorna `{ base64, pairingCode, code }`.
+- `evolution-connection-state` → `GET /instance/connectionState/{instance}` retorna `{ state, wuid?, profileName? }`.
+- `evolution-logout` → `DELETE /instance/logout/{instance}`.
+- `evolution-restart` → `PUT /instance/restart/{instance}`.
+
+## Frontend
+
+- Novo componente `src/components/settings/EvolutionConnectionCard.tsx` com:
+  - Badge de status colorido (verde `open`, amarelo `connecting`, vermelho `close`).
+  - Ações com confirmação para "Desconectar" e "Reiniciar".
+- Novo dialog `src/components/settings/EvolutionQrDialog.tsx`:
+  - Mostra QR como `<img src={data:image/png;base64,...} />`.
+  - Timer regressivo e botão "Gerar novo".
+  - Polling do estado com `setInterval` limpo no unmount.
+- Integrar o card em `src/pages/Settings.tsx` (aba existente de integrações; se não houver, criar aba "WhatsApp").
+
+## Segurança
+
+- Edge functions exigem JWT do usuário e validam role `admin` via `has_role` antes de executar ações destrutivas (logout/restart). Para `connect` e `connectionState` também restringir a admin.
+
+## Validação
+
+1. Abrir Configurações → WhatsApp, ver status atual.
+2. Desconectar → status vira `close`.
+3. Gerar QR Code → escanear no celular → status vira `open` e dialog fecha.
+4. Logs das edge functions mostram chamadas sem 5xx persistente.
+
+## Fora de escopo
+
+- Trocar nome da instância ou criar múltiplas instâncias.
+- Configurar webhooks da Evolution (já existem).
