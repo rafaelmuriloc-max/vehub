@@ -6,6 +6,40 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+async function resolveEvolutionNumber(
+  evoUrl: string,
+  apiKey: string,
+  instance: string,
+  phoneDigits: string,
+): Promise<{ number: string | null; exists: boolean }> {
+  const variants = new Set<string>([phoneDigits]);
+  if (phoneDigits.length === 13 && phoneDigits.startsWith("55") && phoneDigits[4] === "9") {
+    variants.add(phoneDigits.slice(0, 4) + phoneDigits.slice(5));
+  }
+  if (phoneDigits.length === 12 && phoneDigits.startsWith("55")) {
+    const localFirst = phoneDigits[4];
+    if (["6", "7", "8", "9"].includes(localFirst)) {
+      variants.add(phoneDigits.slice(0, 4) + "9" + phoneDigits.slice(4));
+    }
+  }
+  try {
+    const r = await fetch(`${evoUrl}/chat/whatsappNumbers/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+      body: JSON.stringify({ numbers: [...variants] }),
+    });
+    if (!r.ok) return { number: phoneDigits, exists: true };
+    const arr = await r.json().catch(() => [] as any[]);
+    const hit = (Array.isArray(arr) ? arr : []).find((x: any) => x?.exists);
+    if (!hit) return { number: null, exists: false };
+    const jid: string = hit.jid || "";
+    const num = jid.includes("@") ? jid.split("@")[0] : (hit.number || phoneDigits);
+    return { number: num, exists: true };
+  } catch {
+    return { number: phoneDigits, exists: true };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
