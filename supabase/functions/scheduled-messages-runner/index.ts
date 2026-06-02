@@ -334,7 +334,8 @@ Deno.serve(async (req) => {
         const [hh, mm] = String(sched.send_time || "09:00").split(":").map(Number);
         const targetMinutes = hh * 60 + mm;
         const diff = minutesNow - targetMinutes;
-        if (diff < 0 || diff > 30) continue;
+        // Fire only at the configured minute; tolerate up to 2 min of cron latency.
+        if (diff < 0 || diff > 2) continue;
       }
 
       // Idempotency: one run per (schedule, day)

@@ -1,33 +1,30 @@
-## Diagnóstico
+## Objetivo
 
-- O cron existe e está ativo (`scheduled-messages-runner`, a cada 15 minutos).
-- O cron está chamando a função: há execuções registradas às 14:45, 15:00, 15:15 e 15:30 UTC.
-- Os agendamentos foram processados e geraram histórico em `scheduled_message_runs`.
-- O problema atual não é o cron não executar; é que as entregas com anexo estão falhando na Evolution API com:
-  - `Evolution media 400: {"message":["[object Object]"]}`
-- Também há um problema de resiliência: quando uma entrega falha no dia, o runner considera o agendamento como “já executado hoje” e não tenta reenviar automaticamente.
+Disparar cada agendamento **no minuto exato** configurado (no fuso de São Paulo), em vez da janela de 30 minutos atual.
 
-## Plano de correção
+## Mudanças
 
-1. Ajustar o envio pela Evolution API em `scheduled-messages-runner`:
-   - Para mensagens com anexo, enviar primeiro o texto via `sendText`.
-   - Depois enviar o arquivo via `sendMedia` sem `caption`, seguindo o padrão já usado em outras funções do projeto.
-   - Garantir `fileName` sempre preenchido para documentos.
+1. **Cron a cada 1 minuto** (em vez de 15 min)
+   - Recriar o job `scheduled-messages-runner` com schedule `* * * * *`.
+   - Continua chamando a mesma Edge Function via `net.http_post`.
 
-2. Adicionar retry no envio de mídia:
-   - Tentar reenviar o anexo até 3 vezes.
-   - Usar pequena espera progressiva entre tentativas para cobrir falhas temporárias de Storage/Evolution.
+2. **Janela de envio rígida na Edge Function**
+   - Em `supabase/functions/scheduled-messages-runner/index.ts`, substituir a checagem `diff >= 0 && diff <= 30` por `diff === 0` (hora e minuto atuais em BRT == `send_time` do agendamento).
+   - Mantém idempotência: se já existe `scheduled_message_runs` para o agendamento no dia, não dispara de novo (apenas reprocessa entregas `failed` se houver).
+   - Mantém recorrência, antecipação de feriado/fds e fuso `America/Sao_Paulo`.
 
-3. Permitir reprocessamento de falhas do mesmo dia:
-   - Se já existir `scheduled_message_runs` para o agendamento no dia, não duplicar entregas enviadas.
-   - Reprocessar apenas clientes com entrega `failed`.
-   - Atualizar o resumo (`sent`, `failed`, `skipped`, `total`) ao final.
+3. **Recuperação de falhas pontuais**
+   - Se o cron atrasar um minuto (raro), o agendamento daquele dia ficará perdido pelo critério estrito. Para evitar isso, aceitar também `diff` entre 0 e 2 minutos como gatilho válido (apenas para tolerar latência do cron), continuando a impedir duplicidade pelo registro de run do dia.
 
-4. Manter São Paulo como fuso oficial:
-   - Continuar calculando recorrência e janela de envio em `America/Sao_Paulo`.
-   - Não alterar UI, tabelas, RLS ou cron.
+4. **Validação**
+   - Após o ajuste, conferir `cron.job` e `cron.job_run_details` para garantir execução de minuto em minuto.
+   - Acompanhar `scheduled_message_runs` e `scheduled_message_deliveries` no horário do próximo agendamento (12:40 SP do dia atual já passou — testar com um novo horário próximo).
 
-5. Validar após a alteração:
-   - Deploy da edge function `scheduled-messages-runner`.
-   - Executar manualmente um agendamento com falha usando `?id=<id>`.
-   - Conferir `scheduled_message_deliveries` e logs da função para confirmar que a entrega mudou para `sent` ou registrou erro mais claro.
+## Arquivos / recursos afetados
+
+- Migration nova: `cron.unschedule('scheduled-messages-runner')` + `cron.schedule('scheduled-messages-runner', '* * * * *', ...)`.
+- `supabase/functions/scheduled-messages-runner/index.ts`: ajuste da janela (de 0–30 min para 0–2 min) na seção `Time check`.
+
+## Observação
+
+O agendamento de hoje às 12:40 não vai mais executar (horário já passou). Para testar, basta cadastrar um novo agendamento alguns minutos no futuro.
