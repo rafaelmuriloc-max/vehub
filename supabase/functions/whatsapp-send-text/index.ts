@@ -210,15 +210,21 @@ Deno.serve(async (req) => {
         const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
         const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
         if (evolutionUrl && evolutionApiKey && evolutionInstance) {
+          const resolved = await resolveEvolutionNumber(evolutionUrl, evolutionApiKey, evolutionInstance, metaPhone);
+          if (!resolved.exists || !resolved.number) {
+            sendError = `Este número não possui WhatsApp (${metaPhone})`;
+            console.error(sendError);
+          } else {
+          const evoNum = resolved.number;
           const evoRes = await fetch(
             `${evolutionUrl}/message/sendText/${evolutionInstance}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json", apikey: evolutionApiKey },
               body: JSON.stringify({
-                number: metaPhone,
+                number: evoNum,
                 text: signedText,
-                ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${metaPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
+                ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoNum}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
               }),
             }
           );
@@ -230,6 +236,7 @@ Deno.serve(async (req) => {
           } else {
             sendError = `Meta transient + Evolution fallback failed: ${evoRes.status} ${JSON.stringify(evoJson)}`;
             console.error(sendError);
+          }
           }
         } else {
           sendError = `Meta API temporarily unavailable: ${JSON.stringify(metaJson)}`;
