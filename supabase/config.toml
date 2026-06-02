@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.gmail-sync]
 verify_jwt = false
+
+[functions.scheduled-messages-runner]
+verify_jwt = false
