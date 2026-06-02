@@ -506,6 +506,7 @@ Deno.serve(async (req) => {
           await supabase.from("scheduled_message_deliveries").insert({
             run_id: run.id, client_id: client.id, status: "failed", error: send.error || "send failed",
           });
+          console.log("delivery failed", { schedule_id: sched.id, client_id: client.id, phone, error: send.error || "send failed" });
           failed++;
           continue;
         }
