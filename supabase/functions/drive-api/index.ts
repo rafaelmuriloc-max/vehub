@@ -59,14 +59,17 @@ Deno.serve(async (req) => {
     }
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: auth } } },
     );
-    const { data: userData } = await supabase.auth.getUser(auth.replace("Bearer ", ""));
-    if (!userData?.user) {
+    const token = auth.replace("Bearer ", "");
+    const { data: claimsData, error: claimsErr } = await supabase.auth.getClaims(token);
+    if (claimsErr || !claimsData?.claims) {
       return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const userId = claimsData.claims.sub as string;
 
     const body = await req.json();
     const action = String(body.action || "");
@@ -194,7 +197,7 @@ Deno.serve(async (req) => {
       case "delete": {
         // Admin-only check
         const { data: isAdmin } = await supabase.rpc("has_role", {
-          _user_id: userData.user.id, _role: "admin",
+          _user_id: userId, _role: "admin",
         });
         if (!isAdmin) {
           return new Response(JSON.stringify({ ok: false, error: "Apenas admins podem excluir." }), {
