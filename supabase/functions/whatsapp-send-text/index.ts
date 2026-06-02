@@ -5,6 +5,49 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Resolve the actual WhatsApp JID for a number using Evolution's whatsappNumbers endpoint.
+// Many Brazilian numbers are registered without the 9th digit; Evolution returns
+// "Connection Closed" if we send to the wrong variant. This pre-flight finds the
+// correct one.
+async function resolveEvolutionNumber(
+  evoUrl: string,
+  apiKey: string,
+  instance: string,
+  phoneDigits: string,
+): Promise<{ number: string | null; exists: boolean; error?: string }> {
+  const variants = new Set<string>([phoneDigits]);
+  // BR mobile with 9 -> also try without
+  if (phoneDigits.length === 13 && phoneDigits.startsWith("55") && phoneDigits[4] === "9") {
+    variants.add(phoneDigits.slice(0, 4) + phoneDigits.slice(5));
+  }
+  // BR mobile without 9 -> also try with
+  if (phoneDigits.length === 12 && phoneDigits.startsWith("55")) {
+    const localFirst = phoneDigits[4];
+    if (["6", "7", "8", "9"].includes(localFirst)) {
+      variants.add(phoneDigits.slice(0, 4) + "9" + phoneDigits.slice(4));
+    }
+  }
+  try {
+    const r = await fetch(`${evoUrl}/chat/whatsappNumbers/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+      body: JSON.stringify({ numbers: [...variants] }),
+    });
+    if (!r.ok) {
+      return { number: phoneDigits, exists: true, error: `lookup ${r.status}` };
+    }
+    const arr = await r.json().catch(() => [] as any[]);
+    const hit = (Array.isArray(arr) ? arr : []).find((x: any) => x?.exists);
+    if (!hit) return { number: null, exists: false };
+    const jid: string = hit.jid || "";
+    const num = jid.includes("@") ? jid.split("@")[0] : (hit.number || phoneDigits);
+    return { number: num, exists: true };
+  } catch (e) {
+    console.error("resolveEvolutionNumber error:", e);
+    return { number: phoneDigits, exists: true, error: String(e) };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -167,15 +210,21 @@ Deno.serve(async (req) => {
         const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
         const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
         if (evolutionUrl && evolutionApiKey && evolutionInstance) {
+          const resolved = await resolveEvolutionNumber(evolutionUrl, evolutionApiKey, evolutionInstance, metaPhone);
+          if (!resolved.exists || !resolved.number) {
+            sendError = `Este número não possui WhatsApp (${metaPhone})`;
+            console.error(sendError);
+          } else {
+          const evoNum = resolved.number;
           const evoRes = await fetch(
             `${evolutionUrl}/message/sendText/${evolutionInstance}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json", apikey: evolutionApiKey },
               body: JSON.stringify({
-                number: metaPhone,
+                number: evoNum,
                 text: signedText,
-                ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${metaPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
+                ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoNum}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
               }),
             }
           );
@@ -187,6 +236,7 @@ Deno.serve(async (req) => {
           } else {
             sendError = `Meta transient + Evolution fallback failed: ${evoRes.status} ${JSON.stringify(evoJson)}`;
             console.error(sendError);
+          }
           }
         } else {
           sendError = `Meta API temporarily unavailable: ${JSON.stringify(metaJson)}`;
@@ -214,6 +264,16 @@ Deno.serve(async (req) => {
       if (!evoPhone.startsWith("55")) evoPhone = "55" + evoPhone;
       metaPhoneDigits = evoPhone;
 
+      const resolved = await resolveEvolutionNumber(evolutionUrl, evolutionApiKey, evolutionInstance, evoPhone);
+      if (!resolved.exists || !resolved.number) {
+        return new Response(
+          JSON.stringify({ ok: false, error: `Este número não possui WhatsApp (${evoPhone})`, transient: false }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const evoNum = resolved.number;
+      metaPhoneDigits = evoNum;
+
       const evoRes = await fetch(
         `${evolutionUrl}/message/sendText/${evolutionInstance}`,
         {
@@ -223,9 +283,9 @@ Deno.serve(async (req) => {
             apikey: evolutionApiKey,
           },
           body: JSON.stringify({
-            number: evoPhone,
+            number: evoNum,
             text: signedText,
-            ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
+            ...(replyEvolutionId ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoNum}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } } : {}),
           }),
         }
       );

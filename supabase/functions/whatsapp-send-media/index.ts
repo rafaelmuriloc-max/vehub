@@ -6,6 +6,40 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+async function resolveEvolutionNumber(
+  evoUrl: string,
+  apiKey: string,
+  instance: string,
+  phoneDigits: string,
+): Promise<{ number: string | null; exists: boolean }> {
+  const variants = new Set<string>([phoneDigits]);
+  if (phoneDigits.length === 13 && phoneDigits.startsWith("55") && phoneDigits[4] === "9") {
+    variants.add(phoneDigits.slice(0, 4) + phoneDigits.slice(5));
+  }
+  if (phoneDigits.length === 12 && phoneDigits.startsWith("55")) {
+    const localFirst = phoneDigits[4];
+    if (["6", "7", "8", "9"].includes(localFirst)) {
+      variants.add(phoneDigits.slice(0, 4) + "9" + phoneDigits.slice(4));
+    }
+  }
+  try {
+    const r = await fetch(`${evoUrl}/chat/whatsappNumbers/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+      body: JSON.stringify({ numbers: [...variants] }),
+    });
+    if (!r.ok) return { number: phoneDigits, exists: true };
+    const arr = await r.json().catch(() => [] as any[]);
+    const hit = (Array.isArray(arr) ? arr : []).find((x: any) => x?.exists);
+    if (!hit) return { number: null, exists: false };
+    const jid: string = hit.jid || "";
+    const num = jid.includes("@") ? jid.split("@")[0] : (hit.number || phoneDigits);
+    return { number: num, exists: true };
+  } catch {
+    return { number: phoneDigits, exists: true };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -96,8 +130,18 @@ Deno.serve(async (req) => {
 
     const rawPhone = conv.whatsapp_phone.replace(/\D/g, "");
     const toPhone = rawPhone.startsWith("55") ? rawPhone : `55${rawPhone}`;
+
+    // Resolve correct WhatsApp JID for Evolution (handles BR 9th-digit variants).
+    // Falls back to toPhone if the lookup is inconclusive.
+    let evoTo = toPhone;
+    let evoNumberMissing = false;
+    if (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) {
+      const resolved = await resolveEvolutionNumber(EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE_NAME, toPhone);
+      if (resolved.exists && resolved.number) evoTo = resolved.number;
+      else if (!resolved.exists) evoNumberMissing = true;
+    }
     const evoQuoted = replyEvolutionId
-      ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${toPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } }
+      ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoTo}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } }
       : {};
 
     // Check 24h window
@@ -115,6 +159,14 @@ Deno.serve(async (req) => {
     // If reply target lacks a Meta wamid, force Evolution path so the quote
     // appears on the contact's WhatsApp.
     const forceEvolutionForReply = !!(replyToMessageId && !replyMetaWamid && replyEvolutionId);
+
+    // If we need Evolution (no 24h window) and the number is confirmed not on WhatsApp, fail fast.
+    if ((!hasOpenWindow || forceEvolutionForReply) && evoNumberMissing) {
+      return new Response(
+        JSON.stringify({ ok: false, error: `Este número não possui WhatsApp (${toPhone})`, transient: false }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     let sendSuccess = false;
     let sendErrorDetail = "";
@@ -199,7 +251,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               mediatype: type === "document" ? "document" : type,
               mimetype: guessMime(),
               media: mediaUrl,
@@ -235,7 +287,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               audio: mediaUrl,
               ...evoQuoted,
             }),
@@ -273,7 +325,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               audio: mediaUrl,
               ...evoQuoted,
             }),
@@ -323,7 +375,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               latitude,
               longitude,
               name: senderName || "Localização",
@@ -375,7 +427,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               contact: [
                 {
                   fullName: contactName,
@@ -432,7 +484,7 @@ Deno.serve(async (req) => {
         channel: "whatsapp",
         wa_message_id: waMessageId,
         wa_evolution_id: waMessageId && !waMessageId.startsWith("wamid.") ? waMessageId : null,
-        wa_remote_jid: `${toPhone}@s.whatsapp.net`,
+        wa_remote_jid: `${evoTo}@s.whatsapp.net`,
         reply_to_id: replyToMessageId || null,
         reply_to_snapshot: replySnapshot,
         is_forwarded: !!isForwarded,
