@@ -775,10 +775,18 @@ export default function Chat() {
   const transferTicket = async (targetUserId: string) => {
     if (!activeConvId) return;
 
-    // Update assigned_to
+    const wasClosed = activeConv?.status === 'closed';
+    const updates: Record<string, unknown> = { assigned_to: targetUserId };
+    if (wasClosed) {
+      updates.status = 'open';
+      updates.closed_at = null;
+      updates.waiting_since = null;
+      updates.total_wait_seconds = 0;
+    }
+
     const { error } = await supabase
       .from('chat_conversations')
-      .update({ assigned_to: targetUserId })
+      .update(updates as any)
       .eq('id', activeConvId);
 
     if (error) {
@@ -801,7 +809,7 @@ export default function Chat() {
     }
 
     const targetName = teamMembers.find(m => m.user_id === targetUserId)?.full_name || 'usuário';
-    toast({ title: `Chamado transferido para ${targetName}` });
+    toast({ title: wasClosed ? `Chamado reaberto e transferido para ${targetName}` : `Chamado transferido para ${targetName}` });
     setTransferDialogOpen(false);
     setActiveConvId(null);
     setActiveConvName(null);
