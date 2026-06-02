@@ -128,6 +128,46 @@ function renderTemplate(body: string, vars: Record<string, string>): string {
   return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => vars[k] ?? "");
 }
 
+function pickValidBrazilianWhatsAppPhone(raw: string | null | undefined): { phone: string | null; error?: string; candidates: string[] } {
+  const text = String(raw || "").trim();
+  if (!text) return { phone: null, error: "Sem telefone", candidates: [] };
+
+  const parts = text
+    .split(/(?:\s*[/;,|]\s*|\s+ou\s+|\s+e\s+)/i)
+    .map((part) => part.replace(/\D/g, ""))
+    .filter(Boolean);
+
+  const fallbackDigits = text.replace(/\D/g, "");
+  const candidates = (parts.length ? parts : [fallbackDigits]).filter(Boolean);
+
+  for (let digits of candidates) {
+    digits = digits.replace(/^0+/, "");
+    if (digits.startsWith("55")) digits = digits.slice(2);
+
+    // Brasil: DDD (2) + fixo (8) ou celular (9). Rejeita números fictícios/incompletos.
+    if (!/^\d{10,11}$/.test(digits)) continue;
+    if (/^(\d)\1+$/.test(digits)) continue;
+    if (/^\d{2}0{8,9}$/.test(digits)) continue;
+
+    const ddd = Number(digits.slice(0, 2));
+    if (ddd < 11 || ddd > 99) continue;
+
+    return { phone: `55${digits}`, candidates };
+  }
+
+  return { phone: null, error: `Telefone inválido para WhatsApp: ${text}`, candidates };
+}
+
+function describeApiError(payload: any): string {
+  const message = payload?.response?.message ?? payload?.message ?? payload?.error;
+  if (Array.isArray(message)) {
+    return message.map((item) => typeof item === "string" ? item : JSON.stringify(item)).join("; ");
+  }
+  if (message && typeof message === "object") return JSON.stringify(message);
+  if (message) return String(message);
+  return JSON.stringify(payload);
+}
+
 /* ===== Client selection ===== */
 async function resolveClients(supabase: any, sched: any): Promise<any[]> {
   if (sched.assignment_mode === "all") {
@@ -159,16 +199,13 @@ async function resolveClients(supabase: any, sched: any): Promise<any[]> {
 }
 
 /* ===== Ensure WA conversation for phone ===== */
-async function ensureConversation(supabase: any, client: any, deptPhone: string | null, deptContactName: string | null, adminId: string): Promise<string | null> {
-  const phone = (deptPhone || client.contact_phone || "").replace(/\D/g, "");
-  if (!phone) return null;
-  const normalized = phone.startsWith("55") ? phone : `55${phone}`;
+async function ensureConversation(supabase: any, client: any, normalizedPhone: string, deptContactName: string | null, adminId: string): Promise<string | null> {
   const { data: existing } = await supabase
-    .from("chat_conversations").select("id").eq("whatsapp_phone", normalized).maybeSingle();
+    .from("chat_conversations").select("id").eq("whatsapp_phone", normalizedPhone).maybeSingle();
   if (existing?.id) return existing.id;
   const { data: created } = await supabase.from("chat_conversations").insert({
     name: deptContactName || client.company_name,
-    whatsapp_phone: normalized,
+    whatsapp_phone: normalizedPhone,
     client_id: client.id,
     created_by: adminId,
     status: "open",
@@ -197,16 +234,31 @@ async function sendWhatsAppMessage(opts: {
   if (evoUrl && evoKey && evoInst) {
     try {
       // Always send text first
-      const rt = await fetch(`${evoUrl}/message/sendText/${evoInst}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: evoKey },
-        body: JSON.stringify({ number: opts.phone, text: signed }),
-      });
-      const jt = await rt.json().catch(() => ({} as any));
-      if (!rt.ok) {
-        return { ok: false, waId: null, error: `Evolution text ${rt.status}: ${JSON.stringify(jt)}` };
+      let textWaId: string | null = null;
+      let textErr = "";
+      const textDelays = [0, 1000, 3000];
+      for (let i = 0; i < textDelays.length; i++) {
+        if (textDelays[i] > 0) await new Promise(r => setTimeout(r, textDelays[i]));
+        try {
+          const rt = await fetch(`${evoUrl}/message/sendText/${evoInst}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoKey },
+            body: JSON.stringify({ number: opts.phone, text: signed }),
+          });
+          const jt = await rt.json().catch(() => ({} as any));
+          if (rt.ok) {
+            textWaId = jt?.key?.id ?? null;
+            textErr = "";
+            break;
+          }
+          textErr = `Evolution text ${rt.status}: ${describeApiError(jt)}`;
+        } catch (e) {
+          textErr = `Evolution text exception: ${String(e)}`;
+        }
       }
-      const textWaId = jt?.key?.id ?? null;
+      if (textErr) {
+        return { ok: false, waId: null, error: textErr };
+      }
 
       if (!opts.attachmentUrl) {
         return { ok: true, waId: textWaId };
@@ -237,7 +289,7 @@ async function sendWhatsAppMessage(opts: {
         });
         const jm = await rm.json().catch(() => ({} as any));
         if (rm.ok) return { ok: true, waId: jm?.key?.id ?? textWaId };
-        lastErr = `Evolution media ${rm.status}: ${JSON.stringify(jm)}`;
+        lastErr = `Evolution media ${rm.status}: ${describeApiError(jm)}`;
       }
       return { ok: false, waId: null, error: lastErr };
     } catch (e) {
@@ -255,7 +307,7 @@ async function sendWhatsAppMessage(opts: {
         body: JSON.stringify({ messaging_product: "whatsapp", to: opts.phone, type: "text", text: { body: signed } }),
       });
       const jt = await rt.json().catch(() => ({} as any));
-      if (!rt.ok) return { ok: false, waId: null, error: `Meta text ${rt.status}: ${JSON.stringify(jt)}` };
+      if (!rt.ok) return { ok: false, waId: null, error: `Meta text ${rt.status}: ${describeApiError(jt)}` };
       const textWaId = jt?.messages?.[0]?.id ?? null;
       if (!opts.attachmentUrl) return { ok: true, waId: textWaId };
 
@@ -281,7 +333,7 @@ async function sendWhatsAppMessage(opts: {
         });
         const jm = await rm.json().catch(() => ({} as any));
         if (rm.ok) return { ok: true, waId: jm?.messages?.[0]?.id ?? textWaId };
-        lastErr = `Meta media ${rm.status}: ${JSON.stringify(jm)}`;
+        lastErr = `Meta media ${rm.status}: ${describeApiError(jm)}`;
       }
       return { ok: false, waId: null, error: lastErr };
     } catch (e) {
@@ -306,7 +358,7 @@ Deno.serve(async (req) => {
   const brt = nowInBRT();
   const todayUTC = new Date(Date.UTC(brt.year, brt.month - 1, brt.day));
 
-  // Window: fire if send_time is within last 30 min (cron runs every 15 min)
+  // Window: cron runs every minute; fire only on the configured minute, with tiny latency tolerance.
   const minutesNow = brt.hour * 60 + brt.minute;
 
   let q = supabase.from("scheduled_messages").select("*").eq("active", true);
@@ -327,15 +379,27 @@ Deno.serve(async (req) => {
   for (const sched of schedules || []) {
     try {
       if (!forceId) {
-        if (sched.start_date && ymd(todayUTC) < sched.start_date) continue;
-        if (sched.end_date && ymd(todayUTC) > sched.end_date) continue;
-        if (!shouldFireToday(sched, todayUTC)) continue;
+        if (sched.start_date && ymd(todayUTC) < sched.start_date) {
+          console.log("scheduled skip", { id: sched.id, reason: "before_start_date", today: ymd(todayUTC), start_date: sched.start_date });
+          continue;
+        }
+        if (sched.end_date && ymd(todayUTC) > sched.end_date) {
+          console.log("scheduled skip", { id: sched.id, reason: "after_end_date", today: ymd(todayUTC), end_date: sched.end_date });
+          continue;
+        }
+        if (!shouldFireToday(sched, todayUTC)) {
+          console.log("scheduled skip", { id: sched.id, reason: "not_scheduled_for_today", today: ymd(todayUTC), recurrence: sched.recurrence });
+          continue;
+        }
         // Time check
         const [hh, mm] = String(sched.send_time || "09:00").split(":").map(Number);
         const targetMinutes = hh * 60 + mm;
         const diff = minutesNow - targetMinutes;
         // Fire only at the configured minute; tolerate up to 2 min of cron latency.
-        if (diff < 0 || diff > 2) continue;
+        if (diff < 0 || diff > 2) {
+          console.log("scheduled skip", { id: sched.id, reason: "outside_send_time", now: `${String(brt.hour).padStart(2, "0")}:${String(brt.minute).padStart(2, "0")}`, send_time: sched.send_time, diff });
+          continue;
+        }
       }
 
       // Idempotency: one run per (schedule, day)
@@ -382,6 +446,7 @@ Deno.serve(async (req) => {
       }
 
       let clients = await resolveClients(supabase, sched);
+      console.log("scheduled processing", { id: sched.id, name: sched.name, clients: clients.length, retryFailedOnly });
       if (retryFailedOnly) {
         // Only clients with failed deliveries; delete those rows so they get reinserted
         const { data: failedRows } = await supabase
@@ -393,6 +458,9 @@ Deno.serve(async (req) => {
         if (failedDeliveryIds.length) {
           await supabase.from("scheduled_message_deliveries").delete().in("id", failedDeliveryIds);
         }
+      }
+      if (!clients.length) {
+        console.log("scheduled no clients", { id: sched.id, assignment_mode: sched.assignment_mode });
       }
       let sent = 0, failed = 0, skipped = 0;
 
@@ -412,15 +480,19 @@ Deno.serve(async (req) => {
 
       for (const client of clients) {
         const contact = contactMap.get(client.id);
-        const phoneRaw = (contact?.phone || client.contact_phone || "").replace(/\D/g, "");
-        if (!phoneRaw) {
+        const phoneResult = pickValidBrazilianWhatsAppPhone(contact?.phone || client.contact_phone);
+        if (!phoneResult.phone) {
           await supabase.from("scheduled_message_deliveries").insert({
-            run_id: run.id, client_id: client.id, status: "skipped", error: "Sem telefone",
+            run_id: run.id,
+            client_id: client.id,
+            status: "skipped",
+            error: phoneResult.error || "Telefone inválido para WhatsApp",
           });
+          console.log("delivery skipped", { schedule_id: sched.id, client_id: client.id, reason: phoneResult.error, candidates: phoneResult.candidates });
           skipped++;
           continue;
         }
-        const phone = phoneRaw.startsWith("55") ? phoneRaw : `55${phoneRaw}`;
+        const phone = phoneResult.phone;
 
         const convId = await ensureConversation(supabase, client, phone, contact?.name || null, adminId);
         if (!convId) {
@@ -449,6 +521,7 @@ Deno.serve(async (req) => {
           await supabase.from("scheduled_message_deliveries").insert({
             run_id: run.id, client_id: client.id, status: "failed", error: send.error || "send failed",
           });
+          console.log("delivery failed", { schedule_id: sched.id, client_id: client.id, phone, error: send.error || "send failed" });
           failed++;
           continue;
         }

@@ -1,30 +1,40 @@
-## Objetivo
+## Diagnóstico encontrado
 
-Disparar cada agendamento **no minuto exato** configurado (no fuso de São Paulo), em vez da janela de 30 minutos atual.
+- O cron `scheduled-messages-runner` já está ativo e rodando a cada minuto (`* * * * *`).
+- Os agendamentos de hoje foram processados no horário configurado, com `run` criado no banco.
+- O problema atual não é mais o cron: as entregas falharam no envio WhatsApp.
+- O cliente selecionado tem telefone salvo como `((4) 7) 3842-0299/ (0000) 0000-0000`; o runner apenas remove os caracteres não numéricos, gerando um número inválido para WhatsApp/Evolution API.
+- A Evolution API respondeu `400 Bad Request`, e isso ficou registrado em `scheduled_message_deliveries` como `failed`.
 
-## Mudanças
+## Plano de correção
 
-1. **Cron a cada 1 minuto** (em vez de 15 min)
-   - Recriar o job `scheduled-messages-runner` com schedule `* * * * *`.
-   - Continua chamando a mesma Edge Function via `net.http_post`.
+1. **Manter o cron por minuto**
+   - Confirmar no código e no banco que o job continua em `* * * * *`.
+   - O cron só acorda o runner; quem decide disparar é a Edge Function, comparando dia e horário de São Paulo.
 
-2. **Janela de envio rígida na Edge Function**
-   - Em `supabase/functions/scheduled-messages-runner/index.ts`, substituir a checagem `diff >= 0 && diff <= 30` por `diff === 0` (hora e minuto atuais em BRT == `send_time` do agendamento).
-   - Mantém idempotência: se já existe `scheduled_message_runs` para o agendamento no dia, não dispara de novo (apenas reprocessa entregas `failed` se houver).
-   - Mantém recorrência, antecipação de feriado/fds e fuso `America/Sao_Paulo`.
+2. **Garantir disparo somente no dia e horário agendados**
+   - Ajustar o runner para comparar `send_time` com o minuto atual em `America/Sao_Paulo`.
+   - Usar tolerância mínima apenas contra atraso operacional do cron, sem transformar isso em janela de 30 minutos.
+   - Manter idempotência: um agendamento só pode criar uma execução por data agendada.
 
-3. **Recuperação de falhas pontuais**
-   - Se o cron atrasar um minuto (raro), o agendamento daquele dia ficará perdido pelo critério estrito. Para evitar isso, aceitar também `diff` entre 0 e 2 minutos como gatilho válido (apenas para tolerar latência do cron), continuando a impedir duplicidade pelo registro de run do dia.
+3. **Corrigir validação de telefone antes do envio**
+   - Criar uma normalização robusta para telefones brasileiros:
+     - aceitar `55DDDNÚMERO`, `DDDNÚMERO` e variações com máscara;
+     - separar múltiplos telefones digitados no mesmo campo;
+     - escolher o primeiro número válido para WhatsApp;
+     - rejeitar números fictícios como `0000` ou telefones incompletos.
+   - Priorizar contato do departamento; se não existir, usar telefone principal do cliente.
+   - Se não houver número válido, registrar `skipped` com erro claro: `Telefone inválido para WhatsApp`, em vez de tentar enviar para a Evolution API.
 
-4. **Validação**
-   - Após o ajuste, conferir `cron.job` e `cron.job_run_details` para garantir execução de minuto em minuto.
-   - Acompanhar `scheduled_message_runs` e `scheduled_message_deliveries` no horário do próximo agendamento (12:40 SP do dia atual já passou — testar com um novo horário próximo).
+4. **Melhorar o registro de falhas**
+   - Registrar no runner o motivo de cada agendamento ignorado ou processado: fora da data, fora do horário, já executado, sem cliente, sem telefone válido ou falha da Evolution API.
+   - Melhorar o erro salvo em `scheduled_message_deliveries` para ficar legível na tela.
 
-## Arquivos / recursos afetados
+5. **Evitar reprocessamento incorreto**
+   - Quando uma execução já existe no dia, não reenviar mensagens já enviadas.
+   - Permitir retentar apenas entregas com status `failed` quando o runner for chamado de novo, sem duplicar mensagens enviadas.
 
-- Migration nova: `cron.unschedule('scheduled-messages-runner')` + `cron.schedule('scheduled-messages-runner', '* * * * *', ...)`.
-- `supabase/functions/scheduled-messages-runner/index.ts`: ajuste da janela (de 0–30 min para 0–2 min) na seção `Time check`.
-
-## Observação
-
-O agendamento de hoje às 12:40 não vai mais executar (horário já passou). Para testar, basta cadastrar um novo agendamento alguns minutos no futuro.
+6. **Validar após implementar**
+   - Fazer uma chamada manual controlada do runner para verificar resposta e logs.
+   - Conferir `scheduled_message_runs` e `scheduled_message_deliveries`.
+   - Confirmar que o próximo agendamento no horário correto cria execução e entrega, ou registra uma falha clara caso o telefone seja inválido.

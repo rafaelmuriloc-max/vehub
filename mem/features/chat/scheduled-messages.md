@@ -4,7 +4,7 @@ description: Agendamento de mensagens automáticas WhatsApp para clientes via cr
 type: feature
 ---
 Tabelas: `scheduled_messages`, `scheduled_message_clients`, `scheduled_message_runs`, `scheduled_message_deliveries`.
-Runner: edge function `scheduled-messages-runner` chamada via pg_cron a cada 15 min.
+Runner: edge function `scheduled-messages-runner` chamada via pg_cron a cada 1 min; disparo deve ocorrer no dia e horário agendados em America/Sao_Paulo, com tolerância mínima só para latência.
 Recurrence: daily/weekly/monthly/quarterly/yearly/custom_months. Quando cair em fim de semana/feriado e `anticipate_weekend=true`, antecipa para dia útil anterior.
 Modos de atribuição (mesmo padrão das obrigações): all, segment (filters jsonb), manual (via tabela join).
 Destinatário: `client_department_contacts(department_id)` primeiro, fallback no `clients.contact_phone`.
