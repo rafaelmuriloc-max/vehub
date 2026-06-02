@@ -234,7 +234,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             </p>
           )}
         </div>
-        {!isClosed && onTransferTicket && (
+        {onTransferTicket && (
           <Button variant="outline" size="icon" onClick={onTransferTicket} className="shrink-0 h-8 w-8 md:h-auto md:w-auto md:px-3 md:gap-1.5">
             <UserRoundPlus className="h-4 w-4" />
             <span className="hidden md:inline text-sm">Transferir</span>
