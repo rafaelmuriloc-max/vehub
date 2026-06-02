@@ -77,3 +77,15 @@ verify_jwt = false
 
 [functions.scheduled-messages-runner]
 verify_jwt = false
+
+[functions.evolution-connect]
+verify_jwt = false
+
+[functions.evolution-connection-state]
+verify_jwt = false
+
+[functions.evolution-logout]
+verify_jwt = false
+
+[functions.evolution-restart]
+verify_jwt = false
