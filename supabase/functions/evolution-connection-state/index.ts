@@ -46,23 +46,23 @@ Deno.serve(async (req) => {
     if (!res.ok) {
       if (res.status === 404) {
         return new Response(
-          JSON.stringify({ ok: true, state: "close", notFound: true }),
+          JSON.stringify({ ok: true, state: "close", notFound: true, instanceName: instance }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       return new Response(
-        JSON.stringify({ ok: false, error: `Evolution API ${res.status}`, transient: res.status >= 500 }),
+        JSON.stringify({ ok: false, error: `Evolution API ${res.status}`, transient: res.status >= 500, instanceName: instance }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     const state = data?.instance?.state || data?.state || "unknown";
     return new Response(
-      JSON.stringify({ ok: true, state, raw: data }),
+      JSON.stringify({ ok: true, state, raw: data, instanceName: instance }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ ok: false, error: String(err), transient: true }),
+      JSON.stringify({ ok: false, error: String(err), transient: true, instanceName: instance }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
