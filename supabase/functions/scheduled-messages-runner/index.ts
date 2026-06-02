@@ -345,21 +345,54 @@ Deno.serve(async (req) => {
         .eq("scheduled_message_id", sched.id)
         .eq("run_at", runIso)
         .maybeSingle();
+      let run: { id: string } | null = null;
+      let retryFailedOnly = false;
+      let alreadySentIds = new Set<string>();
+      let alreadySkippedIds = new Set<string>();
+      let failedDeliveryIds: string[] = [];
+
       if (existingRun) {
-        results.push({ id: sched.id, skipped: "already_ran_today" });
-        continue;
+        run = existingRun as any;
+        // Check failed deliveries to reprocess
+        const { data: prev } = await supabase
+          .from("scheduled_message_deliveries")
+          .select("id, client_id, status")
+          .eq("run_id", existingRun.id);
+        for (const d of prev || []) {
+          if (d.status === "sent") alreadySentIds.add(d.client_id);
+          else if (d.status === "skipped") alreadySkippedIds.add(d.client_id);
+          else if (d.status === "failed") failedDeliveryIds.push(d.id);
+        }
+        if (!forceId && failedDeliveryIds.length === 0) {
+          results.push({ id: sched.id, skipped: "already_ran_today" });
+          continue;
+        }
+        retryFailedOnly = true;
+      } else {
+        const { data: created, error: runErr } = await supabase
+          .from("scheduled_message_runs")
+          .insert({ scheduled_message_id: sched.id, run_at: runIso, status_summary: {} })
+          .select("id").single();
+        if (runErr || !created) {
+          results.push({ id: sched.id, error: runErr?.message || "run insert failed" });
+          continue;
+        }
+        run = created;
       }
 
-      const { data: run, error: runErr } = await supabase
-        .from("scheduled_message_runs")
-        .insert({ scheduled_message_id: sched.id, run_at: runIso, status_summary: {} })
-        .select("id").single();
-      if (runErr || !run) {
-        results.push({ id: sched.id, error: runErr?.message || "run insert failed" });
-        continue;
+      let clients = await resolveClients(supabase, sched);
+      if (retryFailedOnly) {
+        // Only clients with failed deliveries; delete those rows so they get reinserted
+        const { data: failedRows } = await supabase
+          .from("scheduled_message_deliveries")
+          .select("client_id")
+          .in("id", failedDeliveryIds);
+        const retryIds = new Set((failedRows || []).map((r: any) => r.client_id));
+        clients = clients.filter((c: any) => retryIds.has(c.id));
+        if (failedDeliveryIds.length) {
+          await supabase.from("scheduled_message_deliveries").delete().in("id", failedDeliveryIds);
+        }
       }
-
-      const clients = await resolveClients(supabase, sched);
       let sent = 0, failed = 0, skipped = 0;
 
       // Department contact map
