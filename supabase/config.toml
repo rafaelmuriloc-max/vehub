@@ -89,3 +89,9 @@ verify_jwt = false
 
 [functions.evolution-restart]
 verify_jwt = false
+
+[functions.evolution-instance-delete]
+verify_jwt = false
+
+[functions.evolution-instance-create]
+verify_jwt = false

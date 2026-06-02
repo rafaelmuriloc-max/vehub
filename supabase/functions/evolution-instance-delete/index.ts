@@ -1,0 +1,47 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const authHeader = req.headers.get("Authorization") || "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new Response(JSON.stringify({ ok: false, error: "Não autenticado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+  if (!isAdmin) return new Response(JSON.stringify({ ok: false, error: "Apenas admin" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  const url = Deno.env.get("EVOLUTION_API_URL");
+  const key = Deno.env.get("EVOLUTION_API_KEY");
+  const instance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
+  if (!url || !key || !instance) {
+    return new Response(JSON.stringify({ ok: false, error: "Evolution API não configurada" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  // best-effort logout first
+  try {
+    await fetch(`${url}/instance/logout/${instance}`, { method: "DELETE", headers: { apikey: key } });
+  } catch (_) { /* ignore */ }
+
+  try {
+    const res = await fetch(`${url}/instance/delete/${instance}`, {
+      method: "DELETE",
+      headers: { apikey: key },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok && res.status !== 404) {
+      return new Response(JSON.stringify({ ok: false, error: `Evolution API ${res.status}`, details: data }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ ok: true, raw: data }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+});
