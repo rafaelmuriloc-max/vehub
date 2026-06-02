@@ -44,6 +44,12 @@ Deno.serve(async (req) => {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 404) {
+        return new Response(
+          JSON.stringify({ ok: true, state: "close", notFound: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       return new Response(
         JSON.stringify({ ok: false, error: `Evolution API ${res.status}`, transient: res.status >= 500 }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
