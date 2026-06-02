@@ -19,6 +19,7 @@ import Chat from "./pages/Chat";
 import ChatPopup from "./pages/ChatPopup";
 import Email from "./pages/Email";
 import Drive from "./pages/Drive";
+import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
               <Route path="/email" element={<Email />} />
               <Route path="/drive" element={<Drive />} />
               <Route path="/calendar" element={<CalendarView />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/document-types" element={<DocumentTypes />} />
             </Route>
