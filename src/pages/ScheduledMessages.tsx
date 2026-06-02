@@ -294,8 +294,8 @@ export default function ScheduledMessages() {
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{dept?.name || '-'}</TableCell>
                     <TableCell className="text-sm">{recurrenceLabel(s)}</TableCell>
-                    <TableCell>{(s.send_time || '').slice(0,5)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{s.last_run_at ? new Date(s.last_run_at).toLocaleString('pt-BR') : '—'}</TableCell>
+                    <TableCell>{(s.send_time || '').slice(0,5)} <span className="text-xs text-muted-foreground">(São Paulo)</span></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{s.last_run_at ? new Date(s.last_run_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—'}</TableCell>
                     <TableCell>
                       {s.active ? <Badge>Ativo</Badge> : <Badge variant="secondary">Pausado</Badge>}
                     </TableCell>
@@ -405,8 +405,9 @@ export default function ScheduledMessages() {
                 )}
 
                 <div className="space-y-2">
-                  <Label>Hora (BRT)</Label>
+                  <Label>Hora (fuso de São Paulo)</Label>
                   <Input type="time" value={form.send_time} onChange={e => setForm({ ...form, send_time: e.target.value })} />
+                  <p className="text-xs text-muted-foreground">O disparo respeita o horário de Brasília (America/Sao_Paulo).</p>
                 </div>
                 <div className="flex items-end gap-2">
                   <Switch checked={form.anticipate_weekend} onCheckedChange={v => setForm({ ...form, anticipate_weekend: v })} id="ant" />
@@ -559,7 +560,7 @@ export default function ScheduledMessages() {
               {runs.map(r => (
                 <div key={r.id} className="border rounded p-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="font-medium">{new Date(r.run_at).toLocaleString('pt-BR')}</span>
+                    <span className="font-medium">{new Date(r.run_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
                     <span className="text-muted-foreground">
                       ✅ {r.status_summary?.sent || 0} · ⚠️ {r.status_summary?.skipped || 0} · ❌ {r.status_summary?.failed || 0}
                     </span>
