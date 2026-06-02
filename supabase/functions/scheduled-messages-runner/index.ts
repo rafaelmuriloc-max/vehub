@@ -196,35 +196,50 @@ async function sendWhatsAppMessage(opts: {
   // Scheduled messages are outside a guaranteed 24h window → prefer Evolution.
   if (evoUrl && evoKey && evoInst) {
     try {
-      if (opts.attachmentUrl) {
-        const ext = (opts.attachmentName || opts.attachmentUrl || "").split(".").pop()?.toLowerCase() || "";
-        const isImage = /^(jpe?g|png|gif|webp)$/.test(ext) || (opts.attachmentMime || "").startsWith("image/");
-        const isVideo = /^(mp4|mov|webm)$/.test(ext) || (opts.attachmentMime || "").startsWith("video/");
-        const mediatype = isImage ? "image" : isVideo ? "video" : "document";
-        const r = await fetch(`${evoUrl}/message/sendMedia/${evoInst}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: evoKey },
-          body: JSON.stringify({
-            number: opts.phone,
-            mediatype,
-            mimetype: opts.attachmentMime || (mediatype === "image" ? "image/jpeg" : "application/octet-stream"),
-            media: opts.attachmentUrl,
-            fileName: opts.attachmentName || undefined,
-            caption: signed,
-          }),
-        });
-        const j = await r.json().catch(() => ({} as any));
-        if (r.ok) return { ok: true, waId: j?.key?.id ?? null };
-        return { ok: false, waId: null, error: `Evolution media ${r.status}: ${JSON.stringify(j)}` };
-      }
-      const r = await fetch(`${evoUrl}/message/sendText/${evoInst}`, {
+      // Always send text first
+      const rt = await fetch(`${evoUrl}/message/sendText/${evoInst}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: evoKey },
         body: JSON.stringify({ number: opts.phone, text: signed }),
       });
-      const j = await r.json().catch(() => ({} as any));
-      if (r.ok) return { ok: true, waId: j?.key?.id ?? null };
-      return { ok: false, waId: null, error: `Evolution text ${r.status}: ${JSON.stringify(j)}` };
+      const jt = await rt.json().catch(() => ({} as any));
+      if (!rt.ok) {
+        return { ok: false, waId: null, error: `Evolution text ${rt.status}: ${JSON.stringify(jt)}` };
+      }
+      const textWaId = jt?.key?.id ?? null;
+
+      if (!opts.attachmentUrl) {
+        return { ok: true, waId: textWaId };
+      }
+
+      // Then send media WITHOUT caption, with retry/backoff
+      const ext = (opts.attachmentName || opts.attachmentUrl || "").split(".").pop()?.toLowerCase() || "";
+      const isImage = /^(jpe?g|png|gif|webp)$/.test(ext) || (opts.attachmentMime || "").startsWith("image/");
+      const isVideo = /^(mp4|mov|webm)$/.test(ext) || (opts.attachmentMime || "").startsWith("video/");
+      const mediatype = isImage ? "image" : isVideo ? "video" : "document";
+      const fallbackName = `arquivo${ext ? "." + ext : ""}`;
+      const mediaPayload = {
+        number: opts.phone,
+        mediatype,
+        mimetype: opts.attachmentMime || (mediatype === "image" ? "image/jpeg" : "application/octet-stream"),
+        media: opts.attachmentUrl,
+        fileName: opts.attachmentName || fallbackName,
+      };
+
+      const delays = [0, 2000, 5000];
+      let lastErr = "";
+      for (let i = 0; i < delays.length; i++) {
+        if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+        const rm = await fetch(`${evoUrl}/message/sendMedia/${evoInst}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: evoKey },
+          body: JSON.stringify(mediaPayload),
+        });
+        const jm = await rm.json().catch(() => ({} as any));
+        if (rm.ok) return { ok: true, waId: jm?.key?.id ?? textWaId };
+        lastErr = `Evolution media ${rm.status}: ${JSON.stringify(jm)}`;
+      }
+      return { ok: false, waId: null, error: lastErr };
     } catch (e) {
       return { ok: false, waId: null, error: `Evolution exception: ${String(e)}` };
     }
@@ -233,26 +248,42 @@ async function sendWhatsAppMessage(opts: {
   // Fallback to Meta (will only succeed inside 24h)
   if (accessToken && phoneNumberId) {
     try {
-      const body: any = opts.attachmentUrl
-        ? {
-            messaging_product: "whatsapp",
-            to: opts.phone,
-            type: (opts.attachmentMime || "").startsWith("image/") ? "image" : "document",
-            [(opts.attachmentMime || "").startsWith("image/") ? "image" : "document"]: {
-              link: opts.attachmentUrl,
-              ...(opts.attachmentName ? { filename: opts.attachmentName } : {}),
-              ...((opts.attachmentMime || "").startsWith("image/") ? { caption: signed } : {}),
-            },
-          }
-        : { messaging_product: "whatsapp", to: opts.phone, type: "text", text: { body: signed } };
-      const r = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      // Text first
+      const rt = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ messaging_product: "whatsapp", to: opts.phone, type: "text", text: { body: signed } }),
       });
-      const j = await r.json().catch(() => ({} as any));
-      if (r.ok) return { ok: true, waId: j?.messages?.[0]?.id ?? null };
-      return { ok: false, waId: null, error: `Meta ${r.status}: ${JSON.stringify(j)}` };
+      const jt = await rt.json().catch(() => ({} as any));
+      if (!rt.ok) return { ok: false, waId: null, error: `Meta text ${rt.status}: ${JSON.stringify(jt)}` };
+      const textWaId = jt?.messages?.[0]?.id ?? null;
+      if (!opts.attachmentUrl) return { ok: true, waId: textWaId };
+
+      const isImage = (opts.attachmentMime || "").startsWith("image/");
+      const type = isImage ? "image" : "document";
+      const mediaBody: any = {
+        messaging_product: "whatsapp",
+        to: opts.phone,
+        type,
+        [type]: {
+          link: opts.attachmentUrl,
+          ...(opts.attachmentName ? { filename: opts.attachmentName } : {}),
+        },
+      };
+      const delays = [0, 2000, 5000];
+      let lastErr = "";
+      for (let i = 0; i < delays.length; i++) {
+        if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+        const rm = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify(mediaBody),
+        });
+        const jm = await rm.json().catch(() => ({} as any));
+        if (rm.ok) return { ok: true, waId: jm?.messages?.[0]?.id ?? textWaId };
+        lastErr = `Meta media ${rm.status}: ${JSON.stringify(jm)}`;
+      }
+      return { ok: false, waId: null, error: lastErr };
     } catch (e) {
       return { ok: false, waId: null, error: `Meta exception: ${String(e)}` };
     }
@@ -314,21 +345,54 @@ Deno.serve(async (req) => {
         .eq("scheduled_message_id", sched.id)
         .eq("run_at", runIso)
         .maybeSingle();
+      let run: { id: string } | null = null;
+      let retryFailedOnly = false;
+      let alreadySentIds = new Set<string>();
+      let alreadySkippedIds = new Set<string>();
+      let failedDeliveryIds: string[] = [];
+
       if (existingRun) {
-        results.push({ id: sched.id, skipped: "already_ran_today" });
-        continue;
+        run = existingRun as any;
+        // Check failed deliveries to reprocess
+        const { data: prev } = await supabase
+          .from("scheduled_message_deliveries")
+          .select("id, client_id, status")
+          .eq("run_id", existingRun.id);
+        for (const d of prev || []) {
+          if (d.status === "sent") alreadySentIds.add(d.client_id);
+          else if (d.status === "skipped") alreadySkippedIds.add(d.client_id);
+          else if (d.status === "failed") failedDeliveryIds.push(d.id);
+        }
+        if (!forceId && failedDeliveryIds.length === 0) {
+          results.push({ id: sched.id, skipped: "already_ran_today" });
+          continue;
+        }
+        retryFailedOnly = true;
+      } else {
+        const { data: created, error: runErr } = await supabase
+          .from("scheduled_message_runs")
+          .insert({ scheduled_message_id: sched.id, run_at: runIso, status_summary: {} })
+          .select("id").single();
+        if (runErr || !created) {
+          results.push({ id: sched.id, error: runErr?.message || "run insert failed" });
+          continue;
+        }
+        run = created;
       }
 
-      const { data: run, error: runErr } = await supabase
-        .from("scheduled_message_runs")
-        .insert({ scheduled_message_id: sched.id, run_at: runIso, status_summary: {} })
-        .select("id").single();
-      if (runErr || !run) {
-        results.push({ id: sched.id, error: runErr?.message || "run insert failed" });
-        continue;
+      let clients = await resolveClients(supabase, sched);
+      if (retryFailedOnly) {
+        // Only clients with failed deliveries; delete those rows so they get reinserted
+        const { data: failedRows } = await supabase
+          .from("scheduled_message_deliveries")
+          .select("client_id")
+          .in("id", failedDeliveryIds);
+        const retryIds = new Set((failedRows || []).map((r: any) => r.client_id));
+        clients = clients.filter((c: any) => retryIds.has(c.id));
+        if (failedDeliveryIds.length) {
+          await supabase.from("scheduled_message_deliveries").delete().in("id", failedDeliveryIds);
+        }
       }
-
-      const clients = await resolveClients(supabase, sched);
       let sent = 0, failed = 0, skipped = 0;
 
       // Department contact map
@@ -417,10 +481,15 @@ Deno.serve(async (req) => {
         await new Promise(r => setTimeout(r, 600));
       }
 
-      await supabase.from("scheduled_message_runs").update({ status_summary: { sent, failed, skipped, total: clients.length } }).eq("id", run.id);
+      const totalSent = sent + alreadySentIds.size;
+      const totalSkipped = skipped + alreadySkippedIds.size;
+      const totalAll = totalSent + totalSkipped + failed;
+      await supabase.from("scheduled_message_runs")
+        .update({ status_summary: { sent: totalSent, failed, skipped: totalSkipped, total: totalAll } })
+        .eq("id", run.id);
       await supabase.from("scheduled_messages").update({ last_run_at: new Date().toISOString() }).eq("id", sched.id);
 
-      results.push({ id: sched.id, sent, failed, skipped });
+      results.push({ id: sched.id, sent: totalSent, failed, skipped: totalSkipped, retried: retryFailedOnly });
     } catch (e) {
       console.error("schedule error", sched.id, e);
       results.push({ id: sched.id, error: String(e) });
