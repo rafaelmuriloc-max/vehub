@@ -41,20 +41,31 @@ export function TasksPanel() {
           .eq('completed', true)
           .gte('completed_at', td.start).lt('completed_at', td.end),
         supabase.from('obligation_activity_completions')
-          .select('completed_by, profiles:completed_by(full_name, tag_color)')
+          .select('completed_by')
           .eq('completed', true)
           .gte('completed_at', td.start).lt('completed_at', td.end)
           .not('completed_by', 'is', null)
           .limit(500),
       ]);
 
+      const userIds = Array.from(new Set((completions.data ?? []).map((r: any) => r.completed_by).filter(Boolean)));
+      const profileMap: Record<string, { name: string; color: string | null }> = {};
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('user_id, full_name, tag_color')
+          .in('user_id', userIds);
+        (profs ?? []).forEach((p: any) => {
+          profileMap[p.user_id] = { name: p.full_name ?? 'Usuário', color: p.tag_color ?? null };
+        });
+      }
+
       const counts: Record<string, { name: string; color: string | null; count: number }> = {};
       (completions.data ?? []).forEach((row: any) => {
         const id = row.completed_by;
         if (!id) return;
-        const name = row.profiles?.full_name ?? 'Usuário';
-        const color = row.profiles?.tag_color ?? null;
-        counts[id] = counts[id] || { name, color, count: 0 };
+        const prof = profileMap[id];
+        counts[id] = counts[id] || { name: prof?.name ?? 'Usuário', color: prof?.color ?? null, count: 0 };
         counts[id].count += 1;
       });
       const ranking = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 5);

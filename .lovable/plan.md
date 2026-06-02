@@ -1,51 +1,26 @@
-## Dashboard TV — Painel de operação
+## Fix: chamados atribuídos não aparecem no Dashboard
 
-Página fullscreen pensada para ficar exposta numa TV no escritório, com auto-refresh e visual de alto contraste.
+### Causa
+No `TicketsPanel.tsx`, as queries usam joins implícitos do PostgREST:
+```ts
+profile:assigned_to(full_name, tag_color)
+```
+Mas `chat_conversations.assigned_to` **não tem foreign key** declarada para `profiles` (e `profiles` usa `user_id`, não `id`). O embed retorna `null` para todas as linhas, então o agrupamento "Por atendente" fica vazio e o card "Aguardando 1ª resposta" perde o nome do atendente.
 
-### Acesso e navegação
-- Nova rota `/dashboard` protegida (somente admin), acessível pelo menu lateral com ícone `MonitorPlay`.
-- Layout dedicado: ocupa 100dvh, sem padding do AppLayout (similar ao tratamento do `/chat`), com header próprio mostrando logo + relógio + data.
-- Auto-refresh dos dados a cada 30s (React Query `refetchInterval`) + realtime nos canais já existentes (`chat_messages`, `chat_conversations`).
+O mesmo problema ocorre em `TasksPanel.tsx` no ranking (`profiles:completed_by(...)`).
 
-### Seções (grid responsivo)
+### Correção
+Trocar os embeds por buscas separadas + map por `user_id`:
 
-**1. Clientes**
-- Card grande: Ativos vs Inativos (contagem de `clients` por `status`).
-- Card: Novos no mês (clients com `start_date` no mês corrente).
-- Card: Churn no mês (clients com `end_date` no mês corrente).
+1. **TicketsPanel**
+   - Buscar conversas abertas só com `assigned_to`.
+   - Buscar `profiles` (`user_id, full_name, tag_color`) onde `user_id IN (...)`.
+   - Construir o agregado por atendente no cliente.
+   - Idem para `awaiting`: trazer o nome/cor do atendente via map.
 
-**2. Tarefas (obligation_instances)**
-- Donut/contadores por status (pending / in_progress / done) do mês corrente.
-- Destaque vermelho: Atrasadas (due_date < hoje && status != done).
-- Contador grande: Concluídas hoje.
-- Ranking top-5 colaboradores por conclusões hoje + na semana (join `obligation_activity_completions` → `profiles`, com tag_color).
+2. **TasksPanel**
+   - Buscar completions de hoje só com `completed_by`.
+   - Buscar profiles dos `completed_by` únicos em uma segunda query.
+   - Montar o ranking via map.
 
-**3. Obrigações**
-- Lista das próximas 7 dias: nome da obrigação + cliente + vencimento + atendente (limit 10, scroll suave).
-- Barra de % conclusão do mês por departamento.
-
-**4. Chamados (chat)**
-- Card: Aguardando 1ª resposta (`awaiting_first_reply = true`) com tempo de espera.
-- Lista: Chamados abertos por atendente (group by `assigned_to`, contagem + tag colorida).
-- Destaque para chamados sem atribuição (`assigned_to IS NULL && status = 'open'`).
-
-### Visual
-- Fundo navy escuro (`bg-background` dark), cards com `bg-card/50` + borda sutil + glow laranja nos destaques.
-- Tipografia grande (text-3xl/4xl para números), ideal para leitura à distância.
-- Animações leves com framer-motion (fade-in on mount, pulse em alertas).
-- Badges coloridos reaproveitando `tag_color` dos profiles.
-
-### Detalhes técnicos
-- Arquivos novos:
-  - `src/pages/Dashboard.tsx` (orquestrador + grid)
-  - `src/components/dashboard/ClientsPanel.tsx`
-  - `src/components/dashboard/TasksPanel.tsx`
-  - `src/components/dashboard/ObligationsPanel.tsx`
-  - `src/components/dashboard/TicketsPanel.tsx`
-  - `src/components/dashboard/MetricCard.tsx`
-- Editar:
-  - `src/App.tsx` — registrar rota `/dashboard` dentro do AppLayout.
-  - `src/components/AppLayout.tsx` — tratar `/dashboard` como fullscreen (sem header mobile, sem padding).
-  - `src/components/AppSidebar.tsx` — novo item de menu "Dashboard" (admin only).
-- Queries com `useQuery` + `refetchInterval: 30000`; realtime subscription para chat.
-- Sem novas tabelas, sem migrações — tudo lê do esquema existente.
+Sem mudanças de banco, sem RLS — só ajustes no frontend dos dois componentes.
