@@ -4,24 +4,27 @@ import { DepartmentsTab } from '@/components/settings/DepartmentsTab';
 import { PartnersTab } from '@/components/settings/PartnersTab';
 import { UsersTab } from '@/components/settings/UsersTab';
 import { TriageTrainingTab } from '@/components/settings/TriageTrainingTab';
+import { EvolutionConnectionCard } from '@/components/settings/EvolutionConnectionCard';
 
 export default function Settings() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-foreground">Meu Escritório</h1>
       <Tabs defaultValue="company" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="company">Empresa</TabsTrigger>
           <TabsTrigger value="departments">Departamentos</TabsTrigger>
           <TabsTrigger value="partners">Sócios</TabsTrigger>
           <TabsTrigger value="users">Usuários</TabsTrigger>
           <TabsTrigger value="triage">Treinamento Gisele</TabsTrigger>
+          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
         </TabsList>
         <TabsContent value="company"><CompanyTab /></TabsContent>
         <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="partners"><PartnersTab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="triage"><TriageTrainingTab /></TabsContent>
+        <TabsContent value="whatsapp"><EvolutionConnectionCard /></TabsContent>
       </Tabs>
     </div>
   );
