@@ -160,6 +160,14 @@ Deno.serve(async (req) => {
     // appears on the contact's WhatsApp.
     const forceEvolutionForReply = !!(replyToMessageId && !replyMetaWamid && replyEvolutionId);
 
+    // If we need Evolution (no 24h window) and the number is confirmed not on WhatsApp, fail fast.
+    if ((!hasOpenWindow || forceEvolutionForReply) && evoNumberMissing) {
+      return new Response(
+        JSON.stringify({ ok: false, error: `Este número não possui WhatsApp (${toPhone})`, transient: false }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     let sendSuccess = false;
     let sendErrorDetail = "";
     let messageContent = "";
