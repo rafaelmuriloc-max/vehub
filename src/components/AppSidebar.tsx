@@ -1,4 +1,4 @@
-import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive, MonitorPlay } from 'lucide-react';
+import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive, MonitorPlay, Send } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -114,6 +114,18 @@ export function AppSidebar() {
                   >
                     <MonitorPlay className="h-4 w-4" />
                     <span>Dashboard</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={location.pathname === '/scheduled-messages'}
+                    onClick={() => navigate('/scheduled-messages')}
+                    className="transition-colors duration-150"
+                  >
+                    <Send className="h-4 w-4" />
+                    <span>Mensagens Agendadas</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
