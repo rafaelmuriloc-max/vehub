@@ -24,12 +24,12 @@ export function TicketsPanel() {
         supabase.from('chat_conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         supabase
           .from('chat_conversations')
-          .select('assigned_to, profile:assigned_to(full_name, tag_color)')
+          .select('assigned_to')
           .eq('status', 'open')
           .not('assigned_to', 'is', null),
         supabase
           .from('chat_conversations')
-          .select('id, name, whatsapp_phone, waiting_since, assigned_to, profile:assigned_to(full_name, tag_color)')
+          .select('id, name, whatsapp_phone, waiting_since, assigned_to')
           .eq('status', 'open')
           .eq('awaiting_first_reply', true)
           .order('waiting_since', { ascending: true })
@@ -43,22 +43,44 @@ export function TicketsPanel() {
           .limit(8),
       ]);
 
+      const userIds = Array.from(new Set([
+        ...((byAgent.data ?? []).map((r: any) => r.assigned_to).filter(Boolean)),
+        ...((awaiting.data ?? []).map((r: any) => r.assigned_to).filter(Boolean)),
+      ]));
+
+      const profileMap: Record<string, { name: string; color: string | null }> = {};
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('user_id, full_name, tag_color')
+          .in('user_id', userIds);
+        (profs ?? []).forEach((p: any) => {
+          profileMap[p.user_id] = { name: p.full_name ?? 'Atendente', color: p.tag_color ?? null };
+        });
+      }
+
       const agents: Record<string, { name: string; color: string | null; count: number }> = {};
       (byAgent.data ?? []).forEach((r: any) => {
         const id = r.assigned_to;
         if (!id) return;
+        const prof = profileMap[id];
         agents[id] = agents[id] || {
-          name: r.profile?.full_name ?? 'Atendente',
-          color: r.profile?.tag_color ?? null,
+          name: prof?.name ?? 'Atendente',
+          color: prof?.color ?? null,
           count: 0,
         };
         agents[id].count += 1;
       });
 
+      const awaitingEnriched = (awaiting.data ?? []).map((c: any) => ({
+        ...c,
+        profile: c.assigned_to ? profileMap[c.assigned_to] : null,
+      }));
+
       return {
         open: open.count ?? 0,
         agents: Object.values(agents).sort((a, b) => b.count - a.count),
-        awaiting: awaiting.data ?? [],
+        awaiting: awaitingEnriched,
         unassigned: unassigned.data ?? [],
       };
     },
@@ -124,9 +146,9 @@ export function TicketsPanel() {
                 <div key={c.id} className="flex items-center gap-3 text-sm py-1.5 px-2 rounded-md bg-amber-500/5">
                   <Clock className="h-3.5 w-3.5 text-amber-400" />
                   <span className="flex-1 truncate">{c.name || c.whatsapp_phone || 'Conversa'}</span>
-                  {c.profile?.full_name && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: (c.profile?.tag_color ?? 'hsl(var(--primary))') + '33', color: c.profile?.tag_color ?? undefined }}>
-                      {c.profile.full_name}
+                  {c.profile?.name && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: (c.profile?.color ?? 'hsl(var(--primary))') + '33', color: c.profile?.color ?? undefined }}>
+                      {c.profile.name}
                     </span>
                   )}
                   <span className="tabular-nums text-xs text-amber-300">{formatWait(wait)}</span>
