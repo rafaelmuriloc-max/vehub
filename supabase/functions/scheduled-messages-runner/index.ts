@@ -343,7 +343,7 @@ Deno.serve(async (req) => {
   const brt = nowInBRT();
   const todayUTC = new Date(Date.UTC(brt.year, brt.month - 1, brt.day));
 
-  // Window: fire if send_time is within last 30 min (cron runs every 15 min)
+  // Window: cron runs every minute; fire only on the configured minute, with tiny latency tolerance.
   const minutesNow = brt.hour * 60 + brt.minute;
 
   let q = supabase.from("scheduled_messages").select("*").eq("active", true);
@@ -364,15 +364,27 @@ Deno.serve(async (req) => {
   for (const sched of schedules || []) {
     try {
       if (!forceId) {
-        if (sched.start_date && ymd(todayUTC) < sched.start_date) continue;
-        if (sched.end_date && ymd(todayUTC) > sched.end_date) continue;
-        if (!shouldFireToday(sched, todayUTC)) continue;
+        if (sched.start_date && ymd(todayUTC) < sched.start_date) {
+          console.log("scheduled skip", { id: sched.id, reason: "before_start_date", today: ymd(todayUTC), start_date: sched.start_date });
+          continue;
+        }
+        if (sched.end_date && ymd(todayUTC) > sched.end_date) {
+          console.log("scheduled skip", { id: sched.id, reason: "after_end_date", today: ymd(todayUTC), end_date: sched.end_date });
+          continue;
+        }
+        if (!shouldFireToday(sched, todayUTC)) {
+          console.log("scheduled skip", { id: sched.id, reason: "not_scheduled_for_today", today: ymd(todayUTC), recurrence: sched.recurrence });
+          continue;
+        }
         // Time check
         const [hh, mm] = String(sched.send_time || "09:00").split(":").map(Number);
         const targetMinutes = hh * 60 + mm;
         const diff = minutesNow - targetMinutes;
         // Fire only at the configured minute; tolerate up to 2 min of cron latency.
-        if (diff < 0 || diff > 2) continue;
+        if (diff < 0 || diff > 2) {
+          console.log("scheduled skip", { id: sched.id, reason: "outside_send_time", now: `${String(brt.hour).padStart(2, "0")}:${String(brt.minute).padStart(2, "0")}`, send_time: sched.send_time, diff });
+          continue;
+        }
       }
 
       // Idempotency: one run per (schedule, day)
