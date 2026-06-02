@@ -1587,6 +1587,180 @@ export type Database = {
           },
         ]
       }
+      scheduled_message_clients: {
+        Row: {
+          client_id: string
+          scheduled_message_id: string
+        }
+        Insert: {
+          client_id: string
+          scheduled_message_id: string
+        }
+        Update: {
+          client_id?: string
+          scheduled_message_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_message_clients_scheduled_message_id_fkey"
+            columns: ["scheduled_message_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_message_deliveries: {
+        Row: {
+          chat_message_id: string | null
+          client_id: string
+          error: string | null
+          id: string
+          run_id: string
+          sent_at: string
+          status: string
+        }
+        Insert: {
+          chat_message_id?: string | null
+          client_id: string
+          error?: string | null
+          id?: string
+          run_id: string
+          sent_at?: string
+          status: string
+        }
+        Update: {
+          chat_message_id?: string | null
+          client_id?: string
+          error?: string | null
+          id?: string
+          run_id?: string
+          sent_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_message_deliveries_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_message_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_message_runs: {
+        Row: {
+          created_at: string
+          id: string
+          run_at: string
+          scheduled_message_id: string
+          status_summary: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          run_at?: string
+          scheduled_message_id: string
+          status_summary?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          run_at?: string
+          scheduled_message_id?: string
+          status_summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_message_runs_scheduled_message_id_fkey"
+            columns: ["scheduled_message_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_messages: {
+        Row: {
+          active: boolean
+          annual_month: number | null
+          anticipate_weekend: boolean
+          assignment_mode: string
+          attachment_mime: string | null
+          attachment_name: string | null
+          attachment_url: string | null
+          created_at: string
+          created_by: string | null
+          custom_months: number[] | null
+          department_id: string
+          end_date: string | null
+          id: string
+          last_run_at: string | null
+          message_body: string
+          monthly_day: number | null
+          name: string
+          next_run_at: string | null
+          recurrence: string
+          segment_filters: Json
+          send_time: string
+          start_date: string | null
+          updated_at: string
+          weekly_day: number | null
+        }
+        Insert: {
+          active?: boolean
+          annual_month?: number | null
+          anticipate_weekend?: boolean
+          assignment_mode?: string
+          attachment_mime?: string | null
+          attachment_name?: string | null
+          attachment_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_months?: number[] | null
+          department_id: string
+          end_date?: string | null
+          id?: string
+          last_run_at?: string | null
+          message_body: string
+          monthly_day?: number | null
+          name: string
+          next_run_at?: string | null
+          recurrence?: string
+          segment_filters?: Json
+          send_time?: string
+          start_date?: string | null
+          updated_at?: string
+          weekly_day?: number | null
+        }
+        Update: {
+          active?: boolean
+          annual_month?: number | null
+          anticipate_weekend?: boolean
+          assignment_mode?: string
+          attachment_mime?: string | null
+          attachment_name?: string | null
+          attachment_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_months?: number[] | null
+          department_id?: string
+          end_date?: string | null
+          id?: string
+          last_run_at?: string | null
+          message_body?: string
+          monthly_day?: number | null
+          name?: string
+          next_run_at?: string | null
+          recurrence?: string
+          segment_filters?: Json
+          send_time?: string
+          start_date?: string | null
+          updated_at?: string
+          weekly_day?: number | null
+        }
+        Relationships: []
+      }
       service_takers: {
         Row: {
           company_name: string
