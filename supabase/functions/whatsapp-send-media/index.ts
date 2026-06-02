@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               mediatype: type === "document" ? "document" : type,
               mimetype: guessMime(),
               media: mediaUrl,
@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               audio: mediaUrl,
               ...evoQuoted,
             }),
@@ -317,7 +317,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               audio: mediaUrl,
               ...evoQuoted,
             }),
@@ -367,7 +367,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               latitude,
               longitude,
               name: senderName || "Localização",
@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              number: toPhone,
+              number: evoTo,
               contact: [
                 {
                   fullName: contactName,
@@ -476,7 +476,7 @@ Deno.serve(async (req) => {
         channel: "whatsapp",
         wa_message_id: waMessageId,
         wa_evolution_id: waMessageId && !waMessageId.startsWith("wamid.") ? waMessageId : null,
-        wa_remote_jid: `${toPhone}@s.whatsapp.net`,
+        wa_remote_jid: `${evoTo}@s.whatsapp.net`,
         reply_to_id: replyToMessageId || null,
         reply_to_snapshot: replySnapshot,
         is_forwarded: !!isForwarded,
