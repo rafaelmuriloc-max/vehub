@@ -31,10 +31,10 @@ Deno.serve(async (req) => {
     if (!res.ok) {
       const errText = await res.text();
       console.error("Evolution API error:", res.status, errText);
-      return new Response(JSON.stringify({ error: `Evolution API: ${res.status}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ groups: [], error: `Evolution API ${res.status}`, transient: res.status >= 500 }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const groups = await res.json();
@@ -49,9 +49,9 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("evolution-list-groups error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ groups: [], error: String(err), transient: true }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });
