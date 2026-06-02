@@ -199,16 +199,13 @@ async function resolveClients(supabase: any, sched: any): Promise<any[]> {
 }
 
 /* ===== Ensure WA conversation for phone ===== */
-async function ensureConversation(supabase: any, client: any, deptPhone: string | null, deptContactName: string | null, adminId: string): Promise<string | null> {
-  const phone = (deptPhone || client.contact_phone || "").replace(/\D/g, "");
-  if (!phone) return null;
-  const normalized = phone.startsWith("55") ? phone : `55${phone}`;
+async function ensureConversation(supabase: any, client: any, normalizedPhone: string, deptContactName: string | null, adminId: string): Promise<string | null> {
   const { data: existing } = await supabase
-    .from("chat_conversations").select("id").eq("whatsapp_phone", normalized).maybeSingle();
+    .from("chat_conversations").select("id").eq("whatsapp_phone", normalizedPhone).maybeSingle();
   if (existing?.id) return existing.id;
   const { data: created } = await supabase.from("chat_conversations").insert({
     name: deptContactName || client.company_name,
-    whatsapp_phone: normalized,
+    whatsapp_phone: normalizedPhone,
     client_id: client.id,
     created_by: adminId,
     status: "open",
