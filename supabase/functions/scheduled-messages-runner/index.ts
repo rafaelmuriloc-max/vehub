@@ -128,6 +128,46 @@ function renderTemplate(body: string, vars: Record<string, string>): string {
   return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => vars[k] ?? "");
 }
 
+function pickValidBrazilianWhatsAppPhone(raw: string | null | undefined): { phone: string | null; error?: string; candidates: string[] } {
+  const text = String(raw || "").trim();
+  if (!text) return { phone: null, error: "Sem telefone", candidates: [] };
+
+  const parts = text
+    .split(/(?:\s*[/;,|]\s*|\s+ou\s+|\s+e\s+)/i)
+    .map((part) => part.replace(/\D/g, ""))
+    .filter(Boolean);
+
+  const fallbackDigits = text.replace(/\D/g, "");
+  const candidates = (parts.length ? parts : [fallbackDigits]).filter(Boolean);
+
+  for (let digits of candidates) {
+    digits = digits.replace(/^0+/, "");
+    if (digits.startsWith("55")) digits = digits.slice(2);
+
+    // Brasil: DDD (2) + fixo (8) ou celular (9). Rejeita números fictícios/incompletos.
+    if (!/^\d{10,11}$/.test(digits)) continue;
+    if (/^(\d)\1+$/.test(digits)) continue;
+    if (/^\d{2}0{8,9}$/.test(digits)) continue;
+
+    const ddd = Number(digits.slice(0, 2));
+    if (ddd < 11 || ddd > 99) continue;
+
+    return { phone: `55${digits}`, candidates };
+  }
+
+  return { phone: null, error: `Telefone inválido para WhatsApp: ${text}`, candidates };
+}
+
+function describeApiError(payload: any): string {
+  const message = payload?.response?.message ?? payload?.message ?? payload?.error;
+  if (Array.isArray(message)) {
+    return message.map((item) => typeof item === "string" ? item : JSON.stringify(item)).join("; ");
+  }
+  if (message && typeof message === "object") return JSON.stringify(message);
+  if (message) return String(message);
+  return JSON.stringify(payload);
+}
+
 /* ===== Client selection ===== */
 async function resolveClients(supabase: any, sched: any): Promise<any[]> {
   if (sched.assignment_mode === "all") {
