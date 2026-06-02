@@ -461,15 +461,19 @@ Deno.serve(async (req) => {
 
       for (const client of clients) {
         const contact = contactMap.get(client.id);
-        const phoneRaw = (contact?.phone || client.contact_phone || "").replace(/\D/g, "");
-        if (!phoneRaw) {
+        const phoneResult = pickValidBrazilianWhatsAppPhone(contact?.phone || client.contact_phone);
+        if (!phoneResult.phone) {
           await supabase.from("scheduled_message_deliveries").insert({
-            run_id: run.id, client_id: client.id, status: "skipped", error: "Sem telefone",
+            run_id: run.id,
+            client_id: client.id,
+            status: "skipped",
+            error: phoneResult.error || "Telefone inválido para WhatsApp",
           });
+          console.log("delivery skipped", { schedule_id: sched.id, client_id: client.id, reason: phoneResult.error, candidates: phoneResult.candidates });
           skipped++;
           continue;
         }
-        const phone = phoneRaw.startsWith("55") ? phoneRaw : `55${phoneRaw}`;
+        const phone = phoneResult.phone;
 
         const convId = await ensureConversation(supabase, client, phone, contact?.name || null, adminId);
         if (!convId) {
