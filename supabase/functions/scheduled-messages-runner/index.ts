@@ -431,6 +431,7 @@ Deno.serve(async (req) => {
       }
 
       let clients = await resolveClients(supabase, sched);
+      console.log("scheduled processing", { id: sched.id, name: sched.name, clients: clients.length, retryFailedOnly });
       if (retryFailedOnly) {
         // Only clients with failed deliveries; delete those rows so they get reinserted
         const { data: failedRows } = await supabase
@@ -442,6 +443,9 @@ Deno.serve(async (req) => {
         if (failedDeliveryIds.length) {
           await supabase.from("scheduled_message_deliveries").delete().in("id", failedDeliveryIds);
         }
+      }
+      if (!clients.length) {
+        console.log("scheduled no clients", { id: sched.id, assignment_mode: sched.assignment_mode });
       }
       let sent = 0, failed = 0, skipped = 0;
 
