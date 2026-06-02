@@ -244,7 +244,7 @@ async function sendWhatsAppMessage(opts: {
       });
       const jt = await rt.json().catch(() => ({} as any));
       if (!rt.ok) {
-        return { ok: false, waId: null, error: `Evolution text ${rt.status}: ${JSON.stringify(jt)}` };
+        return { ok: false, waId: null, error: `Evolution text ${rt.status}: ${describeApiError(jt)}` };
       }
       const textWaId = jt?.key?.id ?? null;
 
@@ -277,7 +277,7 @@ async function sendWhatsAppMessage(opts: {
         });
         const jm = await rm.json().catch(() => ({} as any));
         if (rm.ok) return { ok: true, waId: jm?.key?.id ?? textWaId };
-        lastErr = `Evolution media ${rm.status}: ${JSON.stringify(jm)}`;
+        lastErr = `Evolution media ${rm.status}: ${describeApiError(jm)}`;
       }
       return { ok: false, waId: null, error: lastErr };
     } catch (e) {
@@ -295,7 +295,7 @@ async function sendWhatsAppMessage(opts: {
         body: JSON.stringify({ messaging_product: "whatsapp", to: opts.phone, type: "text", text: { body: signed } }),
       });
       const jt = await rt.json().catch(() => ({} as any));
-      if (!rt.ok) return { ok: false, waId: null, error: `Meta text ${rt.status}: ${JSON.stringify(jt)}` };
+      if (!rt.ok) return { ok: false, waId: null, error: `Meta text ${rt.status}: ${describeApiError(jt)}` };
       const textWaId = jt?.messages?.[0]?.id ?? null;
       if (!opts.attachmentUrl) return { ok: true, waId: textWaId };
 
@@ -321,7 +321,7 @@ async function sendWhatsAppMessage(opts: {
         });
         const jm = await rm.json().catch(() => ({} as any));
         if (rm.ok) return { ok: true, waId: jm?.messages?.[0]?.id ?? textWaId };
-        lastErr = `Meta media ${rm.status}: ${JSON.stringify(jm)}`;
+        lastErr = `Meta media ${rm.status}: ${describeApiError(jm)}`;
       }
       return { ok: false, waId: null, error: lastErr };
     } catch (e) {
