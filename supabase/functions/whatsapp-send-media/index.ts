@@ -130,8 +130,18 @@ Deno.serve(async (req) => {
 
     const rawPhone = conv.whatsapp_phone.replace(/\D/g, "");
     const toPhone = rawPhone.startsWith("55") ? rawPhone : `55${rawPhone}`;
+
+    // Resolve correct WhatsApp JID for Evolution (handles BR 9th-digit variants).
+    // Falls back to toPhone if the lookup is inconclusive.
+    let evoTo = toPhone;
+    let evoNumberMissing = false;
+    if (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) {
+      const resolved = await resolveEvolutionNumber(EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE_NAME, toPhone);
+      if (resolved.exists && resolved.number) evoTo = resolved.number;
+      else if (!resolved.exists) evoNumberMissing = true;
+    }
     const evoQuoted = replyEvolutionId
-      ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${toPhone}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } }
+      ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoTo}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } }
       : {};
 
     // Check 24h window
