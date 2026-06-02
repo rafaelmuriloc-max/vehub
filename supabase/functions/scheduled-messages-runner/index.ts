@@ -481,10 +481,15 @@ Deno.serve(async (req) => {
         await new Promise(r => setTimeout(r, 600));
       }
 
-      await supabase.from("scheduled_message_runs").update({ status_summary: { sent, failed, skipped, total: clients.length } }).eq("id", run.id);
+      const totalSent = sent + alreadySentIds.size;
+      const totalSkipped = skipped + alreadySkippedIds.size;
+      const totalAll = totalSent + totalSkipped + failed;
+      await supabase.from("scheduled_message_runs")
+        .update({ status_summary: { sent: totalSent, failed, skipped: totalSkipped, total: totalAll } })
+        .eq("id", run.id);
       await supabase.from("scheduled_messages").update({ last_run_at: new Date().toISOString() }).eq("id", sched.id);
 
-      results.push({ id: sched.id, sent, failed, skipped });
+      results.push({ id: sched.id, sent: totalSent, failed, skipped: totalSkipped, retried: retryFailedOnly });
     } catch (e) {
       console.error("schedule error", sched.id, e);
       results.push({ id: sched.id, error: String(e) });
