@@ -409,13 +409,16 @@ export default function Chat() {
     await ensureAssignedToMe(activeConvId);
 
     if (activeConv?.whatsappPhone) {
-      const { error } = await supabase.functions.invoke('whatsapp-send-text', {
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
         body: { conversationId: activeConvId, text: content, senderName: profile?.full_name || undefined, senderId: user.id, replyToMessageId: replyToId || undefined },
       });
 
       if (error) {
         console.error('Error sending WhatsApp message:', error);
         toast({ title: 'Erro ao enviar mensagem', description: 'Tente novamente.', variant: 'destructive' });
+      } else if (data?.ok === false) {
+        console.error('WhatsApp provider send failed:', data);
+        toast({ title: 'Erro ao enviar mensagem', description: data.transient ? 'Conexão com o WhatsApp indisponível. Tente novamente em instantes.' : 'Verifique o número e tente novamente.', variant: 'destructive' });
       }
     } else {
       let snapshot: any = null;
