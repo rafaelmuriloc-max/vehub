@@ -1,84 +1,46 @@
+## Plano: Excluir e Criar Nova Instância (Aba WhatsApp)
 
-## Diagnóstico
+Adicionar duas ações administrativas na aba **Configurações → WhatsApp** para resolver casos em que a instância da Evolution fica corrompida (cenário atual de "Connection Closed" persistente).
 
-O erro `400 "Error: Connection Closed"` da Evolution API só acontece para alguns contatos porque o número enviado não corresponde ao JID realmente registrado no WhatsApp daquele contato.
+### 1. Novas Edge Functions (admin-only via `has_role`)
 
-No Brasil, números antigos (especialmente DDDs do Sul/Sudeste cadastrados antes de 2012) não têm o nono dígito no WhatsApp, mesmo que o telefone seja salvo com o 9. Quando o sistema envia `5547997057925@s.whatsapp.net` e o JID real é `554797057925@s.whatsapp.net`, a Baileys (engine da Evolution) abre o socket, não encontra o destinatário e devolve "Connection Closed".
-
-Os contatos que funcionam pela Meta API (dentro da janela de 24h) também funcionariam pela Evolution se o JID correto fosse usado — o Meta normaliza internamente, a Evolution não.
-
-## Solução
-
-Adicionar uma etapa de **resolução de JID** antes de qualquer envio pela Evolution API, usando o próprio endpoint da Evolution `POST /chat/whatsappNumbers/{instance}` que aceita uma lista de números e devolve o JID real (`jid`) e se o número existe (`exists: true`).
-
-### Fluxo novo (Evolution)
-
-```text
-1. Normalizar telefone para dígitos com 55 + DDD + (9 opcional) + 8 dígitos
-2. Chamar /chat/whatsappNumbers/{instance} com [numeroCanonico, numeroSem9]
-3. Para cada resposta exists=true, usar exatamente o "jid" devolvido
-4. Se nenhum existir, retornar { ok:false, transient:false, error:"Número não está no WhatsApp" }
-5. Enviar via /message/sendText/{instance} usando o number = JID resolvido (sem o sufixo @s.whatsapp.net)
-6. Em caso de 500/Connection Closed mesmo após resolução: 1 retry após 1s
-```
-
-### Arquivos afetados
-
-1. **`supabase/functions/whatsapp-send-text/index.ts`**
-   - Criar helper `resolveWhatsAppJid(phone)` que faz a chamada `/chat/whatsappNumbers`
-   - Usar JID resolvido nas duas ramificações que enviam via Evolution (fallback Meta→Evo e envio direto fora da janela 24h)
-   - Mensagem de erro amigável quando `exists=false`: "Este número não possui WhatsApp"
-
-2. **`supabase/functions/whatsapp-send-media/index.ts`**
-   - Mesmo helper e mesma lógica
-
-3. **`supabase/functions/chat-inactivity-monitor/index.ts`**
-   - Resolver JID antes de enviar o aviso de inatividade (atualmente também loga "Connection Closed")
-
-4. **`supabase/functions/daily-cs-reminder/index.ts`**
-   - Mesma proteção, para grupos pular a resolução (grupos usam `@g.us`)
-
-5. **`supabase/functions/whatsapp-send/index.ts`** (legado, se usado)
-   - Aplicar o mesmo padrão por consistência
-
-### Detalhe técnico do helper
-
-```ts
-async function resolveWhatsAppJid(phoneDigits: string): Promise<{ jid: string | null; exists: boolean }> {
-  // Gera variantes: com 9 e sem 9 (apenas para celulares BR com 13 dígitos)
-  const variants = new Set<string>([phoneDigits]);
-  if (phoneDigits.length === 13 && phoneDigits.startsWith('55') && phoneDigits[4] === '9') {
-    variants.add(phoneDigits.slice(0, 4) + phoneDigits.slice(5)); // sem o 9
-  } else if (phoneDigits.length === 12 && phoneDigits.startsWith('55')) {
-    variants.add(phoneDigits.slice(0, 4) + '9' + phoneDigits.slice(4)); // com o 9
+- **`evolution-instance-delete`** → tenta `DELETE /instance/logout/{instance}` (best-effort) e depois `DELETE /instance/delete/{instance}`. Aceita 404 como sucesso (instância já não existe).
+- **`evolution-instance-create`** → `POST /instance/create` com:
+  ```json
+  {
+    "instanceName": "<EVOLUTION_INSTANCE_NAME>",
+    "integration": "WHATSAPP-BAILEYS",
+    "qrcode": true,
+    "webhook": {
+      "url": "<SUPABASE_URL>/functions/v1/whatsapp-webhook",
+      "events": ["MESSAGES_UPSERT","MESSAGES_UPDATE","CONNECTION_UPDATE","CONTACTS_UPDATE"]
+    }
   }
+  ```
+  Reusa o `EVOLUTION_INSTANCE_NAME` já em secrets — todo o restante do sistema continua apontando para o mesmo nome.
 
-  const r = await fetch(`${EVO_URL}/chat/whatsappNumbers/${INSTANCE}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: EVO_KEY },
-    body: JSON.stringify({ numbers: [...variants] }),
-  });
-  if (!r.ok) return { jid: null, exists: false };
-  const arr = await r.json(); // [{ exists, jid, number }]
-  const hit = (arr || []).find((x: any) => x?.exists);
-  return { jid: hit?.jid ?? null, exists: !!hit };
-}
-```
+Ambas com `verify_jwt = false` em `supabase/config.toml` (auth manual via JWT, igual às `evolution-*` existentes).
 
-O `number` passado ao `/message/sendText` passa a ser `jid.replace('@s.whatsapp.net','')` — assim o quoted reply continua usando o `remoteJid` correto.
+### 2. Ajuste em `evolution-connection-state`
 
-### Tratamento de erro no frontend
+Mapear 404 da Evolution para `{ ok: true, state: "close", notFound: true }` — hoje vira "Desconhecido" sem contexto. Permite que a UI mostre uma mensagem clara.
 
-`Chat.tsx` já trata `{ ok:false, transient }`. Não precisa mudar a UI; apenas a mensagem de toast vai ficar mais clara quando `transient=false` e o erro for "número não possui WhatsApp".
+### 3. UI — `EvolutionConnectionCard.tsx`
 
-## Fora do escopo
+Adicionar uma seção **"Zona de manutenção"** (separada por `<Separator />`) com:
 
-- Persistir o JID resolvido em cache (otimização futura)
-- Atualizar `chat_conversations.whatsapp_phone` com o número canonizado pela Evolution
-- Mudanças no fluxo Meta API (já funciona)
+- Botão **"Criar nova instância"** (ícone `Plus`) — habilitado quando `notFound` ou `state === 'close'`. Em sucesso, abre o `EvolutionQrDialog` automaticamente.
+- Botão **"Excluir instância"** (variant destructive, ícone `Trash2`) — confirma com `confirm("Isso apaga a instância e a sessão atual. Você precisará escanear o QR Code novamente. Continuar?")`. Em sucesso, atualiza o status.
 
-## Validação
+Quando `notFound` for true, mostrar texto explicativo: _"A instância não existe na Evolution API. Clique em 'Criar nova instância' para configurar."_
 
-1. Enviar mensagem para um contato que estava falhando → verificar log "Resolved JID: 554..." e sucesso
-2. Enviar para um número fake (ex: 5511999999999) → toast "Este número não possui WhatsApp"
-3. Enviar para contato que já funcionava → continua funcionando
+### Arquivos
+- `supabase/functions/evolution-instance-delete/index.ts` (novo)
+- `supabase/functions/evolution-instance-create/index.ts` (novo)
+- `supabase/functions/evolution-connection-state/index.ts` (mapear 404)
+- `supabase/config.toml` (verify_jwt para as 2 novas)
+- `src/components/settings/EvolutionConnectionCard.tsx` (botões + estado notFound)
+
+### Fora do escopo
+- Configurar nome da instância pela UI (continua via secret).
+- Editar webhook/events pela UI (fixos no create).
