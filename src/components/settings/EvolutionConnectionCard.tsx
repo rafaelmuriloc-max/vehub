@@ -3,6 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, QrCode, LogOut, RefreshCw, RotateCcw, Plus, Trash2 } from 'lucide-react';
@@ -20,9 +24,11 @@ const STATE_LABEL: Record<State, string> = {
 export function EvolutionConnectionCard() {
   const [state, setState] = useState<State>('unknown');
   const [notFound, setNotFound] = useState(false);
+  const [instanceName, setInstanceName] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<null | 'logout' | 'delete'>(null);
 
   async function fetchState() {
     setLoading(true);
@@ -35,7 +41,9 @@ export function EvolutionConnectionCard() {
     if (data?.ok) {
       setState((data.state as State) || 'unknown');
       setNotFound(Boolean(data.notFound));
+      if (data.instanceName) setInstanceName(data.instanceName);
     } else if (data?.error) {
+      if (data.instanceName) setInstanceName(data.instanceName);
       toast.error(data.error);
     }
   }
@@ -43,7 +51,6 @@ export function EvolutionConnectionCard() {
   useEffect(() => { fetchState(); }, []);
 
   async function handleLogout() {
-    if (!confirm('Desconectar o WhatsApp da Evolution API?')) return;
     setActing('logout');
     const { data } = await supabase.functions.invoke('evolution-logout');
     setActing(null);
@@ -61,7 +68,6 @@ export function EvolutionConnectionCard() {
   }
 
   async function handleDeleteInstance() {
-    if (!confirm('Isso apaga a instância e a sessão atual na Evolution API. Você precisará criar uma nova e escanear o QR Code novamente. Continuar?')) return;
     setActing('delete');
     const { data } = await supabase.functions.invoke('evolution-instance-delete');
     setActing(null);
@@ -92,6 +98,11 @@ export function EvolutionConnectionCard() {
             <div>
               <CardTitle>Conexão WhatsApp (Evolution API)</CardTitle>
               <CardDescription>Gerencie a conexão da instância e gere um novo QR Code quando necessário.</CardDescription>
+              {instanceName && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Instância: <code className="font-mono text-foreground">{instanceName}</code>
+                </p>
+              )}
             </div>
             <Badge variant={variant as any}>
               {loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
@@ -118,7 +129,7 @@ export function EvolutionConnectionCard() {
             {acting === 'restart' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
             Reiniciar
           </Button>
-          <Button variant="destructive" onClick={handleLogout} disabled={acting === 'logout' || state !== 'open'}>
+          <Button variant="destructive" onClick={() => setConfirmDialog('logout')} disabled={acting === 'logout' || state !== 'open'}>
             {acting === 'logout' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogOut className="h-4 w-4 mr-2" />}
             Desconectar
           </Button>
@@ -140,7 +151,7 @@ export function EvolutionConnectionCard() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={handleDeleteInstance}
+                onClick={() => setConfirmDialog('delete')}
                 disabled={acting === 'delete' || notFound}
               >
                 {acting === 'delete' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
@@ -150,6 +161,33 @@ export function EvolutionConnectionCard() {
           </div>
         </CardContent>
       </Card>
+      <AlertDialog open={confirmDialog !== null} onOpenChange={(o) => { if (!o) setConfirmDialog(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog === 'delete' ? 'Excluir instância?' : 'Desconectar WhatsApp?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog === 'delete'
+                ? 'Isso apaga a instância e a sessão atual na Evolution API. Você precisará criar uma nova e escanear o QR Code novamente.'
+                : 'O WhatsApp será desconectado da Evolution API. Você poderá reconectar gerando um novo QR Code.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = confirmDialog;
+                setConfirmDialog(null);
+                if (action === 'delete') handleDeleteInstance();
+                else if (action === 'logout') handleLogout();
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <EvolutionQrDialog
         open={qrOpen}
         onOpenChange={(o) => { setQrOpen(o); if (!o) fetchState(); }}

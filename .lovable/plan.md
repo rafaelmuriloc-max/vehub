@@ -1,46 +1,47 @@
-## Plano: Excluir e Criar Nova Instância (Aba WhatsApp)
+## Plano: CRUD da instância da Evolution API (aba WhatsApp)
 
-Adicionar duas ações administrativas na aba **Configurações → WhatsApp** para resolver casos em que a instância da Evolution fica corrompida (cenário atual de "Connection Closed" persistente).
+Operar **apenas na instância configurada** em `EVOLUTION_INSTANCE_NAME`, sem listar nada do servidor (a conta tem outras instâncias que não pertencem a este projeto). Sem nova tabela.
 
-### 1. Novas Edge Functions (admin-only via `has_role`)
+### Ações disponíveis no card
 
-- **`evolution-instance-delete`** → tenta `DELETE /instance/logout/{instance}` (best-effort) e depois `DELETE /instance/delete/{instance}`. Aceita 404 como sucesso (instância já não existe).
-- **`evolution-instance-create`** → `POST /instance/create` com:
-  ```json
-  {
-    "instanceName": "<EVOLUTION_INSTANCE_NAME>",
-    "integration": "WHATSAPP-BAILEYS",
-    "qrcode": true,
-    "webhook": {
-      "url": "<SUPABASE_URL>/functions/v1/whatsapp-webhook",
-      "events": ["MESSAGES_UPSERT","MESSAGES_UPDATE","CONNECTION_UPDATE","CONTACTS_UPDATE"]
-    }
-  }
-  ```
-  Reusa o `EVOLUTION_INSTANCE_NAME` já em secrets — todo o restante do sistema continua apontando para o mesmo nome.
+Reorganizar `EvolutionConnectionCard.tsx` em duas linhas claras, todas operando sobre a instância única do secret:
 
-Ambas com `verify_jwt = false` em `supabase/config.toml` (auth manual via JWT, igual às `evolution-*` existentes).
+1. **Status atual** — badge (Conectado / Conectando / Desconectado / Instância inexistente) + nome da instância em mono.
+2. **Ações operacionais** (visíveis sempre):
+   - **Gerar QR Code** — abre `EvolutionQrDialog` (já existe).
+   - **Reiniciar** — `evolution-restart` (já existe).
+   - **Desconectar** — `evolution-logout` (já existe).
+   - **Atualizar status** — `evolution-connection-state` (já existe).
+3. **Zona de manutenção** (já existe, mantida):
+   - **Criar instância** — `evolution-instance-create`. Habilitado quando `notFound` ou `state === 'close'`. Após sucesso abre o QR automaticamente.
+   - **Excluir instância** — `evolution-instance-delete` (confirm destrutivo).
 
-### 2. Ajuste em `evolution-connection-state`
+Nenhuma listagem é chamada. Nenhum endpoint `fetchInstances` é consumido.
 
-Mapear 404 da Evolution para `{ ok: true, state: "close", notFound: true }` — hoje vira "Desconhecido" sem contexto. Permite que a UI mostre uma mensagem clara.
+### Edge functions
 
-### 3. UI — `EvolutionConnectionCard.tsx`
+Tudo já está implementado e usa `EVOLUTION_INSTANCE_NAME` direto do secret:
+- `evolution-connection-state`
+- `evolution-connect` (QR)
+- `evolution-logout`
+- `evolution-restart`
+- `evolution-instance-create`
+- `evolution-instance-delete`
 
-Adicionar uma seção **"Zona de manutenção"** (separada por `<Separator />`) com:
+Nenhuma nova edge function. Nenhuma alteração no `supabase/config.toml`.
 
-- Botão **"Criar nova instância"** (ícone `Plus`) — habilitado quando `notFound` ou `state === 'close'`. Em sucesso, abre o `EvolutionQrDialog` automaticamente.
-- Botão **"Excluir instância"** (variant destructive, ícone `Trash2`) — confirma com `confirm("Isso apaga a instância e a sessão atual. Você precisará escanear o QR Code novamente. Continuar?")`. Em sucesso, atualiza o status.
+### Ajustes de UI em `EvolutionConnectionCard.tsx`
 
-Quando `notFound` for true, mostrar texto explicativo: _"A instância não existe na Evolution API. Clique em 'Criar nova instância' para configurar."_
+- Exibir o **nome da instância** (carregado de uma nova função utilitária trivial ou hardcoded a partir do retorno do `evolution-connection-state` — adicionar `instanceName` ao payload retornado).
+- Pequeno ajuste em `evolution-connection-state`: incluir `instanceName: Deno.env.get("EVOLUTION_INSTANCE_NAME")` na resposta para o card exibir.
+- Reorganizar os botões em duas seções com `<Separator />`: "Operação" e "Zona de manutenção" (já parcialmente feito).
+- Adicionar `<AlertDialog>` (no lugar do `confirm` nativo) para Excluir e Desconectar, para deixar a ação destrutiva mais clara.
 
-### Arquivos
-- `supabase/functions/evolution-instance-delete/index.ts` (novo)
-- `supabase/functions/evolution-instance-create/index.ts` (novo)
-- `supabase/functions/evolution-connection-state/index.ts` (mapear 404)
-- `supabase/config.toml` (verify_jwt para as 2 novas)
-- `src/components/settings/EvolutionConnectionCard.tsx` (botões + estado notFound)
+### Arquivos afetados
+- `src/components/settings/EvolutionConnectionCard.tsx` (reorganização e AlertDialog)
+- `supabase/functions/evolution-connection-state/index.ts` (incluir `instanceName` no payload)
 
-### Fora do escopo
-- Configurar nome da instância pela UI (continua via secret).
-- Editar webhook/events pela UI (fixos no create).
+### Fora de escopo
+- Listar instâncias do servidor Evolution.
+- Múltiplas instâncias / roteamento por departamento.
+- Persistir credenciais no banco.
