@@ -1,4 +1,4 @@
-import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive } from 'lucide-react';
+import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive, MonitorPlay } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -102,6 +102,18 @@ export function AppSidebar() {
                   >
                     <DollarSign className="h-4 w-4" />
                     <span>Financeiro</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={location.pathname === '/dashboard'}
+                    onClick={() => navigate('/dashboard')}
+                    className="transition-colors duration-150"
+                  >
+                    <MonitorPlay className="h-4 w-4" />
+                    <span>Dashboard</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
