@@ -242,12 +242,14 @@ Deno.serve(async (req) => {
     }
 
     if (!sendSuccess) {
-      // Return 200 with fallback flag for transient failures so UI doesn't crash
-      const transient = /is_transient|temporarily unavailable|Service temporarily/i.test(sendError || "");
+      // External WhatsApp providers can fail with 4xx bodies for transient connection issues.
+      // Always return structured JSON here so supabase-js does not throw a FunctionsHttpError
+      // and the chat UI can show a friendly failure instead of the runtime error overlay.
+      const transient = /Connection Closed|timeout|timed out|ECONNRESET|EAI_AGAIN|fetch failed|is_transient|temporarily unavailable|Service temporarily|Bad Gateway|Gateway Timeout|Internal Server Error/i.test(sendError || "");
       return new Response(
         JSON.stringify({ ok: false, error: sendError || "Failed to send message", transient }),
         {
-          status: transient ? 200 : 502,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
