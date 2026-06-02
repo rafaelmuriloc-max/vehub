@@ -12,6 +12,7 @@ const pageTitles: Record<string, string> = {
   '/invoices/emit': 'Emitir NFS-e',
   '/fiscal': 'Fiscal',
   '/calendar': 'Calendário',
+  '/dashboard': 'Dashboard',
   '/settings': 'Configurações',
   '/settings/document-types': 'Tipos de Documento',
   '/obligations': 'Obrigações',
@@ -35,8 +36,8 @@ export function AppLayout() {
     <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
-        <main className={location.pathname === '/chat' ? 'flex-1 h-[100dvh] overflow-hidden' : 'flex-1 overflow-auto'}>
-          {location.pathname !== '/chat' && (
+        <main className={location.pathname === '/chat' || location.pathname === '/dashboard' ? 'flex-1 h-[100dvh] overflow-hidden' : 'flex-1 overflow-auto'}>
+          {location.pathname !== '/chat' && location.pathname !== '/dashboard' && (
           <header
             className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background px-4 md:hidden h-[calc(3rem+env(safe-area-inset-top))]"
             style={{ paddingTop: 'env(safe-area-inset-top)' }}
@@ -45,7 +46,7 @@ export function AppLayout() {
             <span className="text-sm font-medium text-foreground">{pageTitle}</span>
           </header>
           )}
-          <div className={location.pathname === '/chat' ? 'h-full' : 'p-6'}>
+          <div className={location.pathname === '/chat' || location.pathname === '/dashboard' ? 'h-full' : 'p-6'}>
             <Outlet />
           </div>
         </main>
