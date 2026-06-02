@@ -234,16 +234,31 @@ async function sendWhatsAppMessage(opts: {
   if (evoUrl && evoKey && evoInst) {
     try {
       // Always send text first
-      const rt = await fetch(`${evoUrl}/message/sendText/${evoInst}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: evoKey },
-        body: JSON.stringify({ number: opts.phone, text: signed }),
-      });
-      const jt = await rt.json().catch(() => ({} as any));
-      if (!rt.ok) {
-        return { ok: false, waId: null, error: `Evolution text ${rt.status}: ${describeApiError(jt)}` };
+      let textWaId: string | null = null;
+      let textErr = "";
+      const textDelays = [0, 1000, 3000];
+      for (let i = 0; i < textDelays.length; i++) {
+        if (textDelays[i] > 0) await new Promise(r => setTimeout(r, textDelays[i]));
+        try {
+          const rt = await fetch(`${evoUrl}/message/sendText/${evoInst}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoKey },
+            body: JSON.stringify({ number: opts.phone, text: signed }),
+          });
+          const jt = await rt.json().catch(() => ({} as any));
+          if (rt.ok) {
+            textWaId = jt?.key?.id ?? null;
+            textErr = "";
+            break;
+          }
+          textErr = `Evolution text ${rt.status}: ${describeApiError(jt)}`;
+        } catch (e) {
+          textErr = `Evolution text exception: ${String(e)}`;
+        }
       }
-      const textWaId = jt?.key?.id ?? null;
+      if (textErr) {
+        return { ok: false, waId: null, error: textErr };
+      }
 
       if (!opts.attachmentUrl) {
         return { ok: true, waId: textWaId };
