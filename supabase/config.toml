@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.evolution-instance-create]
 verify_jwt = false
+
+[functions.obligation-activity-reconcile]
+verify_jwt = false

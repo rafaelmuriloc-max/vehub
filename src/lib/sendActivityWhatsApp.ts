@@ -48,6 +48,112 @@ const DEFAULT_OBLIGATION_TEMPLATE_PARAMS = [
   'nome_tipo_tarefa',
 ];
 
+async function logWhatsappSend(opts: {
+  instanceId: string;
+  activityId: string;
+  clientId: string;
+  obligationId: string | null;
+  recipientPhone: string;
+  templateName?: string | null;
+  mediaFilename?: string | null;
+  status: 'sent' | 'failed';
+  errorMessage?: string | null;
+}) {
+  try {
+    await supabase.from('whatsapp_logs').insert({
+      instance_id: opts.instanceId,
+      activity_id: opts.activityId,
+      client_id: opts.clientId,
+      obligation_id: opts.obligationId,
+      recipient_phone: opts.recipientPhone,
+      template_name: opts.templateName || null,
+      media_filename: opts.mediaFilename || null,
+      status: opts.status,
+      error_message: opts.errorMessage || null,
+    });
+  } catch (e) {
+    console.error('Failed to write whatsapp_logs:', e);
+  }
+}
+
+/**
+ * Marca a atividade como concluída SE todos os envios esperados
+ * (template + documentos) × destinatários estão presentes em whatsapp_logs com status='sent'.
+ * Caso contrário, incrementa retry_count e grava failure_reason.
+ */
+async function reconcileActivityCompletion(opts: {
+  instanceId: string;
+  activityId: string;
+  recipients: { phone: string }[];
+  docFilenames: string[];
+  templateName: string | null;
+  errors: string[];
+}) {
+  const { instanceId, activityId, recipients, docFilenames, templateName, errors } = opts;
+
+  // Expected count: per recipient = (1 template if templateName) + N docs
+  const perRecipient = (templateName ? 1 : 0) + docFilenames.length;
+  const expected = perRecipient * recipients.length;
+
+  let sentCount = 0;
+  if (expected > 0) {
+    const { count } = await supabase
+      .from('whatsapp_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('instance_id', instanceId)
+      .eq('activity_id', activityId)
+      .eq('status', 'sent');
+    sentCount = count || 0;
+  }
+
+  const fullyDelivered = expected === 0 || sentCount >= expected;
+
+  const { data: existing } = await supabase
+    .from('obligation_activity_completions')
+    .select('id, retry_count')
+    .eq('instance_id', instanceId)
+    .eq('activity_id', activityId)
+    .maybeSingle();
+
+  if (fullyDelivered) {
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({
+        completed: true,
+        completed_at: new Date().toISOString(),
+        failure_reason: null,
+      }).eq('id', existing.id);
+    } else {
+      await supabase.from('obligation_activity_completions').insert({
+        instance_id: instanceId,
+        activity_id: activityId,
+        completed: true,
+        completed_at: new Date().toISOString(),
+      });
+    }
+    return { ok: true };
+  }
+
+  const failureReason = errors.join('; ') || `Envios parciais: ${sentCount}/${expected}`;
+  if (existing) {
+    await supabase.from('obligation_activity_completions').update({
+      completed: false,
+      retry_count: (existing.retry_count || 0) + 1,
+      last_retry_at: new Date().toISOString(),
+      failure_reason: failureReason,
+    }).eq('id', existing.id);
+  } else {
+    await supabase.from('obligation_activity_completions').insert({
+      instance_id: instanceId,
+      activity_id: activityId,
+      completed: false,
+      retry_count: 1,
+      last_retry_at: new Date().toISOString(),
+      failure_reason: failureReason,
+    });
+  }
+  return { ok: false, reason: failureReason };
+}
+
 export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): Promise<{ success: boolean; error?: string }> {
   const { activity, instanceId, clientId, obligationName, referenceMonth, dueDay, departmentId } = params;
 
@@ -60,21 +166,9 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     return { success: false, error: 'Atividade de WhatsApp sem configuração completa' };
   }
 
-  // Prevent duplicate sends within a short window (2 min)
-  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-  const { data: alreadySent } = await supabase
-    .from('whatsapp_logs')
-    .select('id')
-    .eq('instance_id', instanceId)
-    .eq('template_name', templateName || '')
-    .eq('status', 'sent')
-    .gte('created_at', twoMinutesAgo)
-    .limit(1);
-
-  if (alreadySent && alreadySent.length > 0) {
-    console.log(`WhatsApp already sent for instance ${instanceId}, activity ${activity.id}, skipping`);
-    return { success: true };
-  }
+  // Per-send dedup happens below by skipping recipients/docs that already
+  // have a `sent` log for this (instance_id, activity_id). This also enables
+  // resume-on-retry after partial failures.
 
   // Fetch client info
   const { data: client } = await supabase.from('clients').select('company_name, contact_phone, contact_name, document').eq('id', clientId).single();
@@ -226,44 +320,78 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     }
   }
 
+  // Load already-sent logs for this (instance, activity) so we resume after partial failures.
+  const { data: existingLogs } = await supabase
+    .from('whatsapp_logs')
+    .select('recipient_phone, template_name, media_filename, status')
+    .eq('instance_id', instanceId)
+    .eq('activity_id', activity.id)
+    .eq('status', 'sent');
+
+  const sentKey = (phone: string, kind: 'template' | string) =>
+    `${phone}::${kind}`;
+  const alreadySentSet = new Set<string>(
+    (existingLogs || []).map((l: any) =>
+      sentKey(l.recipient_phone, l.media_filename ? l.media_filename : 'template')
+    )
+  );
+
   const allErrors: string[] = [];
-  let anySuccess = false;
 
   for (const recipient of recipients) {
     const { sharedComponents, chatPreview } = buildSharedComponents(recipient.name);
     const recipientPhone = recipient.phone;
+    const obligationId = instanceData?.obligation_id || null;
 
-    // 1) Send Meta template (text-only — never with document header)
-    const templateBody: Record<string, unknown> = {
-      to: recipientPhone,
-      clientId,
-      obligationId: instanceData?.obligation_id || null,
-      instanceId,
-    };
-    if (templateName) {
-      templateBody.type = 'template';
-      templateBody.templateName = templateName;
-      templateBody.templateLanguage = 'pt_BR';
-      if (sharedComponents.length > 0) templateBody.templateParams = sharedComponents;
-      if (chatPreview) templateBody.chatPreview = chatPreview;
-    } else if (activity.whatsapp_message_body) {
-      templateBody.type = 'text';
-      templateBody.text = replaceVariables(activity.whatsapp_message_body, variables, mustacheVars);
-    }
-    const { data: tplData, error: tplErr } = await supabase.functions.invoke('whatsapp-send', { body: templateBody });
-    const tplError = tplErr?.message || tplData?.error;
-    if (tplError) {
-      allErrors.push(`Template para ${recipientPhone}: ${tplError}`);
-      continue; // skip docs if template failed for this recipient
+    // 1) Template Meta — skip if already sent for this recipient
+    let templateOk = alreadySentSet.has(sentKey(recipientPhone, 'template'));
+    if (!templateOk && (templateName || activity.whatsapp_message_body)) {
+      const templateBody: Record<string, unknown> = {
+        to: recipientPhone,
+        clientId,
+        obligationId,
+        instanceId,
+      };
+      if (templateName) {
+        templateBody.type = 'template';
+        templateBody.templateName = templateName;
+        templateBody.templateLanguage = 'pt_BR';
+        if (sharedComponents.length > 0) templateBody.templateParams = sharedComponents;
+        if (chatPreview) templateBody.chatPreview = chatPreview;
+      } else if (activity.whatsapp_message_body) {
+        templateBody.type = 'text';
+        templateBody.text = replaceVariables(activity.whatsapp_message_body, variables, mustacheVars);
+      }
+      const { data: tplData, error: tplErr } = await supabase.functions.invoke('whatsapp-send', { body: templateBody });
+      const tplError = tplErr?.message || tplData?.error;
+      if (tplError) {
+        allErrors.push(`Template para ${recipientPhone}: ${tplError}`);
+        await logWhatsappSend({
+          instanceId, activityId: activity.id, clientId, obligationId,
+          recipientPhone, templateName, status: 'failed', errorMessage: String(tplError),
+        });
+        // Continue trying docs even if template failed — they may still arrive on next retry
+      } else {
+        templateOk = true;
+        // whatsapp-send already inserts a whatsapp_logs row for template sends,
+        // but without activity_id/media_filename. Backfill activity_id so reconciliation works.
+        // Insert our own row so the count matches expected.
+        await logWhatsappSend({
+          instanceId, activityId: activity.id, clientId, obligationId,
+          recipientPhone, templateName, status: 'sent',
+        });
+      }
+    } else if (!templateName && !activity.whatsapp_message_body) {
+      templateOk = true; // no template configured, only docs
     }
 
-    // 2) Send each document via Evolution API
-    let recipientFailed = false;
+    // 2) Documentos via Evolution — independente do template, tenta cada doc faltante
     for (const doc of signedDocs) {
+      if (alreadySentSet.has(sentKey(recipientPhone, doc.fileName))) continue;
       const docBody: Record<string, unknown> = {
         to: recipientPhone,
         clientId,
-        obligationId: instanceData?.obligation_id || null,
+        obligationId,
         instanceId,
         forceEvolutionDocument: true,
         mediaUrl: doc.url,
@@ -274,36 +402,31 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
       const docError = docErr?.message || docData?.error;
       if (docError) {
         allErrors.push(`Documento ${doc.fileName} para ${recipientPhone}: ${docError}`);
-        recipientFailed = true;
+        await logWhatsappSend({
+          instanceId, activityId: activity.id, clientId, obligationId,
+          recipientPhone, mediaFilename: doc.fileName, status: 'failed', errorMessage: String(docError),
+        });
+      } else {
+        await logWhatsappSend({
+          instanceId, activityId: activity.id, clientId, obligationId,
+          recipientPhone, mediaFilename: doc.fileName, status: 'sent',
+        });
       }
     }
-    if (!recipientFailed) anySuccess = true;
   }
 
-  if (!anySuccess || allErrors.length > 0) {
-    return {
-      success: false,
-      error: allErrors.join('; ') || 'Falha ao enviar WhatsApp',
-    };
+  // Reconcile completion based on actual sent logs (handles partial / resumed sends)
+  const reconcile = await reconcileActivityCompletion({
+    instanceId,
+    activityId: activity.id,
+    recipients,
+    docFilenames: signedDocs.map(d => d.fileName),
+    templateName: (templateName || activity.whatsapp_message_body) ? (templateName || 'inline') : null,
+    errors: allErrors,
+  });
+
+  if (!reconcile.ok) {
+    return { success: false, error: reconcile.reason || allErrors.join('; ') || 'Envio incompleto — será reenviado automaticamente' };
   }
-
-  // Mark activity as completed
-  const { data: existing } = await supabase
-    .from('obligation_activity_completions')
-    .select('id')
-    .eq('instance_id', instanceId)
-    .eq('activity_id', activity.id)
-    .maybeSingle();
-
-  if (existing) {
-    await supabase.from('obligation_activity_completions').update({
-      completed: true, completed_at: new Date().toISOString(),
-    }).eq('id', existing.id);
-  } else {
-    await supabase.from('obligation_activity_completions').insert({
-      instance_id: instanceId, activity_id: activity.id, completed: true, completed_at: new Date().toISOString(),
-    });
-  }
-
   return { success: true };
 }
