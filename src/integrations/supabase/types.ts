@@ -1238,30 +1238,39 @@ export type Database = {
           completed: boolean
           completed_at: string | null
           completed_by: string | null
+          failure_reason: string | null
           file_url: string | null
           id: string
           instance_id: string
+          last_retry_at: string | null
           notes: string | null
+          retry_count: number
         }
         Insert: {
           activity_id: string
           completed?: boolean
           completed_at?: string | null
           completed_by?: string | null
+          failure_reason?: string | null
           file_url?: string | null
           id?: string
           instance_id: string
+          last_retry_at?: string | null
           notes?: string | null
+          retry_count?: number
         }
         Update: {
           activity_id?: string
           completed?: boolean
           completed_at?: string | null
           completed_by?: string | null
+          failure_reason?: string | null
           file_url?: string | null
           id?: string
           instance_id?: string
+          last_retry_at?: string | null
           notes?: string | null
+          retry_count?: number
         }
         Relationships: [
           {
@@ -2191,11 +2200,14 @@ export type Database = {
       }
       whatsapp_logs: {
         Row: {
+          activity_id: string | null
           body_text: string | null
           client_id: string | null
           created_at: string
+          error_message: string | null
           id: string
           instance_id: string | null
+          media_filename: string | null
           obligation_id: string | null
           recipient_phone: string
           sent_at: string
@@ -2206,11 +2218,14 @@ export type Database = {
           wamid: string | null
         }
         Insert: {
+          activity_id?: string | null
           body_text?: string | null
           client_id?: string | null
           created_at?: string
+          error_message?: string | null
           id?: string
           instance_id?: string | null
+          media_filename?: string | null
           obligation_id?: string | null
           recipient_phone: string
           sent_at?: string
@@ -2221,11 +2236,14 @@ export type Database = {
           wamid?: string | null
         }
         Update: {
+          activity_id?: string | null
           body_text?: string | null
           client_id?: string | null
           created_at?: string
+          error_message?: string | null
           id?: string
           instance_id?: string | null
+          media_filename?: string | null
           obligation_id?: string | null
           recipient_phone?: string
           sent_at?: string
