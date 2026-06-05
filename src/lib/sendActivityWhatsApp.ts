@@ -48,6 +48,112 @@ const DEFAULT_OBLIGATION_TEMPLATE_PARAMS = [
   'nome_tipo_tarefa',
 ];
 
+async function logWhatsappSend(opts: {
+  instanceId: string;
+  activityId: string;
+  clientId: string;
+  obligationId: string | null;
+  recipientPhone: string;
+  templateName?: string | null;
+  mediaFilename?: string | null;
+  status: 'sent' | 'failed';
+  errorMessage?: string | null;
+}) {
+  try {
+    await supabase.from('whatsapp_logs').insert({
+      instance_id: opts.instanceId,
+      activity_id: opts.activityId,
+      client_id: opts.clientId,
+      obligation_id: opts.obligationId,
+      recipient_phone: opts.recipientPhone,
+      template_name: opts.templateName || null,
+      media_filename: opts.mediaFilename || null,
+      status: opts.status,
+      error_message: opts.errorMessage || null,
+    });
+  } catch (e) {
+    console.error('Failed to write whatsapp_logs:', e);
+  }
+}
+
+/**
+ * Marca a atividade como concluída SE todos os envios esperados
+ * (template + documentos) × destinatários estão presentes em whatsapp_logs com status='sent'.
+ * Caso contrário, incrementa retry_count e grava failure_reason.
+ */
+async function reconcileActivityCompletion(opts: {
+  instanceId: string;
+  activityId: string;
+  recipients: { phone: string }[];
+  docFilenames: string[];
+  templateName: string | null;
+  errors: string[];
+}) {
+  const { instanceId, activityId, recipients, docFilenames, templateName, errors } = opts;
+
+  // Expected count: per recipient = (1 template if templateName) + N docs
+  const perRecipient = (templateName ? 1 : 0) + docFilenames.length;
+  const expected = perRecipient * recipients.length;
+
+  let sentCount = 0;
+  if (expected > 0) {
+    const { count } = await supabase
+      .from('whatsapp_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('instance_id', instanceId)
+      .eq('activity_id', activityId)
+      .eq('status', 'sent');
+    sentCount = count || 0;
+  }
+
+  const fullyDelivered = expected === 0 || sentCount >= expected;
+
+  const { data: existing } = await supabase
+    .from('obligation_activity_completions')
+    .select('id, retry_count')
+    .eq('instance_id', instanceId)
+    .eq('activity_id', activityId)
+    .maybeSingle();
+
+  if (fullyDelivered) {
+    if (existing) {
+      await supabase.from('obligation_activity_completions').update({
+        completed: true,
+        completed_at: new Date().toISOString(),
+        failure_reason: null,
+      }).eq('id', existing.id);
+    } else {
+      await supabase.from('obligation_activity_completions').insert({
+        instance_id: instanceId,
+        activity_id: activityId,
+        completed: true,
+        completed_at: new Date().toISOString(),
+      });
+    }
+    return { ok: true };
+  }
+
+  const failureReason = errors.join('; ') || `Envios parciais: ${sentCount}/${expected}`;
+  if (existing) {
+    await supabase.from('obligation_activity_completions').update({
+      completed: false,
+      retry_count: (existing.retry_count || 0) + 1,
+      last_retry_at: new Date().toISOString(),
+      failure_reason: failureReason,
+    }).eq('id', existing.id);
+  } else {
+    await supabase.from('obligation_activity_completions').insert({
+      instance_id: instanceId,
+      activity_id: activityId,
+      completed: false,
+      retry_count: 1,
+      last_retry_at: new Date().toISOString(),
+      failure_reason: failureReason,
+    });
+  }
+  return { ok: false, reason: failureReason };
+}
+
 export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): Promise<{ success: boolean; error?: string }> {
   const { activity, instanceId, clientId, obligationName, referenceMonth, dueDay, departmentId } = params;
 
