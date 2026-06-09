@@ -384,14 +384,35 @@ Deno.serve(async (req) => {
         .single();
 
       if (convErr || !newConv) {
-        console.error("Error creating conversation:", convErr);
-        return new Response(JSON.stringify({ error: "Failed to create conversation" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // Race condition: another webhook just created the conversation for this phone.
+        // Unique index (chat_conv_unique_phone) guarantees only one survives — fetch it.
+        if ((convErr as any)?.code === "23505") {
+          const { data: raced } = await supabase
+            .from("chat_conversations")
+            .select("id")
+            .eq("whatsapp_phone", canonicalPhone)
+            .eq("is_group", false)
+            .limit(1)
+            .maybeSingle();
+          if (raced?.id) {
+            conversationId = raced.id;
+          } else {
+            console.error("Error creating conversation (race recovery failed):", convErr);
+            return new Response(JSON.stringify({ error: "Failed to create conversation" }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        } else {
+          console.error("Error creating conversation:", convErr);
+          return new Response(JSON.stringify({ error: "Failed to create conversation" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } else {
+        conversationId = newConv.id;
       }
-
-      conversationId = newConv.id;
     } else {
       // Existing conversation — check if avatar or name needs updating
       const { data: existingConvData } = await supabase
