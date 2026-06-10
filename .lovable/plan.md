@@ -1,68 +1,58 @@
-## Causa da duplicação
+## Diagnóstico
 
-As atividades de envio (WhatsApp/E-mail) com anexo estão criando 2–3 linhas em `obligation_activity_completions` para o mesmo par `(instance_id, activity_id)` — todas com `file_url = NULL`, `completed = true`, criadas com diferença de 1–10 segundos.
+A duplicidade **não vem** do envio simultâneo Meta + Evolution. Confirmei pelos logs do banco:
 
-Exemplo real (instância `e6e1913d…`, atividade `031cb5f8…`):
+- Meta API envia apenas o **template** (texto aprovado).
+- Evolution envia apenas o **PDF anexo**.
 
-```
-12:37:37.299  completed=true  (marker)
-12:37:39.467  completed=true  (marker)
-12:37:47.069  completed=true  (marker)
-```
+O cliente recebeu 2 templates + 2 PDFs porque a obrigação FGTS tem **duas atividades WhatsApp `auto_start`** (`Enviar WhatsApp` order=3 e `Envio do FGTS` order=4), e hoje cada uma chama `sendActivityWhatsApp` enviando template + todos os anexos. Resultado: tudo dobrado.
 
-Outros 6 pares idênticos nos últimos 60 dias.
+## Comportamento desejado
 
-### Por que acontece
+Em obrigações com várias atividades WhatsApp em sequência:
 
-Tanto `src/lib/sendActivityWhatsApp.ts` (função `reconcileActivityCompletion`) quanto `src/lib/sendActivityEmail.ts` e a Edge Function `obligation-activity-reconcile` (cron a cada 10 min) executam o padrão:
+- A **primeira** atividade WhatsApp do chain envia **somente o template** (sem anexos).
+- As **demais** atividades WhatsApp enviam **somente os documentos anexos** (sem template).
 
-```ts
-const { data: existing } = await supabase
-  .from('obligation_activity_completions')
-  .select(...)
-  .eq('instance_id', ...).eq('activity_id', ...)
-  .maybeSingle();
+Cada atividade marca sua própria conclusão no `obligation_activity_completions`, mantendo a rastreabilidade individual.
 
-if (existing) update(...) else insert(...);
-```
+## Plano de correção
 
-Esse `SELECT → INSERT` é uma race condition clássica. Quando dois caminhos rodam quase simultaneamente — usuário clica enviar + cron de reconciliação dispara, ou usuário clica duas vezes rápido, ou várias chamadas em paralelo na mesma sessão — ambos veem `existing = null` e ambos fazem `INSERT`. Como não existe restrição única no banco para o par `(instance_id, activity_id)`, os dois INSERTs vencem.
+### 1. Distinguir o "papel" de cada atividade WhatsApp em runtime
 
-Atividades sem anexo também sofrem disso, mas o problema ficou mais visível em obrigações com documento porque o fluxo do anexo é mais longo (assina URL, envia template, envia cada PDF, depois reconcilia), aumentando a janela de corrida com o cron.
+Em `src/lib/sendActivityWhatsApp.ts`, ao iniciar `sendActivityWhatsApp`:
 
-## Correção
+1. Buscar todas as atividades WhatsApp da mesma obrigação (`obligation_activities` filtrado por `obligation_id` e `type='whatsapp'`), ordenadas por `order`.
+2. Calcular o índice da atividade atual dentro dessa lista.
+3. Definir o modo:
+   - `index === 0` → `mode = 'template_only'` (envia template, ignora anexos)
+   - `index > 0`  → `mode = 'documents_only'` (envia apenas anexos, ignora template)
+4. Se a obrigação tiver **apenas uma** atividade WhatsApp, manter o comportamento atual (template + anexos juntos), para não quebrar quem só configurou uma.
 
-### 1. Migration (banco)
+### 2. Ajustar o fluxo de envio conforme o modo
 
-a. Deduplicar rows existentes com `file_url IS NULL`: para cada `(instance_id, activity_id)` manter apenas o `completed_at` mais antigo, deletar o resto. (As linhas com `file_url` preenchido representam documentos anexados — não são tocadas.)
+- `template_only`: pular completamente o loop `signedDocs`. O reconcile passa a esperar apenas o template (`expected = 1 * recipients.length`).
+- `documents_only`: pular o bloco do template Meta. O reconcile passa a esperar apenas `docFilenames.length * recipients.length`.
 
-b. Criar índice único parcial impedindo nova duplicação do "marker de conclusão":
+Assim, mesmo que existam 3 atividades WhatsApp em sequência (1 template + 2 com anexos diferentes), cada uma envia o que lhe compete, sem repetir nada.
 
-```sql
-CREATE UNIQUE INDEX obligation_activity_completions_unique_marker
-  ON public.obligation_activity_completions (instance_id, activity_id)
-  WHERE file_url IS NULL;
-```
+### 3. Proteção idempotente adicional na `sendActivityWhatsApp`
 
-### 2. Código — `src/lib/sendActivityWhatsApp.ts` e `src/lib/sendActivityEmail.ts`
+Antes de enviar, consultar `whatsapp_logs` para o par `(instance_id, activity_id)` e pular itens que já tenham `status='sent'` para o mesmo `recipient_phone + (template_name | media_filename)`. Isso já existe parcialmente; vou reforçar para que clique-duplo do usuário ou reexecução pelo cron nunca envie 2x o mesmo item.
 
-Substituir o `SELECT + INSERT/UPDATE` em `reconcileActivityCompletion` por `upsert` com `onConflict: 'instance_id,activity_id'` (filtrado pelo índice parcial via `ignoreDuplicates: false`). Como `onConflict` parcial não é trivial no PostgREST, a forma segura é:
+### 4. Não tocar no cadastro existente
 
-1. Tentar `INSERT`; se erro `23505` (unique violation), buscar a linha existente pelo par `(instance_id, activity_id) WHERE file_url IS NULL` e fazer `UPDATE` nela.
-2. Espelhar o mesmo tratamento na Edge Function `obligation-activity-reconcile`.
+Nenhuma migration de dados. As obrigações FGTS, INSS, etc. continuam com as mesmas atividades cadastradas — apenas o runtime passa a respeitar o papel de cada uma.
 
-### 3. Edge Function — `obligation-activity-reconcile/index.ts`
+### 5. Verificação
 
-Aplicar a mesma proteção `23505 → fallback update` nos dois caminhos (`whatsapp` e `email`).
+- Disparar manualmente o auto-chain de FGTS de uma instância pendente.
+- Confirmar em `whatsapp_logs`: 1 linha de template + N linhas de docs (sem repetição).
+- Confirmar em `chat_messages`: 1 mensagem de texto + N anexos.
+- Confirmar em `obligation_activity_completions`: cada atividade WhatsApp marcada como `completed=true` individualmente.
 
 ## Arquivos a modificar
 
-- `supabase/migrations/<ts>_dedupe_activity_completions.sql` (novo)
-- `src/lib/sendActivityWhatsApp.ts` (função `reconcileActivityCompletion`)
-- `src/lib/sendActivityEmail.ts` (bloco de upsert da completion)
-- `supabase/functions/obligation-activity-reconcile/index.ts` (4 pontos de insert)
+- `src/lib/sendActivityWhatsApp.ts` (lógica de modo template-only/documents-only + dedup reforçado)
 
-## Verificação após implementar
-
-- Rodar `SELECT instance_id, activity_id, COUNT(*) FROM obligation_activity_completions WHERE file_url IS NULL GROUP BY 1,2 HAVING COUNT(*) > 1;` → deve voltar 0.
-- Invocar `obligation-activity-reconcile` manualmente; conferir nos logs que não cria novas linhas em obrigações já concluídas.
+Nada mais precisa mudar: as Edge Functions (`whatsapp-send`, `obligation-activity-reconcile`) já estão preparadas para receber chamadas parciais e o índice único parcial em `obligation_activity_completions` continua protegendo o marker.

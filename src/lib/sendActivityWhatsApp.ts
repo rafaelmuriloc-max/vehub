@@ -233,6 +233,28 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     .eq('id', instanceId)
     .single();
 
+  // Determine the role of this activity within the chain of WhatsApp
+  // activities of the same obligation:
+  //   - only one WhatsApp activity → send template + docs (legacy behavior)
+  //   - first WhatsApp activity    → send only the template
+  //   - subsequent WhatsApp ones   → send only the attached documents
+  // This prevents duplicate template + duplicate document sends when an
+  // obligation has more than one WhatsApp activity in auto_start chain.
+  let sendMode: 'template_and_docs' | 'template_only' | 'documents_only' = 'template_and_docs';
+  if (instanceData?.obligation_id) {
+    const { data: waActs } = await supabase
+      .from('obligation_activities')
+      .select('id, order')
+      .eq('obligation_id', instanceData.obligation_id)
+      .eq('type', 'whatsapp')
+      .order('order', { ascending: true });
+    const list = (waActs || []) as { id: string; order: number }[];
+    if (list.length > 1) {
+      const idx = list.findIndex(a => a.id === activity.id);
+      sendMode = idx <= 0 ? 'template_only' : 'documents_only';
+    }
+  }
+
   // Fetch competence_rule from obligation
   let competenceRule = 'current';
   if (instanceData?.obligation_id) {
@@ -376,7 +398,11 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
     // 1) Template Meta — skip if already sent for this recipient
     let templateOk = alreadySentSet.has(sentKey(recipientPhone, 'template'));
-    if (!templateOk && (templateName || activity.whatsapp_message_body)) {
+    if (sendMode === 'documents_only') {
+      // Não enviar template nesta atividade — outra atividade WhatsApp
+      // anterior na mesma obrigação já cuidou disso.
+      templateOk = true;
+    } else if (!templateOk && (templateName || activity.whatsapp_message_body)) {
       const templateBody: Record<string, unknown> = {
         to: recipientPhone,
         clientId,
@@ -416,8 +442,11 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
       templateOk = true; // no template configured, only docs
     }
 
-    // 2) Documentos via Evolution — independente do template, tenta cada doc faltante
-    for (const doc of signedDocs) {
+    // 2) Documentos via Evolution — pulados quando esta é a atividade
+    // "template_only" (a primeira do chain). Em "template_and_docs" e
+    // "documents_only" enviamos todos os anexos faltantes.
+    const docsToSend = sendMode === 'template_only' ? [] : signedDocs;
+    for (const doc of docsToSend) {
       if (alreadySentSet.has(sentKey(recipientPhone, doc.fileName))) continue;
       const docBody: Record<string, unknown> = {
         to: recipientPhone,
@@ -451,8 +480,10 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
     instanceId,
     activityId: activity.id,
     recipients,
-    docFilenames: signedDocs.map(d => d.fileName),
-    templateName: (templateName || activity.whatsapp_message_body) ? (templateName || 'inline') : null,
+    docFilenames: (sendMode === 'template_only' ? [] : signedDocs).map(d => d.fileName),
+    templateName: sendMode === 'documents_only'
+      ? null
+      : ((templateName || activity.whatsapp_message_body) ? (templateName || 'inline') : null),
     errors: allErrors,
   });
 
