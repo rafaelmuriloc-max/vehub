@@ -108,50 +108,79 @@ async function reconcileActivityCompletion(opts: {
 
   const fullyDelivered = expected === 0 || sentCount >= expected;
 
-  const { data: existing } = await supabase
-    .from('obligation_activity_completions')
-    .select('id, retry_count')
-    .eq('instance_id', instanceId)
-    .eq('activity_id', activityId)
-    .maybeSingle();
-
   if (fullyDelivered) {
-    if (existing) {
-      await supabase.from('obligation_activity_completions').update({
-        completed: true,
-        completed_at: new Date().toISOString(),
-        failure_reason: null,
-      }).eq('id', existing.id);
-    } else {
-      await supabase.from('obligation_activity_completions').insert({
-        instance_id: instanceId,
-        activity_id: activityId,
-        completed: true,
-        completed_at: new Date().toISOString(),
-      });
-    }
+    await upsertActivityCompletionMarker(instanceId, activityId, {
+      completed: true,
+      completed_at: new Date().toISOString(),
+      failure_reason: null,
+    });
     return { ok: true };
   }
 
   const failureReason = errors.join('; ') || `Envios parciais: ${sentCount}/${expected}`;
-  if (existing) {
-    await supabase.from('obligation_activity_completions').update({
-      completed: false,
-      retry_count: (existing.retry_count || 0) + 1,
-      last_retry_at: new Date().toISOString(),
-      failure_reason: failureReason,
-    }).eq('id', existing.id);
-  } else {
-    await supabase.from('obligation_activity_completions').insert({
-      instance_id: instanceId,
-      activity_id: activityId,
-      completed: false,
-      retry_count: 1,
-      last_retry_at: new Date().toISOString(),
-      failure_reason: failureReason,
-    });
-  }
+  await upsertActivityCompletionMarker(instanceId, activityId, {
+    completed: false,
+    last_retry_at: new Date().toISOString(),
+    failure_reason: failureReason,
+  }, { incrementRetry: true });
   return { ok: false, reason: failureReason };
+}
+
+/**
+ * Insere ou atualiza a linha "marker" (file_url IS NULL) de uma completion,
+ * de forma segura contra race conditions. Depende do índice único parcial
+ * `obligation_activity_completions_unique_marker`.
+ */
+export async function upsertActivityCompletionMarker(
+  instanceId: string,
+  activityId: string,
+  fields: Record<string, unknown>,
+  opts?: { incrementRetry?: boolean }
+) {
+  // 1) UPDATE primeiro (marker existente). Se afetar linha, terminamos.
+  const baseQuery = supabase
+    .from('obligation_activity_completions')
+    .select('id, retry_count')
+    .eq('instance_id', instanceId)
+    .eq('activity_id', activityId)
+    .is('file_url', null)
+    .maybeSingle();
+  const { data: existing } = await baseQuery;
+
+  if (existing) {
+    const patch: Record<string, unknown> = { ...fields };
+    if (opts?.incrementRetry) {
+      patch.retry_count = ((existing as any).retry_count || 0) + 1;
+    }
+    await supabase.from('obligation_activity_completions').update(patch).eq('id', (existing as any).id);
+    return;
+  }
+
+  // 2) Tentar INSERT. Se 23505 (race), refaz UPDATE.
+  const insertRow: Record<string, unknown> = {
+    instance_id: instanceId,
+    activity_id: activityId,
+    ...fields,
+  };
+  if (opts?.incrementRetry) insertRow.retry_count = 1;
+
+  const { error } = await supabase.from('obligation_activity_completions').insert(insertRow);
+  if (error && (error as any).code === '23505') {
+    const { data: again } = await supabase
+      .from('obligation_activity_completions')
+      .select('id, retry_count')
+      .eq('instance_id', instanceId)
+      .eq('activity_id', activityId)
+      .is('file_url', null)
+      .maybeSingle();
+    if (again) {
+      const patch: Record<string, unknown> = { ...fields };
+      if (opts?.incrementRetry) {
+        patch.retry_count = ((again as any).retry_count || 0) + 1;
+      }
+      await supabase.from('obligation_activity_completions').update(patch).eq('id', (again as any).id);
+    }
+  }
 }
 
 export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): Promise<{ success: boolean; error?: string }> {
