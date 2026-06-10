@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { upsertActivityCompletionMarker } from '@/lib/sendActivityWhatsApp';
 
 interface SendActivityEmailParams {
   activity: {
@@ -176,49 +177,20 @@ export async function sendActivityEmail(params: SendActivityEmailParams): Promis
   const sendError = error?.message || data?.error;
   if (sendError) {
     // Persist failure so the retry job can pick it up
-    const { data: existing } = await supabase
-      .from('obligation_activity_completions')
-      .select('id, retry_count')
-      .eq('instance_id', instanceId)
-      .eq('activity_id', activity.id)
-      .maybeSingle();
-    if (existing) {
-      await supabase.from('obligation_activity_completions').update({
-        completed: false,
-        retry_count: (existing.retry_count || 0) + 1,
-        last_retry_at: new Date().toISOString(),
-        failure_reason: String(sendError),
-      }).eq('id', existing.id);
-    } else {
-      await supabase.from('obligation_activity_completions').insert({
-        instance_id: instanceId,
-        activity_id: activity.id,
-        completed: false,
-        retry_count: 1,
-        last_retry_at: new Date().toISOString(),
-        failure_reason: String(sendError),
-      });
-    }
+    await upsertActivityCompletionMarker(instanceId, activity.id, {
+      completed: false,
+      last_retry_at: new Date().toISOString(),
+      failure_reason: String(sendError),
+    }, { incrementRetry: true });
     return { success: false, error: String(sendError) };
   }
 
-  // Mark activity as completed
-  const { data: existing } = await supabase
-    .from('obligation_activity_completions')
-    .select('id')
-    .eq('instance_id', instanceId)
-    .eq('activity_id', activity.id)
-    .maybeSingle();
-
-  if (existing) {
-    await supabase.from('obligation_activity_completions').update({
-      completed: true, completed_at: new Date().toISOString(), failure_reason: null,
-    }).eq('id', existing.id);
-  } else {
-    await supabase.from('obligation_activity_completions').insert({
-      instance_id: instanceId, activity_id: activity.id, completed: true, completed_at: new Date().toISOString(),
-    });
-  }
+  // Mark activity as completed (race-safe)
+  await upsertActivityCompletionMarker(instanceId, activity.id, {
+    completed: true,
+    completed_at: new Date().toISOString(),
+    failure_reason: null,
+  });
 
   return { success: true };
 }
