@@ -164,7 +164,9 @@ export async function upsertActivityCompletionMarker(
   };
   if (opts?.incrementRetry) insertRow.retry_count = 1;
 
-  const { error } = await supabase.from('obligation_activity_completions').insert(insertRow);
+  const { error } = await supabase
+    .from('obligation_activity_completions')
+    .insert(insertRow as any);
   if (error && (error as any).code === '23505') {
     const { data: again } = await supabase
       .from('obligation_activity_completions')
