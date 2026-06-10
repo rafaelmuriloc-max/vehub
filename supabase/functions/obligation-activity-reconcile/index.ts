@@ -28,6 +28,39 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  // Race-safe upsert for the "marker" row (file_url IS NULL).
+  // Relies on partial UNIQUE INDEX obligation_activity_completions_unique_marker.
+  async function upsertMarker(instanceId: string, activityId: string, fields: Record<string, unknown>) {
+    const { data: existing } = await supabase
+      .from("obligation_activity_completions")
+      .select("id")
+      .eq("instance_id", instanceId)
+      .eq("activity_id", activityId)
+      .is("file_url", null)
+      .maybeSingle();
+    if (existing) {
+      await supabase.from("obligation_activity_completions").update(fields).eq("id", (existing as any).id);
+      return;
+    }
+    const { error } = await supabase.from("obligation_activity_completions").insert({
+      instance_id: instanceId,
+      activity_id: activityId,
+      ...fields,
+    });
+    if (error && (error as any).code === "23505") {
+      const { data: again } = await supabase
+        .from("obligation_activity_completions")
+        .select("id")
+        .eq("instance_id", instanceId)
+        .eq("activity_id", activityId)
+        .is("file_url", null)
+        .maybeSingle();
+      if (again) {
+        await supabase.from("obligation_activity_completions").update(fields).eq("id", (again as any).id);
+      }
+    }
+  }
+
   const summary = { scanned: 0, reconciled: 0, stillPending: 0, errors: [] as string[] };
 
   try {
@@ -106,21 +139,12 @@ serve(async (req) => {
 
           if ((sentCount || 0) >= expected) {
             // tudo já saiu — marca como concluída
-            if (comp) {
-              await supabase.from("obligation_activity_completions").update({
-                completed: true,
-                completed_at: new Date().toISOString(),
-                failure_reason: null,
-              }).eq("id", comp.id);
-            } else {
-              await supabase.from("obligation_activity_completions").insert({
-                instance_id: inst.id,
-                activity_id: act.id,
-                completed: true,
-                completed_at: new Date().toISOString(),
-                notes: "auto_reconciled",
-              });
-            }
+            await upsertMarker(inst.id, act.id, {
+              completed: true,
+              completed_at: new Date().toISOString(),
+              failure_reason: null,
+              notes: comp ? undefined : "auto_reconciled",
+            });
             summary.reconciled++;
           } else if (comp) {
             await supabase.from("obligation_activity_completions").update({
@@ -143,21 +167,12 @@ serve(async (req) => {
             .eq("status", "sent");
 
           if ((emailSent || 0) >= 1) {
-            if (comp) {
-              await supabase.from("obligation_activity_completions").update({
-                completed: true,
-                completed_at: new Date().toISOString(),
-                failure_reason: null,
-              }).eq("id", comp.id);
-            } else {
-              await supabase.from("obligation_activity_completions").insert({
-                instance_id: inst.id,
-                activity_id: act.id,
-                completed: true,
-                completed_at: new Date().toISOString(),
-                notes: "auto_reconciled",
-              });
-            }
+            await upsertMarker(inst.id, act.id, {
+              completed: true,
+              completed_at: new Date().toISOString(),
+              failure_reason: null,
+              notes: comp ? undefined : "auto_reconciled",
+            });
             summary.reconciled++;
           } else if (comp) {
             await supabase.from("obligation_activity_completions").update({
