@@ -79,7 +79,13 @@ serve(async (req) => {
 
     // Fallback to publica.cnpj.ws (covers newly opened CNPJs)
     try {
-      const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`);
+      const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; VelocitaCRM/1.0)",
+          "Accept": "application/json",
+        },
+      });
+      console.log("[cnpj-lookup] publica.cnpj.ws status:", res.status);
       if (res.ok) {
         const data = await res.json();
         const est = data.estabelecimento || {};
