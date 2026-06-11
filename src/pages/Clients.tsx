@@ -1032,10 +1032,11 @@ export default function Clients() {
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [search, filterStatus]);
 
-  const activeCount = clients.filter(c => c.status === 'active').length;
-  const churnedCount = clients.filter(c => c.status === 'churned').length;
-  const mrr = clients.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.monthly_value || 0), 0);
-  const churnRate = clients.length > 0 ? (churnedCount / clients.length) * 100 : 0;
+  const payingClients = clients.filter(c => !(c as any).without_monthly_fee);
+  const activeCount = payingClients.filter(c => c.status === 'active').length;
+  const churnedCount = payingClients.filter(c => c.status === 'churned').length;
+  const mrr = payingClients.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.monthly_value || 0), 0);
+  const churnRate = payingClients.length > 0 ? (churnedCount / payingClients.length) * 100 : 0;
 
   const isAdmin_ = isAdmin;
 
