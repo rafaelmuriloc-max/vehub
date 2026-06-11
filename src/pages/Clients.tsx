@@ -1654,7 +1654,15 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Email</Label><Input type="email" {...f('contact_email')} /></div>
                   <div className="space-y-2"><Label>Telefone</Label><Input {...f('contact_phone')} /></div>
                   <div className="col-span-2 space-y-2"><Label>Endereço</Label><Input {...f('address')} /></div>
-                  <div className="space-y-2"><Label>Valor Mensal (R$)</Label><Input type="number" step="0.01" {...f('monthly_value')} /></div>
+                  <div className="space-y-2">
+                    <Label>Valor Mensal (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      {...f('monthly_value')}
+                      disabled={viewOnly || !!form.without_monthly_fee}
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label>Status</Label>
                     <Select value={form.status} onValueChange={v => setForm({ ...form, status: v as any })} disabled={viewOnly}>
@@ -1681,6 +1689,23 @@ export default function Clients() {
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       Quando ativo, as obrigações deste cliente serão movidas automaticamente para a aba “Suspensos” do calendário a partir do dia inicial.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-border p-3 flex items-start gap-3">
+                  <Switch
+                    id="without_monthly_fee"
+                    checked={!!form.without_monthly_fee}
+                    onCheckedChange={(v) => setForm({ ...form, without_monthly_fee: !!v, monthly_value: v ? '' : form.monthly_value })}
+                    disabled={viewOnly}
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="without_monthly_fee" className="cursor-pointer">
+                      Cliente sem mensalidade
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Quando ativo, este cliente não será contabilizado nas estatísticas (total de ativos, MRR, ticket médio, churn), mas continuará gerando obrigações e atividades normalmente.
                     </p>
                   </div>
                 </div>
