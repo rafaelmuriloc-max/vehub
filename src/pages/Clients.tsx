@@ -729,6 +729,7 @@ export default function Clients() {
       trade_name: (c as any).trade_name || '',
       simples_anexo: (c as any).simples_anexo || '',
       services_suspended: !!(c as any).services_suspended,
+      without_monthly_fee: !!(c as any).without_monthly_fee,
     });
   }
 
