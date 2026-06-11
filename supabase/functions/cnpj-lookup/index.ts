@@ -77,6 +77,49 @@ serve(async (req) => {
       console.log("[cnpj-lookup] ReceitaWS failed:", e.message);
     }
 
+    // Fallback to publica.cnpj.ws (covers newly opened CNPJs)
+    try {
+      const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`);
+      if (res.ok) {
+        const data = await res.json();
+        const est = data.estabelecimento || {};
+        const ativPrinc = est.atividade_principal || {};
+        const phone = est.ddd1 && est.telefone1 ? `${est.ddd1}${est.telefone1}` : "";
+        const mapped = {
+          razao_social: data.razao_social,
+          nome_fantasia: est.nome_fantasia,
+          cnpj: est.cnpj,
+          logradouro: [est.tipo_logradouro, est.logradouro].filter(Boolean).join(" "),
+          numero: est.numero,
+          complemento: est.complemento,
+          bairro: est.bairro,
+          municipio: est.cidade?.nome,
+          uf: est.estado?.sigla,
+          cep: est.cep,
+          email: est.email,
+          ddd_telefone_1: phone,
+          cnae_fiscal: parseInt((ativPrinc.subclasse || "").replace(/[.\-/]/g, "") || "0"),
+          cnae_fiscal_descricao: ativPrinc.descricao,
+          cnaes_secundarios: (est.atividades_secundarias || []).map((a: any) => ({
+            codigo: parseInt((a.subclasse || "").replace(/[.\-/]/g, "") || "0"),
+            descricao: a.descricao,
+          })),
+          qsa: (data.socios || []).map((s: any) => ({
+            nome_socio: s.nome,
+            qualificacao_socio: s.qualificacao_socio?.descricao,
+          })),
+          opcao_pelo_simples: data.simples?.simples === "Sim",
+          opcao_pelo_mei: data.simples?.mei === "Sim",
+          data_inicio_atividade: est.data_inicio_atividade,
+        };
+        return new Response(JSON.stringify(mapped), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } catch (e) {
+      console.log("[cnpj-lookup] publica.cnpj.ws failed:", e.message);
+    }
+
     return new Response(
       JSON.stringify({ error: "CNPJ_NOT_FOUND", fallback: true, message: "CNPJ não encontrado em nenhuma fonte" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
