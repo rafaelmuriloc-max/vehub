@@ -53,7 +53,7 @@ export default function Financial() {
       supabase.from('financial_entries').select('*').order('due_date', { ascending: false }),
       supabase.from('financial_categories').select('*').order('name'),
       supabase.from('clients').select('id, company_name').order('company_name'),
-      supabase.from('clients').select('status, monthly_value, start_date, end_date, created_at, opening_date'),
+      supabase.from('clients').select('status, monthly_value, start_date, end_date, created_at, opening_date').eq('without_monthly_fee', false),
       supabase.from('tasks').select('status, due_date'),
     ]);
     setEntries((e as Entry[]) || []);

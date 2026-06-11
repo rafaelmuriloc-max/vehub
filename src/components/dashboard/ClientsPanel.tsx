@@ -18,10 +18,10 @@ export function ClientsPanel() {
     queryFn: async () => {
       const { start, end } = monthRange();
       const [active, inactive, novos, churn] = await Promise.all([
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'inactive'),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).gte('start_date', start).lt('start_date', end),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).gte('end_date', start).lt('end_date', end),
+        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('without_monthly_fee', false),
+        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'inactive').eq('without_monthly_fee', false),
+        supabase.from('clients').select('id', { count: 'exact', head: true }).gte('start_date', start).lt('start_date', end).eq('without_monthly_fee', false),
+        supabase.from('clients').select('id', { count: 'exact', head: true }).gte('end_date', start).lt('end_date', end).eq('without_monthly_fee', false),
       ]);
       return {
         active: active.count ?? 0,

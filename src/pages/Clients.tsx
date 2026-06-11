@@ -129,6 +129,7 @@ type Client = {
   simples_anexo: string | null;
   services_suspended?: boolean;
   services_suspended_at?: string | null;
+  without_monthly_fee?: boolean;
 };
 
 const statusColors: Record<string, string> = {
@@ -151,6 +152,7 @@ const emptyForm = {
   trade_name: '',
   simples_anexo: '',
   services_suspended: false as boolean,
+  without_monthly_fee: false as boolean,
 };
 
 type Department = { id: string; name: string };
@@ -727,6 +729,7 @@ export default function Clients() {
       trade_name: (c as any).trade_name || '',
       simples_anexo: (c as any).simples_anexo || '',
       services_suspended: !!(c as any).services_suspended,
+      without_monthly_fee: !!(c as any).without_monthly_fee,
     });
   }
 
@@ -871,6 +874,7 @@ export default function Clients() {
       services_suspended_at: form.services_suspended
         ? ((editing as any)?.services_suspended_at || new Date().toISOString())
         : null,
+      without_monthly_fee: !!form.without_monthly_fee,
     };
     let error;
     let clientId = editing?.id;
@@ -1028,10 +1032,11 @@ export default function Clients() {
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [search, filterStatus]);
 
-  const activeCount = clients.filter(c => c.status === 'active').length;
-  const churnedCount = clients.filter(c => c.status === 'churned').length;
-  const mrr = clients.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.monthly_value || 0), 0);
-  const churnRate = clients.length > 0 ? (churnedCount / clients.length) * 100 : 0;
+  const payingClients = clients.filter(c => !(c as any).without_monthly_fee);
+  const activeCount = payingClients.filter(c => c.status === 'active').length;
+  const churnedCount = payingClients.filter(c => c.status === 'churned').length;
+  const mrr = payingClients.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.monthly_value || 0), 0);
+  const churnRate = payingClients.length > 0 ? (churnedCount / payingClients.length) * 100 : 0;
 
   const isAdmin_ = isAdmin;
 
@@ -1482,6 +1487,9 @@ export default function Clients() {
                       {c.services_suspended && (
                         <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200">Suspenso</Badge>
                       )}
+                      {(c as any).without_monthly_fee && (
+                        <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-300">Sem mensalidade</Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>{(() => {
@@ -1646,7 +1654,15 @@ export default function Clients() {
                   <div className="space-y-2"><Label>Email</Label><Input type="email" {...f('contact_email')} /></div>
                   <div className="space-y-2"><Label>Telefone</Label><Input {...f('contact_phone')} /></div>
                   <div className="col-span-2 space-y-2"><Label>Endereço</Label><Input {...f('address')} /></div>
-                  <div className="space-y-2"><Label>Valor Mensal (R$)</Label><Input type="number" step="0.01" {...f('monthly_value')} /></div>
+                  <div className="space-y-2">
+                    <Label>Valor Mensal (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      {...f('monthly_value')}
+                      disabled={viewOnly || !!form.without_monthly_fee}
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label>Status</Label>
                     <Select value={form.status} onValueChange={v => setForm({ ...form, status: v as any })} disabled={viewOnly}>
@@ -1673,6 +1689,23 @@ export default function Clients() {
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       Quando ativo, as obrigações deste cliente serão movidas automaticamente para a aba “Suspensos” do calendário a partir do dia inicial.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-border p-3 flex items-start gap-3">
+                  <Switch
+                    id="without_monthly_fee"
+                    checked={!!form.without_monthly_fee}
+                    onCheckedChange={(v) => setForm({ ...form, without_monthly_fee: !!v, monthly_value: v ? '' : form.monthly_value })}
+                    disabled={viewOnly}
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="without_monthly_fee" className="cursor-pointer">
+                      Cliente sem mensalidade
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Quando ativo, este cliente não será contabilizado nas estatísticas (total de ativos, MRR, ticket médio, churn), mas continuará gerando obrigações e atividades normalmente.
                     </p>
                   </div>
                 </div>

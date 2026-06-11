@@ -391,6 +391,7 @@ export type Database = {
           tax_regime: string | null
           trade_name: string | null
           updated_at: string
+          without_monthly_fee: boolean
         }
         Insert: {
           address?: string | null
@@ -441,6 +442,7 @@ export type Database = {
           tax_regime?: string | null
           trade_name?: string | null
           updated_at?: string
+          without_monthly_fee?: boolean
         }
         Update: {
           address?: string | null
@@ -491,6 +493,7 @@ export type Database = {
           tax_regime?: string | null
           trade_name?: string | null
           updated_at?: string
+          without_monthly_fee?: boolean
         }
         Relationships: []
       }
