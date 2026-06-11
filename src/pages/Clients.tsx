@@ -1096,7 +1096,7 @@ export default function Clients() {
       )}
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold">{clients.length}</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold">{payingClients.length}</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ativos</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-emerald-600">{activeCount}</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">MRR</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-primary">R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Churn Rate</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-orange-500">{churnRate.toFixed(1)}%</p></CardContent></Card>
@@ -1121,7 +1121,7 @@ export default function Clients() {
           mei: 'MEI',
         };
         const taxData = Object.entries(
-          clients.reduce((acc, c) => {
+          payingClients.reduce((acc, c) => {
             const key = c.tax_regime || 'Não informado';
             const label = taxRegimeLabels[key] || key;
             acc[label] = (acc[label] || 0) + 1;
@@ -1130,7 +1130,7 @@ export default function Clients() {
         ).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
 
         const segmentData = Object.entries(
-          clients.reduce((acc, c) => {
+          payingClients.reduce((acc, c) => {
             const key = c.business_classification || 'Não informado';
             acc[key] = (acc[key] || 0) + 1;
             return acc;
