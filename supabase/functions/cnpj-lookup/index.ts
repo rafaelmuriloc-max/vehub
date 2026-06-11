@@ -22,9 +22,12 @@ serve(async (req) => {
       );
     }
 
+    const debug: any[] = [];
+
     // Try BrasilAPI first
     try {
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+      debug.push({ source: "brasilapi", status: res.status });
       if (res.ok) {
         const data = await res.json();
         return new Response(JSON.stringify(data), {
@@ -32,14 +35,16 @@ serve(async (req) => {
         });
       }
     } catch (e) {
-      console.log("[cnpj-lookup] BrasilAPI failed:", e.message);
+      debug.push({ source: "brasilapi", error: e.message });
     }
 
     // Fallback to ReceitaWS
     try {
       const res = await fetch(`https://receitaws.com.br/v1/cnpj/${digits}`);
+      debug.push({ source: "receitaws", status: res.status });
       if (res.ok) {
         const data = await res.json();
+        debug.push({ source: "receitaws", body_status: data.status, message: data.message });
         if (data.status !== "ERROR") {
           // Map ReceitaWS format to BrasilAPI format
           const mapped = {
@@ -74,7 +79,7 @@ serve(async (req) => {
         }
       }
     } catch (e) {
-      console.log("[cnpj-lookup] ReceitaWS failed:", e.message);
+      debug.push({ source: "receitaws", error: e.message });
     }
 
     // Fallback to publica.cnpj.ws (covers newly opened CNPJs)
@@ -85,7 +90,7 @@ serve(async (req) => {
           "Accept": "application/json",
         },
       });
-      console.log("[cnpj-lookup] publica.cnpj.ws status:", res.status);
+      debug.push({ source: "publica.cnpj.ws", status: res.status });
       if (res.ok) {
         const data = await res.json();
         const est = data.estabelecimento || {};
@@ -123,11 +128,11 @@ serve(async (req) => {
         });
       }
     } catch (e) {
-      console.log("[cnpj-lookup] publica.cnpj.ws failed:", e.message);
+      debug.push({ source: "publica.cnpj.ws", error: e.message });
     }
 
     return new Response(
-      JSON.stringify({ error: "CNPJ_NOT_FOUND", fallback: true, message: "CNPJ não encontrado em nenhuma fonte" }),
+      JSON.stringify({ error: "CNPJ_NOT_FOUND", fallback: true, message: "CNPJ não encontrado em nenhuma fonte", debug }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
