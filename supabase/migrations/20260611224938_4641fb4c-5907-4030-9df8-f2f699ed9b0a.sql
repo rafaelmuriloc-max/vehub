@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS without_monthly_fee boolean NOT NULL DEFAULT false;
