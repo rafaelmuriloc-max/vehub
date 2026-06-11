@@ -78,14 +78,14 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ error: "CNPJ não encontrado em nenhuma fonte" }),
-      { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: "CNPJ_NOT_FOUND", fallback: true, message: "CNPJ não encontrado em nenhuma fonte" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("[cnpj-lookup] Error:", err);
     return new Response(
-      JSON.stringify({ error: err.message || "Erro interno" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: "SERVICE_FAILED", fallback: true, message: err.message || "Erro interno" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
