@@ -874,6 +874,7 @@ export default function Clients() {
       services_suspended_at: form.services_suspended
         ? ((editing as any)?.services_suspended_at || new Date().toISOString())
         : null,
+      without_monthly_fee: !!form.without_monthly_fee,
     };
     let error;
     let clientId = editing?.id;
