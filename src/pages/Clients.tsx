@@ -1487,6 +1487,9 @@ export default function Clients() {
                       {c.services_suspended && (
                         <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200">Suspenso</Badge>
                       )}
+                      {(c as any).without_monthly_fee && (
+                        <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-300">Sem mensalidade</Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>{(() => {
