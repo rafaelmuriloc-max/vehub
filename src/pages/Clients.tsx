@@ -1195,12 +1195,21 @@ export default function Clients() {
         // Cross data: regime × segment
         const crossData: Record<string, Record<string, number>> = {};
         const allSegments = new Set<string>();
+        const cellData: Record<string, Record<string, { count: number; mrr: number; paying: number }>> = {};
         clients.forEach(c => {
           const regime = taxRegimeLabels[c.tax_regime || ''] || c.tax_regime || 'Não informado';
           const seg = c.business_classification || 'Não informado';
           allSegments.add(seg);
           if (!crossData[regime]) crossData[regime] = {};
           crossData[regime][seg] = (crossData[regime][seg] || 0) + 1;
+          if (!cellData[regime]) cellData[regime] = {};
+          if (!cellData[regime][seg]) cellData[regime][seg] = { count: 0, mrr: 0, paying: 0 };
+          const cell = cellData[regime][seg];
+          cell.count += 1;
+          if (c.status === 'active' && !(c as any).without_monthly_fee) {
+            cell.mrr += Number(c.monthly_value || 0);
+            cell.paying += 1;
+          }
         });
         const segmentList = Array.from(allSegments).sort();
         const rawStackedData = Object.entries(crossData).map(([regime, segs]) => ({
@@ -1219,6 +1228,35 @@ export default function Clients() {
           });
           return pctRow;
         });
+
+        const fmtBRL = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const getCell = (regime: string, seg: string) => cellData[regime]?.[seg] || { count: 0, mrr: 0, paying: 0 };
+        const rowTotals = (regime: string) => {
+          let count = 0, mrr = 0, paying = 0;
+          segmentList.forEach(seg => {
+            const c = getCell(regime, seg);
+            count += c.count; mrr += c.mrr; paying += c.paying;
+          });
+          return { count, mrr, paying, ticket: paying > 0 ? mrr / paying : 0 };
+        };
+        const segTotals = (seg: string) => {
+          let count = 0, mrr = 0, paying = 0;
+          rawStackedData.forEach((r: any) => {
+            const c = getCell(r.regime, seg);
+            count += c.count; mrr += c.mrr; paying += c.paying;
+          });
+          return { count, mrr, paying, ticket: paying > 0 ? mrr / paying : 0 };
+        };
+        const grandTotals = () => {
+          let count = 0, mrr = 0, paying = 0;
+          rawStackedData.forEach((r: any) => {
+            segmentList.forEach(seg => {
+              const c = getCell(r.regime, seg);
+              count += c.count; mrr += c.mrr; paying += c.paying;
+            });
+          });
+          return { count, mrr, paying, ticket: paying > 0 ? mrr / paying : 0 };
+        };
 
         const StackedTooltip = ({ active, payload, label }: any) => {
           if (!active || !payload?.length) return null;
