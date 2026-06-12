@@ -1195,7 +1195,7 @@ export default function Clients() {
         const crossData: Record<string, Record<string, number>> = {};
         const allSegments = new Set<string>();
         const cellData: Record<string, Record<string, { count: number; mrr: number; paying: number }>> = {};
-        clients.forEach(c => {
+        clients.filter(c => c.status === 'active').forEach(c => {
           const regime = taxRegimeLabels[c.tax_regime || ''] || c.tax_regime || 'Não informado';
           const seg = c.business_classification || 'Não informado';
           allSegments.add(seg);
