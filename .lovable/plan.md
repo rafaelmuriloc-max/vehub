@@ -1,14 +1,25 @@
 ## Objetivo
-Eliminar o card superior que exibe "Total" (quantidade de clientes) na página `/clients`.
+Fazer com que os gráficos de donut **Regime Tributário** e **Segmento** na página de Clientes considerem apenas clientes com `status === 'active'`.
 
-## Localização
-- `src/pages/Clients.tsx`, linha ~1099 — card `<Card><CardHeader...>Total</CardTitle>...{payingClients.length}</p>...</Card>`
-- O card está dentro de um container `grid gap-4 md:grid-cols-4` (linha ~1098).
+## Problema atual
+Ambos os gráficos são gerados a partir de `payingClients`, que inclui tanto clientes ativos quanto churned. Isso distorce a visualização ao contabilizar clientes que já saíram.
 
-## Mudanças
-1. **Remover o card "Total"** (linha 1099 inteira).
-2. **Ajustar o grid** de `md:grid-cols-4` para `md:grid-cols-3` para manter o alinhamento proporcional dos 3 cards restantes (Ativos, MRR, Churn Rate).
+## Alteração
+Em `src/pages/Clients.tsx`, substituir a fonte de dados dos gráficos:
+- `Regime Tributário` (taxData)
+- `Segmento` (segmentData)
 
-## Fora de escopo
-- Os demais cards (Ativos, MRR, Churn Rate) permanecem inalterados.
-- Todos os cálculos de `payingClients` continuam existindo caso sejam usados em outras partes da página.
+De:
+```
+payingClients.reduce(...)
+```
+
+Para:
+```
+payingClients.filter(c => c.status === 'active').reduce(...)
+```
+
+Isso filtra apenas os clientes ativos antes de contar e agrupar por regime tributário e segmento.
+
+## Fora do escopo
+- O gráfico de barras empilhadas e a tabela **Regime Tributário × Segmento** (`stackedData`/`crossData`) já usam a lógica `cellData` com condição `c.status === 'active'` para MRR/ticket, mas mantêm contagens totais. Não serão alterados nesta tarefa a menos que solicitado.

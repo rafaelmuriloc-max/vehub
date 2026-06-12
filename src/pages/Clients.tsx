@@ -1120,7 +1120,7 @@ export default function Clients() {
           mei: 'MEI',
         };
         const taxData = Object.entries(
-          payingClients.reduce((acc, c) => {
+          payingClients.filter(c => c.status === 'active').reduce((acc, c) => {
             const key = c.tax_regime || 'Não informado';
             const label = taxRegimeLabels[key] || key;
             acc[label] = (acc[label] || 0) + 1;
@@ -1129,7 +1129,7 @@ export default function Clients() {
         ).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
 
         const segmentData = Object.entries(
-          payingClients.reduce((acc, c) => {
+          payingClients.filter(c => c.status === 'active').reduce((acc, c) => {
             const key = c.business_classification || 'Não informado';
             acc[key] = (acc[key] || 0) + 1;
             return acc;
