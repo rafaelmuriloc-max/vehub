@@ -442,11 +442,33 @@ export default function Financial() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>Conta Bancária</Label>
+                <Select value={form.bank_account_id || 'none'} onValueChange={v => setForm({ ...form, bank_account_id: v === 'none' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {bankAccounts.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Centro de Custo</Label>
+                <Select value={form.cost_center_id || 'none'} onValueChange={v => setForm({ ...form, cost_center_id: v === 'none' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {costCenters.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <Button type="submit" className="w-full">{editing ? 'Salvar' : 'Criar'}</Button>
           </form>
         </DialogContent>
       </Dialog>
+
+      <BillPaymentDialog open={!!billDialog} onOpenChange={(b) => !b && setBillDialog(null)} entry={billDialog} onPaid={loadData} />
     </div>
   );
 }
