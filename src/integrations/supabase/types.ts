@@ -14,6 +14,351 @@ export type Database = {
   }
   public: {
     Tables: {
+      asaas_charges: {
+        Row: {
+          asaas_charge_id: string
+          asaas_subscription_id: string | null
+          bank_slip_url: string | null
+          billing_type: string | null
+          client_id: string | null
+          created_at: string
+          due_date: string | null
+          entry_id: string | null
+          environment: string
+          id: string
+          invoice_url: string | null
+          paid_at: string | null
+          pix_copy_paste: string | null
+          pix_qr_code: string | null
+          raw: Json | null
+          status: string | null
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          asaas_charge_id: string
+          asaas_subscription_id?: string | null
+          bank_slip_url?: string | null
+          billing_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          entry_id?: string | null
+          environment?: string
+          id?: string
+          invoice_url?: string | null
+          paid_at?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code?: string | null
+          raw?: Json | null
+          status?: string | null
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          asaas_charge_id?: string
+          asaas_subscription_id?: string | null
+          bank_slip_url?: string | null
+          billing_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          due_date?: string | null
+          entry_id?: string | null
+          environment?: string
+          id?: string
+          invoice_url?: string | null
+          paid_at?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code?: string | null
+          raw?: Json | null
+          status?: string | null
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_charges_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_charges_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "financial_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asaas_customers: {
+        Row: {
+          asaas_customer_id: string
+          client_id: string
+          created_at: string
+          environment: string
+          id: string
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          asaas_customer_id: string
+          client_id: string
+          created_at?: string
+          environment?: string
+          id?: string
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          asaas_customer_id?: string
+          client_id?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_customers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asaas_settings: {
+        Row: {
+          created_at: string
+          default_billing_type: string
+          default_due_days: number
+          enabled: boolean
+          environment: string
+          id: string
+          last_sync_at: string | null
+          updated_at: string
+          webhook_token: string
+        }
+        Insert: {
+          created_at?: string
+          default_billing_type?: string
+          default_due_days?: number
+          enabled?: boolean
+          environment?: string
+          id?: string
+          last_sync_at?: string | null
+          updated_at?: string
+          webhook_token?: string
+        }
+        Update: {
+          created_at?: string
+          default_billing_type?: string
+          default_due_days?: number
+          enabled?: boolean
+          environment?: string
+          id?: string
+          last_sync_at?: string | null
+          updated_at?: string
+          webhook_token?: string
+        }
+        Relationships: []
+      }
+      asaas_subscriptions: {
+        Row: {
+          asaas_subscription_id: string
+          billing_type: string | null
+          client_id: string | null
+          created_at: string
+          cycle: string
+          description: string | null
+          environment: string
+          id: string
+          next_due_date: string | null
+          raw: Json | null
+          status: string | null
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          asaas_subscription_id: string
+          billing_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          cycle?: string
+          description?: string | null
+          environment?: string
+          id?: string
+          next_due_date?: string | null
+          raw?: Json | null
+          status?: string | null
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          asaas_subscription_id?: string
+          billing_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          cycle?: string
+          description?: string | null
+          environment?: string
+          id?: string
+          next_due_date?: string | null
+          raw?: Json | null
+          status?: string | null
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_subscriptions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asaas_webhook_events: {
+        Row: {
+          error: string | null
+          event: string
+          id: string
+          payload: Json
+          processed: boolean
+          received_at: string
+        }
+        Insert: {
+          error?: string | null
+          event: string
+          id?: string
+          payload: Json
+          processed?: boolean
+          received_at?: string
+        }
+        Update: {
+          error?: string | null
+          event?: string
+          id?: string
+          payload?: Json
+          processed?: boolean
+          received_at?: string
+        }
+        Relationships: []
+      }
+      bank_accounts: {
+        Row: {
+          account_number: string | null
+          account_type: string
+          active: boolean
+          agency: string | null
+          bank_name: string | null
+          color: string | null
+          created_at: string
+          current_balance: number
+          id: string
+          initial_balance: number
+          is_asaas: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          account_number?: string | null
+          account_type?: string
+          active?: boolean
+          agency?: string | null
+          bank_name?: string | null
+          color?: string | null
+          created_at?: string
+          current_balance?: number
+          id?: string
+          initial_balance?: number
+          is_asaas?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          account_number?: string | null
+          account_type?: string
+          active?: boolean
+          agency?: string | null
+          bank_name?: string | null
+          color?: string | null
+          created_at?: string
+          current_balance?: number
+          id?: string
+          initial_balance?: number
+          is_asaas?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      bill_payments: {
+        Row: {
+          asaas_payment_id: string | null
+          bar_code: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          entry_id: string | null
+          environment: string
+          id: string
+          pix_qr_code: string | null
+          raw: Json | null
+          scheduled_date: string | null
+          status: string | null
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          asaas_payment_id?: string | null
+          bar_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          entry_id?: string | null
+          environment?: string
+          id?: string
+          pix_qr_code?: string | null
+          raw?: Json | null
+          scheduled_date?: string | null
+          status?: string | null
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          asaas_payment_id?: string | null
+          bar_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          entry_id?: string | null
+          environment?: string
+          id?: string
+          pix_qr_code?: string | null
+          raw?: Json | null
+          scheduled_date?: string | null
+          status?: string | null
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_payments_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "financial_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_conversations: {
         Row: {
           assigned_to: string | null
@@ -614,6 +959,47 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_centers: {
+        Row: {
+          active: boolean
+          code: string | null
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code?: string | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_centers_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       department_credentials: {
         Row: {
           department_id: string
@@ -917,66 +1303,96 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          parent_id: string | null
           type: Database["public"]["Enums"]["financial_entry_type"]
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          parent_id?: string | null
           type: Database["public"]["Enums"]["financial_entry_type"]
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          parent_id?: string | null
           type?: Database["public"]["Enums"]["financial_entry_type"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "financial_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "financial_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financial_entries: {
         Row: {
           amount: number
+          asaas_charge_id: string | null
+          bank_account_id: string | null
           category_id: string | null
           client_id: string | null
+          cost_center_id: string | null
           created_at: string
           created_by: string | null
           description: string
           due_date: string
           id: string
           paid_date: string | null
+          recurring_id: string | null
           status: Database["public"]["Enums"]["financial_entry_status"]
           type: Database["public"]["Enums"]["financial_entry_type"]
           updated_at: string
         }
         Insert: {
           amount: number
+          asaas_charge_id?: string | null
+          bank_account_id?: string | null
           category_id?: string | null
           client_id?: string | null
+          cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
           description: string
           due_date: string
           id?: string
           paid_date?: string | null
+          recurring_id?: string | null
           status?: Database["public"]["Enums"]["financial_entry_status"]
           type: Database["public"]["Enums"]["financial_entry_type"]
           updated_at?: string
         }
         Update: {
           amount?: number
+          asaas_charge_id?: string | null
+          bank_account_id?: string | null
           category_id?: string | null
           client_id?: string | null
+          cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string
           due_date?: string
           id?: string
           paid_date?: string | null
+          recurring_id?: string | null
           status?: Database["public"]["Enums"]["financial_entry_status"]
           type?: Database["public"]["Enums"]["financial_entry_type"]
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "financial_entries_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "financial_entries_category_id_fkey"
             columns: ["category_id"]
@@ -989,6 +1405,20 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_entries_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_entries_recurring_id_fkey"
+            columns: ["recurring_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_entries"
             referencedColumns: ["id"]
           },
         ]
@@ -1595,6 +2025,95 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_entries: {
+        Row: {
+          active: boolean
+          amount: number
+          bank_account_id: string | null
+          category_id: string | null
+          client_id: string | null
+          cost_center_id: string | null
+          created_at: string
+          created_by: string | null
+          day_of_month: number | null
+          description: string
+          end_date: string | null
+          frequency: string
+          id: string
+          next_run_date: string
+          start_date: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          amount: number
+          bank_account_id?: string | null
+          category_id?: string | null
+          client_id?: string | null
+          cost_center_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          description: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          next_run_date: string
+          start_date: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          amount?: number
+          bank_account_id?: string | null
+          category_id?: string | null
+          client_id?: string | null
+          cost_center_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          description?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          next_run_date?: string
+          start_date?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_entries_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "financial_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_entries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_entries_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
             referencedColumns: ["id"]
           },
         ]
