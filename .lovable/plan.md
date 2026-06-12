@@ -1,14 +1,27 @@
-## Ajuste
-Restringir a contagem de "suspensos" exibida no card Ativos para considerar apenas clientes com `status = 'active'` E `services_suspended = true` (clientes ativos mas suspensos por inadimplência).
+## Objetivo
+Adicionar a informação de quantos clientes ativos estão com serviços suspensos por inadimplência no card **Ativos** da página `/clients`.
 
-## Alteração
-Em `src/components/dashboard/ClientsPanel.tsx`, adicionar `.eq('status', 'active')` à query de suspensos:
+## Contexto
+O card "Ativos" na página `Clients.tsx` atualmente exibe apenas o número total de clientes ativos (`activeCount`). O dashboard (`ClientsPanel.tsx`) já possui essa funcionalidade, mostrando um subtexto "X suspensos" no card Ativos.
 
-```ts
-supabase.from('clients')
-  .select('id', { count: 'exact', head: true })
-  .eq('status', 'active')
-  .eq('services_suspended', true)
-```
+## Implementação
 
-O subtexto "X suspensos" no card Ativos passa a refletir somente os ativos inadimplentes.
+### `src/pages/Clients.tsx`
+
+1. **Adicionar contagem de suspensos**:
+   - Após o cálculo de `activeCount` (linha 1036), adicionar:
+     ```ts
+     const suspendedCount = payingClients.filter(c => c.status === 'active' && c.services_suspended).length;
+     ```
+
+2. **Adicionar subtexto no card Ativos**:
+   - No card "Ativos" (linha 1099), adicionar um parágrafo abaixo do número principal mostrando:
+     ```tsx
+     <p className="text-xs text-muted-foreground mt-1">{suspendedCount} suspensos</p>
+     ```
+   - Isso alinha visualmente com o padrão já implementado no dashboard (`ClientsPanel.tsx`).
+
+## Critérios de aceitação
+- O card "Ativos" na página `/clients` exibe o número total de clientes ativos e, logo abaixo, a quantidade de clientes ativos com `services_suspended = true`.
+- A contagem respeita o filtro `payingClients` (exclui `without_monthly_fee`).
+- O estilo visual segue o padrão do dashboard (texto pequeno, cor `muted-foreground`).
