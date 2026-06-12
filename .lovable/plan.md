@@ -1,39 +1,53 @@
-## Problema
+## Objetivo
+Expandir o quadro "Regime Tributário × Segmento" em `src/pages/Clients.tsx` para que cada segmento exiba três colunas em vez de uma:
+1. **Qtd** (já existe — quantidade de clientes)
+2. **Ticket Médio** (novo)
+3. **MRR** (novo)
 
-O CNPJ `67.203.457/0001-74` é recente (abertura em 08/06/2026) e ainda não consta nas bases que a edge function `cnpj-lookup` consulta:
+A coluna **Total** à direita também passará a mostrar Qtd, Ticket Médio e MRR consolidados do regime. A linha **Total** inferior somará/recalculará da mesma forma.
 
-- **BrasilAPI** → 404 "CNPJ não encontrado"
-- **ReceitaWS / Minha Receita** → 404 "CNPJ não encontrado"
+## Regras de cálculo (por célula regime × segmento)
+- **Qtd**: total de clientes naquele regime + segmento (mantém comportamento atual, incluindo todos os clientes).
+- **MRR**: soma de `monthly_value` apenas dos clientes **ativos** e que **não** estão marcados como `without_monthly_fee` (consistente com a regra global do projeto de excluir clientes em mensalidade-zero das estatísticas financeiras).
+- **Ticket Médio**: `MRR ÷ quantidade de clientes ativos pagantes` na célula. Se 0 pagantes → exibir `R$ 0,00`.
 
-Já a base **publica.cnpj.ws** retorna os dados completos (testado e confirmado). A função precisa de um terceiro fallback para cobrir CNPJs recém-abertos.
+Formatação:
+- MRR e Ticket Médio em `R$ X.XXX,XX` (pt-BR, 2 casas).
+- Qtd em número inteiro.
 
-## Mudança
+## Mudanças de UI
+- Cabeçalho passa a ter sub-cabeçalhos. Estrutura sugerida usando dois `TableHeader` rows:
+  ```text
+  | Regime | Comércio (colspan 3)        | Indústria (colspan 3) | ... | Total (colspan 3) |
+  |        | Qtd | Ticket | MRR          | Qtd | Ticket | MRR    | ... | Qtd | Ticket | MRR |
+  ```
+- Bolinha colorida do segmento permanece no cabeçalho do grupo.
+- Linhas de dados: para cada segmento, 3 `<TableCell>` (Qtd, Ticket, MRR), todos `text-right text-xs tabular-nums`. MRR em `font-medium` para destaque.
+- Linha Total inferior: Qtd somando os clientes do segmento, MRR somando todos os MRR do segmento e Ticket Médio = MRR_total_segmento ÷ pagantes_ativos_segmento.
+- Subtítulo do card muda de "Quantidades absolutas" para "Quantidade, ticket médio e MRR por segmento".
+- Adicionar `overflow-x-auto` ao container (já existe `overflow-auto`) e largura mínima na tabela para não espremer demais em telas estreitas.
 
-Adicionar `https://publica.cnpj.ws/cnpj/{cnpj}` como **terceira tentativa** em `supabase/functions/cnpj-lookup/index.ts`, executada apenas se BrasilAPI e ReceitaWS falharem.
+## Dados a calcular
+Substituir o `crossData` atual por uma estrutura mais rica calculada uma única vez no mesmo bloco IIFE (linhas ~1196-1210):
 
-O retorno da `publica.cnpj.ws` tem estrutura diferente — será convertido para o mesmo formato que o frontend já consome (formato BrasilAPI), mapeando:
+```ts
+type Cell = { count: number; mrr: number; paying: number };
+const crossData: Record<string, Record<string, Cell>> = {};
+clients.forEach(c => {
+  const regime = taxRegimeLabels[c.tax_regime || ''] || c.tax_regime || 'Não informado';
+  const seg = c.business_classification || 'Não informado';
+  allSegments.add(seg);
+  if (!crossData[regime]) crossData[regime] = {};
+  const cell = crossData[regime][seg] ||= { count: 0, mrr: 0, paying: 0 };
+  cell.count += 1;
+  if (c.status === 'active' && !(c as any).without_monthly_fee) {
+    cell.mrr += Number(c.monthly_value || 0);
+    cell.paying += 1;
+  }
+});
+```
+`rawStackedData` continua existindo para o gráfico (com `count` por segmento + `total`); apenas a tabela passa a usar `crossData` diretamente para ler Qtd/MRR/Ticket por célula.
 
-| Campo frontend (BrasilAPI) | Origem em publica.cnpj.ws |
-|---|---|
-| `razao_social` | `razao_social` |
-| `nome_fantasia` | `estabelecimento.nome_fantasia` |
-| `cnpj` | `estabelecimento.cnpj` |
-| `logradouro` / `numero` / `complemento` / `bairro` / `cep` | `estabelecimento.*` |
-| `municipio` | `estabelecimento.cidade.nome` |
-| `uf` | `estabelecimento.estado.sigla` |
-| `email` | `estabelecimento.email` |
-| `ddd_telefone_1` | `estabelecimento.ddd1 + telefone1` |
-| `cnae_fiscal` / `cnae_fiscal_descricao` | `estabelecimento.atividade_principal.subclasse` (sem pontuação) / `.descricao` |
-| `cnaes_secundarios` | `estabelecimento.atividades_secundarias` mapeado para `{codigo, descricao}` |
-| `qsa` | `socios` mapeado para `{nome_socio, qualificacao_socio}` |
-| `opcao_pelo_simples` | `simples.simples === "Sim"` |
-| `opcao_pelo_mei` | `simples.mei === "Sim"` |
-| `data_inicio_atividade` | `estabelecimento.data_inicio_atividade` |
-
-Se as três fontes falharem, mantém o retorno atual `200 { error: "CNPJ_NOT_FOUND", fallback: true }`.
-
-## Arquivos
-
-- `supabase/functions/cnpj-lookup/index.ts` — adicionar bloco try/catch para `publica.cnpj.ws` após o bloco do ReceitaWS, com o mapeamento descrito.
-
-Sem alterações no frontend.
+## Escopo / fora de escopo
+- **Apenas** o quadro "Regime Tributário × Segmento" muda. Gráfico empilhado, demais KPIs e cartões permanecem inalterados.
+- Sem mudanças de banco de dados, edge functions ou cálculo de MRR global da página.
