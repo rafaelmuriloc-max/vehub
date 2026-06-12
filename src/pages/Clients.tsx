@@ -1034,6 +1034,7 @@ export default function Clients() {
 
   const payingClients = clients.filter(c => !(c as any).without_monthly_fee);
   const activeCount = payingClients.filter(c => c.status === 'active').length;
+  const suspendedCount = payingClients.filter(c => c.status === 'active' && (c as any).services_suspended).length;
   const churnedCount = payingClients.filter(c => c.status === 'churned').length;
   const mrr = payingClients.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.monthly_value || 0), 0);
   const churnRate = payingClients.length > 0 ? (churnedCount / payingClients.length) * 100 : 0;
@@ -1096,7 +1097,7 @@ export default function Clients() {
       )}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ativos</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-emerald-600">{activeCount}</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ativos</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-emerald-600">{activeCount}</p><p className="text-xs text-muted-foreground mt-1">{suspendedCount} suspensos</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">MRR</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-primary">R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Churn Rate</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-orange-500">{churnRate.toFixed(1)}%</p></CardContent></Card>
       </div>
