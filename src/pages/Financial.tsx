@@ -323,6 +323,12 @@ export default function Financial() {
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="recurring"><RecurringEntriesTab /></TabsContent>
+        <TabsContent value="accounts"><BankAccountsTab /></TabsContent>
+        <TabsContent value="costcenters"><CostCentersTab /></TabsContent>
+        <TabsContent value="asaas"><AsaasChargesTab /></TabsContent>
+        <TabsContent value="dre"><DreTab /></TabsContent>
+        <TabsContent value="integrations"><IntegrationsTab /></TabsContent>
         <TabsContent value="cashflow">
           <Card>
             <CardHeader><CardTitle>Fluxo de Caixa - Últimos 6 meses</CardTitle></CardHeader>
