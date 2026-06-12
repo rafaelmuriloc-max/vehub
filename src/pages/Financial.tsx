@@ -246,10 +246,16 @@ export default function Financial() {
       </div>
 
       <Tabs defaultValue="entries">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="entries">Lançamentos</TabsTrigger>
+          <TabsTrigger value="recurring">Recorrências</TabsTrigger>
+          <TabsTrigger value="accounts">Contas Bancárias</TabsTrigger>
+          <TabsTrigger value="costcenters">Centros de Custo</TabsTrigger>
+          <TabsTrigger value="asaas">Cobranças Asaas</TabsTrigger>
+          <TabsTrigger value="dre">DRE</TabsTrigger>
           <TabsTrigger value="cashflow">Fluxo de Caixa</TabsTrigger>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="integrations">Integrações</TabsTrigger>
         </TabsList>
         <TabsContent value="entries" className="space-y-4">
           <div className="flex gap-4">
