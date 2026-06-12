@@ -298,7 +298,23 @@ export default function Financial() {
                       <TableCell>R$ {Number(entry.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                       <TableCell>{new Date(entry.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell><Badge className={statusColors[entry.status]}>{statusLabels[entry.status]}</Badge></TableCell>
-                      <TableCell>{isAdmin && <Button variant="ghost" size="sm" onClick={() => openEdit(entry)}>Editar</Button>}</TableCell>
+                      <TableCell>
+                        {isAdmin && (
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(entry)}>Editar</Button>
+                            {entry.type === 'receivable' && !entry.asaas_charge_id && entry.status !== 'paid' && (
+                              <Button variant="ghost" size="sm" onClick={() => generateCharge(entry)} disabled={generating === entry.id} title="Gerar cobrança Asaas">
+                                <Receipt className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {entry.type === 'payable' && entry.status !== 'paid' && (
+                              <Button variant="ghost" size="sm" onClick={() => setBillDialog(entry)} title="Pagar via Asaas">
+                                <CreditCard className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum lançamento</TableCell></TableRow>}
