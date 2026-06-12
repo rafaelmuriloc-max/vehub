@@ -17,17 +17,19 @@ export function ClientsPanel() {
     refetchInterval: 30000,
     queryFn: async () => {
       const { start, end } = monthRange();
-      const [active, inactive, novos, churn] = await Promise.all([
+      const [active, inactive, novos, churn, suspended] = await Promise.all([
         supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('without_monthly_fee', false),
         supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'inactive').eq('without_monthly_fee', false),
         supabase.from('clients').select('id', { count: 'exact', head: true }).gte('start_date', start).lt('start_date', end).eq('without_monthly_fee', false),
         supabase.from('clients').select('id', { count: 'exact', head: true }).gte('end_date', start).lt('end_date', end).eq('without_monthly_fee', false),
+        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('services_suspended', true),
       ]);
       return {
         active: active.count ?? 0,
         inactive: inactive.count ?? 0,
         novos: novos.count ?? 0,
         churn: churn.count ?? 0,
+        suspended: suspended.count ?? 0,
       };
     },
   });
@@ -41,7 +43,13 @@ export function ClientsPanel() {
         <h2 className="text-lg font-semibold tracking-tight">Clientes</h2>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <MetricCard label="Ativos" value={data?.active ?? '—'} accent="success" icon={<Users className="h-4 w-4" />} />
+        <MetricCard
+          label="Ativos"
+          value={data?.active ?? '—'}
+          accent="success"
+          icon={<Users className="h-4 w-4" />}
+          hint={<span><strong className="text-amber-400">{data?.suspended ?? 0}</strong> suspensos</span>}
+        />
         <MetricCard label="Inativos" value={data?.inactive ?? '—'} icon={<Users className="h-4 w-4" />} />
         <MetricCard
           label="Novos no mês"

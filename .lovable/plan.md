@@ -1,23 +1,16 @@
-## Objetivo
-Fazer com que o quadro cruzado **Regime Tributário × Segmento** exclua clientes marcados como **"Sem mensalidade"** (`without_monthly_fee`), além de já filtrar apenas os ativos.
-
 ## Contexto
-- Os gráficos de donut de Regime e Segmento já utilizam `payingClients`, que por definição exclui clientes sem mensalidade. Portanto, eles já estão corretos.
-- O quadro cruzado (`crossData`, `cellData`, `rawStackedData`) atualmente filtra apenas por `status === 'active'`, mas ainda inclui clientes com `without_monthly_fee` na contagem de clientes por célula.
+O painel "Clientes" no Dashboard (`ClientsPanel.tsx`) exibe quatro métricas: Ativos, Inativos, Novos no mês e Churn no mês. A tabela `clients` possui um campo boolean `services_suspended` que indica clientes com serviços suspensos.
 
-## Alteração
-No arquivo `src/pages/Clients.tsx`, linha 1198, alterar o filtro do `forEach` que constrói os dados cruzados:
+## Objetivo
+Exibir a quantidade de clientes suspensos como subtexto (hint) dentro do card "Ativos".
 
-```js
-// Antes
-clients.filter(c => c.status === 'active').forEach(c => { ... })
+## Implementação
+1. Adicionar contagem de `services_suspended = true` à query do `ClientsPanel.tsx`, usando a mesma estratégia das demais contagens (`.select('id', { count: 'exact', head: true })`).
+2. Incluir a prop `hint` no `MetricCard` de "Ativos", formatada como: "X suspensos".
 
-// Depois
-clients.filter(c => c.status === 'active' && !(c as any).without_monthly_fee).forEach(c => { ... })
-```
+## Arquivo alterado
+- `src/components/dashboard/ClientsPanel.tsx`
 
-Como o filtro principal já garante que nenhum cliente sem mensalidade entra no loop, o `if` interno (linha 1208) que verifica `!(c as any).without_monthly_fee` para calcular MRR e paying torna-se redundante e pode ser simplificado para sempre acumular, já que a condição externa já garante isso.
-
-## Resultado
-- O quadro cruzado passa a considerar apenas clientes **ativos E com mensalidade**.
-- Contagem, MRR e ticket médio passam a refletir exatamente o mesmo universo dos gráficos de donut.
+## Detalhes técnicos
+- A consulta será: `supabase.from('clients').select('id', { count: 'exact', head: true }).eq('services_suspended', true)`
+- O hint será exibido abaixo do valor numérico do card, usando o estilo já existente do componente `MetricCard`.
