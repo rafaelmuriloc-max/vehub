@@ -98,3 +98,33 @@ verify_jwt = false
 
 [functions.obligation-activity-reconcile]
 verify_jwt = false
+
+[functions.asaas-webhook]
+verify_jwt = false
+
+[functions.asaas-customer-sync]
+verify_jwt = false
+
+[functions.asaas-charge-create]
+verify_jwt = false
+
+[functions.asaas-charge-cancel]
+verify_jwt = false
+
+[functions.asaas-subscription-create]
+verify_jwt = false
+
+[functions.asaas-subscription-cancel]
+verify_jwt = false
+
+[functions.asaas-bill-pay]
+verify_jwt = false
+
+[functions.asaas-test-connection]
+verify_jwt = false
+
+[functions.asaas-balance-sync]
+verify_jwt = false
+
+[functions.recurring-entries-runner]
+verify_jwt = false
