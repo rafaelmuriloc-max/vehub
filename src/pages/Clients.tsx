@@ -1195,7 +1195,7 @@ export default function Clients() {
         const crossData: Record<string, Record<string, number>> = {};
         const allSegments = new Set<string>();
         const cellData: Record<string, Record<string, { count: number; mrr: number; paying: number }>> = {};
-        clients.filter(c => c.status === 'active').forEach(c => {
+        clients.filter(c => c.status === 'active' && !(c as any).without_monthly_fee).forEach(c => {
           const regime = taxRegimeLabels[c.tax_regime || ''] || c.tax_regime || 'Não informado';
           const seg = c.business_classification || 'Não informado';
           allSegments.add(seg);
@@ -1205,10 +1205,8 @@ export default function Clients() {
           if (!cellData[regime][seg]) cellData[regime][seg] = { count: 0, mrr: 0, paying: 0 };
           const cell = cellData[regime][seg];
           cell.count += 1;
-          if (c.status === 'active' && !(c as any).without_monthly_fee) {
-            cell.mrr += Number(c.monthly_value || 0);
-            cell.paying += 1;
-          }
+          cell.mrr += Number(c.monthly_value || 0);
+          cell.paying += 1;
         });
         const segmentList = Array.from(allSegments).sort();
         const rawStackedData = Object.entries(crossData).map(([regime, segs]) => ({
