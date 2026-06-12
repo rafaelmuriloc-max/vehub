@@ -1326,46 +1326,75 @@ export default function Clients() {
                     <Building2 className="h-4 w-4" />
                     Regime Tributário × Segmento
                   </CardTitle>
-                  <p className="text-[11px] text-muted-foreground/60">Quantidades absolutas</p>
+                  <p className="text-[11px] text-muted-foreground/60">Quantidade, ticket médio e MRR por segmento</p>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-auto">
-                    <Table>
+                    <Table className="min-w-[860px]">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="text-left text-xs">Regime</TableHead>
+                          <TableHead rowSpan={2} className="text-left text-xs align-bottom">Regime</TableHead>
                           {segmentList.map((seg, i) => (
-                            <TableHead key={seg} className="text-right text-xs">
-                              <div className="flex items-center justify-end gap-1.5">
+                            <TableHead key={seg} colSpan={3} className="text-center text-xs border-l">
+                              <div className="flex items-center justify-center gap-1.5">
                                 <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
                                 {seg}
                               </div>
                             </TableHead>
                           ))}
-                          <TableHead className="text-right text-xs font-semibold">Total</TableHead>
+                          <TableHead colSpan={3} className="text-center text-xs font-semibold border-l">Total</TableHead>
+                        </TableRow>
+                        <TableRow>
+                          {segmentList.flatMap((seg) => [
+                            <TableHead key={`${seg}-q`} className="text-right text-[10px] text-muted-foreground border-l">Qtd</TableHead>,
+                            <TableHead key={`${seg}-t`} className="text-right text-[10px] text-muted-foreground">Ticket</TableHead>,
+                            <TableHead key={`${seg}-m`} className="text-right text-[10px] text-muted-foreground">MRR</TableHead>,
+                          ])}
+                          <TableHead className="text-right text-[10px] text-muted-foreground border-l">Qtd</TableHead>
+                          <TableHead className="text-right text-[10px] text-muted-foreground">Ticket</TableHead>
+                          <TableHead className="text-right text-[10px] text-muted-foreground">MRR</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {rawStackedData.map((row: any) => (
-                          <TableRow key={row.regime}>
-                            <TableCell className="text-xs font-medium">{row.regime}</TableCell>
-                            {segmentList.map(seg => (
-                              <TableCell key={seg} className="text-right text-xs tabular-nums">{(row[seg] || 0)}</TableCell>
-                            ))}
-                            <TableCell className="text-right text-xs font-semibold tabular-nums">{row.total}</TableCell>
-                          </TableRow>
-                        ))}
-                        <TableRow className="border-t-2">
-                          <TableCell className="text-xs font-semibold">Total</TableCell>
-                          {segmentList.map(seg => (
-                            <TableCell key={seg} className="text-right text-xs font-semibold tabular-nums">
-                              {rawStackedData.reduce((s: number, r: any) => s + ((r[seg] || 0) as number), 0)}
-                            </TableCell>
-                          ))}
-                          <TableCell className="text-right text-xs font-bold tabular-nums">
-                            {rawStackedData.reduce((s: number, r: any) => s + (r.total as number), 0)}
-                          </TableCell>
-                        </TableRow>
+                        {rawStackedData.map((row: any) => {
+                          const rt = rowTotals(row.regime);
+                          return (
+                            <TableRow key={row.regime}>
+                              <TableCell className="text-xs font-medium">{row.regime}</TableCell>
+                              {segmentList.flatMap(seg => {
+                                const c = getCell(row.regime, seg);
+                                const ticket = c.paying > 0 ? c.mrr / c.paying : 0;
+                                return [
+                                  <TableCell key={`${seg}-q`} className="text-right text-xs tabular-nums border-l">{c.count}</TableCell>,
+                                  <TableCell key={`${seg}-t`} className="text-right text-xs tabular-nums text-muted-foreground">{fmtBRL(ticket)}</TableCell>,
+                                  <TableCell key={`${seg}-m`} className="text-right text-xs tabular-nums font-medium">{fmtBRL(c.mrr)}</TableCell>,
+                                ];
+                              })}
+                              <TableCell className="text-right text-xs font-semibold tabular-nums border-l">{rt.count}</TableCell>
+                              <TableCell className="text-right text-xs font-semibold tabular-nums text-muted-foreground">{fmtBRL(rt.ticket)}</TableCell>
+                              <TableCell className="text-right text-xs font-semibold tabular-nums">{fmtBRL(rt.mrr)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {(() => {
+                          const gt = grandTotals();
+                          return (
+                            <TableRow className="border-t-2">
+                              <TableCell className="text-xs font-semibold">Total</TableCell>
+                              {segmentList.flatMap(seg => {
+                                const st = segTotals(seg);
+                                return [
+                                  <TableCell key={`${seg}-q`} className="text-right text-xs font-semibold tabular-nums border-l">{st.count}</TableCell>,
+                                  <TableCell key={`${seg}-t`} className="text-right text-xs font-semibold tabular-nums text-muted-foreground">{fmtBRL(st.ticket)}</TableCell>,
+                                  <TableCell key={`${seg}-m`} className="text-right text-xs font-bold tabular-nums">{fmtBRL(st.mrr)}</TableCell>,
+                                ];
+                              })}
+                              <TableCell className="text-right text-xs font-bold tabular-nums border-l">{gt.count}</TableCell>
+                              <TableCell className="text-right text-xs font-bold tabular-nums text-muted-foreground">{fmtBRL(gt.ticket)}</TableCell>
+                              <TableCell className="text-right text-xs font-bold tabular-nums">{fmtBRL(gt.mrr)}</TableCell>
+                            </TableRow>
+                          );
+                        })()}
                       </TableBody>
                     </Table>
                   </div>
