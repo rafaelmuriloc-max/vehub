@@ -1,16 +1,14 @@
-## Contexto
-O painel "Clientes" no Dashboard (`ClientsPanel.tsx`) exibe quatro métricas: Ativos, Inativos, Novos no mês e Churn no mês. A tabela `clients` possui um campo boolean `services_suspended` que indica clientes com serviços suspensos.
+## Ajuste
+Restringir a contagem de "suspensos" exibida no card Ativos para considerar apenas clientes com `status = 'active'` E `services_suspended = true` (clientes ativos mas suspensos por inadimplência).
 
-## Objetivo
-Exibir a quantidade de clientes suspensos como subtexto (hint) dentro do card "Ativos".
+## Alteração
+Em `src/components/dashboard/ClientsPanel.tsx`, adicionar `.eq('status', 'active')` à query de suspensos:
 
-## Implementação
-1. Adicionar contagem de `services_suspended = true` à query do `ClientsPanel.tsx`, usando a mesma estratégia das demais contagens (`.select('id', { count: 'exact', head: true })`).
-2. Incluir a prop `hint` no `MetricCard` de "Ativos", formatada como: "X suspensos".
+```ts
+supabase.from('clients')
+  .select('id', { count: 'exact', head: true })
+  .eq('status', 'active')
+  .eq('services_suspended', true)
+```
 
-## Arquivo alterado
-- `src/components/dashboard/ClientsPanel.tsx`
-
-## Detalhes técnicos
-- A consulta será: `supabase.from('clients').select('id', { count: 'exact', head: true }).eq('services_suspended', true)`
-- O hint será exibido abaixo do valor numérico do card, usando o estilo já existente do componente `MetricCard`.
+O subtexto "X suspensos" no card Ativos passa a refletir somente os ativos inadimplentes.

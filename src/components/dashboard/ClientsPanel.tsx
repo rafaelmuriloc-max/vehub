@@ -22,7 +22,7 @@ export function ClientsPanel() {
         supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'inactive').eq('without_monthly_fee', false),
         supabase.from('clients').select('id', { count: 'exact', head: true }).gte('start_date', start).lt('start_date', end).eq('without_monthly_fee', false),
         supabase.from('clients').select('id', { count: 'exact', head: true }).gte('end_date', start).lt('end_date', end).eq('without_monthly_fee', false),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('services_suspended', true),
+        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('services_suspended', true),
       ]);
       return {
         active: active.count ?? 0,
