@@ -11,13 +11,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, CheckSquare } from 'lucide-react';
+import { Plus, DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, CheckSquare, Receipt, CreditCard } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { IntegrationsTab } from '@/components/financial/IntegrationsTab';
+import { BankAccountsTab } from '@/components/financial/BankAccountsTab';
+import { CostCentersTab } from '@/components/financial/CostCentersTab';
+import { RecurringEntriesTab } from '@/components/financial/RecurringEntriesTab';
+import { AsaasChargesTab } from '@/components/financial/AsaasChargesTab';
+import { DreTab } from '@/components/financial/DreTab';
+import { BillPaymentDialog } from '@/components/financial/BillPaymentDialog';
 
 type Entry = {
   id: string; description: string; amount: number; type: 'receivable' | 'payable';
   status: 'pending' | 'paid' | 'overdue'; due_date: string; paid_date: string | null;
   category_id: string | null; client_id: string | null; created_by: string | null;
+  cost_center_id?: string | null; bank_account_id?: string | null; asaas_charge_id?: string | null;
 };
 type Category = { id: string; name: string; type: 'receivable' | 'payable' };
 type Client = { id: string; company_name: string };
@@ -33,39 +41,47 @@ export default function Financial() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsFull, setClientsFull] = useState<ClientFull[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [costCenters, setCostCenters] = useState<any[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [billDialog, setBillDialog] = useState<Entry | null>(null);
+  const [generating, setGenerating] = useState<string | null>(null);
   const { isAdmin, user, profile } = useAuth();
   const { toast } = useToast();
 
   const [form, setForm] = useState({
     description: '', amount: '', type: 'receivable' as 'receivable' | 'payable',
     status: 'pending' as 'pending' | 'paid' | 'overdue', due_date: '', paid_date: '',
-    category_id: '', client_id: '',
+    category_id: '', client_id: '', cost_center_id: '', bank_account_id: '',
   });
 
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    const [{ data: e }, { data: c }, { data: cl }, { data: clFull }, { data: tk }] = await Promise.all([
+    const [{ data: e }, { data: c }, { data: cl }, { data: clFull }, { data: tk }, { data: cc }, { data: ba }] = await Promise.all([
       supabase.from('financial_entries').select('*').order('due_date', { ascending: false }),
       supabase.from('financial_categories').select('*').order('name'),
       supabase.from('clients').select('id, company_name').order('company_name'),
       supabase.from('clients').select('status, monthly_value, start_date, end_date, created_at, opening_date').eq('without_monthly_fee', false),
       supabase.from('tasks').select('status, due_date'),
+      supabase.from('cost_centers').select('id, name').eq('active', true),
+      supabase.from('bank_accounts').select('id, name').eq('active', true),
     ]);
     setEntries((e as Entry[]) || []);
     setCategories((c as Category[]) || []);
     setClients((cl as Client[]) || []);
     setClientsFull((clFull as ClientFull[]) || []);
     setTasks((tk as TaskRow[]) || []);
+    setCostCenters(cc || []);
+    setBankAccounts(ba || []);
   }
 
   function openNew() {
     setEditing(null);
-    setForm({ description: '', amount: '', type: 'receivable', status: 'pending', due_date: '', paid_date: '', category_id: '', client_id: '' });
+    setForm({ description: '', amount: '', type: 'receivable', status: 'pending', due_date: '', paid_date: '', category_id: '', client_id: '', cost_center_id: '', bank_account_id: '' });
     setDialogOpen(true);
   }
 
@@ -75,6 +91,7 @@ export default function Financial() {
       description: entry.description, amount: String(entry.amount), type: entry.type,
       status: entry.status, due_date: entry.due_date, paid_date: entry.paid_date || '',
       category_id: entry.category_id || '', client_id: entry.client_id || '',
+      cost_center_id: (entry as any).cost_center_id || '', bank_account_id: (entry as any).bank_account_id || '',
     });
     setDialogOpen(true);
   }
@@ -85,6 +102,7 @@ export default function Financial() {
       description: form.description, amount: Number(form.amount), type: form.type,
       status: form.status, due_date: form.due_date, paid_date: form.paid_date || null,
       category_id: form.category_id || null, client_id: form.client_id || null,
+      cost_center_id: form.cost_center_id || null, bank_account_id: form.bank_account_id || null,
     };
     let error;
     if (editing) {
@@ -94,6 +112,15 @@ export default function Financial() {
     }
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     else { setDialogOpen(false); loadData(); toast({ title: editing ? 'Lançamento atualizado' : 'Lançamento criado' }); }
+  }
+
+  async function generateCharge(entry: Entry) {
+    if (!entry.client_id) { toast({ title: 'Vincule um cliente ao lançamento', variant: 'destructive' }); return; }
+    setGenerating(entry.id);
+    const { data, error } = await supabase.functions.invoke('asaas-charge-create', { body: { entry_id: entry.id } });
+    setGenerating(null);
+    if (error || data?.error) toast({ title: 'Erro', description: error?.message || data?.error, variant: 'destructive' });
+    else { toast({ title: 'Cobrança gerada', description: data.charge?.invoiceUrl ? 'Veja na aba Cobranças Asaas' : '' }); loadData(); }
   }
 
   const filtered = entries.filter(e => {
