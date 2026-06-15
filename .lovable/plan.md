@@ -1,87 +1,47 @@
-## Visão geral
-Expandir a aba Financeiro para um sistema completo com integração Asaas (sandbox/produção), além de novos módulos: contas bancárias, DRE, lançamentos recorrentes, e categorias/centros de custo avançados. Configuração da integração ficará em uma nova aba "Integrações" dentro de Financeiro.
+# Investigação
 
-## Estrutura final da página `/` (Financeiro)
-Tabs:
-1. **Visão Geral** (KPIs + gráficos atuais)
-2. **Lançamentos** (CRUD existente, expandido)
-3. **Recorrências** (novo)
-4. **Contas Bancárias** (novo)
-5. **Cobranças Asaas** (novo)
-6. **DRE / Relatórios** (novo)
-7. **Integrações** (novo — config Asaas + webhook URL)
+Encontrei **duas conversas** do André Locatelli (PORTO PENHA FOOD PARK LTDA), ambas com o mesmo `client_id` e mesma pessoa responsável:
 
-## Banco de dados (migrações)
+| ID conversa | Telefone armazenado | Criada em | Última msg |
+|---|---|---|---|
+| `7e57fd9b…` (original) | `5547992839913` (13 dígitos – canônico) | 06/04 | 15/06 14:25 ("Perfeito! Vou transferir…") |
+| `8a0b08f2…` (duplicada) | `554792839913` (12 dígitos – sem o "9" de celular) | 03/06 20:05 | 15/06 14:44 ("Cancela.entao") |
 
-**Novas tabelas (public, com GRANTs + RLS admin-only para escrita, authenticated para leitura):**
+## Causa raiz
 
-- `asaas_settings` — singleton (1 linha)
-  - `id`, `environment` ('sandbox'|'production'), `webhook_token` (uuid), `default_billing_type` ('BOLETO'|'PIX'|'CREDIT_CARD'|'UNDEFINED'), `default_due_days` (int), `enabled` (bool), `last_sync_at`, `created_at`, `updated_at`
-  - A **API key** vai como secret (`ASAAS_API_KEY_SANDBOX` e `ASAAS_API_KEY_PROD`), não no banco.
+O cadastro do cliente tem `contact_phone = "(47) 92839913"` (10 dígitos locais, **sem o 9 inicial**). Quando a função `scheduled-messages-runner` disparou uma mensagem automática em 03/06 às 20:05:
 
-- `bank_accounts` — `id`, `name`, `bank_name`, `agency`, `account_number`, `account_type` ('checking'|'savings'|'cash'|'asaas'), `initial_balance` (numeric), `current_balance` (numeric, calculada via trigger), `color`, `active`, `is_asaas` (bool), timestamps
+1. `pickValidBrazilianWhatsAppPhone` aceita 10 dígitos e devolve `554792839913` sem inserir o "9" do celular.
+2. `ensureConversation` faz `eq("whatsapp_phone", normalizedPhone)` (busca exata) em vez de usar variantes — não encontrou a conversa canônica de 13 dígitos e **criou uma nova**.
 
-- `cost_centers` — `id`, `name`, `code`, `parent_id` (auto-ref), `active`, `color`, timestamps
+A partir daí, mensagens enviadas pelo Meta (que normaliza para 13 dígitos) caem na conversa antiga, e mensagens disparadas pelo runner caem na nova → duplicação visível na lista.
 
-- `recurring_entries` — `id`, `description`, `amount`, `type` ('receivable'|'payable'), `category_id`, `cost_center_id`, `client_id`, `bank_account_id`, `frequency` ('monthly'|'weekly'|'yearly'), `day_of_month` (int), `start_date`, `end_date`, `next_run_date`, `active`, `created_by`, timestamps
+Verifiquei o banco e existem ao menos **3 outras duplicatas com o mesmo padrão "12 dígitos vs 13 dígitos"** (DM Processos, Dioser, Porto Penha), além de algumas com telefones realmente diferentes (não são bug).
 
-- `asaas_customers` — mapa `client_id` ↔ `asaas_customer_id`, `synced_at`
+# Plano
 
-- `asaas_charges` — `id`, `entry_id` (FK financial_entries), `client_id`, `asaas_charge_id`, `asaas_subscription_id` (nullable), `billing_type`, `status`, `invoice_url`, `bank_slip_url`, `pix_qr_code`, `pix_copy_paste`, `value`, `due_date`, `paid_at`, `raw` (jsonb), timestamps
+## 1. Corrigir o bug em `supabase/functions/scheduled-messages-runner/index.ts`
 
-- `asaas_subscriptions` — `id`, `client_id`, `asaas_subscription_id`, `value`, `cycle`, `billing_type`, `next_due_date`, `status`, `description`, timestamps
+- Em `pickValidBrazilianWhatsAppPhone`: quando o DDD for válido e o número tiver 10 dígitos começando por 6-9 no primeiro dígito local, **inserir o "9"** retornando sempre 11 dígitos locais + 55 = 13 dígitos canônicos.
+- Em `ensureConversation`: substituir o `eq("whatsapp_phone", normalizedPhone)` por `.in("whatsapp_phone", getPhoneVariants(normalizedPhone))` (replicando o helper de `whatsapp-send` / `whatsapp-webhook`) e, se encontrar variante não-canônica, atualizar para o formato canônico antes de retornar.
 
-- `asaas_webhook_events` — `id`, `event`, `payload` (jsonb), `processed`, `error`, `received_at` (log de auditoria)
+## 2. Mesclar as duas conversas do André Locatelli (migração SQL)
 
-- `bill_payments` (pagamento de boletos/PIX via Asaas Transfer/Bill) — `id`, `entry_id`, `asaas_payment_id`, `bar_code`, `pix_qr_code`, `value`, `due_date`, `scheduled_date`, `status`, `raw` (jsonb), timestamps
+Em uma migração one-off:
 
-**Alterações em tabelas existentes:**
-- `financial_entries`: add `cost_center_id` (uuid, FK), `bank_account_id` (uuid, FK), `recurring_id` (uuid, FK), `asaas_charge_id` (text, indexed)
-- `financial_categories`: add `parent_id` (auto-ref) para categorias avançadas hierárquicas
+- `UPDATE chat_messages SET conversation_id = '7e57fd9b…' WHERE conversation_id = '8a0b08f2…'`
+- Mover/deduplicar participantes (`chat_participants`) da duplicada para a original.
+- `DELETE FROM chat_conversations WHERE id = '8a0b08f2…'`
+- `UPDATE chat_conversations SET updated_at = now(), awaiting_first_reply = false, status='open' WHERE id = '7e57fd9b…'` (para refletir a última mensagem "Cancela.entao").
+- `UPDATE clients SET contact_phone = '(47) 99283-9913' WHERE id = 'a4b6b030…'` para evitar reincidência.
 
-## Edge Functions
+## 3. (Opcional, recomendado) Limpeza das outras duplicatas com mesmo padrão
 
-Todas com CORS e validação Zod. Selecionam API key conforme `asaas_settings.environment`.
-
-- `asaas-customer-sync` — cria/atualiza customer no Asaas a partir de `clients` (nome, CNPJ, email, telefone, endereço); grava em `asaas_customers`.
-- `asaas-charge-create` — recebe `entry_id`; garante customer; cria cobrança (`POST /v3/payments`) com `billingType` (BOLETO/PIX/UNDEFINED); grava em `asaas_charges`; retorna URL do boleto e PIX copia-cola.
-- `asaas-charge-cancel` — `DELETE /v3/payments/{id}`.
-- `asaas-subscription-create` / `asaas-subscription-cancel` — `/v3/subscriptions`; espelha em `asaas_subscriptions`.
-- `asaas-bill-pay` — paga boleto/PIX (Asaas Bill Payment `/v3/bill` ou PIX Transfer `/v3/transfers`); cria registro em `bill_payments` e marca `entry_id` como pago quando confirmado.
-- `asaas-webhook` (`verify_jwt = false`) — endpoint público. Valida token via query/header `asaas-access-token` igual a `asaas_settings.webhook_token`. Trata eventos `PAYMENT_RECEIVED`, `PAYMENT_CONFIRMED`, `PAYMENT_OVERDUE`, `PAYMENT_DELETED`, `PAYMENT_REFUNDED`: atualiza `asaas_charges` e o `financial_entries` correspondente (status `paid`/`overdue`, `paid_date`).
-- `asaas-balance-sync` — consulta saldo Asaas (`/v3/finance/balance`) e atualiza `bank_accounts` da conta Asaas.
-- `recurring-entries-runner` (CRON diário) — gera `financial_entries` a partir de `recurring_entries` quando `next_run_date <= today`, avança `next_run_date`.
-
-## Secrets necessários
-- `ASAAS_API_KEY_SANDBOX`
-- `ASAAS_API_KEY_PRODUCTION`
-
-(Solicitados via `add_secret` após a aprovação do plano.)
-
-## Frontend
-
-Novos componentes em `src/components/financial/`:
-- `IntegrationsTab.tsx` — form de config Asaas: switch sandbox/produção, status da API key (verde se secret existe), `default_billing_type`, `default_due_days`, switch `enabled`, e card mostrando a **URL do webhook** (`{SUPABASE_URL}/functions/v1/asaas-webhook?token={webhook_token}`) com botão copiar + botão "Gerar novo token". Botão "Testar conexão" chama edge function leve.
-- `BankAccountsTab.tsx` — CRUD de contas, com cards mostrando saldo atual e botão "Sincronizar saldo Asaas" para contas `is_asaas`.
-- `RecurringEntriesTab.tsx` — CRUD de recorrências.
-- `CostCentersDialog.tsx` — gerenciamento (acessível também dentro do dialog de lançamento).
-- `AsaasChargesTab.tsx` — lista de cobranças Asaas com filtros (status, cliente, período), ações: ver fatura, copiar PIX, cancelar, marcar como pago manual.
-- `BillPaymentDialog.tsx` — colar código de barras/PIX em lançamento `payable`; chama `asaas-bill-pay`.
-- `DreTab.tsx` — seletor de período + tabela DRE (Receitas por categoria, Despesas por categoria, Resultado) e gráfico mensal.
-
-Atualizações em `Financial.tsx`:
-- Reorganizar em 7 abas listadas acima (mantendo KPIs no topo).
-- Dialog "Novo Lançamento" ganha: select de **Conta bancária**, **Centro de custo**, e (para `receivable`) botão "Gerar cobrança Asaas" pós-salvar.
-
-## Critérios de aceitação
-- Admin configura ambiente (sandbox/prod), salva e vê status conectado.
-- URL de webhook visível e copiável; eventos Asaas atualizam lançamentos automaticamente.
-- Criar cobrança a partir de lançamento gera boleto/PIX e mostra link.
-- Assinatura mensal pode ser criada para cliente ativo.
-- Pagamento de boleto/PIX a partir de lançamento `payable` chega ao Asaas.
-- Recorrências geram lançamentos automaticamente via CRON diário.
-- Contas bancárias e centros de custo funcionam no CRUD de lançamentos.
-- DRE exibe resultado por período com receitas/despesas agrupadas por categoria.
+Mesma migração detecta pares de conversas do mesmo `client_id` em que um telefone é a versão de 12 dígitos do outro (13 dígitos) e mescla automaticamente — sem tocar nos casos onde os telefones são realmente diferentes.
 
 ## Fora do escopo
-- Antecipação de recebíveis, split de pagamentos, cartão tokenizado, multi-empresa.
+
+- Duplicatas com telefones realmente distintos (clientes com 2 números cadastrados) — exigem decisão manual.
+- Telefones com lixo (ex: `554738420299000000000000`) — também tratamento manual.
+
+Quer que eu inclua o passo 3 (limpeza em lote dos outros casos do mesmo padrão) ou prefere mesclar só o André Locatelli agora?
