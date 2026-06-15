@@ -152,6 +152,12 @@ function pickValidBrazilianWhatsAppPhone(raw: string | null | undefined): { phon
     const ddd = Number(digits.slice(0, 2));
     if (ddd < 11 || ddd > 99) continue;
 
+    // Insere o "9" de celular quando o número veio com 10 dígitos e o primeiro
+    // dígito local indica celular (6-9). Garante formato canônico 13 dígitos.
+    if (digits.length === 10 && ["6", "7", "8", "9"].includes(digits[2])) {
+      digits = digits.slice(0, 2) + "9" + digits.slice(2);
+    }
+
     return { phone: `55${digits}`, candidates };
   }
 
@@ -200,9 +206,30 @@ async function resolveClients(supabase: any, sched: any): Promise<any[]> {
 
 /* ===== Ensure WA conversation for phone ===== */
 async function ensureConversation(supabase: any, client: any, normalizedPhone: string, deptContactName: string | null, adminId: string): Promise<string | null> {
+  // Procura por todas as variantes do telefone (com/sem o 9 do celular) para
+  // evitar duplicar conversa quando o número estiver cadastrado em formato
+  // diferente do canônico.
+  const variants = new Set<string>();
+  variants.add(normalizedPhone);
+  if (normalizedPhone.length === 13 && normalizedPhone.startsWith("55") && normalizedPhone[4] === "9") {
+    variants.add(normalizedPhone.slice(0, 4) + normalizedPhone.slice(5));
+  }
+  if (normalizedPhone.length === 12 && normalizedPhone.startsWith("55") && ["6","7","8","9"].includes(normalizedPhone[4])) {
+    variants.add(normalizedPhone.slice(0, 4) + "9" + normalizedPhone.slice(4));
+  }
   const { data: existing } = await supabase
-    .from("chat_conversations").select("id").eq("whatsapp_phone", normalizedPhone).maybeSingle();
-  if (existing?.id) return existing.id;
+    .from("chat_conversations")
+    .select("id, whatsapp_phone")
+    .in("whatsapp_phone", [...variants])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) {
+    if (existing.whatsapp_phone !== normalizedPhone) {
+      await supabase.from("chat_conversations").update({ whatsapp_phone: normalizedPhone }).eq("id", existing.id);
+    }
+    return existing.id;
+  }
   const { data: created } = await supabase.from("chat_conversations").insert({
     name: deptContactName || client.company_name,
     whatsapp_phone: normalizedPhone,
