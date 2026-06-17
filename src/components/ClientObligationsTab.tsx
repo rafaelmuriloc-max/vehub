@@ -228,11 +228,12 @@ export default function ClientObligationsTab({ clientId }: Props) {
             }
             toast({ title: `WhatsApp "${nextAct.title}" enviado automaticamente` });
           } else if (nextAct.type === 'whatsapp') {
-          // WhatsApp activity without template/body → mark completed and continue chain
-          if (nextComp) {
-            await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
-          } else {
-            await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+            // WhatsApp activity without template/body → mark completed and continue chain
+            if (nextComp) {
+              await supabase.from('obligation_activity_completions').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', nextComp.id);
+            } else {
+              await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: nextAct.id, completed: true, completed_at: new Date().toISOString() });
+            }
           }
         }
       }
