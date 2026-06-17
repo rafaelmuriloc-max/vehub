@@ -131,6 +131,19 @@ serve(async (req) => {
       const evoJson = await evoRes.json().catch(() => ({}));
       if (!evoRes.ok) {
         console.error("Evolution sendMedia error:", JSON.stringify(evoJson));
+        // Detect "number does not exist on WhatsApp" response
+        const respMsg = evoJson?.response?.message;
+        const notExists = Array.isArray(respMsg) && respMsg.some((m: any) => m?.exists === false);
+        if (notExists) {
+          return new Response(
+            JSON.stringify({
+              error: `O número ${cleanPhone} não está cadastrado no WhatsApp. Verifique o telefone do cliente.`,
+              code: "WHATSAPP_NUMBER_NOT_FOUND",
+              details: evoJson,
+            }),
+            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         return new Response(
           JSON.stringify({ error: evoJson?.message || "Erro ao enviar documento via Evolution", details: evoJson }),
           { status: evoRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
