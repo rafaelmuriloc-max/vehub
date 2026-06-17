@@ -1,47 +1,44 @@
-# Investigação
+## Resumo
 
-Encontrei **duas conversas** do André Locatelli (PORTO PENHA FOOD PARK LTDA), ambas com o mesmo `client_id` e mesma pessoa responsável:
+Reprocessar as ~30 instâncias DAS — Simples Nacional (competência 05/2026, vencimento 06/2026) que ficaram com documento anexado mas fluxo automático interrompido, **enviando o DAS via WhatsApp apenas para clientes que não têm nenhum registro de mídia entregue** (dedupe por presença de qualquer `whatsapp_logs.media_filename` na instância) e fechando e-mail/marcadores faltantes. Em paralelo, corrigir o bug de cadeia em `ClientObligationsTab.tsx`.
 
-| ID conversa | Telefone armazenado | Criada em | Última msg |
-|---|---|---|---|
-| `7e57fd9b…` (original) | `5547992839913` (13 dígitos – canônico) | 06/04 | 15/06 14:25 ("Perfeito! Vou transferir…") |
-| `8a0b08f2…` (duplicada) | `554792839913` (12 dígitos – sem o "9" de celular) | 03/06 20:05 | 15/06 14:44 ("Cancela.entao") |
+## Passos
 
-## Causa raiz
+### 1. Edge function nova: `obligation-chain-reprocess`
+Entrada: `{ obligation_id, reference_month }` (ou lista de `instance_ids`).
+Para cada instância encontrada:
+1. Lê todas as activities da obrigação (ordenadas).
+2. Confirma que a atividade 1 (document) tem `file_url`.
+3. Para cada atividade seguinte com `auto_start=true`:
+   - Se já há completion `completed=true` → pula.
+   - Se WhatsApp:
+     - Verifica em `whatsapp_logs` se existe **qualquer** linha com `instance_id = X` e `media_filename IS NOT NULL` → se sim, **não reenvia documento**, apenas marca a atividade como concluída (marker `completed=true`).
+     - Caso contrário, dispara `sendActivityWhatsApp` (template_only ou documents_only conforme posição).
+   - Se Email: dispara `sendActivityEmail` se ainda não houver `email_logs` para essa instance/activity; senão, marca como concluída.
+4. Recalcula status da `obligation_instance` (trigger já existe).
 
-O cadastro do cliente tem `contact_phone = "(47) 92839913"` (10 dígitos locais, **sem o 9 inicial**). Quando a função `scheduled-messages-runner` disparou uma mensagem automática em 03/06 às 20:05:
+Retorna lista por empresa com: enviado, pulado-pois-já-entregue, erro.
 
-1. `pickValidBrazilianWhatsAppPhone` aceita 10 dígitos e devolve `554792839913` sem inserir o "9" do celular.
-2. `ensureConversation` faz `eq("whatsapp_phone", normalizedPhone)` (busca exata) em vez de usar variantes — não encontrou a conversa canônica de 13 dígitos e **criou uma nova**.
+### 2. UI: botão em `SimplesNacionalTab`
+Botão "Reprocessar fluxo automático" (apenas admin) que abre dialog:
+- Seletor de mês de competência (default 05/2026).
+- Pré-visualização das instâncias afetadas.
+- Botão "Executar" → invoca a edge function.
+- Toast com resumo (X enviadas, Y puladas, Z falhas).
 
-A partir daí, mensagens enviadas pelo Meta (que normaliza para 13 dígitos) caem na conversa antiga, e mensagens disparadas pelo runner caem na nova → duplicação visível na lista.
+### 3. Correção do bug de cadeia
+Em `ClientObligationsTab.tsx` (duas ocorrências, linhas ~230 e ~320):
+- Substituir o `break;` seguido de código morto por: marcar a atividade WhatsApp sem template/body como concluída e **continuar** a cadeia ao invés de interromper.
 
-Verifiquei o banco e existem ao menos **3 outras duplicatas com o mesmo padrão "12 dígitos vs 13 dígitos"** (DM Processos, Dioser, Porto Penha), além de algumas com telefones realmente diferentes (não são bug).
+### 4. Hardening em `sendActivityWhatsApp`
+Passar `activity_id` no body do invoke a `whatsapp-send` para que o log inserido pelo edge function já fique reconciliável (evita o problema atual de logs com `activity_id NULL`). Não muda comportamento dos envios já feitos.
 
-# Plano
-
-## 1. Corrigir o bug em `supabase/functions/scheduled-messages-runner/index.ts`
-
-- Em `pickValidBrazilianWhatsAppPhone`: quando o DDD for válido e o número tiver 10 dígitos começando por 6-9 no primeiro dígito local, **inserir o "9"** retornando sempre 11 dígitos locais + 55 = 13 dígitos canônicos.
-- Em `ensureConversation`: substituir o `eq("whatsapp_phone", normalizedPhone)` por `.in("whatsapp_phone", getPhoneVariants(normalizedPhone))` (replicando o helper de `whatsapp-send` / `whatsapp-webhook`) e, se encontrar variante não-canônica, atualizar para o formato canônico antes de retornar.
-
-## 2. Mesclar as duas conversas do André Locatelli (migração SQL)
-
-Em uma migração one-off:
-
-- `UPDATE chat_messages SET conversation_id = '7e57fd9b…' WHERE conversation_id = '8a0b08f2…'`
-- Mover/deduplicar participantes (`chat_participants`) da duplicada para a original.
-- `DELETE FROM chat_conversations WHERE id = '8a0b08f2…'`
-- `UPDATE chat_conversations SET updated_at = now(), awaiting_first_reply = false, status='open' WHERE id = '7e57fd9b…'` (para refletir a última mensagem "Cancela.entao").
-- `UPDATE clients SET contact_phone = '(47) 99283-9913' WHERE id = 'a4b6b030…'` para evitar reincidência.
-
-## 3. (Opcional, recomendado) Limpeza das outras duplicatas com mesmo padrão
-
-Mesma migração detecta pares de conversas do mesmo `client_id` em que um telefone é a versão de 12 dígitos do outro (13 dígitos) e mescla automaticamente — sem tocar nos casos onde os telefones são realmente diferentes.
+### 5. Validação
+Após executar reprocessamento:
+- Conferir contagem de `obligation_instances` com `status='done'` para o filtro.
+- Spot-check em 3 instâncias: 4 completions `completed=true`, status final correto, sem documentos duplicados em `whatsapp_logs`.
 
 ## Fora do escopo
-
-- Duplicatas com telefones realmente distintos (clientes com 2 números cadastrados) — exigem decisão manual.
-- Telefones com lixo (ex: `554738420299000000000000`) — também tratamento manual.
-
-Quer que eu inclua o passo 3 (limpeza em lote dos outros casos do mesmo padrão) ou prefere mesclar só o André Locatelli agora?
+- Mudar estrutura/ordem das atividades da obrigação.
+- Reenviar para quem já recebeu (decidido: pular se houver qualquer `media_filename` na instância).
+- Aplicar o mesmo reprocessamento a outras obrigações além do DAS-SN nesta rodada (a function fica pronta para reuso).
