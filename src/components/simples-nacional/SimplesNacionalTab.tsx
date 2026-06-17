@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Loader2, RefreshCw, ChevronRight, Search, Calculator } from 'lucide-react';
 import CompetenciaRow from './CompetenciaRow';
+import ReprocessChainDialog from './ReprocessChainDialog';
 
 type Client = {
   id: string;
@@ -73,6 +74,7 @@ export default function SimplesNacionalTab() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [reprocessOpen, setReprocessOpen] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -203,7 +205,14 @@ export default function SimplesNacionalTab() {
             <span className="hidden sm:inline">Sincronizar agora</span>
           </Button>
         )}
+        {isAdmin && (
+          <Button variant="outline" size="sm" onClick={() => setReprocessOpen(true)}>
+            <RefreshCw className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Reprocessar fluxo</span>
+          </Button>
+        )}
       </div>
+      <ReprocessChainDialog open={reprocessOpen} onOpenChange={setReprocessOpen} />
 
       <Card className="overflow-hidden">
         <div className="hidden md:grid grid-cols-[1fr_180px_140px_180px_180px_40px] gap-3 px-4 py-3 bg-muted/40 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
