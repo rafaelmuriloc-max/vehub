@@ -391,6 +391,34 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
 
   const allErrors: string[] = [];
 
+  // Helper: extracts the actual error message from a failed supabase.functions.invoke()
+  // call. The default `error.message` is just "Edge Function returned a non-2xx status
+  // code"; the real reason lives in the response body.
+  async function extractInvokeError(invokeError: any, dataPayload: any): Promise<string> {
+    if (dataPayload && typeof dataPayload === 'object' && dataPayload.error) {
+      const code = dataPayload.code ? ` [${dataPayload.code}]` : '';
+      return `${dataPayload.error}${code}`;
+    }
+    try {
+      const ctx = invokeError?.context;
+      if (ctx && typeof ctx.json === 'function') {
+        const body = await ctx.clone().json().catch(async () => {
+          try { return JSON.parse(await ctx.clone().text()); } catch { return null; }
+        });
+        if (body?.error) {
+          const code = body.code ? ` [${body.code}]` : '';
+          return `${body.error}${code}`;
+        }
+        if (body) return JSON.stringify(body).slice(0, 500);
+      }
+      if (ctx && typeof ctx.text === 'function') {
+        const t = await ctx.clone().text().catch(() => '');
+        if (t) return t.slice(0, 500);
+      }
+    } catch { /* ignore */ }
+    return invokeError?.message || 'Erro desconhecido';
+  }
+
   for (const recipient of recipients) {
     const { sharedComponents, chatPreview } = buildSharedComponents(recipient.name);
     const recipientPhone = recipient.phone;
@@ -420,8 +448,9 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
         templateBody.text = replaceVariables(activity.whatsapp_message_body, variables, mustacheVars);
       }
       const { data: tplData, error: tplErr } = await supabase.functions.invoke('whatsapp-send', { body: templateBody });
-      const tplError = tplErr?.message || tplData?.error;
-      if (tplError) {
+      const hasTplFailure = !!tplErr || !!tplData?.error;
+      if (hasTplFailure) {
+        const tplError = await extractInvokeError(tplErr, tplData);
         allErrors.push(`Template para ${recipientPhone}: ${tplError}`);
         await logWhatsappSend({
           instanceId, activityId: activity.id, clientId, obligationId,
@@ -459,8 +488,9 @@ export async function sendActivityWhatsApp(params: SendActivityWhatsAppParams): 
         mediaFilename: doc.fileName,
       };
       const { data: docData, error: docErr } = await supabase.functions.invoke('whatsapp-send', { body: docBody });
-      const docError = docErr?.message || docData?.error;
-      if (docError) {
+      const hasDocFailure = !!docErr || !!docData?.error;
+      if (hasDocFailure) {
+        const docError = await extractInvokeError(docErr, docData);
         allErrors.push(`Documento ${doc.fileName} para ${recipientPhone}: ${docError}`);
         await logWhatsappSend({
           instanceId, activityId: activity.id, clientId, obligationId,
