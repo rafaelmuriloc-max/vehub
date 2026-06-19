@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
@@ -23,7 +23,7 @@ import { sanitizeStorageName } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
-type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string };
+type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null };
 type Client = { id: string; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
@@ -132,6 +132,8 @@ function CalendarMain() {
   const [showBulkCompleteConfirm, setShowBulkCompleteConfirm] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [semMovInstanceId, setSemMovInstanceId] = useState<string | null>(null);
+  const [semMovLoading, setSemMovLoading] = useState(false);
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
@@ -142,6 +144,32 @@ function CalendarMain() {
   };
 
   const clearSelection = () => setSelectedInstanceIds(new Set());
+
+  async function handleSemMovimento(instanceId: string) {
+    setSemMovLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('pgdasd-sem-movimento', {
+        body: { instance_id: instanceId },
+      });
+      if (error) {
+        toast({ title: 'Erro ao declarar', description: error.message, variant: 'destructive' });
+        return;
+      }
+      if (!data?.success) {
+        toast({ title: 'Falha na declaração', description: data?.error || 'Erro desconhecido', variant: 'destructive' });
+        return;
+      }
+      const wppMsg = data.whatsapp_sent
+        ? 'Cliente notificado via WhatsApp.'
+        : `Declaração enviada, mas WhatsApp falhou: ${data.whatsapp_error || 'desconhecido'}`;
+      toast({ title: 'Declarado sem movimento', description: wppMsg });
+      setSemMovInstanceId(null);
+      setDetailInstanceId(null);
+      await loadData();
+    } finally {
+      setSemMovLoading(false);
+    }
+  }
 
   const loadData = useCallback(async () => {
     const y = currentDate.getFullYear();
@@ -154,7 +182,7 @@ function CalendarMain() {
     const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
       supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at, status, completion_kind')
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
-      supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule'),
+      supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule, system_code'),
       supabase.from('clients').select('id, company_name, services_suspended'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
@@ -1064,6 +1092,8 @@ function CalendarMain() {
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                             const isSelected = selectedInstanceIds.has(ev.instanceId);
                             const quick = completed && isQuickCompleted(ev.instanceId, ev.obligationId);
+                            const obl = oblMap.get(ev.obligationId);
+                            const isDasSn = obl?.system_code === 'das-simples-nacional';
                             return (
                               <div
                                 key={idx}
@@ -1099,6 +1129,11 @@ function CalendarMain() {
                                     {!completed && (
                                       <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
                                         <Check className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                    {!completed && isDasSn && (
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
+                                        <FileX className="h-3.5 w-3.5" />
                                       </Button>
                                     )}
                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
@@ -1254,6 +1289,8 @@ function CalendarMain() {
                       {paginatedMonthPending.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
+                        const obl = oblMap.get(ev.obligationId);
+                        const isDasSn = obl?.system_code === 'das-simples-nacional';
                         return (
                           <div
                             key={idx}
@@ -1283,6 +1320,11 @@ function CalendarMain() {
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
                                   <Check className="h-3.5 w-3.5" />
                                 </Button>
+                                {isDasSn && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
+                                    <FileX className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -1500,6 +1542,17 @@ function CalendarMain() {
             )}
           </DialogHeader>
 
+          {detailObligation?.system_code === 'das-simples-nacional' && detailInstance && (
+            <Button
+              variant="outline"
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/30"
+              onClick={() => setSemMovInstanceId(detailInstance.id)}
+            >
+              <FileX className="h-4 w-4 mr-2" />
+              Declarar Sem Movimento e Avisar Cliente
+            </Button>
+          )}
+
           {/* Progress bar */}
           {dialogProgress.total > 0 && (
             <div className="space-y-1.5">
@@ -1706,6 +1759,28 @@ function CalendarMain() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={quickCompleteSelectedInstances} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               Concluir {selectedInstanceIds.size}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Sem Movimento Confirmation */}
+      <AlertDialog open={!!semMovInstanceId} onOpenChange={open => { if (!open && !semMovLoading) setSemMovInstanceId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Declarar Sem Movimento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Será transmitida ao SERPRO uma declaração PGDAS-D <strong>sem movimento</strong> para esta competência e enviada uma mensagem via WhatsApp ao cliente informando que o Simples Nacional foi declarado sem movimentação. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={semMovLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={semMovLoading}
+              onClick={(e) => { e.preventDefault(); if (semMovInstanceId) handleSemMovimento(semMovInstanceId); }}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {semMovLoading ? (<><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Enviando...</>) : 'Confirmar e Enviar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

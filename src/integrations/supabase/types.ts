@@ -1793,6 +1793,7 @@ export type Database = {
           recurrence: string
           retention_tax_type: string | null
           segment_filters: Json | null
+          system_code: string | null
           target_day: number | null
           tax_sphere: string | null
           updated_at: string
@@ -1813,6 +1814,7 @@ export type Database = {
           recurrence?: string
           retention_tax_type?: string | null
           segment_filters?: Json | null
+          system_code?: string | null
           target_day?: number | null
           tax_sphere?: string | null
           updated_at?: string
@@ -1833,6 +1835,7 @@ export type Database = {
           recurrence?: string
           retention_tax_type?: string | null
           segment_filters?: Json | null
+          system_code?: string | null
           target_day?: number | null
           tax_sphere?: string | null
           updated_at?: string
