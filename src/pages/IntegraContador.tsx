@@ -370,7 +370,7 @@ export default function IntegraContador() {
 
       // Fluxo padrão — filtra apenas os campos do serviço atual para evitar resíduos
       const allowedKeys = new Set(selectedService.fields.map(f => f.key));
-      const processedData: Record<string, string | number> = {};
+      const processedData: Record<string, string | number | boolean> = {};
       for (const k of Object.keys(formData)) {
         if (allowedKeys.has(k)) processedData[k] = formData[k];
       }
@@ -379,6 +379,7 @@ export default function IntegraContador() {
       }
       if ('descritivoRegime' in processedData) {
         processedData.tipoRegime = processedData.descritivoRegime === 'CAIXA' ? 1 : 0;
+        processedData.deAcordoResolucao = true;
       }
       const dados = dadosOverride || (selectedService.fields.length > 0 ? JSON.stringify(processedData) : '');
       const { data, error } = await supabase.functions.invoke('integra-contador', {
