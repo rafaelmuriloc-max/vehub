@@ -1,14 +1,17 @@
-O novo erro `[EntradaIncorreta-PGDASD-MSG_ISN_048]` mostra que o SERPRO está recusando meses enviados em `receitasBrutasAnteriores` para a declaração sem movimento. Primeiro recusou 03/2026; após remover PA-1, recusou 02/2026. Isso indica que, para este caso, o PGDAS-D não quer receber a lista de receitas anteriores gerada automaticamente.
+Mover o formulário PGDAS-D (Entregar Declaração Mensal) do Integra Contador para um botão por empresa na aba **Simples Nacional**.
 
-## Mudança
+## Mudanças
 
-Em `src/components/integra-contador/PgdasdDeclaracaoForm.tsx`:
+### 1. `src/components/simples-nacional/SimplesNacionalTab.tsx`
+- Adicionar botão **"Gerar Declaração Mensal"** (ícone `FileText`) na linha de cabeçalho expandido de cada empresa, ao lado de "Atualizar esta empresa".
+- Ao clicar, abrir um `Dialog` (full-width / scrollable) renderizando `PgdasdDeclaracaoForm` com o CNPJ do cliente.
+- Ao submeter, invocar a edge function `integra-contador` com `idSistema: 'PGDASD'`, `idServico: 'TRANSDECLARACAO11'`, `tipo: 'Declarar'` e `dados` (JSON string vindo do form).
+- Mostrar toast de sucesso/erro e fechar o dialog em caso de sucesso, então `loadData()`.
 
-1. No payload `semMovimento`, remover também a chave `receitasBrutasAnteriores`.
-   - Já removemos `atividades` e `folhasSalario`; agora a declaração sem movimento ficará só com os campos essenciais do período atual e `estabelecimentos` com CNPJ.
+### 2. `src/pages/IntegraContador.tsx`
+- Remover o serviço `TRANSDECLARACAO11` (linha 88) do `SERVICE_CATALOG.sn.services`.
+- Pode manter o import de `PgdasdDeclaracaoForm` se ainda for usado em outro lugar; caso contrário, remover.
 
-2. Manter `receitasBrutasAnteriores` apenas no fluxo com movimento, onde o usuário informa atividades/receitas e a lista pode ser necessária.
+### 3. Sem alterações de banco, edge function ou outros serviços
 
-3. Como segurança, no fluxo com movimento, sanitizar valores negativos em `receitasAnteriores` e `folhasSalario` para no mínimo `0`, evitando o erro `MSG_ISN_010` quando houver digitação negativa.
-
-Sem alterações em edge function, autenticação ou serviços de regime.
+O fluxo de envio (procurador, mTLS, payload do PGDAS-D) continua o mesmo — apenas a UI muda de lugar.

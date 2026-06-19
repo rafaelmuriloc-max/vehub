@@ -9,6 +9,10 @@ import { Card } from '@/components/ui/card';
 import { Loader2, RefreshCw, ChevronRight, Search, Calculator } from 'lucide-react';
 import CompetenciaRow from './CompetenciaRow';
 import ReprocessChainDialog from './ReprocessChainDialog';
+import { FileText } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import PgdasdDeclaracaoForm from '@/components/integra-contador/PgdasdDeclaracaoForm';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type Client = {
   id: string;
@@ -75,6 +79,39 @@ export default function SimplesNacionalTab() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [reprocessOpen, setReprocessOpen] = useState(false);
+  const [declOpen, setDeclOpen] = useState(false);
+  const [declClient, setDeclClient] = useState<Client | null>(null);
+  const [declLoading, setDeclLoading] = useState(false);
+
+  async function handleDeclaracao(dadosJson: string) {
+    if (!declClient) return;
+    setDeclLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('integra-contador', {
+        body: {
+          client_id: declClient.id,
+          idSistema: 'PGDASD',
+          idServico: 'TRANSDECLARACAO11',
+          tipo: 'Declarar',
+          versaoSistema: '1.0',
+          dados: dadosJson,
+        },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast({ title: 'Declaração transmitida', description: 'PGDAS-D enviado com sucesso.' });
+        setDeclOpen(false);
+        await loadData();
+      } else {
+        const msg = data?.data?.mensagens?.[0]?.texto || data?.error || 'Erro desconhecido';
+        toast({ title: 'Erro na transmissão', description: msg, variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeclLoading(false);
+    }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -271,10 +308,16 @@ export default function SimplesNacionalTab() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-semibold text-foreground">Competências de {year}</div>
                     {isAdmin && (
-                      <Button size="sm" variant="outline" onClick={() => handleSync(client.id)} disabled={syncing}>
-                        {syncing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                        Atualizar esta empresa
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => { setDeclClient(client); setDeclOpen(true); }}>
+                          <FileText className="h-3 w-3 mr-1" />
+                          Gerar Declaração Mensal
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleSync(client.id)} disabled={syncing}>
+                          {syncing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                          Atualizar esta empresa
+                        </Button>
+                      </div>
                     )}
                   </div>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
@@ -297,6 +340,27 @@ export default function SimplesNacionalTab() {
           );
         })}
       </Card>
+
+      <Dialog open={declOpen} onOpenChange={setDeclOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Entregar Declaração Mensal — PGDAS-D</DialogTitle>
+            <DialogDescription>
+              {declClient?.company_name} • {formatCnpj(declClient?.document)}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 pr-2">
+            {declClient && (
+              <PgdasdDeclaracaoForm
+                cnpjContribuinte={(declClient.document || '').replace(/\D/g, '')}
+                onSubmit={handleDeclaracao}
+                loading={declLoading}
+                disabled={!isAdmin}
+              />
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
