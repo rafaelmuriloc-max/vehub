@@ -120,6 +120,7 @@ async function reconcileActivityCompletion(opts: {
   const failureReason = errors.join('; ') || `Envios parciais: ${sentCount}/${expected}`;
   await upsertActivityCompletionMarker(instanceId, activityId, {
     completed: false,
+    completed_at: null,
     last_retry_at: new Date().toISOString(),
     failure_reason: failureReason,
   }, { incrementRetry: true });
