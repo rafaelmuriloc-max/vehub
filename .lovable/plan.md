@@ -1,19 +1,14 @@
-O erro `[EntradaIncorreta-REGIME-MSG_ISN_059]` ocorre porque os serviços do sistema `REGIMEAPURACAO` esperam o campo `anoOpcao`, mas o app está enviando `anoCalendario` (chave compartilhada do `F_ANO`).
+O SERPRO exige também o campo `descritivoRegime` ("COMPETENCIA" ou "CAIXA") junto com `tipoRegime` e `anoOpcao`.
 
 ## Mudança
 
 Em `src/pages/IntegraContador.tsx`:
 
-1. Adicionar um novo descritor de campo:
-   ```ts
-   const F_ANO_OPCAO = { key: 'anoOpcao', label: 'Ano da Opção', required: true, placeholder: '2026' };
-   ```
-2. Substituir `F_ANO` por `F_ANO_OPCAO` nas quatro entradas do sistema `REGIMEAPURACAO`:
-   - `EFETUAROPCAOREGIME101`
-   - `CONSULTARANOSCALENDARIOS102` (mantém `[]`, sem alteração)
-   - `CONSULTAROPCAOREGIME103`
-   - `CONSULTARRESOLUCAO104`
+1. Em vez de pedir `tipoRegime` ao usuário, simplificar para um único campo "Regime de Apuração" com duas opções textuais (COMPETENCIA / CAIXA).
+2. No `handleSubmit`, quando o serviço for `REGIMEAPURACAO/EFETUAROPCAOREGIME101`, derivar:
+   - `descritivoRegime` = valor selecionado ("COMPETENCIA" ou "CAIXA")
+   - `tipoRegime` = 0 para COMPETENCIA, 1 para CAIXA
+   - manter `anoOpcao`
+3. Atualizar o campo `F_TIPO_REGIME` para `F_REGIME` com `key: 'descritivoRegime'` e options `[{value:'COMPETENCIA'},{value:'CAIXA'}]`.
 
-Os demais serviços (`PGDASD`, `DEFIS`, `PGMEI`, `PAGTOWEB`, etc.) continuam usando `anoCalendario` via `F_ANO`.
-
-Nenhuma alteração em edge function ou backend — apenas a chave enviada no `dados`.
+Nenhuma outra alteração.
