@@ -770,6 +770,20 @@ export default function Obligations() {
               />
               <Label>É Imposto?</Label>
             </div>
+            <div className="space-y-2">
+              <Label>Integração de Sistema</Label>
+              <Select
+                value={obligationForm.system_code || 'none'}
+                onValueChange={v => setObligationForm({ ...obligationForm, system_code: v === 'none' ? '' : v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhuma</SelectItem>
+                  <SelectItem value="das-simples-nacional">DAS – Simples Nacional (PGDAS-D)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Habilita ações automatizadas no calendário (ex.: botão "Sem Movimento").</p>
+            </div>
             {obligationForm.is_tax && (
               <>
                 <div className="space-y-2">
