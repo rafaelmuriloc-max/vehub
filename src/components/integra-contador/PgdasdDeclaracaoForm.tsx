@@ -53,6 +53,9 @@ function calcPrevMonths(pa: string): number[] {
   const month = parseInt(pa.substring(4, 6));
   const months: number[] = [];
   let y = year, m = month;
+  // Pular o mês imediatamente anterior (PA-1): a lista começa em PA-2
+  m--;
+  if (m < 1) { m = 12; y--; }
   for (let i = 0; i < 12; i++) {
     m--;
     if (m < 1) { m = 12; y--; }
