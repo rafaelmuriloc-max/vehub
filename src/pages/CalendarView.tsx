@@ -1289,6 +1289,8 @@ function CalendarMain() {
                       {paginatedMonthPending.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
+                        const obl = oblMap.get(ev.obligationId);
+                        const isDasSn = obl?.system_code === 'das-simples-nacional';
                         return (
                           <div
                             key={idx}
@@ -1318,6 +1320,11 @@ function CalendarMain() {
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
                                   <Check className="h-3.5 w-3.5" />
                                 </Button>
+                                {isDasSn && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
+                                    <FileX className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
