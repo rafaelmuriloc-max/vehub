@@ -135,7 +135,6 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
         valorFixoIcms: null,
         valorFixoIss: null,
         receitasBrutasAnteriores: receitasAnteriores,
-        folhasSalario: folhasSalario,
         naoOptante: null,
         estabelecimentos: [{ cnpjCompleto: cnpjContribuinte }],
       } : {
