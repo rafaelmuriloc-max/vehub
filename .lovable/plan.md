@@ -1,14 +1,16 @@
-## Mudança
+## Reenviar somente a mensagem da obrigação que falhou
 
-Enviar a mensagem de "Sem Movimento" do PGDAS-D para o **contato do Depto Fiscal** cadastrado na empresa, em vez do telefone principal do cliente.
+### 1. `supabase/functions/pgdasd-sem-movimento/index.ts`
+Adicionar suporte ao parâmetro `notify_only: true` no body. Quando presente:
+- Pular completamente a chamada ao `integra-contador` e o `update` em `obligation_instances` (declaração já foi enviada).
+- Apenas carregar `client`, `obligation`, calcular `mesAno`, resolver o telefone do Depto Fiscal e enviar via Evolution.
+- Retornar `{ success, whatsapp_sent, whatsapp_error }`.
 
-### `supabase/functions/pgdasd-sem-movimento/index.ts`
+### 2. Disparar o reenvio
+Invocar o edge function via `supabase--curl_edge_functions` com:
+```json
+{ "instance_id": "00723bef-89c1-4aa7-bfb7-56fe6800682a", "notify_only": true }
+```
+e conferir nos logs/resposta se `whatsapp_sent = true`.
 
-1. Antes de usar `client.contact_phone`, consultar `client_department_contacts` filtrando por `client_id = inst.client_id` e `department_id = '7403523f-3518-4f8e-b6c3-5f252ced0f34'` (Depto Fiscal).
-2. Ordem de prioridade do telefone:
-   1. `client_department_contacts.contact_phone` do Depto Fiscal (se preenchido).
-   2. Fallback: `clients.contact_phone`.
-   3. Se nenhum: retornar `whatsapp_error: "Cliente sem telefone do Depto Fiscal cadastrado"`.
-3. Adicionar `console.log` mostrando origem do telefone (`fiscal_contact` vs `client_main`) e número normalizado, para facilitar debug futuro.
-
-Sem mudanças em UI, schema ou outras funções — o toast do `CalendarView` já exibe `whatsapp_error`.
+Sem mudanças de UI ou schema. O modo `notify_only` também fica disponível para reenvios futuros caso outra mensagem falhe.

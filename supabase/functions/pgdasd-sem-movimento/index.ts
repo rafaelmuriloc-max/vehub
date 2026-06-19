@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json().catch(() => ({}));
-    const { instance_id } = body || {};
+    const { instance_id, notify_only } = body || {};
     if (!instance_id) return json({ error: "instance_id obrigatório" }, 400);
 
     // Load instance + obligation + client + office
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     if (!client) return json({ error: "Cliente não encontrado" }, 404);
 
     const cnpj = onlyDigits(client.document);
-    if (cnpj.length !== 14) return json({ error: "CNPJ do cliente inválido" }, 400);
+    if (!notify_only && cnpj.length !== 14) return json({ error: "CNPJ do cliente inválido" }, 400);
 
     // Compute PA (AAAAMM) using competence_rule
     const refDate = new Date(inst.reference_month + "T00:00:00");
@@ -114,8 +114,10 @@ Deno.serve(async (req) => {
       valoresParaComparacao: [],
     };
 
-    // Call integra-contador forwarding the caller's JWT (so client RLS validation works)
-    const icRes = await fetch(`${supabaseUrl}/functions/v1/integra-contador`, {
+    let icJson: any = null;
+    if (!notify_only) {
+      // Call integra-contador forwarding the caller's JWT (so client RLS validation works)
+      const icRes = await fetch(`${supabaseUrl}/functions/v1/integra-contador`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -131,20 +133,19 @@ Deno.serve(async (req) => {
         dados: JSON.stringify(dadosPayload),
       }),
     });
-    const icJson = await icRes.json().catch(() => ({} as any));
-    const icStatus = icJson?.status ?? icRes.status;
-    const icOk = icRes.ok && (icStatus === 200 || icStatus === 201);
-
-    if (!icOk) {
-      const msg = icJson?.mensagens?.[0]?.texto || icJson?.error || `Erro SERPRO ${icStatus}`;
-      return json({ success: false, step: "serpro", error: msg, raw: icJson }, 200);
+      icJson = await icRes.json().catch(() => ({} as any));
+      const icStatus = icJson?.status ?? icRes.status;
+      const icOk = icRes.ok && (icStatus === 200 || icStatus === 201);
+      if (!icOk) {
+        const msg = icJson?.mensagens?.[0]?.texto || icJson?.error || `Erro SERPRO ${icStatus}`;
+        return json({ success: false, step: "serpro", error: msg, raw: icJson }, 200);
+      }
+      // Mark instance as done (sem movimento)
+      await admin
+        .from("obligation_instances")
+        .update({ status: "done", completion_kind: "sem_movimento" })
+        .eq("id", instance_id);
     }
-
-    // Mark instance as done (sem movimento)
-    await admin
-      .from("obligation_instances")
-      .update({ status: "done", completion_kind: "sem_movimento" })
-      .eq("id", instance_id);
 
     // Send WhatsApp message via Evolution API
     let whatsappSent = false;
