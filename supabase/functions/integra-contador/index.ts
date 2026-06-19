@@ -814,6 +814,9 @@ Deno.serve(async (req) => {
 
     let apiResponse = await callSerproApi(bearerToken, jwtToken);
     console.log(`API response status: ${apiResponse.status}`);
+    if (apiResponse.status >= 400) {
+      console.error(`[integra-contador] SERPRO erro ${apiResponse.status}:`, apiResponse.bodyText?.substring(0, 2000));
+    }
 
     // Retry on 401 (token expired)
     if (apiResponse.status === 401) {
@@ -823,6 +826,9 @@ Deno.serve(async (req) => {
       jwtToken = newAuth.jwtToken;
       apiResponse = await callSerproApi(bearerToken, jwtToken);
       console.log(`API response status (retry): ${apiResponse.status}`);
+      if (apiResponse.status >= 400) {
+        console.error(`[integra-contador] SERPRO erro ${apiResponse.status} (retry 401):`, apiResponse.bodyText?.substring(0, 2000));
+      }
     }
 
     // Retry on 403 with procurador token (cached token may be stale on SERPRO side)
@@ -857,6 +863,9 @@ Deno.serve(async (req) => {
         console.log(`[integra-contador] Token fresco obtido (${procuradorToken.length} chars), repetindo chamada...`);
         apiResponse = await callSerproApi(bearerToken, jwtToken);
         console.log(`API response status (403 retry): ${apiResponse.status}`);
+        if (apiResponse.status >= 400) {
+          console.error(`[integra-contador] SERPRO erro ${apiResponse.status} (retry 403):`, apiResponse.bodyText?.substring(0, 2000));
+        }
       } else {
         console.log(`[integra-contador] Não foi possível obter token fresco, mantendo resposta 403 original.`);
       }
