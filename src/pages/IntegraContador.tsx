@@ -46,6 +46,10 @@ const F_PA = { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true,
 const F_PERIODO = { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' };
 const F_ANO = { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' };
 const F_ANO_OPCAO = { key: 'anoOpcao', label: 'Ano da Opção', required: true, placeholder: '2026' };
+const F_TIPO_REGIME = { key: 'tipoRegime', label: 'Tipo de Regime', required: true, placeholder: '0', options: [
+  { value: '0', label: '0 - Competência' },
+  { value: '1', label: '1 - Caixa' },
+] };
 const F_PROTOCOLO = { key: 'protocolo', label: 'Protocolo', required: true, placeholder: '' };
 const F_NUM_PEDIDO = { key: 'numeroPedido', label: 'Número do Pedido', required: true, placeholder: '' };
 const F_NUM_DECLARACAO = { key: 'numeroDeclaracao', label: 'Nº Declaração', required: true, placeholder: '00000000201801001' };
@@ -91,7 +95,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       { idSistema: 'PGDASD', idServico: 'GERARDASPROCESSO18', label: 'DAS Processo Cobrança', description: 'Gera DAS referente a processo de Cobrança RFB', tipo: 'Emitir', fields: [F_NUM_PROCESSO] },
       { idSistema: 'PGDASD', idServico: 'GERARDASAVULSO19', label: 'DAS Avulso', description: 'Gera DAS avulso do Simples Nacional', tipo: 'Emitir', fields: [F_PERIODO] },
       // Regime de Apuração
-      { idSistema: 'REGIMEAPURACAO', idServico: 'EFETUAROPCAOREGIME101', label: 'Efetuar Opção Regime', description: 'Efetua opção de regime de apuração', tipo: 'Declarar', fields: [F_ANO_OPCAO] },
+      { idSistema: 'REGIMEAPURACAO', idServico: 'EFETUAROPCAOREGIME101', label: 'Efetuar Opção Regime', description: 'Efetua opção de regime de apuração', tipo: 'Declarar', fields: [F_ANO_OPCAO, F_TIPO_REGIME] },
       { idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTARANOSCALENDARIOS102', label: 'Consultar Anos Calendário', description: 'Consulta opções de regime de apuração por ano', tipo: 'Consultar', fields: [] },
       { idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTAROPCAOREGIME103', label: 'Consultar Opção Regime', description: 'Consulta opção de regime de apuração vigente', tipo: 'Consultar', fields: [F_ANO_OPCAO] },
       { idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTARRESOLUCAO104', label: 'Consultar Resolução Caixa', description: 'Consulta resolução de regime caixa', tipo: 'Consultar', fields: [F_ANO_OPCAO] },
@@ -364,10 +368,17 @@ export default function IntegraContador() {
         return;
       }
 
-      // Fluxo padrão
-      const processedData: Record<string, string | number> = { ...formData };
+      // Fluxo padrão — filtra apenas os campos do serviço atual para evitar resíduos
+      const allowedKeys = new Set(selectedService.fields.map(f => f.key));
+      const processedData: Record<string, string | number> = {};
+      for (const k of Object.keys(formData)) {
+        if (allowedKeys.has(k)) processedData[k] = formData[k];
+      }
       if ('numeroReciboEntrega' in processedData) {
         processedData.numeroReciboEntrega = Number(processedData.numeroReciboEntrega);
+      }
+      if ('tipoRegime' in processedData) {
+        processedData.tipoRegime = Number(processedData.tipoRegime);
       }
       const dados = dadosOverride || (selectedService.fields.length > 0 ? JSON.stringify(processedData) : '');
       const { data, error } = await supabase.functions.invoke('integra-contador', {
