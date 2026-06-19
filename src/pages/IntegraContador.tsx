@@ -46,9 +46,9 @@ const F_PA = { key: 'pa', label: 'Período Apuração (AAAAMM)', required: true,
 const F_PERIODO = { key: 'periodoApuracao', label: 'Período Apuração (AAAAMM)', required: true, placeholder: '202401' };
 const F_ANO = { key: 'anoCalendario', label: 'Ano Calendário', required: true, placeholder: '2024' };
 const F_ANO_OPCAO = { key: 'anoOpcao', label: 'Ano da Opção', required: true, placeholder: '2026' };
-const F_TIPO_REGIME = { key: 'tipoRegime', label: 'Tipo de Regime', required: true, placeholder: '0', options: [
-  { value: '0', label: '0 - Competência' },
-  { value: '1', label: '1 - Caixa' },
+const F_REGIME = { key: 'descritivoRegime', label: 'Regime de Apuração', required: true, placeholder: 'COMPETENCIA', options: [
+  { value: 'COMPETENCIA', label: 'Competência' },
+  { value: 'CAIXA', label: 'Caixa' },
 ] };
 const F_PROTOCOLO = { key: 'protocolo', label: 'Protocolo', required: true, placeholder: '' };
 const F_NUM_PEDIDO = { key: 'numeroPedido', label: 'Número do Pedido', required: true, placeholder: '' };
@@ -95,7 +95,7 @@ const SERVICE_CATALOG: Record<string, ServiceCategory> = {
       { idSistema: 'PGDASD', idServico: 'GERARDASPROCESSO18', label: 'DAS Processo Cobrança', description: 'Gera DAS referente a processo de Cobrança RFB', tipo: 'Emitir', fields: [F_NUM_PROCESSO] },
       { idSistema: 'PGDASD', idServico: 'GERARDASAVULSO19', label: 'DAS Avulso', description: 'Gera DAS avulso do Simples Nacional', tipo: 'Emitir', fields: [F_PERIODO] },
       // Regime de Apuração
-      { idSistema: 'REGIMEAPURACAO', idServico: 'EFETUAROPCAOREGIME101', label: 'Efetuar Opção Regime', description: 'Efetua opção de regime de apuração', tipo: 'Declarar', fields: [F_ANO_OPCAO, F_TIPO_REGIME] },
+      { idSistema: 'REGIMEAPURACAO', idServico: 'EFETUAROPCAOREGIME101', label: 'Efetuar Opção Regime', description: 'Efetua opção de regime de apuração', tipo: 'Declarar', fields: [F_ANO_OPCAO, F_REGIME] },
       { idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTARANOSCALENDARIOS102', label: 'Consultar Anos Calendário', description: 'Consulta opções de regime de apuração por ano', tipo: 'Consultar', fields: [] },
       { idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTAROPCAOREGIME103', label: 'Consultar Opção Regime', description: 'Consulta opção de regime de apuração vigente', tipo: 'Consultar', fields: [F_ANO_OPCAO] },
       { idSistema: 'REGIMEAPURACAO', idServico: 'CONSULTARRESOLUCAO104', label: 'Consultar Resolução Caixa', description: 'Consulta resolução de regime caixa', tipo: 'Consultar', fields: [F_ANO_OPCAO] },
@@ -377,8 +377,8 @@ export default function IntegraContador() {
       if ('numeroReciboEntrega' in processedData) {
         processedData.numeroReciboEntrega = Number(processedData.numeroReciboEntrega);
       }
-      if ('tipoRegime' in processedData) {
-        processedData.tipoRegime = Number(processedData.tipoRegime);
+      if ('descritivoRegime' in processedData) {
+        processedData.tipoRegime = processedData.descritivoRegime === 'CAIXA' ? 1 : 0;
       }
       const dados = dadosOverride || (selectedService.fields.length > 0 ? JSON.stringify(processedData) : '');
       const { data, error } = await supabase.functions.invoke('integra-contador', {
