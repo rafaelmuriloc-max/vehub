@@ -1,0 +1,2 @@
+ALTER TABLE public.obligations ADD COLUMN IF NOT EXISTS system_code text;
+CREATE UNIQUE INDEX IF NOT EXISTS obligations_system_code_unique ON public.obligations(system_code) WHERE system_code IS NOT NULL;
