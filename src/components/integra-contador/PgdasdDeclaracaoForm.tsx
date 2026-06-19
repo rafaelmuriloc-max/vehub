@@ -137,7 +137,7 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
         receitasBrutasAnteriores: receitasAnteriores,
         folhasSalario: folhasSalario,
         naoOptante: null,
-        estabelecimentos: [{ cnpjCompleto: cnpjContribuinte, atividades: [] }],
+        estabelecimentos: [{ cnpjCompleto: cnpjContribuinte }],
       } : {
         tipoDeclaracao: Number(tipoDeclaracao),
         receitaPaCompetenciaInterno: recCompInterno,
@@ -248,7 +248,7 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
             <div className="flex items-center gap-2 pt-2 border-t">
               <Checkbox checked={semMovimento} onCheckedChange={(v) => setSemMovimento(!!v)} id="semMovimento" />
               <Label htmlFor="semMovimento" className="font-semibold">
-                Declaração sem movimento (zera receitas e omite estabelecimentos)
+                Declaração sem movimento (sem atividades/receitas no período)
               </Label>
             </div>
           </AccordionContent>
