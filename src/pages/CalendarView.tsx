@@ -1542,6 +1542,17 @@ function CalendarMain() {
             )}
           </DialogHeader>
 
+          {detailObligation?.system_code === 'das-simples-nacional' && detailInstance && (
+            <Button
+              variant="outline"
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/30"
+              onClick={() => setSemMovInstanceId(detailInstance.id)}
+            >
+              <FileX className="h-4 w-4 mr-2" />
+              Declarar Sem Movimento e Avisar Cliente
+            </Button>
+          )}
+
           {/* Progress bar */}
           {dialogProgress.total > 0 && (
             <div className="space-y-1.5">
