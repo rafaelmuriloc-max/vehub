@@ -425,63 +425,6 @@ export default function Clients() {
 
   useEffect(() => { loadClients(); }, []);
 
-  // One-time batch update of tax_regime for existing clients
-  useEffect(() => {
-    const BATCH_KEY = 'tax_regime_batch_done';
-    if (localStorage.getItem(BATCH_KEY)) return;
-    
-    async function batchUpdateTaxRegimes() {
-      const { data: allClients } = await supabase
-        .from('clients')
-        .select('id, document, tax_regime');
-      
-      if (!allClients) return;
-      
-      const cnpjClients = allClients.filter(
-        (c) => c.document && c.document.replace(/\D/g, '').length === 14
-      );
-
-      let updated = 0;
-      let errors = 0;
-
-      for (const client of cnpjClients) {
-        const cnpj = client.document!.replace(/\D/g, '');
-        try {
-          const { data, error: fnError } = await supabase.functions.invoke('cnpj-lookup', { body: { cnpj } });
-          if (fnError || !data || data.error) { errors++; continue; }
-          
-          const isSimples = data.opcao_pelo_simples === true;
-          const isMei = data.opcao_pelo_mei === true;
-          const newRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
-
-          if (client.tax_regime !== newRegime) {
-            await supabase
-              .from('clients')
-              .update({ tax_regime: newRegime })
-              .eq('id', client.id);
-            updated++;
-          }
-        } catch {
-          errors++;
-        }
-        await new Promise(r => setTimeout(r, 1000));
-      }
-
-      localStorage.setItem(BATCH_KEY, 'true');
-      console.log(`[batch-tax-regime] Done: ${updated} updated, ${errors} errors, ${cnpjClients.length} total`);
-      
-      if (updated > 0) {
-        loadClients();
-        toast({
-          title: 'Regimes tributários atualizados',
-          description: `${updated} cliente(s) atualizado(s) automaticamente.`,
-        });
-      }
-    }
-
-    batchUpdateTaxRegimes();
-  }, []);
-
   // Auto-classify segments and backfill business_segment
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
