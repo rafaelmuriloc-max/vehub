@@ -137,7 +137,6 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
         receitaPaCaixaExterno: null,
         valorFixoIcms: null,
         valorFixoIss: null,
-        receitasBrutasAnteriores: receitasAnteriores,
         naoOptante: null,
         estabelecimentos: [{ cnpjCompleto: cnpjContribuinte }],
       } : {
@@ -148,8 +147,15 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
         receitaPaCaixaExterno: recCaixaExterno,
         valorFixoIcms: valorFixoIcms,
         valorFixoIss: valorFixoIss,
-        receitasBrutasAnteriores: receitasAnteriores,
-        folhasSalario: folhasSalario,
+        receitasBrutasAnteriores: receitasAnteriores.map(r => ({
+          pa: r.pa,
+          valorInterno: Math.max(0, r.valorInterno || 0),
+          valorExterno: Math.max(0, r.valorExterno || 0),
+        })),
+        folhasSalario: folhasSalario.map(f => ({
+          pa: f.pa,
+          valor: Math.max(0, f.valor || 0),
+        })),
         naoOptante: null,
         estabelecimentos: estabelecimentos.map(est => ({
           cnpjCompleto: est.cnpjCompleto,
