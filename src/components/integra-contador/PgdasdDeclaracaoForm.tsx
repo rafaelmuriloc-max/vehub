@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Plus, Trash2, Send, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Props {
   cnpjContribuinte: string;
@@ -69,6 +70,7 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
   const [tipoDeclaracao, setTipoDeclaracao] = useState('1');
   const [transmissao, setTransmissao] = useState(true);
   const [comparacao, setComparacao] = useState(true);
+  const [semMovimento, setSemMovimento] = useState(false);
 
   // Receitas do período
   const [recCompInterno, setRecCompInterno] = useState(0);
@@ -103,12 +105,40 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
   }, [cnpjContribuinte]);
 
   function handleSubmit() {
+    // Validação: declaração sem movimento vs com movimento
+    if (!semMovimento) {
+      const totalReceita = (recCompInterno || 0) + (recCompExterno || 0);
+      if (totalReceita <= 0) {
+        toast.error('Receita do período é zero. Marque "Declaração sem movimento" ou informe os valores.');
+        return;
+      }
+      const atividadeZerada = estabelecimentos.some(est =>
+        est.atividades.some(atv => (atv.valorAtividade || 0) <= 0)
+      );
+      if (atividadeZerada) {
+        toast.error('Toda atividade deve ter valor maior que zero. Remova-as ou marque "Declaração sem movimento".');
+        return;
+      }
+    }
+
     const payload = {
       cnpjCompleto: cnpjContribuinte,
       pa: Number(pa),
       indicadorTransmissao: transmissao,
-      indicadorComparacao: comparacao,
-      declaracao: {
+      indicadorComparacao: semMovimento ? false : comparacao,
+      declaracao: semMovimento ? {
+        tipoDeclaracao: Number(tipoDeclaracao),
+        receitaPaCompetenciaInterno: 0,
+        receitaPaCompetenciaExterno: 0,
+        receitaPaCaixaInterno: null,
+        receitaPaCaixaExterno: null,
+        valorFixoIcms: null,
+        valorFixoIss: null,
+        receitasBrutasAnteriores: receitasAnteriores,
+        folhasSalario: folhasSalario,
+        naoOptante: null,
+        estabelecimentos: [],
+      } : {
         tipoDeclaracao: Number(tipoDeclaracao),
         receitaPaCompetenciaInterno: recCompInterno,
         receitaPaCompetenciaExterno: recCompExterno,
@@ -136,7 +166,7 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
           })),
         })),
       },
-      valoresParaComparacao: comparacao ? valoresComparacao : [],
+      valoresParaComparacao: (!semMovimento && comparacao) ? valoresComparacao : [],
     };
     onSubmit(JSON.stringify(payload));
   }
@@ -214,6 +244,12 @@ export default function PgdasdDeclaracaoForm({ cnpjContribuinte, onSubmit, loadi
                 <Checkbox checked={comparacao} onCheckedChange={(v) => setComparacao(!!v)} id="comparacao" />
                 <Label htmlFor="comparacao">Indicador de Comparação</Label>
               </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <Checkbox checked={semMovimento} onCheckedChange={(v) => setSemMovimento(!!v)} id="semMovimento" />
+              <Label htmlFor="semMovimento" className="font-semibold">
+                Declaração sem movimento (zera receitas e omite estabelecimentos)
+              </Label>
             </div>
           </AccordionContent>
         </AccordionItem>
