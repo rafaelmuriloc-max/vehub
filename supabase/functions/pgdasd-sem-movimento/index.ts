@@ -149,19 +149,32 @@ Deno.serve(async (req) => {
     // Send WhatsApp message via Evolution API
     let whatsappSent = false;
     let whatsappError: string | null = null;
-    const phone = onlyDigits(client.contact_phone);
+    // Prioriza contato do Depto Fiscal; fallback para telefone principal do cliente
+    const DEPTO_FISCAL_ID = "7403523f-3518-4f8e-b6c3-5f252ced0f34";
+    const { data: fiscalContact } = await admin
+      .from("client_department_contacts")
+      .select("contact_phone")
+      .eq("client_id", inst.client_id)
+      .eq("department_id", DEPTO_FISCAL_ID)
+      .maybeSingle();
+    const fiscalPhone = onlyDigits(fiscalContact?.contact_phone);
+    const fallbackPhone = onlyDigits(client.contact_phone);
+    const phone = fiscalPhone || fallbackPhone;
+    const phoneSource = fiscalPhone ? "fiscal_contact" : (fallbackPhone ? "client_main" : "none");
+    console.log("[pgdasd-sem-movimento] phone source:", phoneSource, "digits:", phone);
     const evoUrl = Deno.env.get("EVOLUTION_API_URL");
     const evoKey = Deno.env.get("EVOLUTION_API_KEY");
     const evoInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
 
     if (!phone) {
-      whatsappError = "Cliente sem telefone cadastrado";
+      whatsappError = "Depto Fiscal sem telefone cadastrado para este cliente";
     } else if (!evoUrl || !evoKey || !evoInstance) {
       whatsappError = "Evolution API não configurada";
     } else {
       let evoPhone = phone;
       if (!evoPhone.startsWith("55")) evoPhone = "55" + evoPhone;
       const resolved = await resolveEvolutionNumber(evoUrl, evoKey, evoInstance, evoPhone);
+      console.log("[pgdasd-sem-movimento] resolved:", JSON.stringify(resolved));
       if (!resolved.exists || !resolved.number) {
         whatsappError = `Número não possui WhatsApp (${evoPhone})`;
       } else {
@@ -183,6 +196,7 @@ Deno.serve(async (req) => {
         } else {
           const t = await r.text().catch(() => "");
           whatsappError = `Evolution API ${r.status}: ${t.slice(0, 200)}`;
+          console.error("[pgdasd-sem-movimento] evolution send failed:", r.status, t.slice(0, 300));
         }
       }
     }
