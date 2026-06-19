@@ -1,7 +1,14 @@
-O SERPRO rejeitou `03/2026` como período desnecessário em `receitasBrutasAnteriores` para PA=202604. A regra do PGDAS-D é que essa lista representa os 12 meses **anteriores ao mês imediatamente anterior** ao PA (de PA-13 até PA-2), pois PA-1 é tratado separadamente.
+O novo erro `[EntradaIncorreta-PGDASD-MSG_ISN_048]` mostra que o SERPRO está recusando meses enviados em `receitasBrutasAnteriores` para a declaração sem movimento. Primeiro recusou 03/2026; após remover PA-1, recusou 02/2026. Isso indica que, para este caso, o PGDAS-D não quer receber a lista de receitas anteriores gerada automaticamente.
 
 ## Mudança
 
-Em `src/components/integra-contador/PgdasdDeclaracaoForm.tsx`, ajustar `calcPrevMonths` para começar em PA-2 (decrementar duas vezes antes de iniciar o loop), gerando os 12 meses corretos: PA-2 até PA-13.
+Em `src/components/integra-contador/PgdasdDeclaracaoForm.tsx`:
 
-Sem outras alterações.
+1. No payload `semMovimento`, remover também a chave `receitasBrutasAnteriores`.
+   - Já removemos `atividades` e `folhasSalario`; agora a declaração sem movimento ficará só com os campos essenciais do período atual e `estabelecimentos` com CNPJ.
+
+2. Manter `receitasBrutasAnteriores` apenas no fluxo com movimento, onde o usuário informa atividades/receitas e a lista pode ser necessária.
+
+3. Como segurança, no fluxo com movimento, sanitizar valores negativos em `receitasAnteriores` e `folhasSalario` para no mínimo `0`, evitando o erro `MSG_ISN_010` quando houver digitação negativa.
+
+Sem alterações em edge function, autenticação ou serviços de regime.
