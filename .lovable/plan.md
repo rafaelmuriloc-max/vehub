@@ -1,11 +1,19 @@
-Plano para corrigir o erro `[EntradaIncorreta-PGDASD-MSG_ISN_045]` no PGDAS-D:
+O erro `[EntradaIncorreta-REGIME-MSG_ISN_059]` ocorre porque os serviços do sistema `REGIMEAPURACAO` esperam o campo `anoOpcao`, mas o app está enviando `anoCalendario` (chave compartilhada do `F_ANO`).
 
-1. Em `src/components/integra-contador/PgdasdDeclaracaoForm.tsx`, ajustar o payload da declaração `semMovimento` para não enviar a chave `folhasSalario`.
-   - O SERPRO rejeita `folhasSalario` quando não há atividade com requisito de folha.
-   - O payload sem movimento ficará com receitas zeradas, `estabelecimentos` contendo apenas o CNPJ e sem `atividades` nem `folhasSalario`.
+## Mudança
 
-2. Manter `folhasSalario` apenas no fluxo com movimento, onde existem atividades informadas.
+Em `src/pages/IntegraContador.tsx`:
 
-3. Não alterar autenticação SERPRO, procurador, edge function ou outros serviços do Integra Contador.
+1. Adicionar um novo descritor de campo:
+   ```ts
+   const F_ANO_OPCAO = { key: 'anoOpcao', label: 'Ano da Opção', required: true, placeholder: '2026' };
+   ```
+2. Substituir `F_ANO` por `F_ANO_OPCAO` nas quatro entradas do sistema `REGIMEAPURACAO`:
+   - `EFETUAROPCAOREGIME101`
+   - `CONSULTARANOSCALENDARIOS102` (mantém `[]`, sem alteração)
+   - `CONSULTAROPCAOREGIME103`
+   - `CONSULTARRESOLUCAO104`
 
-Validação esperada: o JSON gerado para `semMovimento` não terá `folhasSalario`, evitando a rejeição `MSG_ISN_045`.
+Os demais serviços (`PGDASD`, `DEFIS`, `PGMEI`, `PAGTOWEB`, etc.) continuam usando `anoCalendario` via `F_ANO`.
+
+Nenhuma alteração em edge function ou backend — apenas a chave enviada no `dados`.
