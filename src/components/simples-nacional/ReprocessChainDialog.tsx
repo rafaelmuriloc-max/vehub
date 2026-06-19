@@ -125,8 +125,9 @@ export default function ReprocessChainDialog({ open, onOpenChange }: { open: boo
         // Dedupe sources for this instance
         const { data: waLogs } = await supabase
           .from('whatsapp_logs')
-          .select('media_filename, template_name')
-          .eq('instance_id', inst.id);
+          .select('media_filename, template_name, status')
+          .eq('instance_id', inst.id)
+          .eq('status', 'sent');
         const hasAnyMedia = (waLogs || []).some(l => !!l.media_filename);
         const hasAnyTemplate = (waLogs || []).some(l => !!l.template_name);
 
