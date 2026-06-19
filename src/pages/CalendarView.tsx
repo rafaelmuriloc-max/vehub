@@ -1764,6 +1764,28 @@ function CalendarMain() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Sem Movimento Confirmation */}
+      <AlertDialog open={!!semMovInstanceId} onOpenChange={open => { if (!open && !semMovLoading) setSemMovInstanceId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Declarar Sem Movimento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Será transmitida ao SERPRO uma declaração PGDAS-D <strong>sem movimento</strong> para esta competência e enviada uma mensagem via WhatsApp ao cliente informando que o Simples Nacional foi declarado sem movimentação. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={semMovLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={semMovLoading}
+              onClick={(e) => { e.preventDefault(); if (semMovInstanceId) handleSemMovimento(semMovInstanceId); }}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {semMovLoading ? (<><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Enviando...</>) : 'Confirmar e Enviar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <TaskEditDialog
         open={editingTaskId !== null}
         onOpenChange={(v) => { if (!v) setEditingTaskId(null); }}
