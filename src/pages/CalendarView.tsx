@@ -132,6 +132,8 @@ function CalendarMain() {
   const [showBulkCompleteConfirm, setShowBulkCompleteConfirm] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [semMovInstanceId, setSemMovInstanceId] = useState<string | null>(null);
+  const [semMovLoading, setSemMovLoading] = useState(false);
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
@@ -142,6 +144,32 @@ function CalendarMain() {
   };
 
   const clearSelection = () => setSelectedInstanceIds(new Set());
+
+  async function handleSemMovimento(instanceId: string) {
+    setSemMovLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('pgdasd-sem-movimento', {
+        body: { instance_id: instanceId },
+      });
+      if (error) {
+        toast({ title: 'Erro ao declarar', description: error.message, variant: 'destructive' });
+        return;
+      }
+      if (!data?.success) {
+        toast({ title: 'Falha na declaração', description: data?.error || 'Erro desconhecido', variant: 'destructive' });
+        return;
+      }
+      const wppMsg = data.whatsapp_sent
+        ? 'Cliente notificado via WhatsApp.'
+        : `Declaração enviada, mas WhatsApp falhou: ${data.whatsapp_error || 'desconhecido'}`;
+      toast({ title: 'Declarado sem movimento', description: wppMsg });
+      setSemMovInstanceId(null);
+      setDetailInstanceId(null);
+      await loadData();
+    } finally {
+      setSemMovLoading(false);
+    }
+  }
 
   const loadData = useCallback(async () => {
     const y = currentDate.getFullYear();
