@@ -418,12 +418,33 @@ function ServiceHoursCard({
   const [fallbackDept, setFallbackDept] = useState<string>(data.triage_fallback_department_id || '');
   const [triagePrompt, setTriagePrompt] = useState<string>(data.triage_system_prompt || '');
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [directEnabled, setDirectEnabled] = useState(!!data.triage_direct_route_enabled);
+  const [directDept, setDirectDept] = useState<string>(data.triage_direct_route_department_id || '');
+  const [directUser, setDirectUser] = useState<string>(data.triage_direct_route_user_id || '');
+  const [deptUsers, setDeptUsers] = useState<{ user_id: string; full_name: string | null }[]>([]);
 
   useEffect(() => {
     supabase.from('departments').select('id, name').order('name').then(({ data }) => {
       setDepartments((data as any[]) || []);
     });
   }, []);
+
+  useEffect(() => {
+    if (!directDept) { setDeptUsers([]); return; }
+    supabase
+      .from('profile_departments')
+      .select('user_id, profiles:profiles!inner(full_name)')
+      .eq('department_id', directDept)
+      .then(({ data }) => {
+        const rows = ((data as any[]) || []).map(r => ({
+          user_id: r.user_id,
+          full_name: r.profiles?.full_name ?? null,
+        }));
+        rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+        setDeptUsers(rows);
+        if (directUser && !rows.find(r => r.user_id === directUser)) setDirectUser('');
+      });
+  }, [directDept]);
 
   const save = async () => {
     if (!data.id) return;
@@ -439,6 +460,10 @@ function ServiceHoursCard({
         return;
       }
     }
+    if (directEnabled && (!directDept || !directUser)) {
+      toast({ title: 'Configure a transferência direta', description: 'Selecione o departamento e o atendente padrão antes de ativar a transferência direta.', variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     const patch: Partial<CompanyData> = {
       service_hours_enabled: enabled,
@@ -451,6 +476,9 @@ function ServiceHoursCard({
       triage_enabled: triageEnabled,
       triage_fallback_department_id: fallbackDept || null,
       triage_system_prompt: triagePrompt || null,
+      triage_direct_route_enabled: directEnabled,
+      triage_direct_route_department_id: directEnabled ? directDept || null : null,
+      triage_direct_route_user_id: directEnabled ? directUser || null : null,
     };
     const { error } = await supabase.from('company_settings').update(patch).eq('id', data.id);
     setSaving(false);
