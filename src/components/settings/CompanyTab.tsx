@@ -594,6 +594,53 @@ function ServiceHoursCard({
             </p>
           </div>
 
+          <div className="border-t pt-3 space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label className="text-sm font-medium">Transferência direta (sem IA)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Quando ativada, toda nova conversa é encaminhada imediatamente para o departamento e atendente escolhidos, sem passar pela triagem da IA.
+                </p>
+              </div>
+              <Switch checked={directEnabled} onCheckedChange={setDirectEnabled} disabled={!admin} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Departamento de destino</Label>
+                <select
+                  value={directDept}
+                  onChange={e => setDirectDept(e.target.value)}
+                  disabled={!admin || !directEnabled}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value="">— Selecione —</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Atendente padrão</Label>
+                <select
+                  value={directUser}
+                  onChange={e => setDirectUser(e.target.value)}
+                  disabled={!admin || !directEnabled || !directDept}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value="">— Selecione —</option>
+                  {deptUsers.map(u => (
+                    <option key={u.user_id} value={u.user_id}>{u.full_name || u.user_id}</option>
+                  ))}
+                </select>
+                {directEnabled && directDept && deptUsers.length === 0 && (
+                  <p className="text-xs text-destructive">
+                    Nenhum atendente vinculado a este departamento. Vincule em Configurações → Departamentos.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-1">
             <Label>Prompt da Gisele (treinamento)</Label>
             <Textarea
