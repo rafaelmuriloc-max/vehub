@@ -431,19 +431,21 @@ function ServiceHoursCard({
 
   useEffect(() => {
     if (!directDept) { setDeptUsers([]); return; }
-    supabase
-      .from('profile_departments')
-      .select('user_id, profiles:profiles!inner(full_name)')
-      .eq('department_id', directDept)
-      .then(({ data }) => {
-        const rows = ((data as any[]) || []).map(r => ({
-          user_id: r.user_id,
-          full_name: r.profiles?.full_name ?? null,
-        }));
-        rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
-        setDeptUsers(rows);
-        if (directUser && !rows.find(r => r.user_id === directUser)) setDirectUser('');
-      });
+    (async () => {
+      const [{ data: allLinks }, { data: deptLinks }, { data: allProfiles }] = await Promise.all([
+        supabase.from('profile_departments').select('user_id'),
+        supabase.from('profile_departments').select('user_id').eq('department_id', directDept),
+        supabase.from('profiles').select('user_id, full_name'),
+      ]);
+      const linked = new Set(((allLinks as any[]) || []).map(r => r.user_id));
+      const inDept = new Set(((deptLinks as any[]) || []).map(r => r.user_id));
+      const rows = (((allProfiles as any[]) || [])
+        .filter(p => inDept.has(p.user_id) || !linked.has(p.user_id))
+        .map(p => ({ user_id: p.user_id, full_name: p.full_name ?? null })));
+      rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+      setDeptUsers(rows);
+      if (directUser && !rows.find(r => r.user_id === directUser)) setDirectUser('');
+    })();
   }, [directDept]);
 
   const save = async () => {
