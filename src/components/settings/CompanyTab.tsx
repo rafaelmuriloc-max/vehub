@@ -40,6 +40,9 @@ interface CompanyData {
   triage_enabled?: boolean | null;
   triage_fallback_department_id?: string | null;
   triage_system_prompt?: string | null;
+  triage_direct_route_enabled?: boolean | null;
+  triage_direct_route_department_id?: string | null;
+  triage_direct_route_user_id?: string | null;
 }
 
 export function CompanyTab() {
