@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     // Settings (must be enabled)
     const { data: settings } = await supabase
       .from("company_settings")
-      .select("agent_name, triage_enabled, triage_fallback_department_id, triage_system_prompt")
+      .select("agent_name, triage_enabled, triage_fallback_department_id, triage_system_prompt, triage_direct_route_enabled, triage_direct_route_department_id, triage_direct_route_user_id")
       .limit(1).maybeSingle();
     if (!settings?.triage_enabled) {
       await supabase.from("chat_conversations")
@@ -83,6 +83,70 @@ Deno.serve(async (req) => {
       });
     }
     const agentName = settings.agent_name || "Atendimento";
+
+    // ===== Direct route (bypass AI) =====
+    const directEnabled = (settings as any).triage_direct_route_enabled === true;
+    const directDeptId = (settings as any).triage_direct_route_department_id as string | null;
+    const directUserId = (settings as any).triage_direct_route_user_id as string | null;
+    if (directEnabled && directDeptId && directUserId) {
+      const { data: dept } = await supabase
+        .from("departments")
+        .select("id, name")
+        .eq("id", directDeptId)
+        .maybeSingle();
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("user_id, full_name")
+        .eq("user_id", directUserId)
+        .maybeSingle();
+      const deptName = dept?.name || "departamento responsável";
+      const firstName = (prof?.full_name || "").split(" ")[0] || "um atendente";
+
+      await supabase.from("chat_conversations").update({
+        triage_status: "done",
+        triage_department_id: directDeptId,
+        triaged_department_id: directDeptId,
+        triage_summary: "Roteamento direto (sem IA).",
+        assigned_to: directUserId,
+        updated_at: new Date().toISOString(),
+      }).eq("id", conversation_id);
+
+      const transferText = `Olá! Vou transferir você para o nosso *${deptName}*. Em instantes ${firstName} continuará o atendimento por aqui. 😊`;
+      const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({ conversationId: conversation_id, text: transferText, senderName: agentName, agentName }),
+      });
+      if (!sendRes.ok) console.error("direct-route send-text failed:", sendRes.status, await sendRes.text());
+
+      try {
+        const { data: msgs2 } = await supabase
+          .from("chat_messages")
+          .select("content, message_type")
+          .eq("conversation_id", conversation_id)
+          .order("created_at", { ascending: false })
+          .limit(30);
+        const userText = (msgs2 || [])
+          .filter((m: any) => m.message_type?.startsWith("whatsapp_incoming"))
+          .map((m: any) => m.content || "")
+          .join(" \n").trim().slice(0, 2000);
+        if (userText) {
+          await supabase.from("triage_learnings").insert({
+            conversation_id,
+            user_messages: userText,
+            chosen_department_id: directDeptId,
+            summary: "Roteamento direto",
+            outcome: "auto_confirmed",
+          });
+        }
+      } catch (e) {
+        console.warn("direct-route learning insert failed:", (e as Error).message);
+      }
+
+      return new Response(JSON.stringify({ ok: true, action: "direct_route", department: deptName, assignee: directUserId }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Departments
     const { data: depts } = await supabase

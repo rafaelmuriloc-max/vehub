@@ -876,6 +876,9 @@ export type Database = {
           service_lunch_start: string | null
           service_open_time: string | null
           service_timezone: string
+          triage_direct_route_department_id: string | null
+          triage_direct_route_enabled: boolean
+          triage_direct_route_user_id: string | null
           triage_enabled: boolean
           triage_fallback_department_id: string | null
           triage_system_prompt: string | null
@@ -914,6 +917,9 @@ export type Database = {
           service_lunch_start?: string | null
           service_open_time?: string | null
           service_timezone?: string
+          triage_direct_route_department_id?: string | null
+          triage_direct_route_enabled?: boolean
+          triage_direct_route_user_id?: string | null
           triage_enabled?: boolean
           triage_fallback_department_id?: string | null
           triage_system_prompt?: string | null
@@ -952,6 +958,9 @@ export type Database = {
           service_lunch_start?: string | null
           service_open_time?: string | null
           service_timezone?: string
+          triage_direct_route_department_id?: string | null
+          triage_direct_route_enabled?: boolean
+          triage_direct_route_user_id?: string | null
           triage_enabled?: boolean
           triage_fallback_department_id?: string | null
           triage_system_prompt?: string | null
