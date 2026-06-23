@@ -43,6 +43,7 @@ export interface ChatMessage {
   transcription?: string | null;
   transcription_status?: string | null;
   is_forwarded?: boolean | null;
+  channel?: string | null;
 }
 
 interface MessageAreaProps {
