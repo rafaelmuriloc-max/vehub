@@ -529,9 +529,18 @@ Deno.serve(async (req) => {
       messageObj.audioMessage?.contextInfo ||
       messageObj.documentMessage?.contextInfo ||
       messageObj.stickerMessage?.contextInfo ||
-      messageObj.messageContextInfo ||
+      messageObj.contactMessage?.contextInfo ||
+      messageObj.locationMessage?.contextInfo ||
+      messageObj.buttonsResponseMessage?.contextInfo ||
+      messageObj.listResponseMessage?.contextInfo ||
+      messageObj.templateButtonReplyMessage?.contextInfo ||
+      messageObj.reactionMessage?.contextInfo ||
+      (messageObj.messageContextInfo?.quotedMessage ? messageObj.messageContextInfo : null) ||
       (data as any).contextInfo ||
       null;
+    if (!isFromMe) {
+      console.log("Incoming messageObj:", JSON.stringify(messageObj).substring(0, 3000));
+    }
     const quotedStanzaId: string | null = ctxInfo?.stanzaId || null;
     console.log("Reply detection:", {
       quotedStanzaId,
@@ -540,12 +549,13 @@ Deno.serve(async (req) => {
     });
     if (quotedStanzaId) {
       try {
-        const { data: original } = await supabase
+        const { data: originals } = await supabase
           .from("chat_messages")
           .select("id, sender_id, content, message_type, media_url")
           .eq("conversation_id", conversationId)
-          .eq("wa_evolution_id", quotedStanzaId)
-          .maybeSingle();
+          .or(`wa_evolution_id.eq.${quotedStanzaId},wa_message_id.eq.${quotedStanzaId}`)
+          .limit(1);
+        const original = originals?.[0] || null;
         console.log("Reply lookup:", { quotedStanzaId, foundOriginal: !!original });
         if (original) {
           insertData.reply_to_id = original.id;
@@ -567,22 +577,19 @@ Deno.serve(async (req) => {
           // Use the snapshot Evolution sends us so the citation still renders.
           const qm = ctxInfo.quotedMessage;
           let qContent = "";
-          let qType = "whatsapp_incoming";
+          // If quoted was sent by us (no participant set in 1:1 chat), mark as outgoing
+          const quotedFromUs = !ctxInfo?.participant;
+          let qType = quotedFromUs ? "whatsapp_outgoing" : "whatsapp_incoming";
           if (qm.conversation) qContent = qm.conversation;
           else if (qm.extendedTextMessage?.text) qContent = qm.extendedTextMessage.text;
-          else if (qm.imageMessage) { qContent = qm.imageMessage.caption || ""; qType = "whatsapp_incoming_image"; }
-          else if (qm.videoMessage) { qContent = qm.videoMessage.caption || ""; qType = "whatsapp_incoming_video"; }
-          else if (qm.audioMessage) { qContent = ""; qType = "whatsapp_incoming_audio"; }
-          else if (qm.documentMessage) { qContent = qm.documentMessage.caption || qm.documentMessage.fileName || ""; qType = "whatsapp_incoming_document"; }
-          else if (qm.stickerMessage) { qContent = ""; qType = "whatsapp_incoming_image"; }
-          // If the quoted message was sent by us (participant matches our number),
-          // mark as outgoing so the bubble layout matches.
-          const fromUs = ctxInfo?.participant
-            ? false // can't easily tell; leave as incoming default
-            : false;
+          else if (qm.imageMessage) { qContent = qm.imageMessage.caption || ""; qType = quotedFromUs ? "whatsapp_image" : "whatsapp_incoming_image"; }
+          else if (qm.videoMessage) { qContent = qm.videoMessage.caption || ""; qType = quotedFromUs ? "whatsapp_video" : "whatsapp_incoming_video"; }
+          else if (qm.audioMessage) { qContent = ""; qType = quotedFromUs ? "whatsapp_audio" : "whatsapp_incoming_audio"; }
+          else if (qm.documentMessage) { qContent = qm.documentMessage.caption || qm.documentMessage.fileName || ""; qType = quotedFromUs ? "whatsapp_document" : "whatsapp_incoming_document"; }
+          else if (qm.stickerMessage) { qContent = ""; qType = quotedFromUs ? "whatsapp_image" : "whatsapp_incoming_image"; }
           insertData.reply_to_snapshot = {
             sender_id: null,
-            sender_name: fromUs ? "" : "",
+            sender_name: "",
             content: qContent,
             message_type: qType,
             media_url: null,
