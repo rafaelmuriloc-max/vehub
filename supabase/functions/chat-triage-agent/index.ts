@@ -70,24 +70,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Settings (must be enabled)
+    // Settings
     const { data: settings } = await supabase
       .from("company_settings")
       .select("agent_name, triage_enabled, triage_fallback_department_id, triage_system_prompt, triage_direct_route_enabled, triage_direct_route_department_id, triage_direct_route_user_id")
       .limit(1).maybeSingle();
-    if (!settings?.triage_enabled) {
-      await supabase.from("chat_conversations")
-        .update({ triage_status: "skipped" }).eq("id", conversation_id);
-      return new Response(JSON.stringify({ ok: true, skipped: "disabled" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const agentName = settings.agent_name || "Atendimento";
+    const agentName = settings?.agent_name || "Atendimento";
 
-    // ===== Direct route (bypass AI) =====
-    const directEnabled = (settings as any).triage_direct_route_enabled === true;
-    const directDeptId = (settings as any).triage_direct_route_department_id as string | null;
-    const directUserId = (settings as any).triage_direct_route_user_id as string | null;
+    // ===== Direct route (bypass AI) — roda independentemente de triage_enabled =====
+    const directEnabled = (settings as any)?.triage_direct_route_enabled === true;
+    const directDeptId = (settings as any)?.triage_direct_route_department_id as string | null;
+    const directUserId = (settings as any)?.triage_direct_route_user_id as string | null;
     if (directEnabled && directDeptId && directUserId) {
       const { data: dept } = await supabase
         .from("departments")
@@ -144,6 +137,15 @@ Deno.serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ ok: true, action: "direct_route", department: deptName, assignee: directUserId }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // A partir daqui é o fluxo com IA — exige triage_enabled
+    if (!settings?.triage_enabled) {
+      await supabase.from("chat_conversations")
+        .update({ triage_status: "skipped" }).eq("id", conversation_id);
+      return new Response(JSON.stringify({ ok: true, skipped: "disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
