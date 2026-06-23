@@ -43,6 +43,7 @@ export interface ChatMessage {
   transcription?: string | null;
   transcription_status?: string | null;
   is_forwarded?: boolean | null;
+  channel?: string | null;
 }
 
 interface MessageAreaProps {
@@ -315,7 +316,8 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
             {group.msgs.map(msg => {
                const isIncoming = msg.message_type === 'whatsapp_incoming' || (msg.message_type?.startsWith('whatsapp_incoming_') ?? false);
                const isWhatsAppOutgoing = !isIncoming && (msg.message_type === 'whatsapp' || msg.message_type?.startsWith('whatsapp_'));
-               const showOnRight = isWhatsAppOutgoing || (!isIncoming && msg.sender_id === currentUserId);
+               const isInternalTeamNote = msg.channel === 'internal' && !isIncoming;
+               const showOnRight = isWhatsAppOutgoing || isInternalTeamNote || (!isIncoming && msg.sender_id === currentUserId);
               return (
                 <MessageBubble
                   key={msg.id}
@@ -332,6 +334,7 @@ export function MessageArea({ conversationName, messages, currentUserId, onSend,
                   deletedAt={msg.deleted_at}
                   isForwarded={!!msg.is_forwarded}
                   isAdmin={isAdmin}
+                  channel={msg.channel}
                   onEdit={onEditMessage ? (text) => onEditMessage(msg.id, text) : undefined}
                   onDeleteForMe={onDeleteMessageForMe ? () => onDeleteMessageForMe(msg.id) : undefined}
                   onDeleteForAll={onDeleteMessageForAll ? () => onDeleteMessageForAll(msg.id) : undefined}

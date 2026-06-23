@@ -59,6 +59,7 @@ interface MessageBubbleProps {
   transcription?: string | null;
   transcriptionStatus?: string | null;
   messageId?: string;
+  channel?: string | null;
 }
 
 function formatBytes(bytes: number): string {
@@ -140,11 +141,12 @@ function DocumentMessage({ mediaUrl, fileName }: { mediaUrl: string; fileName: s
   );
 }
 
-export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isForwarded, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, onForward, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId }: MessageBubbleProps) {
+export function MessageBubble({ content, timestamp, isMine, isRead, senderName, isGroup, messageType, mediaUrl, avatarUrl, editedAt, deletedAt, isForwarded, isAdmin, onEdit, onDeleteForMe, onDeleteForAll, onReply, onForward, replySnapshot, replyToId, onJumpToReply, bubbleRef, highlight, transcription, transcriptionStatus, messageId, channel }: MessageBubbleProps) {
   const isWhatsApp = messageType?.startsWith('whatsapp');
    const isIncoming = messageType === 'whatsapp_incoming' || (messageType?.startsWith('whatsapp_incoming_') ?? false);
    const isWhatsAppOutgoing = !isIncoming && (messageType === 'whatsapp' || messageType?.startsWith('whatsapp_'));
-   const showOnRight = isWhatsAppOutgoing || (!isIncoming && isMine);
+   const isInternalTeamNote = channel === 'internal' && !isIncoming;
+   const showOnRight = isWhatsAppOutgoing || isInternalTeamNote || (!isIncoming && isMine);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
   const [retrying, setRetrying] = useState(false);
