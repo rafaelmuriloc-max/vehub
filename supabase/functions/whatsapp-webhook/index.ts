@@ -644,10 +644,12 @@ Deno.serve(async (req) => {
       try {
         const { data: triageSettings } = await supabase
           .from("company_settings")
-          .select("triage_enabled")
+          .select("triage_enabled, triage_direct_route_enabled")
           .limit(1)
           .maybeSingle();
-        if (triageSettings?.triage_enabled) {
+        const triageActive = triageSettings?.triage_enabled === true
+          || (triageSettings as any)?.triage_direct_route_enabled === true;
+        if (triageActive) {
           const { data: conv } = await supabase
             .from("chat_conversations")
             .select("assigned_to, triage_status, is_group")
