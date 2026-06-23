@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json();
-    console.log("Webhook received:", JSON.stringify(payload).substring(0, 500));
+    console.log("Webhook received:", JSON.stringify(payload).substring(0, 5000));
 
     const event = payload.event;
     if (event !== "messages.upsert") {
