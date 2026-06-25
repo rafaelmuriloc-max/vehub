@@ -1,4 +1,37 @@
 
+---
+
+## PIS/COFINS — guia do PIS não enviada
+
+### Diagnóstico (logs)
+Para várias empresas na competência 05/2026 (GOLDEN GREN, LBV, OCEAN SIGNATURE, FONTE DELLA VITA, …), os `whatsapp_logs` mostram que apenas o PDF do **COFINS** foi enviado pela atividade "Envia Darf WhatsApp" (`07869e4e-2471-40ee-957b-bbd6d94998ef`). Não há log de envio do PDF do PIS.
+
+Cronologia em GOLDEN GREN (instance `44ac9660-…`):
+- 12:51:37 — `DARF COFINS` marcado completo + `file_url` preenchido (upload via página **Documentos**)
+- 12:51:39 — `Envia WhatsApp` (template) disparado automaticamente
+- 12:51:42 — `Envia Darf WhatsApp` disparado → envia **apenas** o COFINS (único anexo presente)
+- 12:51:50 — `Envia Email` disparado
+- 12:52:20 — `DARF PIS` marcado completo + `file_url` (upload do PIS chegou ~40s depois)
+
+### Causa raiz
+`src/pages/Documents.tsx` (linhas ~574-603) dispara a cadeia `auto_start` logo após associar um documento a uma instância, **sem** o "anti-race" que existe em `ClientObligationsTab.tsx` (linhas ~183-195 e 274-286). Esse anti-race bloqueia a próxima atividade quando ainda há *outra* atividade do tipo `document` anterior na ordem sem `file_url`. Como faltava no Documents.tsx, o upload do COFINS (order 2) disparou as atividades WhatsApp/Email mesmo com PIS (order 1) ainda não anexado.
+
+Adicionalmente, quando o PIS é enviado depois, a cadeia até re-roda, mas a atividade `Envia Darf WhatsApp` já está marcada `completed=true` → a checagem `if (nextComp?.completed) break;` impede o reenvio. Resultado: PIS nunca sai.
+
+### Fix
+1. **`src/pages/Documents.tsx`** (loop `for (let ai = actIdx + 1 …)`):
+   - Adicionar a mesma checagem `priorDocs` usada em `ClientObligationsTab.tsx`: buscar `obligation_activity_completions` da instância e, se algum doc com `order < nextAct.order` estiver sem `file_url`, dar `break`.
+   - Pular (`continue`) a atividade se o marker dela já tiver `completed=true` (evita disparar errado quando o doc faltante chegou depois).
+
+2. **Reconciliação dos casos já afetados** (competência 05/2026):
+   - Para cada instância em que existe `obligation_activity_completions` com `file_url` contendo `_PIS_` mas NÃO existe log `status='sent'` com `media_filename ILIKE '%PIS%'` na atividade `07869e4e-…`:
+     - Resetar o marker (`file_url IS NULL`) da atividade `07869e4e-…` para `completed=false, completed_at=null`.
+     - Chamar `sendActivityWhatsApp` (via botão "Reprocessar fluxo" já existente em SimplesNacional — não, esta é PIS/COFINS) → vou criar um SQL que apenas reseta o marker e instruir o usuário a clicar manualmente em "Reprocessar" / completar a atividade anterior; OU melhor: chamar a função diretamente via script.
+   - Pelo padrão já adotado no projeto, o caminho mais limpo é: resetar o marker da atividade `07869e4e` (Envia Darf WhatsApp) e re-disparar a cadeia rodando `sendActivityWhatsApp` em background para cada instância afetada. A própria função já deduplica pelo `whatsapp_logs.status='sent'`, então só vai mandar o PIS (COFINS já tem log `sent`).
+
+### Arquivos a alterar
+- `src/pages/Documents.tsx` — adicionar anti-race + skip-completed.
+- Migration ad-hoc (SQL) — resetar markers da atividade `07869e4e-…` nas instâncias 05/2026 cujo PIS não foi enviado, para permitir reenvio.
 ## Problema
 
 Quando o cliente usa a função **Responder** do WhatsApp, a mensagem chega no painel mas **sem a citação** da mensagem original. No banco, mensagens `whatsapp_incoming` recentes estão todas com `reply_to_id = NULL` e `reply_to_snapshot = NULL`, mesmo quando o cliente claramente respondeu uma mensagem.
