@@ -27,7 +27,7 @@ type Obligation = { id: string; name: string; department_id: string; alert_day: 
 type Client = { id: string; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
-type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null };
+type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null; completed_at: string | null };
 type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null };
 
 type CalendarEvent = {
@@ -208,7 +208,7 @@ function CalendarMain() {
       if (slice.length === 0) continue;
       const { data } = await supabase
         .from('obligation_activity_completions')
-        .select('id, instance_id, activity_id, completed, file_url, notes')
+        .select('id, instance_id, activity_id, completed, file_url, notes, completed_at')
         .in('instance_id', slice);
       if (data) allComps.push(...(data as Completion[]));
     }
@@ -424,6 +424,12 @@ function CalendarMain() {
     const comps = oblActivities.map(act => completions.find(c => c.instance_id === instanceId && c.activity_id === act.id));
     if (comps.some(c => !c?.completed)) return false;
     return comps.every(c => c?.notes === 'quick_complete');
+  }
+
+  function getInstanceCompletedAt(instanceId: string): string | null {
+    const comps = completions.filter(c => c.instance_id === instanceId && c.completed && c.completed_at);
+    if (comps.length === 0) return null;
+    return comps.reduce((max, c) => (c.completed_at! > max ? c.completed_at! : max), comps[0].completed_at!);
   }
 
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
@@ -1152,6 +1158,16 @@ function CalendarMain() {
                                 {progress.total > 0 && (
                                   <Progress value={progress.percent} className="h-1 mt-2" />
                                 )}
+                                {completed && (() => {
+                                  const completedAt = getInstanceCompletedAt(ev.instanceId);
+                                  if (!completedAt) return null;
+                                  return (
+                                    <div className={`flex items-center gap-1 mt-2 text-[10px] ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
+                                      <Clock className="h-3 w-3" />
+                                      <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}</span>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             );
                           })}
@@ -1426,6 +1442,16 @@ function CalendarMain() {
                             {progress.total > 0 && (
                               <Progress value={progress.percent} className="h-1 mt-2" />
                             )}
+                            {(() => {
+                              const completedAt = getInstanceCompletedAt(ev.instanceId);
+                              if (!completedAt) return null;
+                              return (
+                                <div className={`flex items-center gap-1 mt-2 text-[10px] ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
+                                  <Clock className="h-3 w-3" />
+                                  <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}</span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
