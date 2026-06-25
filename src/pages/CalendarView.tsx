@@ -1158,6 +1158,16 @@ function CalendarMain() {
                                 {progress.total > 0 && (
                                   <Progress value={progress.percent} className="h-1 mt-2" />
                                 )}
+                                {completed && (() => {
+                                  const completedAt = getInstanceCompletedAt(ev.instanceId);
+                                  if (!completedAt) return null;
+                                  return (
+                                    <div className={`flex items-center gap-1 mt-2 text-[10px] ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
+                                      <Clock className="h-3 w-3" />
+                                      <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}</span>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             );
                           })}
