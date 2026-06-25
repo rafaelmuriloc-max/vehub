@@ -117,10 +117,13 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
   const q = search.trim().toLowerCase();
+  const qDigits = search.replace(/\D/g, '');
   const filtered = conversations.filter(c => {
     if (!q) return true;
     if (c.name.toLowerCase().includes(q)) return true;
-    return (c.companyNames ?? []).some(n => n.toLowerCase().includes(q));
+    if ((c.companyNames ?? []).some(n => n.toLowerCase().includes(q))) return true;
+    if (qDigits.length > 0 && (c.whatsappPhone || '').replace(/\D/g, '').includes(qDigits)) return true;
+    return false;
   });
 
   return (
@@ -211,7 +214,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Pesquisar conversa"
+            placeholder="Pesquisar por nome, telefone ou empresa"
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-[#F0F2F5] dark:bg-zinc-800 border-0 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
