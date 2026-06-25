@@ -117,10 +117,13 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
   const q = search.trim().toLowerCase();
+  const qDigits = search.replace(/\D/g, '');
   const filtered = conversations.filter(c => {
     if (!q) return true;
     if (c.name.toLowerCase().includes(q)) return true;
-    return (c.companyNames ?? []).some(n => n.toLowerCase().includes(q));
+    if ((c.companyNames ?? []).some(n => n.toLowerCase().includes(q))) return true;
+    if (qDigits.length > 0 && (c.whatsappPhone || '').replace(/\D/g, '').includes(qDigits)) return true;
+    return false;
   });
 
   return (
