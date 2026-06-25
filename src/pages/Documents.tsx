@@ -575,6 +575,34 @@ export default function Documents() {
                 const nextAct = allObActivities[ai];
                 if (!nextAct.auto_start) break;
 
+                // Anti-race: bloqueia se alguma atividade-documento anterior
+                // ainda não tem arquivo anexado (ex.: PIS faltando enquanto
+                // COFINS chegou primeiro). Mesma checagem do ClientObligationsTab.
+                const priorDocs = allObActivities.filter(
+                  (a: any) => a.type === 'document' && a.order < nextAct.order
+                );
+                if (priorDocs.length > 0) {
+                  const { data: liveComps } = await supabase
+                    .from('obligation_activity_completions')
+                    .select('activity_id, completed, file_url')
+                    .eq('instance_id', inst.id);
+                  const pendingDoc = priorDocs.some((d: any) => {
+                    const c = (liveComps || []).find((x: any) => x.activity_id === d.id);
+                    return !(c?.completed && c?.file_url);
+                  });
+                  if (pendingDoc) break;
+                }
+
+                // Skip se a próxima atividade já está marcada como completa
+                const { data: existingNext } = await supabase
+                  .from('obligation_activity_completions')
+                  .select('id, completed')
+                  .eq('instance_id', inst.id)
+                  .eq('activity_id', nextAct.id)
+                  .is('file_url', null)
+                  .maybeSingle();
+                if (existingNext?.completed) continue;
+
                 if (nextAct.type === 'email' && oblDetail && instDetail) {
                   const result = await sendActivityEmail({
                     activity: nextAct,
