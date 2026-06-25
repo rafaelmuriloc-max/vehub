@@ -214,7 +214,7 @@ export function ConversationList({ conversations, activeId, onSelect, onCreated,
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Pesquisar conversa"
+            placeholder="Pesquisar por nome, telefone ou empresa"
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-[#F0F2F5] dark:bg-zinc-800 border-0 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
