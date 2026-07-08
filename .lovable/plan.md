@@ -1,20 +1,23 @@
 ## Objetivo
-Permitir que a barra de pesquisa de conversas no chat filtre por **nome**, **telefone** e **empresa**.
 
-## Contexto atual
-No arquivo `src/components/chat/ConversationList.tsx`, o filtro de busca (linhas 119-124) já considera:
-- `c.name` (nome da conversa/contato)
-- `c.companyNames` (empresas vinculadas)
+Quando o campo **Data de saída** (`clients.end_date`) de um cliente for preenchido, todas as obrigações desse cliente com vencimento a partir dessa data devem ser excluídas automaticamente (soft delete).
 
-Mas **não busca por `whatsappPhone`**, apesar de o campo existir na interface `ConversationItem`.
+## Implementação
 
-## Alteração
-No `ConversationList.tsx`, estender a função `filtered` para também verificar se o termo de busca está contido em `c.whatsappPhone` (após remover caracteres não numéricos, permitindo busca parcial por dígitos).
+**1. Trigger no banco (`clients` AFTER UPDATE de `end_date`)**
 
-### Detalhes técnicos
-- Normalizar o termo de busca removendo não-dígitos.
-- Comparar com os últimos dígitos do telefone, similar ao padrão já usado em outros componentes do chat (ex.: `ForwardMessageDialog.tsx`).
-- Atualizar o `placeholder` do input para refletir os novos critérios de busca.
+- Dispara quando `end_date` passa de `NULL` para um valor, ou quando é alterado para uma data anterior.
+- Marca como excluídas (`deleted_at = now()`) todas as linhas de `obligation_instances` do cliente onde:
+  - `deleted_at IS NULL` (ainda ativas), e
+  - `due_date >= NEW.end_date` **OU** `reference_month >= date_trunc('month', NEW.end_date)` (cobre obrigações sem `due_date` definido).
+- Também aplicar em INSERT caso o cliente seja criado já com `end_date`.
 
-## Arquivos afetados
-- `src/components/chat/ConversationList.tsx`
+**2. Backfill único**
+
+- No mesmo migration, rodar o mesmo UPDATE para clientes que já possuem `end_date` preenchida hoje, garantindo consistência retroativa.
+
+## Detalhes técnicos
+
+- Soft delete (`deleted_at`), coerente com o resto do sistema — as queries já filtram `is('deleted_at', null)`.
+- Nenhuma alteração de frontend necessária: as listas (Calendário, Dashboard, Obrigações) já ignoram `deleted_at`.
+- Se o usuário limpar `end_date` posteriormente, as instâncias **não** são restauradas automaticamente (comportamento simples e previsível). Podem ser regeradas pelo fluxo normal de geração se necessário.
