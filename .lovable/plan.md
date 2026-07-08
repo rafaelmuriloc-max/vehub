@@ -1,23 +1,27 @@
 ## Objetivo
 
-Quando o campo **Data de saída** (`clients.end_date`) de um cliente for preenchido, todas as obrigações desse cliente com vencimento a partir dessa data devem ser excluídas automaticamente (soft delete).
+Quando uma obrigação de departamento for desvinculada de um cliente (linha removida em `client_department_obligations`), todas as **obrigações futuras** daquele cliente para aquela obrigação devem ser automaticamente excluídas (soft delete em `obligation_instances`).
+
+Exemplo: cliente 20 - Ramonisa deixou de ter folha de pagamento → ao desmarcar as obrigações do departamento Pessoal no cadastro, as instâncias futuras dessas obrigações são apagadas.
 
 ## Implementação
 
-**1. Trigger no banco (`clients` AFTER UPDATE de `end_date`)**
+**Trigger `AFTER DELETE` em `client_department_obligations`**
 
-- Dispara quando `end_date` passa de `NULL` para um valor, ou quando é alterado para uma data anterior.
-- Marca como excluídas (`deleted_at = now()`) todas as linhas de `obligation_instances` do cliente onde:
-  - `deleted_at IS NULL` (ainda ativas), e
-  - `due_date >= NEW.end_date` **OU** `reference_month >= date_trunc('month', NEW.end_date)` (cobre obrigações sem `due_date` definido).
-- Também aplicar em INSERT caso o cliente seja criado já com `end_date`.
+Ao remover uma linha `(client_id, obligation_id, department_id)`:
 
-**2. Backfill único**
+- Marca `deleted_at = now()` em `obligation_instances` onde:
+  - `client_id = OLD.client_id`
+  - `obligation_id = OLD.obligation_id`
+  - `deleted_at IS NULL`
+  - E é considerada **futura**:
+    - `due_date >= CURRENT_DATE`, **ou**
+    - `due_date IS NULL AND reference_month >= date_trunc('month', CURRENT_DATE)::date`
 
-- No mesmo migration, rodar o mesmo UPDATE para clientes que já possuem `end_date` preenchida hoje, garantindo consistência retroativa.
+Instâncias passadas (já vencidas / mês anterior) permanecem intocadas para preservar o histórico.
 
 ## Detalhes técnicos
 
-- Soft delete (`deleted_at`), coerente com o resto do sistema — as queries já filtram `is('deleted_at', null)`.
-- Nenhuma alteração de frontend necessária: as listas (Calendário, Dashboard, Obrigações) já ignoram `deleted_at`.
-- Se o usuário limpar `end_date` posteriormente, as instâncias **não** são restauradas automaticamente (comportamento simples e previsível). Podem ser regeradas pelo fluxo normal de geração se necessário.
+- Soft delete, coerente com o resto do sistema (queries já filtram `is('deleted_at', null)`).
+- Se a obrigação for religada depois, as instâncias futuras podem ser regeradas pelo fluxo normal de geração — não há restauração automática (mesmo comportamento adotado no trigger de `end_date`).
+- Nenhuma alteração de frontend necessária.
