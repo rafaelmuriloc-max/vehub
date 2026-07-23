@@ -190,7 +190,7 @@ export default function Obligations() {
       alert_day: obligationForm.alert_day ? Number(obligationForm.alert_day) : null,
       target_day: obligationForm.target_day ? Number(obligationForm.target_day) : null,
       due_day: obligationForm.due_day ? Number(obligationForm.due_day) : null,
-      competence_rule: ['mensal', 'anual'].includes(obligationForm.recurrence) ? obligationForm.competence_rule : 'current',
+      competence_rule: ['mensal', 'anual', 'trimestral'].includes(obligationForm.recurrence) ? obligationForm.competence_rule : 'current',
       annual_month: obligationForm.recurrence === 'anual' && obligationForm.annual_month ? Number(obligationForm.annual_month) : null,
       is_tax: obligationForm.is_tax,
       tax_sphere: obligationForm.is_tax && obligationForm.tax_sphere ? obligationForm.tax_sphere : null,
@@ -248,6 +248,7 @@ export default function Obligations() {
   async function generateObligationInstances(obligationId: string) {
     const ob = obligations.find(o => o.id === obligationId);
     const isAnnual = ob?.recurrence === 'anual';
+    const isQuarterly = ob?.recurrence === 'trimestral';
 
     if (isAnnual) {
       if (!generateStartYear) return;
@@ -296,6 +297,32 @@ export default function Obligations() {
             due_date: dueDate,
             status: 'pending',
           });
+        }
+      }
+    } else if (isQuarterly) {
+      const startMonth = Number(generateStartMonth);
+      const year = new Date().getFullYear();
+      const quarterEndMonths = [3, 6, 9, 12].filter(m => m >= startMonth);
+
+      for (const endMonth of quarterEndMonths) {
+        const refDate = `${year}-${String(endMonth).padStart(2, '0')}-01`;
+        // Vencimento: dia 30 do mês seguinte ao trimestre. Q4 -> 30/01 do ano seguinte.
+        const dueMonth = endMonth === 12 ? 1 : endMonth + 1;
+        const dueYear = endMonth === 12 ? year + 1 : year;
+        const rawDueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-30`;
+        const dueDate = previousBusinessDay(rawDueDate, getHolidays(dueYear));
+
+        for (const clientId of clientIds) {
+          const key = `${clientId}_${refDate}`;
+          if (!existingSet.has(key)) {
+            rows.push({
+              obligation_id: obligationId,
+              client_id: clientId,
+              reference_month: refDate,
+              due_date: dueDate,
+              status: 'pending',
+            });
+          }
         }
       }
     } else {
@@ -495,6 +522,7 @@ export default function Obligations() {
           <option value="semanal">Semanal</option>
           <option value="quinzenal">Quinzenal</option>
           <option value="mensal">Mensal</option>
+          <option value="trimestral">Trimestral</option>
           <option value="anual">Anual</option>
         </select>
       </div>
@@ -719,18 +747,19 @@ export default function Obligations() {
                   <SelectItem value="semanal">Semanal</SelectItem>
                   <SelectItem value="quinzenal">Quinzenal</SelectItem>
                   <SelectItem value="mensal">Mensal</SelectItem>
+                  <SelectItem value="trimestral">Trimestral</SelectItem>
                   <SelectItem value="anual">Anual</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {obligationForm.recurrence === 'mensal' && (
+            {(obligationForm.recurrence === 'mensal' || obligationForm.recurrence === 'trimestral') && (
               <div className="space-y-2">
                 <Label>Competência</Label>
                 <Select value={obligationForm.competence_rule} onValueChange={v => setObligationForm({ ...obligationForm, competence_rule: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="current">Mês atual (competência = mês de referência)</SelectItem>
-                    <SelectItem value="previous">Mês anterior (ex: Folha de Pagamento)</SelectItem>
+                    <SelectItem value="current">{obligationForm.recurrence === 'trimestral' ? 'Trimestre atual' : 'Mês atual (competência = mês de referência)'}</SelectItem>
+                    <SelectItem value="previous">{obligationForm.recurrence === 'trimestral' ? 'Trimestre anterior' : 'Mês anterior (ex: Folha de Pagamento)'}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
@@ -846,8 +875,20 @@ export default function Obligations() {
                   <span className="h-3 w-3 rounded-full bg-red-500 inline-block" />
                   Dia Vencimento
                 </Label>
-                <Input type="number" min={1} max={31} placeholder="Ex: 20" value={obligationForm.due_day} onChange={e => setObligationForm({ ...obligationForm, due_day: e.target.value })} />
-                <p className="text-xs text-muted-foreground">Prazo final (multa)</p>
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  placeholder="Ex: 20"
+                  value={obligationForm.recurrence === 'trimestral' ? '30' : obligationForm.due_day}
+                  disabled={obligationForm.recurrence === 'trimestral'}
+                  onChange={e => setObligationForm({ ...obligationForm, due_day: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {obligationForm.recurrence === 'trimestral'
+                    ? 'Trimestral: sempre dia 30 do mês seguinte ao trimestre'
+                    : 'Prazo final (multa)'}
+                </p>
               </div>
             </div>
 
@@ -1028,7 +1069,11 @@ export default function Obligations() {
                       </div>
                       {generateStartMonth && (
                         <p className="text-sm text-muted-foreground">
-                          Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)
+                          {editingObligation.recurrence === 'trimestral' ? (
+                            <>Serão geradas obrigações dos trimestres a partir de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> até o <strong>4º trimestre/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)</>
+                          ) : (
+                            <>Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)</>
+                          )}
                         </p>
                       )}
                     </>
