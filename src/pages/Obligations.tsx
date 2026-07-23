@@ -1069,7 +1069,11 @@ export default function Obligations() {
                       </div>
                       {generateStartMonth && (
                         <p className="text-sm text-muted-foreground">
-                          Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)
+                          {editingObligation.recurrence === 'trimestral' ? (
+                            <>Serão geradas obrigações dos trimestres a partir de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> até o <strong>4º trimestre/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)</>
+                          ) : (
+                            <>Serão geradas obrigações de <strong>{monthNames[Number(generateStartMonth) - 1]}</strong> a <strong>Dezembro/{new Date().getFullYear()}</strong> para <strong>{segmentPreviewClients.length}</strong> empresa(s)</>
+                          )}
                         </p>
                       )}
                     </>
