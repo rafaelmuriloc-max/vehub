@@ -1,36 +1,27 @@
-## Causa
+## Problema
 
-O calendário monta os eventos usando `obl.due_day` sobre o `reference_month` da instância:
+As instâncias trimestrais de **IRPJ/CSLL** referentes a Q3/2026 (ref 09/2026, vence 30/10) e Q4/2026 (ref 12/2026, vence 30/01/2027) estão marcadas como `deleted_at`. Q2/2026 (ref 06, vence 30/07) permaneceu ativa.
 
-```ts
-const dueDate = makeDate(obl.due_day);  // dia fixo do mês da competência
+**Causa:** o backfill executado anteriormente ("excluir obrigações futuras de empresas sem link em `client_department_obligations`") avaliou pelo `reference_month >= mês atual`. Como o IRPJ/CSLL trimestral usa competência = último mês do trimestre, apenas Q2 (ref 06/2026, já no passado em relação a julho/2026) escapou. Os 66 clientes continuam com o vínculo em `client_department_obligations` — a exclusão foi indevida.
+
+## Correção
+
+Restaurar (`deleted_at = NULL`) as instâncias de IRPJ/CSLL cujo cliente ainda possui vínculo ativo com essa obrigação em `client_department_obligations`:
+
+```sql
+UPDATE obligation_instances oi
+   SET deleted_at = NULL
+ WHERE oi.obligation_id = '4cf4c4d5-c565-4266-9cfe-7e90fa280927'
+   AND oi.deleted_at IS NOT NULL
+   AND EXISTS (
+     SELECT 1 FROM client_department_obligations cdo
+      WHERE cdo.client_id = oi.client_id
+        AND cdo.obligation_id = oi.obligation_id
+   );
 ```
 
-Para obrigações **trimestrais** (ex.: IRPJ/CSLL):
-- `obligations.due_day` foi ocultado no cadastro (fica `null`) — regra é "dia 30 do mês seguinte ao trimestre".
-- `reference_month` da instância = último mês do trimestre (03, 06, 09, 12), mas o vencimento cai em **abril, julho, outubro ou janeiro do ano seguinte**.
+Depois: confirmar contagem por competência (esperado 66 ativas em 06, 09 e 12/2026) e validar no calendário nos meses de vencimento (jul/out/2026 e jan/2027).
 
-Resultado: `makeDate(null)` retorna `null` → nenhum evento é gerado e a instância some do calendário. Além disso, o `loadData` só carrega instâncias com `reference_month` dentro do mês visível, então uma instância Q1 (ref 03/AAAA, venc 30/04/AAAA) nunca aparece quando você abre abril.
+## Prevenção
 
-## Correção em `src/pages/CalendarView.tsx`
-
-1. **Carregar `due_date` e `recurrence` já persistidos**
-   - Adicionar `due_date` no `select` de `obligation_instances` (linha 183) e no tipo `Instance` (linha 25).
-   - Adicionar `recurrence` no `select` de `obligations` (linha 185) e no tipo `Obligation`.
-
-2. **Carregar instâncias também por `due_date` no mês visível**
-   - Substituir a query única por dois lookups em paralelo (por `reference_month` e por `due_date` dentro de `[monthStart, monthEnd)`) e unir os resultados deduplicando por `id`. Isso garante que uma instância Q1 apareça em abril mesmo com `reference_month = 03`.
-
-3. **Usar `inst.due_date` quando existir**
-   - No `events` (a partir da linha 227) e no `deletedMonthEvents` (linha 355), preferir `inst.due_date` sobre o cálculo por `obl.due_day`.
-   - Para trimestrais, não empurrar eventos `alert`/`target` (obrigação não tem esses dias configurados) — só `due`, na `inst.due_date`.
-
-4. **Métrica mensal (linha 831 em diante)**
-   - Trocar `makeDate(obl.due_day, inst.reference_month)` por `inst.due_date ?? makeDate(obl.due_day, inst.reference_month)` para contar overdue/on-time corretamente para trimestrais.
-
-5. **Rótulo de competência para trimestral**
-   - Onde hoje há `competence_rule === 'previous' ? m-1 : m` (linhas 250 e 368 e 1561), quando `obl.recurrence === 'trimestral'` gerar rótulo `Q{n}/AAAA` (n = trimestre do `reference_month`, ex.: ref 06/2026 → `Q2/2026`) em vez de "Jun/2026".
-
-## Fora de escopo
-- Sem alterações em `Obligations.tsx`, geração de instâncias ou schema.
-- Cards de detalhe/atividades continuam usando o mesmo `reference_month`; só o posicionamento no calendário e o rótulo mudam.
+Ajustar futuras rotinas de limpeza para obrigações **trimestrais**: comparar por `due_date` (não por `reference_month`), já que a competência é anterior ao vencimento e induz falsos positivos de "instância futura".
