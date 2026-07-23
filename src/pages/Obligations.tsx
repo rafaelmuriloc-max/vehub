@@ -848,8 +848,20 @@ export default function Obligations() {
                   <span className="h-3 w-3 rounded-full bg-red-500 inline-block" />
                   Dia Vencimento
                 </Label>
-                <Input type="number" min={1} max={31} placeholder="Ex: 20" value={obligationForm.due_day} onChange={e => setObligationForm({ ...obligationForm, due_day: e.target.value })} />
-                <p className="text-xs text-muted-foreground">Prazo final (multa)</p>
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  placeholder="Ex: 20"
+                  value={obligationForm.recurrence === 'trimestral' ? '30' : obligationForm.due_day}
+                  disabled={obligationForm.recurrence === 'trimestral'}
+                  onChange={e => setObligationForm({ ...obligationForm, due_day: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {obligationForm.recurrence === 'trimestral'
+                    ? 'Trimestral: sempre dia 30 do mês seguinte ao trimestre'
+                    : 'Prazo final (multa)'}
+                </p>
               </div>
             </div>
 
