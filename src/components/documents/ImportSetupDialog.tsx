@@ -98,6 +98,28 @@ export default function ImportSetupDialog({ open, onOpenChange, onConfirm }: Pro
   }, [activities, obligationId, docTypes]);
 
   const selectedObligation = filteredObligations.find(o => o.id === obligationId);
+  const isQuarterly = selectedObligation?.recurrence === 'quarterly';
+
+  // Derive quarter/year from current referenceMonth (YYYY-MM)
+  const [refYear, refMonth] = referenceMonth.split('-').map(Number);
+  const currentQuarter = refMonth ? String(Math.ceil(refMonth / 3)).padStart(2, '0') : '01';
+  const currentYear = refYear || new Date().getFullYear();
+  const quarterEndMonth: Record<string, string> = { '01': '03', '02': '06', '03': '09', '04': '12' };
+  const yearOptions = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
+
+  function setQuarter(q: string, y: number) {
+    setReferenceMonth(`${y}-${quarterEndMonth[q]}`);
+  }
+
+  // When switching to a quarterly obligation, snap referenceMonth to the end of the corresponding quarter
+  useEffect(() => {
+    if (!isQuarterly || !referenceMonth) return;
+    const endMonth = quarterEndMonth[currentQuarter];
+    if (refMonth && String(refMonth).padStart(2, '0') !== endMonth) {
+      setReferenceMonth(`${currentYear}-${endMonth}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isQuarterly]);
 
   function toggleType(id: string) {
     setAllowedDocTypeIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -133,7 +155,30 @@ export default function ImportSetupDialog({ open, onOpenChange, onConfirm }: Pro
 
           <div className="space-y-2">
             <Label>2. Competência</Label>
-            <Input type="month" value={referenceMonth} onChange={e => setReferenceMonth(e.target.value)} disabled={!departmentId} />
+            {isQuarterly ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={currentQuarter} onValueChange={(q) => setQuarter(q, currentYear)}>
+                  <SelectTrigger><SelectValue placeholder="Trimestre" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="01">01 — Jan–Mar</SelectItem>
+                    <SelectItem value="02">02 — Abr–Jun</SelectItem>
+                    <SelectItem value="03">03 — Jul–Set</SelectItem>
+                    <SelectItem value="04">04 — Out–Dez</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={String(currentYear)} onValueChange={(y) => setQuarter(currentQuarter, Number(y))}>
+                  <SelectTrigger><SelectValue placeholder="Ano" /></SelectTrigger>
+                  <SelectContent>
+                    {yearOptions.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="col-span-2 text-xs text-muted-foreground">
+                  Competência trimestral selecionada: <strong>{currentQuarter}/{currentYear}</strong>
+                </p>
+              </div>
+            ) : (
+              <Input type="month" value={referenceMonth} onChange={e => setReferenceMonth(e.target.value)} disabled={!departmentId} />
+            )}
           </div>
 
           <div className="space-y-2">
