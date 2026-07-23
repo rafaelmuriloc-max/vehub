@@ -258,7 +258,7 @@ function CalendarMain() {
         : refDate;
       const compMonthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
       const competenceLabel = obl.recurrence === 'trimestral'
-        ? `Q${Math.floor(compDate.getMonth() / 3) + 1}/${compDate.getFullYear()}`
+        ? `${String(refDate.getMonth() + 1).padStart(2, '0')}/${refDate.getFullYear()}`
         : `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
 
       const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id, competenceLabel };
@@ -379,7 +379,7 @@ function CalendarMain() {
         : refDate;
       const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
       const competenceLabel = obl.recurrence === 'trimestral'
-        ? `Q${Math.floor(compDate.getMonth() / 3) + 1}/${compDate.getFullYear()}`
+        ? `${String(refDate.getMonth() + 1).padStart(2, '0')}/${refDate.getFullYear()}`
         : `${names[compDate.getMonth()]}/${compDate.getFullYear()}`;
       const refDay = (obl.due_day ?? obl.target_day ?? obl.alert_day ?? 1);
       const date = inst.due_date ?? `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
@@ -1573,7 +1573,7 @@ function CalendarMain() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ListChecks className="h-5 w-5 text-primary" />
-              {detailObligation?.name}{detailInstance ? (() => { const rd = new Date(detailInstance.reference_month + 'T00:00:00'); const cd = detailObligation?.competence_rule === 'previous' ? new Date(rd.getFullYear(), rd.getMonth() - 1, 1) : rd; const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; const label = detailObligation?.recurrence === 'trimestral' ? `Q${Math.floor(cd.getMonth() / 3) + 1}/${cd.getFullYear()}` : `${mn[cd.getMonth()]}/${cd.getFullYear()}`; return ` | ${label}`; })() : ''}
+              {detailObligation?.name}{detailInstance ? (() => { const rd = new Date(detailInstance.reference_month + 'T00:00:00'); const cd = detailObligation?.competence_rule === 'previous' ? new Date(rd.getFullYear(), rd.getMonth() - 1, 1) : rd; const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; const label = detailObligation?.recurrence === 'trimestral' ? `${String(rd.getMonth() + 1).padStart(2, '0')}/${rd.getFullYear()}` : `${mn[cd.getMonth()]}/${cd.getFullYear()}`; return ` | ${label}`; })() : ''}
             </DialogTitle>
             {detailInstance && (
               <p className="text-sm text-muted-foreground mt-1">
