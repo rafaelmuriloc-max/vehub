@@ -257,12 +257,15 @@ function CalendarMain() {
         ? new Date(y, m - 1, 1)
         : refDate;
       const compMonthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-      const competenceLabel = `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
+      const competenceLabel = obl.recurrence === 'trimestral'
+        ? `Q${Math.floor(compDate.getMonth() / 3) + 1}/${compDate.getFullYear()}`
+        : `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
 
       const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id, competenceLabel };
-      const alertDate = makeDate(obl.alert_day);
-      const targetDate = makeDate(obl.target_day);
-      const dueDate = makeDate(obl.due_day);
+      const isQuarterly = obl.recurrence === 'trimestral';
+      const alertDate = isQuarterly ? null : makeDate(obl.alert_day);
+      const targetDate = isQuarterly ? null : makeDate(obl.target_day);
+      const dueDate = inst.due_date ?? makeDate(obl.due_day);
       if (alertDate) result.push({ ...base, type: 'alert', date: alertDate });
       if (targetDate) result.push({ ...base, type: 'target', date: targetDate });
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
