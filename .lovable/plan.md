@@ -1,34 +1,36 @@
-## Objetivo
-Adicionar a periodicidade **Trimestral** ao cadastro de obrigações, com geração correta das instâncias e vencimento fixo no mês seguinte ao trimestre.
+## Causa
 
-## Regras de vencimento (trimestral)
-| Trimestre | Competência (reference_month) | Vencimento bruto |
-|---|---|---|
-| Q1 (jan–mar) | 03/AAAA | 30/04/AAAA |
-| Q2 (abr–jun) | 06/AAAA | 30/07/AAAA |
-| Q3 (jul–set) | 09/AAAA | 30/10/AAAA |
-| Q4 (out–dez) | 12/AAAA | 30/01/AAAA+1 |
+O calendário monta os eventos usando `obl.due_day` sobre o `reference_month` da instância:
 
-Vencimento sempre no dia **30 do mês seguinte ao fim do trimestre**, sujeito à antecipação para o dia útil anterior via `previousBusinessDay` + feriados (padrão do projeto).
+```ts
+const dueDate = makeDate(obl.due_day);  // dia fixo do mês da competência
+```
 
-## Alterações em `src/pages/Obligations.tsx`
+Para obrigações **trimestrais** (ex.: IRPJ/CSLL):
+- `obligations.due_day` foi ocultado no cadastro (fica `null`) — regra é "dia 30 do mês seguinte ao trimestre".
+- `reference_month` da instância = último mês do trimestre (03, 06, 09, 12), mas o vencimento cai em **abril, julho, outubro ou janeiro do ano seguinte**.
 
-1. **Select de recorrência** (form novo/editar + filtro): adicionar `SelectItem value="trimestral"` (label "Trimestral") — selects nas linhas ~496, ~720.
+Resultado: `makeDate(null)` retorna `null` → nenhum evento é gerado e a instância some do calendário. Além disso, o `loadData` só carrega instâncias com `reference_month` dentro do mês visível, então uma instância Q1 (ref 03/AAAA, venc 30/04/AAAA) nunca aparece quando você abre abril.
 
-2. **Regra de competência**: incluir `'trimestral'` na lista da linha 193 → `['mensal', 'anual', 'trimestral'].includes(...)`.
+## Correção em `src/pages/CalendarView.tsx`
 
-3. **Campo "Dia de vencimento"**: ocultar para trimestral (dia fixo = 30, definido pela regra). Manter apenas para mensal.
+1. **Carregar `due_date` e `recurrence` já persistidos**
+   - Adicionar `due_date` no `select` de `obligation_instances` (linha 183) e no tipo `Instance` (linha 25).
+   - Adicionar `recurrence` no `select` de `obligations` (linha 185) e no tipo `Obligation`.
 
-4. **Geração de instâncias (`generateObligationInstances`)** — novo ramo trimestral:
-   - Para cada trimestre `q ∈ {1,2,3,4}` do ano corrente cujo mês final (`3*q`) seja ≥ ao "Mês de início" selecionado:
-     - `reference_month` = `AAAA-{3*q}-01`
-     - Mês/ano de vencimento: `3*q + 1` (se `q === 4` → mês 01 do ano seguinte)
-     - `rawDueDate` = dia 30 desse mês/ano
-     - `due_date` = `previousBusinessDay(rawDueDate, getHolidays(anoDoVencimento))`
-   - Dedup pelo par `(client_id, reference_month)` como já é feito.
+2. **Carregar instâncias também por `due_date` no mês visível**
+   - Substituir a query única por dois lookups em paralelo (por `reference_month` e por `due_date` dentro de `[monthStart, monthEnd)`) e unir os resultados deduplicando por `id`. Isso garante que uma instância Q1 apareça em abril mesmo com `reference_month = 03`.
 
-5. **UI "Gerar Obrigações"**: reutilizar o seletor de "Mês de início" já existente; adaptar o texto para "Serão geradas obrigações dos trimestres a partir de {mês} até o Q4 de {ano}".
+3. **Usar `inst.due_date` quando existir**
+   - No `events` (a partir da linha 227) e no `deletedMonthEvents` (linha 355), preferir `inst.due_date` sobre o cálculo por `obl.due_day`.
+   - Para trimestrais, não empurrar eventos `alert`/`target` (obrigação não tem esses dias configurados) — só `due`, na `inst.due_date`.
+
+4. **Métrica mensal (linha 831 em diante)**
+   - Trocar `makeDate(obl.due_day, inst.reference_month)` por `inst.due_date ?? makeDate(obl.due_day, inst.reference_month)` para contar overdue/on-time corretamente para trimestrais.
+
+5. **Rótulo de competência para trimestral**
+   - Onde hoje há `competence_rule === 'previous' ? m-1 : m` (linhas 250 e 368 e 1561), quando `obl.recurrence === 'trimestral'` gerar rótulo `Q{n}/AAAA` (n = trimestre do `reference_month`, ex.: ref 06/2026 → `Q2/2026`) em vez de "Jun/2026".
 
 ## Fora de escopo
-- Sem mudanças de schema (`recurrence` já aceita texto).
-- Sem alterações em triggers, calendário ou reconciler — usam `reference_month`/`due_date` das instâncias.
+- Sem alterações em `Obligations.tsx`, geração de instâncias ou schema.
+- Cards de detalhe/atividades continuam usando o mesmo `reference_month`; só o posicionamento no calendário e o rótulo mudam.

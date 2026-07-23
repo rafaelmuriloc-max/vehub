@@ -22,8 +22,8 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
-type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
-type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null };
+type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
+type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null; recurrence?: string | null };
 type Client = { id: string; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
@@ -179,17 +179,23 @@ function CalendarMain() {
     const nextYear = m + 1 > 11 ? y + 1 : y;
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
-    const [instRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
-      supabase.from('obligation_instances').select('id, client_id, obligation_id, reference_month, deleted_at, status, completion_kind')
+    const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, completion_kind';
+    const [instByRefRes, instByDueRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
+      supabase.from('obligation_instances').select(instCols)
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
-      supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule, system_code'),
+      supabase.from('obligation_instances').select(instCols)
+        .gte('due_date', monthStart).lt('due_date', monthEnd),
+      supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule, system_code, recurrence'),
       supabase.from('clients').select('id, company_name, services_suspended'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
         .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
-    const allMonthInstances = (instRes.data as Instance[]) || [];
+    const byId = new Map<string, Instance>();
+    for (const row of ((instByRefRes.data as Instance[]) || [])) byId.set(row.id, row);
+    for (const row of ((instByDueRes.data as Instance[]) || [])) byId.set(row.id, row);
+    const allMonthInstances = Array.from(byId.values());
     const monthInstances = allMonthInstances.filter(i => !i.deleted_at);
     const monthDeleted = allMonthInstances.filter(i => !!i.deleted_at);
     setInstances(monthInstances);
@@ -251,12 +257,15 @@ function CalendarMain() {
         ? new Date(y, m - 1, 1)
         : refDate;
       const compMonthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-      const competenceLabel = `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
+      const competenceLabel = obl.recurrence === 'trimestral'
+        ? `Q${Math.floor(compDate.getMonth() / 3) + 1}/${compDate.getFullYear()}`
+        : `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
 
       const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id, competenceLabel };
-      const alertDate = makeDate(obl.alert_day);
-      const targetDate = makeDate(obl.target_day);
-      const dueDate = makeDate(obl.due_day);
+      const isQuarterly = obl.recurrence === 'trimestral';
+      const alertDate = isQuarterly ? null : makeDate(obl.alert_day);
+      const targetDate = isQuarterly ? null : makeDate(obl.target_day);
+      const dueDate = inst.due_date ?? makeDate(obl.due_day);
       if (alertDate) result.push({ ...base, type: 'alert', date: alertDate });
       if (targetDate) result.push({ ...base, type: 'target', date: targetDate });
       if (dueDate) result.push({ ...base, type: 'due', date: dueDate });
@@ -369,9 +378,11 @@ function CalendarMain() {
         ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
         : refDate;
       const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-      const competenceLabel = `${names[compDate.getMonth()]}/${compDate.getFullYear()}`;
+      const competenceLabel = obl.recurrence === 'trimestral'
+        ? `Q${Math.floor(compDate.getMonth() / 3) + 1}/${compDate.getFullYear()}`
+        : `${names[compDate.getMonth()]}/${compDate.getFullYear()}`;
       const refDay = (obl.due_day ?? obl.target_day ?? obl.alert_day ?? 1);
-      const date = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
+      const date = inst.due_date ?? `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
       result.push({
         clientId: client.id, clientName: client.company_name,
         obligationName: obl.name, deptName: dept.name,
@@ -832,7 +843,10 @@ function CalendarMain() {
 
         // Filter instances for current month view
         const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
-        const monthInstances = instances.filter(inst => inst.reference_month.startsWith(monthPrefix));
+        const monthInstances = instances.filter(inst =>
+          inst.reference_month.startsWith(monthPrefix) ||
+          (inst.due_date ? inst.due_date.startsWith(monthPrefix) : false)
+        );
 
         for (const inst of monthInstances) {
           const obl = oblMap.get(inst.obligation_id);
@@ -841,9 +855,10 @@ function CalendarMain() {
           if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
           if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
 
-          const alertDate = makeDate(obl.alert_day, inst.reference_month);
-          const targetDate = makeDate(obl.target_day, inst.reference_month);
-          const dueDate = makeDate(obl.due_day, inst.reference_month);
+          const isQuarterly = obl.recurrence === 'trimestral';
+          const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
+          const targetDate = isQuarterly ? null : makeDate(obl.target_day, inst.reference_month);
+          const dueDate = inst.due_date ?? makeDate(obl.due_day, inst.reference_month);
 
           const completed = isInstanceCompleted(inst.id, inst.obligation_id);
 
@@ -1558,7 +1573,7 @@ function CalendarMain() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ListChecks className="h-5 w-5 text-primary" />
-              {detailObligation?.name}{detailInstance ? (() => { const rd = new Date(detailInstance.reference_month + 'T00:00:00'); const cd = detailObligation?.competence_rule === 'previous' ? new Date(rd.getFullYear(), rd.getMonth() - 1, 1) : rd; const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; return ` | ${mn[cd.getMonth()]}/${cd.getFullYear()}`; })() : ''}
+              {detailObligation?.name}{detailInstance ? (() => { const rd = new Date(detailInstance.reference_month + 'T00:00:00'); const cd = detailObligation?.competence_rule === 'previous' ? new Date(rd.getFullYear(), rd.getMonth() - 1, 1) : rd; const mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; const label = detailObligation?.recurrence === 'trimestral' ? `Q${Math.floor(cd.getMonth() / 3) + 1}/${cd.getFullYear()}` : `${mn[cd.getMonth()]}/${cd.getFullYear()}`; return ` | ${label}`; })() : ''}
             </DialogTitle>
             {detailInstance && (
               <p className="text-sm text-muted-foreground mt-1">
