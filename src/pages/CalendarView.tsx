@@ -843,7 +843,10 @@ function CalendarMain() {
 
         // Filter instances for current month view
         const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
-        const monthInstances = instances.filter(inst => inst.reference_month.startsWith(monthPrefix));
+        const monthInstances = instances.filter(inst =>
+          inst.reference_month.startsWith(monthPrefix) ||
+          (inst.due_date ? inst.due_date.startsWith(monthPrefix) : false)
+        );
 
         for (const inst of monthInstances) {
           const obl = oblMap.get(inst.obligation_id);
