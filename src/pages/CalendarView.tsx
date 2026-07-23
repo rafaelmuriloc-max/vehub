@@ -852,9 +852,10 @@ function CalendarMain() {
           if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
           if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
 
-          const alertDate = makeDate(obl.alert_day, inst.reference_month);
-          const targetDate = makeDate(obl.target_day, inst.reference_month);
-          const dueDate = makeDate(obl.due_day, inst.reference_month);
+          const isQuarterly = obl.recurrence === 'trimestral';
+          const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
+          const targetDate = isQuarterly ? null : makeDate(obl.target_day, inst.reference_month);
+          const dueDate = inst.due_date ?? makeDate(obl.due_day, inst.reference_month);
 
           const completed = isInstanceCompleted(inst.id, inst.obligation_id);
 
