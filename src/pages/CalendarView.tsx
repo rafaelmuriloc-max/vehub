@@ -378,9 +378,11 @@ function CalendarMain() {
         ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
         : refDate;
       const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-      const competenceLabel = `${names[compDate.getMonth()]}/${compDate.getFullYear()}`;
+      const competenceLabel = obl.recurrence === 'trimestral'
+        ? `Q${Math.floor(compDate.getMonth() / 3) + 1}/${compDate.getFullYear()}`
+        : `${names[compDate.getMonth()]}/${compDate.getFullYear()}`;
       const refDay = (obl.due_day ?? obl.target_day ?? obl.alert_day ?? 1);
-      const date = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
+      const date = inst.due_date ?? `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
       result.push({
         clientId: client.id, clientName: client.company_name,
         obligationName: obl.name, deptName: dept.name,
