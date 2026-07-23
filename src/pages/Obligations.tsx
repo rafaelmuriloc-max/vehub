@@ -495,6 +495,7 @@ export default function Obligations() {
           <option value="semanal">Semanal</option>
           <option value="quinzenal">Quinzenal</option>
           <option value="mensal">Mensal</option>
+          <option value="trimestral">Trimestral</option>
           <option value="anual">Anual</option>
         </select>
       </div>
@@ -719,18 +720,19 @@ export default function Obligations() {
                   <SelectItem value="semanal">Semanal</SelectItem>
                   <SelectItem value="quinzenal">Quinzenal</SelectItem>
                   <SelectItem value="mensal">Mensal</SelectItem>
+                  <SelectItem value="trimestral">Trimestral</SelectItem>
                   <SelectItem value="anual">Anual</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {obligationForm.recurrence === 'mensal' && (
+            {(obligationForm.recurrence === 'mensal' || obligationForm.recurrence === 'trimestral') && (
               <div className="space-y-2">
                 <Label>Competência</Label>
                 <Select value={obligationForm.competence_rule} onValueChange={v => setObligationForm({ ...obligationForm, competence_rule: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="current">Mês atual (competência = mês de referência)</SelectItem>
-                    <SelectItem value="previous">Mês anterior (ex: Folha de Pagamento)</SelectItem>
+                    <SelectItem value="current">{obligationForm.recurrence === 'trimestral' ? 'Trimestre atual' : 'Mês atual (competência = mês de referência)'}</SelectItem>
+                    <SelectItem value="previous">{obligationForm.recurrence === 'trimestral' ? 'Trimestre anterior' : 'Mês anterior (ex: Folha de Pagamento)'}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">Define se a competência nas mensagens é o mês de referência ou o mês anterior</p>
