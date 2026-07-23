@@ -248,6 +248,7 @@ export default function Obligations() {
   async function generateObligationInstances(obligationId: string) {
     const ob = obligations.find(o => o.id === obligationId);
     const isAnnual = ob?.recurrence === 'anual';
+    const isQuarterly = ob?.recurrence === 'trimestral';
 
     if (isAnnual) {
       if (!generateStartYear) return;
@@ -296,6 +297,32 @@ export default function Obligations() {
             due_date: dueDate,
             status: 'pending',
           });
+        }
+      }
+    } else if (isQuarterly) {
+      const startMonth = Number(generateStartMonth);
+      const year = new Date().getFullYear();
+      const quarterEndMonths = [3, 6, 9, 12].filter(m => m >= startMonth);
+
+      for (const endMonth of quarterEndMonths) {
+        const refDate = `${year}-${String(endMonth).padStart(2, '0')}-01`;
+        // Vencimento: dia 30 do mês seguinte ao trimestre. Q4 -> 30/01 do ano seguinte.
+        const dueMonth = endMonth === 12 ? 1 : endMonth + 1;
+        const dueYear = endMonth === 12 ? year + 1 : year;
+        const rawDueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-30`;
+        const dueDate = previousBusinessDay(rawDueDate, getHolidays(dueYear));
+
+        for (const clientId of clientIds) {
+          const key = `${clientId}_${refDate}`;
+          if (!existingSet.has(key)) {
+            rows.push({
+              obligation_id: obligationId,
+              client_id: clientId,
+              reference_month: refDate,
+              due_date: dueDate,
+              status: 'pending',
+            });
+          }
         }
       }
     } else {
