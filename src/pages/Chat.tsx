@@ -418,7 +418,14 @@ export default function Chat() {
         toast({ title: 'Erro ao enviar mensagem', description: 'Tente novamente.', variant: 'destructive' });
       } else if (data?.ok === false) {
         console.error('WhatsApp provider send failed:', data);
-        toast({ title: 'Erro ao enviar mensagem', description: data.transient ? 'Conexão com o WhatsApp indisponível. Tente novamente em instantes.' : 'Verifique o número e tente novamente.', variant: 'destructive' });
+        const detail = typeof data.error === 'string' && data.error.trim() ? data.error : null;
+        toast({
+          title: 'Erro ao enviar mensagem',
+          description: data.transient
+            ? 'Conexão com o WhatsApp indisponível. Tente novamente em instantes.'
+            : (detail || 'Verifique o número e tente novamente.'),
+          variant: 'destructive',
+        });
       }
     } else {
       let snapshot: any = null;
