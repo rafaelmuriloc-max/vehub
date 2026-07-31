@@ -126,18 +126,8 @@ Deno.serve(async (req) => {
 
     const phone = conv.whatsapp_phone;
 
-    // Check if there's an incoming message from the client in the last 24h
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: recentIncoming } = await supabase
-      .from("chat_messages")
-      .select("id")
-      .eq("conversation_id", conversationId)
-      .eq("channel", "whatsapp")
-      .eq("message_type", "whatsapp_incoming")
-      .gte("created_at", twentyFourHoursAgo)
-      .limit(1);
-
-    const hasOpenWindow = recentIncoming && recentIncoming.length > 0;
+    // All outgoing messages go through the Evolution API.
+    const hasOpenWindow = false;
     let sendSuccess = false;
     let sendError: string | null = null;
     let waMessageId: string | null = null;
