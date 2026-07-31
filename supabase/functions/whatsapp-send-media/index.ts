@@ -144,24 +144,14 @@ Deno.serve(async (req) => {
       ? { quoted: { key: { id: replyEvolutionId, remoteJid: `${evoTo}@s.whatsapp.net`, fromMe: !!replyMetaWamid } } }
       : {};
 
-    // Check 24h window
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: recentIncoming } = await supabase
-      .from("chat_messages")
-      .select("id")
-      .eq("conversation_id", conversationId)
-      .eq("channel", "whatsapp")
-      .eq("message_type", "whatsapp_incoming")
-      .gte("created_at", since24h)
-      .limit(1);
-
-    const hasOpenWindow = recentIncoming && recentIncoming.length > 0;
+    // All outgoing media goes through the Evolution API.
+    const hasOpenWindow = false;
     // If reply target lacks a Meta wamid, force Evolution path so the quote
     // appears on the contact's WhatsApp.
     const forceEvolutionForReply = !!(replyToMessageId && !replyMetaWamid && replyEvolutionId);
 
-    // If we need Evolution (no 24h window) and the number is confirmed not on WhatsApp, fail fast.
-    if ((!hasOpenWindow || forceEvolutionForReply) && evoNumberMissing) {
+    // Number confirmed not on WhatsApp: fail fast.
+    if (evoNumberMissing) {
       return new Response(
         JSON.stringify({ ok: false, error: `Este número não possui WhatsApp (${toPhone})`, transient: false }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
