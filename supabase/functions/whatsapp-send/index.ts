@@ -30,6 +30,44 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Resolve the actual WhatsApp JID for a number (handles BR 9th-digit variants).
+async function resolveEvolutionNumber(
+  evoUrl: string,
+  apiKey: string,
+  instance: string,
+  phoneDigits: string,
+): Promise<{ number: string | null; exists: boolean }> {
+  const variants = new Set<string>(getPhoneVariants(phoneDigits));
+  try {
+    const r = await fetch(`${evoUrl}/chat/whatsappNumbers/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+      body: JSON.stringify({ numbers: [...variants] }),
+    });
+    if (!r.ok) return { number: phoneDigits, exists: true };
+    const arr = await r.json().catch(() => [] as any[]);
+    const hit = (Array.isArray(arr) ? arr : []).find((x: any) => x?.exists);
+    if (!hit) return { number: null, exists: false };
+    const jid: string = hit.jid || "";
+    const num = jid.includes("@") ? jid.split("@")[0] : (hit.number || phoneDigits);
+    return { number: num, exists: true };
+  } catch {
+    return { number: phoneDigits, exists: true };
+  }
+}
+
+// Flatten Meta template components into plain text (fallback when no preview is given)
+function templateComponentsToText(components: any[]): string {
+  if (!Array.isArray(components)) return "";
+  const parts: string[] = [];
+  for (const c of components) {
+    for (const p of c?.parameters || []) {
+      if (p?.type === "text" && p.text) parts.push(String(p.text));
+    }
+  }
+  return parts.join("\n");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
