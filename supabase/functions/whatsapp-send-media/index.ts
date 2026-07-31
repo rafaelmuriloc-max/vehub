@@ -260,11 +260,8 @@ Deno.serve(async (req) => {
       messageType = "whatsapp_audio";
       messageContent = fileName || "audio";
 
-      // Prefer Evolution API for audio: Meta API rejects audio/webm;codecs=opus
-      // produced by browser MediaRecorder. Evolution converts to PTT-compatible ogg.
-      const audioExt = (fileName || mediaUrl || "").split(".").pop()?.toLowerCase() || "";
-      const isMetaCompatible = ["ogg", "mp3", "m4a", "aac", "amr"].includes(audioExt);
-      const useEvolutionForAudio = !!(EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME) && !isMetaCompatible;
+      // Audio always goes through Evolution (PTT-compatible conversion).
+      const useEvolutionForAudio = !!(EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE_NAME);
 
       if (useEvolutionForAudio) {
         console.log("Sending audio via Evolution API (browser format)");
