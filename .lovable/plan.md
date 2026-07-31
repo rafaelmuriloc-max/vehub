@@ -6,21 +6,33 @@ Os logs da função `whatsapp-send-text` mostram, em todas as tentativas de hoje
 ERROR Meta API error: 401 {"error":{"message":"Authentication Error","code":190,"type":"OAuthException"}}
 ```
 
-Ou seja: o token de acesso da API oficial da Meta (`WHATSAPP_ACCESS_TOKEN`) está expirado/inválido.
+O token da API oficial da Meta está expirado/inválido. No mesmo período, um envio pela Evolution API funcionou (`Evolution API send success`), ou seja, o número da ALPHA GYM está correto.
 
-No mesmo período, um envio pela Evolution API funcionou normalmente (`Evolution API send success`). Portanto o número da ALPHA GYM (5547999558898) está correto e tem WhatsApp — o problema não é o número.
+## Decisão
 
-Por que falha em vez de cair no plano B: hoje o código só faz fallback para a Evolution quando o erro da Meta é **transitório** (5xx, `is_transient`, code 2). O erro 190 é classificado como permanente, então a função devolve `ok:false` e o chat mostra "Verifique o número e tente novamente" — mensagem enganosa.
+Passar a enviar **todas as mensagens pela Evolution API**, removendo a Meta do caminho de envio.
 
-## Correções
+## Alterações
 
 1. `supabase/functions/whatsapp-send-text/index.ts`
-   - Tratar erros de autenticação/autorização da Meta (HTTP 401/403 ou `error.code` 190/10/200/(4xx de token)) como "provedor indisponível" e **fazer fallback automático para a Evolution API**, reaproveitando o mesmo bloco já existente de fallback (resolução do número + `sendText`).
-   - Quando o fallback também falhar, retornar `transient:true` para erros de conexão e uma mensagem de erro específica (auth vs número inexistente) no campo `error`.
-2. Aplicar o mesmo tratamento em `supabase/functions/whatsapp-send-media/index.ts` e `supabase/functions/whatsapp-send/index.ts`, que compartilham a mesma lógica Meta-primeiro (verificar e alinhar).
-3. `src/pages/Chat.tsx`
-   - Exibir a causa real vinda de `data.error` (ex.: "Número sem WhatsApp", "Falha de autenticação no provedor") em vez do texto genérico, mantendo o texto amigável quando não houver detalhe.
+   - Remover o ramo da Meta (janela de 24h, `graph.facebook.com`, retry transitório e fallback).
+   - Sempre resolver o número com `resolveEvolutionNumber` e enviar por `POST /message/sendText/{instance}`.
+   - Manter assinatura do remetente, marcador VHUB, `quoted` para respostas, e gravação em `chat_messages` com `wa_evolution_id`.
+   - Erros: número sem WhatsApp → `ok:false` com mensagem específica; falha de conexão → `transient:true`.
 
-## Ação necessária fora do código
+2. `supabase/functions/whatsapp-send-media/index.ts`
+   - Mesmo tratamento: sempre `POST /message/sendMedia/{instance}` (imagem, vídeo, documento, áudio), sem chamada à Meta.
 
-O token da Meta precisa ser renovado no painel da Meta e atualizado no secret `WHATSAPP_ACCESS_TOKEN`. Com o fallback acima, os envios voltam a funcionar via Evolution mesmo antes dessa renovação.
+3. `supabase/functions/whatsapp-send/index.ts`
+   - Usado por automações (guias, templates). Enviar sempre pela Evolution:
+     - Texto → `sendText`; mídia/documento → `sendMedia` (caminho já existente com `forceEvolutionDocument`, que passa a ser o padrão).
+     - Envios que hoje usam `type: "template"` da Meta passam a ser enviados como texto simples pela Evolution (o corpo do template já é montado no app).
+   - Continuar registrando em `whatsapp_logs` com `status` e `wamid` = `key.id` da Evolution.
+
+4. `src/pages/Chat.tsx`
+   - Mostrar a causa real vinda de `data.error` (ex.: número sem WhatsApp, instância desconectada) em vez do texto genérico.
+
+## Observações técnicas
+
+- Os secrets `WHATSAPP_ACCESS_TOKEN` e `WHATSAPP_PHONE_NUMBER_ID` deixam de ser usados no envio; o webhook de recebimento da Meta não é alterado nesta etapa.
+- A limitação da Meta de não enviar para o próprio número deixa de existir; a dependência passa a ser a instância Evolution estar conectada.
