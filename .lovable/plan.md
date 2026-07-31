@@ -1,32 +1,26 @@
-## Objetivo
+## Diagnóstico
 
-No calendário, o rótulo de competência de obrigações trimestrais deve ser o mês final do trimestre no formato `MM/AAAA` (ex.: `03/2026`, `06/2026`, `09/2026`, `12/2026`) em vez de `Q1/2026`, `Q2/2026`, etc.
+Os logs da função `whatsapp-send-text` mostram, em todas as tentativas de hoje (18:05–18:08):
 
-## Contexto
+```text
+ERROR Meta API error: 401 {"error":{"message":"Authentication Error","code":190,"type":"OAuthException"}}
+```
 
-Hoje, em `src/pages/CalendarView.tsx`, quando `obligation.recurrence === 'trimestral'` o rótulo é montado como `` `Q${quarter}/${year}` ``. O `reference_month` das instâncias trimestrais já é armazenado no mês final de cada trimestre (03, 06, 09, 12), então basta usar mês/ano do próprio `reference_month`.
+Ou seja: o token de acesso da API oficial da Meta (`WHATSAPP_ACCESS_TOKEN`) está expirado/inválido.
 
-## Alterações
+No mesmo período, um envio pela Evolution API funcionou normalmente (`Evolution API send success`). Portanto o número da ALPHA GYM (5547999558898) está correto e tem WhatsApp — o problema não é o número.
 
-Apenas frontend, em `src/pages/CalendarView.tsx`:
+Por que falha em vez de cair no plano B: hoje o código só faz fallback para a Evolution quando o erro da Meta é **transitório** (5xx, `is_transient`, code 2). O erro 190 é classificado como permanente, então a função devolve `ok:false` e o chat mostra "Verifique o número e tente novamente" — mensagem enganosa.
 
-1. Builder de eventos (por volta da linha 260):
-   - Substituir:
-     ```ts
-     const competenceLabel = obl.recurrence === 'trimestral'
-       ? `Q${Math.floor(compDate.getMonth() / 3) + 1}/${compDate.getFullYear()}`
-       : `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
-     ```
-   - Por:
-     ```ts
-     const mm = String(refDate.getMonth() + 1).padStart(2, '0');
-     const yyyy = refDate.getFullYear();
-     const competenceLabel = obl.recurrence === 'trimestral'
-       ? `${mm}/${yyyy}`
-       : `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
-     ```
-   - Para trimestrais o rótulo passa a ser o mês final do trimestre (o próprio `reference_month`), ignorando `competence_rule`.
+## Correções
 
-2. Aplicar a mesma lógica no segundo ponto que monta `competenceLabel` (~linha 381) e no título do diálogo de detalhes (~linha 1576), trocando o `` `Q${...}/${...}` `` por `` `${MM}/${YYYY}` `` derivado de `reference_month`.
+1. `supabase/functions/whatsapp-send-text/index.ts`
+   - Tratar erros de autenticação/autorização da Meta (HTTP 401/403 ou `error.code` 190/10/200/(4xx de token)) como "provedor indisponível" e **fazer fallback automático para a Evolution API**, reaproveitando o mesmo bloco já existente de fallback (resolução do número + `sendText`).
+   - Quando o fallback também falhar, retornar `transient:true` para erros de conexão e uma mensagem de erro específica (auth vs número inexistente) no campo `error`.
+2. Aplicar o mesmo tratamento em `supabase/functions/whatsapp-send-media/index.ts` e `supabase/functions/whatsapp-send/index.ts`, que compartilham a mesma lógica Meta-primeiro (verificar e alinhar).
+3. `src/pages/Chat.tsx`
+   - Exibir a causa real vinda de `data.error` (ex.: "Número sem WhatsApp", "Falha de autenticação no provedor") em vez do texto genérico, mantendo o texto amigável quando não houver detalhe.
 
-Nenhuma alteração em banco, edge functions ou fluxo de geração de instâncias.
+## Ação necessária fora do código
+
+O token da Meta precisa ser renovado no painel da Meta e atualizado no secret `WHATSAPP_ACCESS_TOKEN`. Com o fallback acima, os envios voltam a funcionar via Evolution mesmo antes dessa renovação.
