@@ -107,11 +107,12 @@ serve(async (req) => {
       });
     }
 
-    const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-    const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+    const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+    const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
+    const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
 
-    if (!accessToken || !phoneNumberId) {
-      return new Response(JSON.stringify({ error: "WhatsApp credentials not configured" }), {
+    if (!evolutionUrl || !evolutionKey || !evolutionInstance) {
+      return new Response(JSON.stringify({ error: "Evolution API não configurada" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -121,21 +122,23 @@ serve(async (req) => {
     if (cleanPhone.startsWith("0")) cleanPhone = "55" + cleanPhone.slice(1);
     if (!cleanPhone.startsWith("55")) cleanPhone = "55" + cleanPhone;
 
-    let messagePayload: Record<string, unknown> = {};
     let wamid: string | null = null;
-    let metaData: any = null;
 
-    if (forceEvolutionDocument && mediaUrl) {
-      // Send document via Evolution API (does NOT call Meta)
-      const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
-      const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
-      const evolutionInstance = Deno.env.get("EVOLUTION_INSTANCE_NAME");
-      if (!evolutionUrl || !evolutionKey || !evolutionInstance) {
-        return new Response(JSON.stringify({ error: "Evolution API não configurada" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // Resolve the correct WhatsApp number for this contact
+    const resolved = await resolveEvolutionNumber(evolutionUrl, evolutionKey, evolutionInstance, cleanPhone);
+    if (!resolved.exists || !resolved.number) {
+      return new Response(
+        JSON.stringify({
+          error: `O número ${cleanPhone} não está cadastrado no WhatsApp. Verifique o telefone do cliente.`,
+          code: "WHATSAPP_NUMBER_NOT_FOUND",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const evoNumber = resolved.number;
+
+    if (mediaUrl) {
+      // Send media/document via Evolution API
       const guessMime = (): string => {
         const ext = (mediaFilename || mediaUrl || "").split(".").pop()?.toLowerCase() || "";
         const map: Record<string, string> = {
@@ -158,8 +161,8 @@ serve(async (req) => {
           method: "POST",
           headers: { apikey: evolutionKey, "Content-Type": "application/json" },
           body: JSON.stringify({
-            number: cleanPhone,
-            mediatype: "document",
+            number: evoNumber,
+            mediatype: mediaType && ["image", "video", "document"].includes(mediaType) ? mediaType : "document",
             mimetype: guessMime(),
             media: mediaUrl,
             fileName: mediaFilename || "documento.pdf",
@@ -169,69 +172,47 @@ serve(async (req) => {
       const evoJson = await evoRes.json().catch(() => ({}));
       if (!evoRes.ok) {
         console.error("Evolution sendMedia error:", JSON.stringify(evoJson));
-        // Detect "number does not exist on WhatsApp" response
-        const respMsg = evoJson?.response?.message;
-        const notExists = Array.isArray(respMsg) && respMsg.some((m: any) => m?.exists === false);
-        if (notExists) {
-          return new Response(
-            JSON.stringify({
-              error: `O número ${cleanPhone} não está cadastrado no WhatsApp. Verifique o telefone do cliente.`,
-              code: "WHATSAPP_NUMBER_NOT_FOUND",
-              details: evoJson,
-            }),
-            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
         return new Response(
           JSON.stringify({ error: evoJson?.message || "Erro ao enviar documento via Evolution", details: evoJson }),
           { status: evoRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       wamid = evoJson?.key?.id || null;
-    } else if (type === "template" && templateName && templateName.trim()) {
-      messagePayload = {
-        messaging_product: "whatsapp",
-        to: cleanPhone,
-        type: "template",
-        template: {
-          name: templateName,
-          language: { code: templateLanguage || "pt_BR" },
-          ...(templateParams && templateParams.length > 0 ? { components: templateParams } : {}),
-        },
-      };
     } else {
+      // Send text via Evolution API. Template sends fall back to their rendered
+      // preview / flattened parameters, since Evolution has no template concept.
       const VHUB_MARKER = "\u200B\u200B\u200B";
-      messagePayload = {
-        messaging_product: "whatsapp",
-        to: cleanPhone,
-        type: "text",
-        text: { body: (text || "") + VHUB_MARKER },
-      };
-    }
+      const bodyText =
+        (text && text.trim())
+          ? text
+          : (chatPreview && String(chatPreview).trim())
+            ? String(chatPreview)
+            : templateComponentsToText(templateParams || []);
 
-    if (!forceEvolutionDocument) {
-      console.log("WhatsApp payload:", JSON.stringify(messagePayload));
-      const metaResponse = await fetch(
-        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(messagePayload),
-        }
-      );
-      metaData = await metaResponse.json();
-      console.log("Meta response status:", metaResponse.status, "body:", JSON.stringify(metaData));
-      if (!metaResponse.ok) {
-        console.error("Meta API error:", JSON.stringify(metaData));
+      if (!bodyText.trim()) {
         return new Response(
-          JSON.stringify({ error: metaData.error?.message || "Erro ao enviar WhatsApp", details: metaData }),
-          { status: metaResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Mensagem vazia: nenhum texto para enviar" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      wamid = metaData.messages?.[0]?.id || null;
+
+      const evoRes = await fetch(
+        `${evolutionUrl}/message/sendText/${evolutionInstance}`,
+        {
+          method: "POST",
+          headers: { apikey: evolutionKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ number: evoNumber, text: bodyText + VHUB_MARKER }),
+        }
+      );
+      const evoJson = await evoRes.json().catch(() => ({}));
+      if (!evoRes.ok) {
+        console.error("Evolution sendText error:", JSON.stringify(evoJson));
+        return new Response(
+          JSON.stringify({ error: evoJson?.message || "Erro ao enviar mensagem via Evolution", details: evoJson }),
+          { status: evoRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      wamid = evoJson?.key?.id || null;
     }
 
     const supabaseService = createClient(
