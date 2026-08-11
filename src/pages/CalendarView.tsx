@@ -784,10 +784,15 @@ function CalendarMain() {
   const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const monthEventsSuspended = monthEvents.filter(ev => isSuspendedEvent(ev));
+  const monthEventsLate = monthEventsCompleted
+    .filter(ev => isInstanceLateDelivery(ev.instanceId, ev.obligationId))
+    .sort((a, b) => a.date.localeCompare(b.date));
   const monthPendingTotalPages = Math.ceil(monthEventsPending.length / ITEMS_PER_PAGE);
   const monthCompletedTotalPages = Math.ceil(monthEventsCompleted.length / ITEMS_PER_PAGE);
   const paginatedMonthPending = monthEventsPending.slice((monthPendingPage - 1) * ITEMS_PER_PAGE, monthPendingPage * ITEMS_PER_PAGE);
   const paginatedMonthCompleted = monthEventsCompleted.slice((monthCompletedPage - 1) * ITEMS_PER_PAGE, monthCompletedPage * ITEMS_PER_PAGE);
+  const monthLateTotalPages = Math.ceil(monthEventsLate.length / ITEMS_PER_PAGE);
+  const paginatedMonthLate = monthEventsLate.slice((monthLatePage - 1) * ITEMS_PER_PAGE, monthLatePage * ITEMS_PER_PAGE);
   const monthDeletedTotalPages = Math.ceil(deletedMonthEvents.length / ITEMS_PER_PAGE);
   const paginatedMonthDeleted = deletedMonthEvents.slice((monthDeletedPage - 1) * ITEMS_PER_PAGE, monthDeletedPage * ITEMS_PER_PAGE);
   const monthSuspendedTotalPages = Math.ceil(monthEventsSuspended.length / ITEMS_PER_PAGE);
