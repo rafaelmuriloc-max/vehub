@@ -74,7 +74,7 @@ export function AttachSocietyDocumentsDialog({ open, onOpenChange, conversationC
         }
         const { data: clientsData } = await supabase
           .from('clients')
-          .select('id, company_name')
+          .select('id, sci_code, company_name')
           .in('id', clientIds)
           .order('company_name');
         if (!cancelled) {

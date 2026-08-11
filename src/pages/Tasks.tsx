@@ -133,7 +133,7 @@ export default function Tasks() {
     const [{ data: t }, { data: p }, { data: c }, { data: a }, { data: d }, { data: tpl }, { data: att }] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('user_id, full_name, tag_color'),
-      supabase.from('clients').select('id, company_name').order('company_name'),
+      supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
       supabase.from('task_assignments').select('task_id, user_id'),
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('task_templates').select('*').order('name'),

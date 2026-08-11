@@ -66,7 +66,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
       const [clientsRes, deptRes, convRes] = await Promise.all([
         supabase
           .from('clients')
-          .select('id, company_name, contact_name, contact_phone')
+          .select('id, sci_code, company_name, contact_name, contact_phone')
           .not('contact_phone', 'is', null),
         supabase
           .from('client_department_contacts')

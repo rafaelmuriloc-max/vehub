@@ -132,7 +132,7 @@ export default function InvoiceEmit() {
   async function loadClients() {
     const { data } = await supabase
       .from('clients')
-      .select('id, company_name, document, municipal_registration, address, tax_regime, contact_phone, contact_email')
+      .select('id, sci_code, company_name, document, municipal_registration, address, tax_regime, contact_phone, contact_email')
       .eq('status', 'active')
       .order('company_name');
     if (data) setClients(data);

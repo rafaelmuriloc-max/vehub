@@ -45,7 +45,7 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
     setDepartmentIds([]);
     (async () => {
       const [cRes, dRes] = await Promise.all([
-        supabase.from('clients').select('id, company_name').order('company_name'),
+        supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
         supabase.from('departments').select('id, name').order('name'),
       ]);
       setClients((cRes.data as ClientOpt[]) || []);

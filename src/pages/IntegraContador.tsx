@@ -249,7 +249,7 @@ export default function IntegraContador() {
   async function loadClients() {
     const { data } = await supabase
       .from('clients')
-      .select('id, company_name, document, digital_certificate_url')
+      .select('id, sci_code, company_name, document, digital_certificate_url')
       .eq('status', 'active')
       .not('document', 'is', null)
       .not('digital_certificate_url', 'is', null)

@@ -117,7 +117,7 @@ export default function SimplesNacionalTab() {
     setLoading(true);
     const [clientsRes, compsRes] = await Promise.all([
       supabase.from('clients')
-        .select('id, company_name, document')
+        .select('id, sci_code, company_name, document')
         .in('tax_regime', ['simples_nacional', 'Simples Nacional'])
         .eq('status', 'active')
         .order('company_name'),

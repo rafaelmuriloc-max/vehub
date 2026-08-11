@@ -55,7 +55,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
     (async () => {
       const [{ data: tpl }, { data: c }, { data: p }, { data: d }] = await Promise.all([
         supabase.from('task_templates').select('*').order('name'),
-        supabase.from('clients').select('id, company_name').order('company_name'),
+        supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
         supabase.from('profiles').select('user_id, full_name, department_id'),
         supabase.from('departments').select('id, name').order('name'),
       ]);

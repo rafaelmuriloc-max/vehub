@@ -157,7 +157,7 @@ export default function RfbParcelamentos() {
     try {
       const { data: clientsData } = await supabase
         .from('clients')
-        .select('id, company_name, document')
+        .select('id, sci_code, company_name, document')
         .eq('status', 'active')
         .order('company_name');
       setClients((clientsData || []) as Client[]);

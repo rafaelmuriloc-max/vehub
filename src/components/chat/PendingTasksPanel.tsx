@@ -153,7 +153,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
           const deptIds = [...new Set(baseRows.map((r) => r.department_id).filter(Boolean))] as string[];
           const [clientsRes, deptsRes, assignsRes] = await Promise.all([
             clientIds.length
-              ? supabase.from('clients').select('id,company_name').in('id', clientIds)
+              ? supabase.from('clients').select('id, sci_code, company_name').in('id', clientIds)
               : Promise.resolve({ data: [] as any[] }),
             deptIds.length
               ? supabase.from('departments').select('id,name').in('id', deptIds)

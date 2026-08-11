@@ -66,7 +66,7 @@ export default function SituacaoFiscalTab() {
     try {
       const { data: clientsData } = await supabase
         .from('clients')
-        .select('id, company_name, document, digital_certificate_url')
+        .select('id, sci_code, company_name, document, digital_certificate_url')
         .not('digital_certificate_url', 'is', null)
         .eq('status', 'active')
         .order('company_name');

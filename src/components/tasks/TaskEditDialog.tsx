@@ -70,7 +70,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
         supabase.from('task_assignments').select('user_id').eq('task_id', taskId),
         supabase.from('task_attachments').select('*').eq('task_id', taskId).order('created_at', { ascending: true }),
         supabase.from('profiles').select('user_id, full_name'),
-        supabase.from('clients').select('id, company_name').order('company_name'),
+        supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
         supabase.from('departments').select('id, name').order('name'),
       ]);
       if (cancelled) return;

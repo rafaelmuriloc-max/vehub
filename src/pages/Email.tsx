@@ -637,13 +637,13 @@ function ClientLinkPopover({ message }: { message: EmailMessage }) {
   const [linked, setLinked] = useState<Client | null>(null);
 
   useEffect(() => {
-    supabase.from('clients').select('id, company_name').order('company_name').limit(2000)
+    supabase.from('clients').select('id, sci_code, company_name').order('company_name').limit(2000)
       .then(({ data }) => setClients((data as any) || []));
   }, []);
 
   useEffect(() => {
     if (!message.client_id) { setLinked(null); return; }
-    supabase.from('clients').select('id, company_name').eq('id', message.client_id).maybeSingle()
+    supabase.from('clients').select('id, sci_code, company_name').eq('id', message.client_id).maybeSingle()
       .then(({ data }) => setLinked((data as any) || null));
   }, [message.client_id]);
 

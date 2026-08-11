@@ -32,7 +32,7 @@ export function RecurringEntriesTab() {
       supabase.from('financial_categories').select('*'),
       supabase.from('cost_centers').select('*').eq('active', true),
       supabase.from('bank_accounts').select('*').eq('active', true),
-      supabase.from('clients').select('id, company_name').order('company_name'),
+      supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
     ]);
     setItems(r.data || []); setCats(c.data || []); setCenters(cc.data || []); setAccounts(ba.data || []); setClients(cl.data || []);
   }

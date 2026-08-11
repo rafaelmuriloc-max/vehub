@@ -125,7 +125,7 @@ export default function Chat() {
     if (whatsappConvs.length > 0 && allContacts.length > 0) {
       const contactClientIds = [...new Set(allContacts.filter(c => c.client_id).map(c => c.client_id))];
       const { data: contactClients } = contactClientIds.length > 0
-        ? await supabase.from('clients').select('id, company_name').in('id', contactClientIds)
+        ? await supabase.from('clients').select('id, sci_code, company_name').in('id', contactClientIds)
         : { data: [] };
       const contactClientMap = new Map((contactClients || []).map(c => [c.id, c.company_name]));
 

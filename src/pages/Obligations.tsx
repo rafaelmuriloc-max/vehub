@@ -98,7 +98,7 @@ export default function Obligations() {
       supabase.from('obligations').select('*').order('name'),
       supabase.from('obligation_activities').select('*').order('order'),
       supabase.from('document_types').select('id, name').order('name'),
-      supabase.from('clients').select('id, company_name, document, tax_regime, payroll_type, address, status').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, sci_code, company_name, document, tax_regime, payroll_type, address, status').eq('status', 'active').order('company_name'),
       supabase.from('client_department_obligations').select('*'),
     ]);
     if (dRes.data) setDepartments(dRes.data);

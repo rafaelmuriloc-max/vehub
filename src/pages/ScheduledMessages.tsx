@@ -85,7 +85,7 @@ export default function ScheduledMessages() {
   const load = async () => {
     const [d, c, s] = await Promise.all([
       supabase.from('departments').select('id, name').order('name'),
-      supabase.from('clients').select('id, company_name, document, tax_regime, payroll_type, address, status').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, sci_code, company_name, document, tax_regime, payroll_type, address, status').eq('status', 'active').order('company_name'),
       supabase.from('scheduled_messages').select('*').order('created_at', { ascending: false }),
     ]);
     setDepartments((d.data as any) || []);

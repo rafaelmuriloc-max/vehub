@@ -85,7 +85,7 @@ export default function ReprocessChainDialog({ open, onOpenChange }: { open: boo
       const instanceIds = instances.map(i => i.id);
 
       const [clientsRes, completionsRes] = await Promise.all([
-        supabase.from('clients').select('id, company_name').in('id', clientIds),
+        supabase.from('clients').select('id, sci_code, company_name').in('id', clientIds),
         supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url').in('instance_id', instanceIds),
       ]);
       const clientsMap = new Map<string, string>();

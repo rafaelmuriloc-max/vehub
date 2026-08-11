@@ -186,7 +186,7 @@ function CalendarMain() {
       supabase.from('obligation_instances').select(instCols)
         .gte('due_date', monthStart).lt('due_date', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule, system_code, recurrence'),
-      supabase.from('clients').select('id, company_name, services_suspended'),
+      supabase.from('clients').select('id, sci_code, company_name, services_suspended'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
