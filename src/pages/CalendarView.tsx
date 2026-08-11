@@ -308,6 +308,43 @@ function CalendarMain() {
     });
   }
 
+  const taskStatusLabels: Record<string, string> = {
+    todo: 'A Fazer',
+    in_progress: 'Aguardando',
+    in_review: 'Em Revisão',
+    done: 'Concluída',
+  };
+
+  function isTaskOverdue(t: TaskRow) {
+    return t.status !== 'done' && !!t.due_date && t.due_date < today;
+  }
+
+  const overdueMonthTasks = useMemo(
+    () => tasks
+      .filter(t => isTaskOverdue(t))
+      .filter(t => filterDept === 'all' || t.department_id === filterDept)
+      .filter(t => filterClient === 'all' || t.client_id === filterClient)
+      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')),
+    [tasks, filterDept, filterClient, today]
+  );
+
+  const [selectedOverdueTasks, setSelectedOverdueTasks] = useState<string[]>([]);
+  const [closingTasks, setClosingTasks] = useState(false);
+
+  async function completeTasks(ids: string[]) {
+    if (ids.length === 0) return;
+    setClosingTasks(true);
+    const { error } = await supabase.from('tasks').update({ status: 'done' }).in('id', ids);
+    setClosingTasks(false);
+    if (error) {
+      toast({ title: 'Erro ao concluir', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setSelectedOverdueTasks(prev => prev.filter(id => !ids.includes(id)));
+    toast({ title: ids.length > 1 ? `${ids.length} tarefas concluídas` : 'Tarefa concluída' });
+    await loadData();
+  }
+
   function getDayDots(day: number) {
     const dayEvents = getEventsForDay(day);
     const counts = { alert: 0, target: 0, due: 0 };
@@ -1207,11 +1244,12 @@ function CalendarMain() {
                       const cli = t.client_id ? clientMap.get(t.client_id) : null;
                       const dept = t.department_id ? deptMap.get(t.department_id) : null;
                       const prioColor: Record<string, string> = { low: 'bg-muted text-foreground', medium: 'bg-blue-500 text-white', high: 'bg-orange-500 text-white', urgent: 'bg-red-500 text-white' };
+                      const overdue = isTaskOverdue(t);
                       return (
                         <div
                           key={t.id}
                           onClick={() => setEditingTaskId(t.id)}
-                          className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30"
+                          className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${overdue ? 'border-red-300 dark:border-red-900/60 bg-red-50/60 dark:bg-red-950/20 hover:border-red-400' : 'border-border hover:border-primary/30 hover:bg-muted/30'}`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
@@ -1227,14 +1265,27 @@ function CalendarMain() {
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                               <Badge className={`${prioColor[t.priority] || prioColor.medium} border-0 text-[10px]`}>{t.priority}</Badge>
+                              {t.status !== 'done' && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 text-emerald-600 hover:text-emerald-700"
+                                  title="Marcar como concluída"
+                                  disabled={closingTasks}
+                                  onClick={(e) => { e.stopPropagation(); completeTasks([t.id]); }}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </div>
-                          {dept && (
-                            <div className="flex items-center justify-between mt-2">
-                              <Badge variant="outline" className="text-[10px]">{dept.name}</Badge>
-                              <Badge variant="outline" className="text-[10px]">{t.status}</Badge>
+                          <div className="flex items-center justify-between gap-2 mt-2">
+                            {dept ? <Badge variant="outline" className="text-[10px]">{dept.name}</Badge> : <span />}
+                            <div className="flex items-center gap-1">
+                              {overdue && <Badge className="bg-red-600 text-white border-0 text-[10px]">Atrasada</Badge>}
+                              <Badge variant="outline" className="text-[10px]">{taskStatusLabels[t.status] || t.status}</Badge>
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1246,6 +1297,83 @@ function CalendarMain() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Overdue tasks of the month */}
+      {overdueMonthTasks.length > 0 && (
+        <Card className="border-red-200 dark:border-red-900/50">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <div>
+                  <CardTitle className="text-lg">Tarefas atrasadas</CardTitle>
+                  <CardDescription className="mt-0.5">{overdueMonthTasks.length} tarefa(s) vencida(s) ainda em aberto</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedOverdueTasks(
+                    selectedOverdueTasks.length === overdueMonthTasks.length ? [] : overdueMonthTasks.map(t => t.id)
+                  )}
+                >
+                  {selectedOverdueTasks.length === overdueMonthTasks.length ? 'Limpar seleção' : 'Selecionar todas'}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={selectedOverdueTasks.length === 0 || closingTasks}
+                  onClick={() => completeTasks(selectedOverdueTasks)}
+                >
+                  {closingTasks ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                  Concluir {selectedOverdueTasks.length > 0 ? `(${selectedOverdueTasks.length})` : ''}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {overdueMonthTasks.map(t => {
+                const cli = t.client_id ? clientMap.get(t.client_id) : null;
+                const dept = t.department_id ? deptMap.get(t.department_id) : null;
+                const checked = selectedOverdueTasks.includes(t.id);
+                return (
+                  <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => setSelectedOverdueTasks(prev => v ? [...prev, t.id] : prev.filter(id => id !== t.id))}
+                    />
+                    <button className="min-w-0 flex-1 text-left" onClick={() => setEditingTaskId(t.id)}>
+                      <p className="text-sm font-medium truncate">
+                        <span className="text-muted-foreground mr-1">#{String(t.task_number).padStart(6, '0')}</span>
+                        {t.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {cli && (<><Building2 className="h-3 w-3 inline mr-1" />{cli.company_name} · </>)}
+                        Venceu em {format(parseISO(t.due_date), 'dd/MM/yyyy')}
+                      </p>
+                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {dept && <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{dept.name}</Badge>}
+                      <Badge variant="outline" className="text-[10px]">{taskStatusLabels[t.status] || t.status}</Badge>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-emerald-600 hover:text-emerald-700"
+                        title="Marcar como concluída"
+                        disabled={closingTasks}
+                        onClick={() => completeTasks([t.id])}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Month obligations - below */}
       <Card>

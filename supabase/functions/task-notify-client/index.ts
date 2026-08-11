@@ -394,7 +394,10 @@ Deno.serve(async (req) => {
       (result.whatsapp && result.whatsapp.ok) ||
       (result.email && result.email.ok);
     if (anyOk) {
-      await admin.from("tasks").update({ notify_sent_at: new Date().toISOString() }).eq("id", taskId);
+      await admin
+        .from("tasks")
+        .update({ notify_sent_at: new Date().toISOString(), status: "done" })
+        .eq("id", taskId);
     }
 
     return new Response(JSON.stringify(result), {

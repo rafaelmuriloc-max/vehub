@@ -128,8 +128,19 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
     setEditAttachments(prev => [...prev, ...inserted]);
     setEditNewFiles([]);
     setUploading(false);
+    if (inserted.length > 0 && direction === 'output') await promoteOnOutbound();
     if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
     else toast({ title: 'Anexos adicionados' });
+  }
+
+  // Ao anexar o documento de retorno, a tarefa deixa de ser "A Fazer" e vai para
+  // "Aguardando" (falta apenas o envio ao cliente). Nunca rebaixa tarefas concluídas.
+  async function promoteOnOutbound() {
+    if (!editing || editing.status !== 'todo') return;
+    const { error } = await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', editing.id);
+    if (error) return;
+    setEditing(prev => (prev ? { ...prev, status: 'in_progress' } : prev));
+    setForm(prev => ({ ...prev, status: 'in_progress' as TaskStatus }));
   }
 
   async function triggerNotify(id: string) {
@@ -312,6 +323,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
           }
           setEditAttachments(prev => [...prev, ...inserted]);
           setUploading(false);
+          if (inserted.length > 0 && drivePickerDir === 'output') await promoteOnOutbound();
           if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
           else toast({ title: 'Anexos adicionados do Drive' });
         }}
