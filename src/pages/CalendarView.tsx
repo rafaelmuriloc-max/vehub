@@ -10,6 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
 import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2 } from 'lucide-react';
@@ -112,6 +113,7 @@ function CalendarMain() {
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
   const [filterObligation, setFilterObligation] = useState('all');
+  const [filterLateDeliveries, setFilterLateDeliveries] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
   const [dayPendingPage, setDayPendingPage] = useState(1);
@@ -120,6 +122,7 @@ function CalendarMain() {
   const [monthCompletedPage, setMonthCompletedPage] = useState(1);
   const [monthDeletedPage, setMonthDeletedPage] = useState(1);
   const [monthSuspendedPage, setMonthSuspendedPage] = useState(1);
+  const [monthLatePage, setMonthLatePage] = useState(1);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
@@ -242,6 +245,7 @@ function CalendarMain() {
       if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+      if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
 
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const y = refDate.getFullYear();
@@ -280,7 +284,7 @@ function CalendarMain() {
       }
     }
     return Array.from(deduped.values());
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, holidays]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, holidays, isInstanceLateDelivery]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -410,6 +414,7 @@ function CalendarMain() {
       if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+      if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const compDate = obl.competence_rule === 'previous'
         ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
@@ -427,10 +432,10 @@ function CalendarMain() {
       });
     }
     return result.sort((a, b) => a.date.localeCompare(b.date));
-  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
+  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, isInstanceLateDelivery]);
 
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
-  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient]);
+  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient, filterLateDeliveries]);
 
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
@@ -478,6 +483,36 @@ function CalendarMain() {
     const comps = completions.filter(c => c.instance_id === instanceId && c.completed && c.completed_at);
     if (comps.length === 0) return null;
     return comps.reduce((max, c) => (c.completed_at! > max ? c.completed_at! : max), comps[0].completed_at!);
+  }
+
+  function getInstanceDueDate(instanceId: string): string | null {
+    const inst = instances.find(i => i.id === instanceId) || deletedInstances.find(i => i.id === instanceId);
+    if (!inst) return null;
+    if (inst.due_date) return inst.due_date;
+    const obl = oblMap.get(inst.obligation_id);
+    if (!obl?.due_day) return null;
+    const refDate = new Date(inst.reference_month + 'T00:00:00');
+    const raw = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(obl.due_day).padStart(2, '0')}`;
+    return previousBusinessDay(raw, holidays);
+  }
+
+  function isInstanceLateDelivery(instanceId: string, obligationId: string): boolean {
+    if (!isInstanceCompleted(instanceId, obligationId)) return false;
+    const completedAt = getInstanceCompletedAt(instanceId);
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!completedAt || !dueDate) return false;
+    const completedDate = completedAt.split('T')[0];
+    return completedDate > dueDate;
+  }
+
+  function getLateDeliveryDays(instanceId: string): number | null {
+    const completedAt = getInstanceCompletedAt(instanceId);
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!completedAt || !dueDate) return null;
+    const completed = parseISO(completedAt.split('T')[0]);
+    const due = parseISO(dueDate);
+    const diff = Math.floor((completed.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : null;
   }
 
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
@@ -749,10 +784,15 @@ function CalendarMain() {
   const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const monthEventsSuspended = monthEvents.filter(ev => isSuspendedEvent(ev));
+  const monthEventsLate = monthEventsCompleted
+    .filter(ev => isInstanceLateDelivery(ev.instanceId, ev.obligationId))
+    .sort((a, b) => a.date.localeCompare(b.date));
   const monthPendingTotalPages = Math.ceil(monthEventsPending.length / ITEMS_PER_PAGE);
   const monthCompletedTotalPages = Math.ceil(monthEventsCompleted.length / ITEMS_PER_PAGE);
   const paginatedMonthPending = monthEventsPending.slice((monthPendingPage - 1) * ITEMS_PER_PAGE, monthPendingPage * ITEMS_PER_PAGE);
   const paginatedMonthCompleted = monthEventsCompleted.slice((monthCompletedPage - 1) * ITEMS_PER_PAGE, monthCompletedPage * ITEMS_PER_PAGE);
+  const monthLateTotalPages = Math.ceil(monthEventsLate.length / ITEMS_PER_PAGE);
+  const paginatedMonthLate = monthEventsLate.slice((monthLatePage - 1) * ITEMS_PER_PAGE, monthLatePage * ITEMS_PER_PAGE);
   const monthDeletedTotalPages = Math.ceil(deletedMonthEvents.length / ITEMS_PER_PAGE);
   const paginatedMonthDeleted = deletedMonthEvents.slice((monthDeletedPage - 1) * ITEMS_PER_PAGE, monthDeletedPage * ITEMS_PER_PAGE);
   const monthSuspendedTotalPages = Math.ceil(monthEventsSuspended.length / ITEMS_PER_PAGE);
@@ -767,7 +807,7 @@ function CalendarMain() {
     <div className="space-y-6">
       {/* Header + Filters unified */}
       {(() => {
-        const activeFilters = [filterDept, filterClient, filterObligation].filter(v => v !== 'all').length;
+        const activeFilters = [filterDept, filterClient, filterObligation].filter(v => v !== 'all').length + (filterLateDeliveries ? 1 : 0);
         return (
           <div className="bg-card rounded-xl border p-6 space-y-5">
             <div className="flex items-center justify-between">
@@ -785,7 +825,7 @@ function CalendarMain() {
                   variant="ghost"
                   size="sm"
                   className="text-muted-foreground hover:text-foreground gap-1.5"
-                  onClick={() => { setFilterDept('all'); setFilterClient('all'); setFilterObligation('all'); setSelectedDay(null); }}
+                  onClick={() => { setFilterDept('all'); setFilterClient('all'); setFilterObligation('all'); setFilterLateDeliveries(false); setSelectedDay(null); }}
                 >
                   <X className="h-3.5 w-3.5" />
                   Limpar filtros
@@ -795,7 +835,7 @@ function CalendarMain() {
             </div>
 
             <div className="border-t pt-5">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Departamento" /></SelectTrigger>
                   <SelectContent>
@@ -856,6 +896,15 @@ function CalendarMain() {
                       .map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+
+                <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                  <span className="text-sm font-medium">Fora do prazo</span>
+                  <Switch
+                    checked={filterLateDeliveries}
+                    onCheckedChange={v => { setFilterLateDeliveries(v); setSelectedDay(null); }}
+                    aria-label="Mostrar apenas obrigações entregues fora do prazo"
+                  />
+                </label>
               </div>
             </div>
           </div>
@@ -900,10 +949,7 @@ function CalendarMain() {
           const completed = isInstanceCompleted(inst.id, inst.obligation_id);
 
           if (completed) {
-            // Find latest completion date
-            const instCompletions = completions.filter(c => c.instance_id === inst.id && c.completed);
-            // We don't have completed_at in local Completion type, so compare with dueDate using today as proxy
-            if (dueDate && todayStr > dueDate) {
+            if (isInstanceLateDelivery(inst.id, inst.obligation_id)) {
               doneLate++;
             } else {
               doneOnTime++;
@@ -1147,6 +1193,7 @@ function CalendarMain() {
                         <div className="space-y-2">
                           {tab.items.map((ev, idx) => {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                            const isLateDelivery = completed && isInstanceLateDelivery(ev.instanceId, ev.obligationId);
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                             const isSelected = selectedInstanceIds.has(ev.instanceId);
                             const quick = completed && isQuickCompleted(ev.instanceId, ev.obligationId);
@@ -1158,11 +1205,13 @@ function CalendarMain() {
                                 onClick={() => setDetailInstanceId(ev.instanceId)}
                                 className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
                                   ${isSelected ? 'ring-2 ring-primary/50' : ''}
-                                  ${completed
-                                    ? (quick
-                                        ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
-                                        : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
-                                    : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                  ${isLateDelivery
+                                    ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
+                                    : completed
+                                      ? (quick
+                                          ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
+                                          : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
+                                      : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
@@ -1184,6 +1233,11 @@ function CalendarMain() {
                                     <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
                                       {typeConfig[ev.type].label}
                                     </Badge>
+                                    {isLateDelivery && (
+                                      <Badge className="bg-orange-500 text-white border-0 text-[10px]">
+                                        Fora do prazo
+                                      </Badge>
+                                    )}
                                     {!completed && (
                                       <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
                                         <Check className="h-3.5 w-3.5" />
@@ -1396,7 +1450,7 @@ function CalendarMain() {
             </div>
           ) : (
             <Tabs defaultValue="pending">
-              <TabsList className="mb-4">
+              <TabsList className="mb-4 flex-wrap h-auto gap-1">
                 <TabsTrigger value="pending">
                   A fazer
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsPending.length}</Badge>
@@ -1404,6 +1458,10 @@ function CalendarMain() {
                 <TabsTrigger value="completed">
                   Concluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="late">
+                  Fora do prazo
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsLate.length}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="deleted">
                   Excluídas
@@ -1600,6 +1658,101 @@ function CalendarMain() {
                       })}
                     </div>
                     <PaginationBlock page={monthCompletedPage} totalPages={monthCompletedTotalPages} total={monthEventsCompleted.length} onPageChange={setMonthCompletedPage} />
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="late">
+                {monthEventsLate.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <AlertTriangle className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação entregue fora do prazo neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    {(() => {
+                      const allIds = monthEventsLate.map(e => e.instanceId);
+                      const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                      return (
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
+                      );
+                    })()}
+                    <div className="space-y-2">
+                      {paginatedMonthLate.map((ev, idx) => {
+                        const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        const isSelected = selectedInstanceIds.has(ev.instanceId);
+                        const lateDays = getLateDeliveryDays(ev.instanceId);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setDetailInstanceId(ev.instanceId)}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
+                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-orange-500 text-white border-0 text-[10px]">
+                                  Fora do prazo
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                            {(() => {
+                              const completedAt = getInstanceCompletedAt(ev.instanceId);
+                              if (!completedAt) return null;
+                              return (
+                                <div className="flex items-center gap-1 mt-2 text-[10px] text-orange-600 dark:text-orange-400">
+                                  <Clock className="h-3 w-3" />
+                                  <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}{lateDays ? ` · ${lateDays} dia${lateDays > 1 ? 's' : ''} de atraso` : ''}</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <PaginationBlock page={monthLatePage} totalPages={monthLateTotalPages} total={monthEventsLate.length} onPageChange={setMonthLatePage} />
                   </>
                 )}
               </TabsContent>
