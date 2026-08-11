@@ -18,6 +18,7 @@ import { RegisterContactDialog } from '@/components/chat/RegisterContactDialog';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 import { PendingTasksPanel } from '@/components/chat/PendingTasksPanel';
 import { X } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -100,7 +101,7 @@ export default function Chat() {
 
     const [clientsResult, participantsResult, whatsappContactsResult] = await Promise.all([
       allClientIds.length > 0
-        ? supabase.from('clients').select('id, contact_name, company_name').in('id', allClientIds)
+        ? supabase.from('clients').select('id, sci_code, contact_name, company_name').in('id', allClientIds)
         : Promise.resolve({ data: [] }),
       oneToOneConvIds.length > 0
         ? supabase.from('chat_participants').select('conversation_id, user_id').in('conversation_id', oneToOneConvIds).neq('user_id', user.id)
@@ -127,7 +128,7 @@ export default function Chat() {
       const { data: contactClients } = contactClientIds.length > 0
         ? await supabase.from('clients').select('id, sci_code, company_name').in('id', contactClientIds)
         : { data: [] };
-      const contactClientMap = new Map((contactClients || []).map(c => [c.id, c.company_name]));
+      const contactClientMap = new Map((contactClients || []).map(c => [c.id, formatClientLabel(c)]));
 
       for (const conv of whatsappConvs) {
         const digits = (conv as any).whatsapp_phone.replace(/\D/g, '');
@@ -168,7 +169,7 @@ export default function Chat() {
         name = conv.name;
       } else if (conv.client_id && clientMap.has(conv.client_id)) {
         const client = clientMap.get(conv.client_id)!;
-        name = client.contact_name || client.company_name || name;
+        name = client.contact_name || formatClientLabel(client) || name;
       } else if (!conv.is_group && !conv.client_id) {
         const otherUserId = participantMap.get(conv.id);
         if (otherUserId) {

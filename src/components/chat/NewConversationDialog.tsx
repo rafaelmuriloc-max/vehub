@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { Phone } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 interface Contact {
   phone: string;          // normalized digits
@@ -70,7 +71,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
           .not('contact_phone', 'is', null),
         supabase
           .from('client_department_contacts')
-          .select('contact_name, contact_phone, client_id, clients(company_name)')
+          .select('contact_name, contact_phone, client_id, clients(sci_code, company_name)')
           .not('contact_phone', 'is', null),
         supabase
           .from('chat_conversations')
@@ -103,7 +104,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
             phone,
             displayPhone: d.contact_phone,
             name: d.contact_name || d.contact_phone,
-            companyName: d.clients?.company_name,
+            companyName: d.clients ? formatClientLabel(d.clients) : undefined,
             clientId: d.client_id,
             source: 'department',
           });

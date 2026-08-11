@@ -20,6 +20,7 @@ import { RecurringEntriesTab } from '@/components/financial/RecurringEntriesTab'
 import { AsaasChargesTab } from '@/components/financial/AsaasChargesTab';
 import { DreTab } from '@/components/financial/DreTab';
 import { BillPaymentDialog } from '@/components/financial/BillPaymentDialog';
+import { formatClientLabel } from '@/lib/utils';
 
 type Entry = {
   id: string; description: string; amount: number; type: 'receivable' | 'payable';
@@ -28,7 +29,7 @@ type Entry = {
   cost_center_id?: string | null; bank_account_id?: string | null; asaas_charge_id?: string | null;
 };
 type Category = { id: string; name: string; type: 'receivable' | 'payable' };
-type Client = { id: string; company_name: string };
+type Client = { id: string; sci_code?: string | null; company_name: string };
 type ClientFull = { status: string; monthly_value: number | null; start_date: string | null; end_date: string | null; created_at: string | null; opening_date: string | null };
 type TaskRow = { status: string; due_date: string | null };
 
@@ -438,7 +439,7 @@ export default function Financial() {
                 <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

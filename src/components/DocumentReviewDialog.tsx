@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 export interface AiExtraction {
   cnpj: string;
@@ -26,7 +27,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   data: ReviewData | null;
   documentTypes: { id: string; name: string }[];
-  clients: { id: string; company_name: string }[];
+  clients: { id: string; sci_code?: string | null; company_name: string }[];
   onConfirm: (data: { file: File; clientId: string; docTypeId: string; referenceMonth: string }) => void;
   confirming: boolean;
   queueTotal?: number;
@@ -111,7 +112,7 @@ export default function DocumentReviewDialog({ open, onOpenChange, data, documen
             <Select name="clientId" defaultValue={matchedClientId} required>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
               </SelectContent>
             </Select>
             {extraction.cnpj && !matchedClientId && (

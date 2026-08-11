@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
+import { formatClientLabel } from '@/lib/utils';
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
   ChevronDown, ChevronRight, Zap, Copy, Users, Search, CalendarDays,
 } from 'lucide-react';
@@ -26,7 +27,7 @@ type Department = { id: string; name: string };
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any; annual_month: number | null; is_retention: boolean; retention_tax_type: string | null; system_code: string | null };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; order: number; document_type_id: string | null; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type DocumentType = { id: string; name: string };
-type Client = { id: string; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
+type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
 type ClientDeptObligation = { id: string; client_id: string; department_id: string; obligation_id: string };
 
 const activityTypeIcons: Record<string, React.ReactNode> = {
@@ -137,7 +138,7 @@ export default function Obligations() {
   const filteredManualClients = useMemo(() => {
     if (!clientSearch) return clients;
     const s = clientSearch.toLowerCase();
-    return clients.filter(c => c.company_name.toLowerCase().includes(s) || (c.document && c.document.includes(s)));
+    return clients.filter(c => c.company_name.toLowerCase().includes(s) || (c.sci_code || '').toLowerCase().includes(s) || (c.document && c.document.includes(s)));
   }, [clients, clientSearch]);
 
   // ---- Obligation CRUD ----
@@ -1006,7 +1007,7 @@ export default function Obligations() {
                             }}
                           />
                           <Label htmlFor={`client_${c.id}`} className="text-sm flex-1 cursor-pointer">
-                            {c.company_name}
+                            {formatClientLabel(c)}
                             {c.document && <span className="text-muted-foreground ml-1">({c.document})</span>}
                           </Label>
                         </div>

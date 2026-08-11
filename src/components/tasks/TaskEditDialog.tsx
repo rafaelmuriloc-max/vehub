@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Paperclip, Upload, X, HardDrive } from 'lucide-react';
 import { DrivePickerDialog } from '@/components/drive/DrivePickerDialog';
 import { downloadDriveFile } from '@/components/drive/DriveBrowser';
+import { formatClientLabel } from '@/lib/utils';
 
 type TaskStatus = 'todo' | 'in_progress' | 'done';
 type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -23,7 +24,7 @@ type Task = {
   notify_whatsapp?: boolean; notify_email?: boolean; notify_sent_at?: string | null;
 };
 type Profile = { user_id: string; full_name: string | null };
-type Client = { id: string; company_name: string };
+type Client = { id: string; sci_code?: string | null; company_name: string };
 type Department = { id: string; name: string };
 type TaskAttachment = {
   id: string; file_name: string; file_url: string; file_type: string | null;
@@ -225,7 +226,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
                 <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

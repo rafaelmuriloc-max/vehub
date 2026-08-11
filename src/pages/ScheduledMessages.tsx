@@ -17,9 +17,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Pencil, Trash2, Pause, Play, Send, Search, Paperclip, History, X } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 type Department = { id: string; name: string };
-type Client = { id: string; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
+type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
 type ScheduledMsg = any;
 
 const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -134,7 +135,7 @@ export default function ScheduledMessages() {
 
   const filteredClients = useMemo(() => {
     const q = clientSearch.toLowerCase();
-    return clients.filter(c => !q || c.company_name.toLowerCase().includes(q) || (c.document || '').toLowerCase().includes(q));
+    return clients.filter(c => !q || c.company_name.toLowerCase().includes(q) || (c.sci_code || '').toLowerCase().includes(q) || (c.document || '').toLowerCase().includes(q));
   }, [clients, clientSearch]);
 
   const segmentPreview = useMemo(() => {
@@ -502,7 +503,7 @@ export default function ScheduledMessages() {
                             setManualSelected(v ? [...manualSelected, c.id] : manualSelected.filter(id => id !== c.id));
                           }} />
                           <Label htmlFor={`cli_${c.id}`} className="text-sm flex-1 cursor-pointer">
-                            {c.company_name}
+                            {formatClientLabel(c)}
                             {c.document && <span className="text-muted-foreground ml-1">({c.document})</span>}
                           </Label>
                         </div>

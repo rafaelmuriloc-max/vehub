@@ -14,9 +14,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send, FileText, Building2, Landmark, Mail, CreditCard, Search, Scale, RefreshCw, Shield, Link2, FolderOpen, Bell, MailOpen, MailCheck, Eye, Download, FileDown } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 type Client = {
   id: string;
+  sci_code?: string | null;
   company_name: string;
   document: string | null;
   digital_certificate_url: string | null;
@@ -666,7 +668,7 @@ export default function IntegraContador() {
                 <SelectContent>
                   {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.company_name} — {c.document}
+                      {formatClientLabel(c)} — {c.document}
                     </SelectItem>
                   ))}
                 </SelectContent>

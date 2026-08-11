@@ -9,6 +9,7 @@ import { X, ListTodo, Paperclip, Upload, Trash2, ChevronLeft, ChevronRight } fro
 import { toast } from '@/hooks/use-toast';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { formatClientLabel } from '@/lib/utils';
 
 function getReadableTextColor(hex: string): string {
   let h = hex.replace('#', '');
@@ -51,7 +52,7 @@ interface TaskRow {
   created_at: string;
   created_by: string | null;
   department_id: string | null;
-  clients: { company_name: string } | null;
+  clients: { sci_code?: string | null; company_name: string } | null;
   departments?: { name: string } | null;
   task_assignments: { user_id: string }[];
   status?: string;
@@ -162,8 +163,8 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
               ? supabase.from('task_assignments').select('task_id,user_id').in('task_id', taskIds)
               : Promise.resolve({ data: [] as any[] }),
           ]);
-          const clientMap: Record<string, { company_name: string }> = {};
-          (clientsRes.data || []).forEach((c: any) => { clientMap[c.id] = { company_name: c.company_name }; });
+          const clientMap: Record<string, { sci_code?: string | null; company_name: string }> = {};
+          (clientsRes.data || []).forEach((c: any) => { clientMap[c.id] = { sci_code: c.sci_code, company_name: c.company_name }; });
           const deptMap: Record<string, { name: string }> = {};
           (deptsRes.data || []).forEach((d: any) => { deptMap[d.id] = { name: d.name }; });
           const assignsByTask: Record<string, { user_id: string }[]> = {};
@@ -359,11 +360,11 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
                   <p className="font-medium text-sm leading-snug">{task.title}</p>
                   {isMobile ? (
                     task.clients?.company_name && (
-                      <p className="text-xs text-muted-foreground">{task.clients.company_name}</p>
+                      <p className="text-xs text-muted-foreground">{formatClientLabel(task.clients)}</p>
                     )
                   ) : (task.clients?.company_name || task.departments?.name) && (
                     <p className="text-xs text-muted-foreground">
-                      {task.clients?.company_name && <span>{task.clients.company_name}</span>}
+                      {task.clients?.company_name && <span>{formatClientLabel(task.clients)}</span>}
                       {task.clients?.company_name && task.departments?.name && <span> · </span>}
                       {task.departments?.name && <span>{task.departments.name}</span>}
                     </p>

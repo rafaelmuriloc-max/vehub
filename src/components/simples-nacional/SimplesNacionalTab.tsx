@@ -13,9 +13,11 @@ import { FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import PgdasdDeclaracaoForm from '@/components/integra-contador/PgdasdDeclaracaoForm';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { formatClientLabel } from '@/lib/utils';
 
 type Client = {
   id: string;
+  sci_code?: string | null;
   company_name: string;
   document: string | null;
 };
@@ -275,7 +277,7 @@ export default function SimplesNacionalTab() {
                 onClick={() => setExpanded(isOpen ? null : client.id)}
                 className="w-full grid md:grid-cols-[1fr_180px_140px_180px_180px_40px] grid-cols-1 gap-3 px-4 py-3 hover:bg-accent/30 transition-colors text-left"
               >
-                <div className="font-medium text-foreground truncate">{client.company_name}</div>
+                <div className="font-medium text-foreground truncate">{formatClientLabel(client)}</div>
                 <div className="text-sm text-muted-foreground font-mono">{formatCnpj(client.document)}</div>
                 <div className="text-sm text-right tabular-nums">{formatBRL(rbt12)}</div>
                 <div className="flex items-center gap-2">
@@ -346,7 +348,7 @@ export default function SimplesNacionalTab() {
           <DialogHeader>
             <DialogTitle>Entregar Declaração Mensal — PGDAS-D</DialogTitle>
             <DialogDescription>
-              {declClient?.company_name} • {formatCnpj(declClient?.document)}
+              {formatClientLabel(declClient)} • {formatCnpj(declClient?.document)}
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="flex-1 pr-2">

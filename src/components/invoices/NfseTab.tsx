@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { formatClientLabel } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
-type Client = { id: string; company_name: string; document: string | null; digital_certificate_url: string | null; digital_certificate_expiry: string | null };
+type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null; digital_certificate_url: string | null; digital_certificate_expiry: string | null };
 type Invoice = {
   id: string;
   client_id: string;
@@ -355,7 +356,7 @@ export default function NfseTab() {
   }
 
   function getClientName(clientId: string) {
-    return clients.find(c => c.id === clientId)?.company_name || '—';
+    return formatClientLabel(clients.find(c => c.id === clientId), '—');
   }
 
   function formatCurrency(value: number) {
@@ -438,7 +439,7 @@ export default function NfseTab() {
                   <SelectContent>
                     <SelectItem value="all">Todos os clientes</SelectItem>
                     {clients.filter(c => c.document).map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -615,7 +616,7 @@ export default function NfseTab() {
                 <SelectContent>
                   <SelectItem value="all">Todos os clientes</SelectItem>
                   {clients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

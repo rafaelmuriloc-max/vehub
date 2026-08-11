@@ -13,11 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
 type Client = {
   id: string;
+  sci_code?: string | null;
   company_name: string;
   document: string | null;
   digital_certificate_url: string | null;
@@ -341,7 +343,7 @@ export default function NfeTab() {
   }
 
   function getClientName(clientId: string) {
-    return clients.find(c => c.id === clientId)?.company_name || '—';
+    return formatClientLabel(clients.find(c => c.id === clientId), '—');
   }
 
   function formatCurrency(value: number) {
@@ -478,7 +480,7 @@ export default function NfeTab() {
                   <SelectContent>
                     <SelectItem value="all">Todos os clientes</SelectItem>
                     {clients.filter(c => c.document).map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -580,7 +582,7 @@ export default function NfeTab() {
                 <SelectContent>
                   <SelectItem value="all">Todos os clientes</SelectItem>
                   {clients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

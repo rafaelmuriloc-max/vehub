@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Play } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 export function RecurringEntriesTab() {
   const [items, setItems] = useState<any[]>([]);
@@ -115,7 +116,7 @@ export function RecurringEntriesTab() {
             <div><Label>Categoria</Label><Select value={form.category_id || 'none'} onValueChange={v => setForm({ ...form, category_id: v === 'none' ? null : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">—</SelectItem>{cats.filter(c => c.type === form.type).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>Centro de Custo</Label><Select value={form.cost_center_id || 'none'} onValueChange={v => setForm({ ...form, cost_center_id: v === 'none' ? null : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">—</SelectItem>{centers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>Conta Bancária</Label><Select value={form.bank_account_id || 'none'} onValueChange={v => setForm({ ...form, bank_account_id: v === 'none' ? null : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">—</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
-            <div className="col-span-2"><Label>Cliente (opcional)</Label><Select value={form.client_id || 'none'} onValueChange={v => setForm({ ...form, client_id: v === 'none' ? null : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">—</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent></Select></div>
+            <div className="col-span-2"><Label>Cliente (opcional)</Label><Select value={form.client_id || 'none'} onValueChange={v => setForm({ ...form, client_id: v === 'none' ? null : v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">—</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}</SelectContent></Select></div>
             <div className="col-span-2 flex items-center gap-2"><Switch checked={form.active ?? true} onCheckedChange={v => setForm({ ...form, active: v })} /><Label>Ativo</Label></div>
             <div className="col-span-2"><Button onClick={save} className="w-full">Salvar</Button></div>
           </div>

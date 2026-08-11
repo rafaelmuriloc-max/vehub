@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Search, PlayCircle, Eye, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 type Modalidade = {
   idSistema: string;
@@ -51,6 +52,7 @@ const MODALIDADES: Modalidade[] = [
 
 type Client = {
   id: string;
+  sci_code?: string | null;
   company_name: string;
   document: string | null;
 };
@@ -320,7 +322,7 @@ export default function RfbParcelamentos() {
     const s = search.toLowerCase().trim();
     return display.filter(it => {
       if (s) {
-        const hay = `${it.client.company_name} ${it.client.document || ''}`.toLowerCase();
+        const hay = `${formatClientLabel(it.client)} ${it.client.document || ''}`.toLowerCase();
         if (!hay.includes(s)) return false;
       }
       if (filterModalidade !== 'all') {
@@ -595,7 +597,7 @@ export default function RfbParcelamentos() {
                         onCheckedChange={() => toggleSelect(it.client.id)}
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{it.client.company_name}</TableCell>
+                    <TableCell className="font-medium">{formatClientLabel(it.client)}</TableCell>
                     <TableCell className="font-mono text-xs">{formatCnpj(it.client.document)}</TableCell>
                     <TableCell>
                       {it.parc?.origem

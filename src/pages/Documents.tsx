@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import * as pdfjs from 'pdfjs-dist';
 import DocumentReviewDialog, { type AiExtraction, type ReviewData } from '@/components/DocumentReviewDialog';
 import ImportSetupDialog, { type ImportContext } from '@/components/documents/ImportSetupDialog';
+import { formatClientLabel } from '@/lib/utils';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -28,7 +29,7 @@ type ExtractionConfig = {
   obligation_type_region?: FieldRegion | null;
 };
 type DocumentType = { id: string; name: string; description: string | null; extraction_config: ExtractionConfig | null };
-type Client = { id: string; company_name: string; document: string | null };
+type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null };
 type Doc = { id: string; document_type_id: string; client_id: string; reference_month: string; file_url: string; file_name: string; created_at: string; linked_obligation_id: string | null };
 type Obligation = { id: string; name: string };
 
@@ -774,7 +775,7 @@ export default function Documents() {
   }
 
   function getTypeName(id: string) { return documentTypes.find(d => d.id === id)?.name || '—'; }
-  function getClientName(id: string) { return clients.find(c => c.id === id)?.company_name || '—'; }
+  function getClientName(id: string) { return formatClientLabel(clients.find(c => c.id === id), '—'); }
   function getObligationName(id: string | null) { if (!id) return '—'; return obligations.find(o => o.id === id)?.name || '—'; }
 
   return (
