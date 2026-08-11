@@ -891,6 +891,15 @@ function CalendarMain() {
                       .map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+
+                <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                  <span className="text-sm font-medium">Fora do prazo</span>
+                  <Switch
+                    checked={filterLateDeliveries}
+                    onCheckedChange={v => { setFilterLateDeliveries(v); setSelectedDay(null); }}
+                    aria-label="Mostrar apenas obrigações entregues fora do prazo"
+                  />
+                </label>
               </div>
             </div>
           </div>
