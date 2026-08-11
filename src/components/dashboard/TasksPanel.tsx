@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MetricCard } from './MetricCard';
 import { Card } from '@/components/ui/card';
-import { CheckSquare, AlertTriangle, Trophy } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CheckSquare, AlertTriangle, Trophy, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 function monthRange() {
   const now = new Date();
