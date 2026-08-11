@@ -857,27 +857,44 @@ export default function Clients() {
       }
     }
 
-    // Sync obligation selections
-    if (clientId && selectedObligations.size > 0) {
-      await (supabase as any).from('client_department_obligations').delete().eq('client_id', clientId);
-      const oblRows = Array.from(selectedObligations).map(oblId => {
-        const obl = allObligations.find(o => o.id === oblId);
-        return {
-          client_id: clientId,
-          department_id: obl?.department_id,
-          obligation_id: oblId,
-        };
-      }).filter(r => r.department_id);
-      if (oblRows.length > 0) {
-        const { error: oblError } = await (supabase as any)
+    // Sync obligation selections (diff-based: só remove o que foi desmarcado)
+    if (clientId) {
+      const { data: existingLinks } = await (supabase as any)
+        .from('client_department_obligations')
+        .select('obligation_id')
+        .eq('client_id', clientId);
+      const currentIds = new Set<string>(((existingLinks || []) as any[]).map(r => r.obligation_id));
+      const desiredIds = new Set<string>(Array.from(selectedObligations));
+
+      const toRemove = Array.from(currentIds).filter(id => !desiredIds.has(id));
+      const toAdd = Array.from(desiredIds).filter(id => !currentIds.has(id));
+
+      if (toRemove.length > 0) {
+        await (supabase as any)
           .from('client_department_obligations')
-          .insert(oblRows);
-        if (oblError) {
-          toast({ title: 'Erro ao salvar obrigações', description: oblError.message, variant: 'destructive' });
+          .delete()
+          .eq('client_id', clientId)
+          .in('obligation_id', toRemove);
+      }
+
+      if (toAdd.length > 0) {
+        const oblRows = toAdd.map(oblId => {
+          const obl = allObligations.find(o => o.id === oblId);
+          return {
+            client_id: clientId,
+            department_id: obl?.department_id,
+            obligation_id: oblId,
+          };
+        }).filter(r => r.department_id);
+        if (oblRows.length > 0) {
+          const { error: oblError } = await (supabase as any)
+            .from('client_department_obligations')
+            .insert(oblRows);
+          if (oblError) {
+            toast({ title: 'Erro ao salvar obrigações', description: oblError.message, variant: 'destructive' });
+          }
         }
       }
-    } else if (clientId && selectedObligations.size === 0 && editing) {
-      await (supabase as any).from('client_department_obligations').delete().eq('client_id', clientId);
     }
 
     if (clientId && pendingCertFile) {
