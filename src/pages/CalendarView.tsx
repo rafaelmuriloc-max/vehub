@@ -244,6 +244,7 @@ function CalendarMain() {
       if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+      if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
 
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const y = refDate.getFullYear();
@@ -282,7 +283,7 @@ function CalendarMain() {
       }
     }
     return Array.from(deduped.values());
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, holidays]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, holidays, isInstanceLateDelivery]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
