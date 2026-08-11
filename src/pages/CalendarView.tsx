@@ -482,6 +482,36 @@ function CalendarMain() {
     return comps.reduce((max, c) => (c.completed_at! > max ? c.completed_at! : max), comps[0].completed_at!);
   }
 
+  function getInstanceDueDate(instanceId: string): string | null {
+    const inst = instances.find(i => i.id === instanceId) || deletedInstances.find(i => i.id === instanceId);
+    if (!inst) return null;
+    if (inst.due_date) return inst.due_date;
+    const obl = oblMap.get(inst.obligation_id);
+    if (!obl?.due_day) return null;
+    const refDate = new Date(inst.reference_month + 'T00:00:00');
+    const raw = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(obl.due_day).padStart(2, '0')}`;
+    return previousBusinessDay(raw, holidays);
+  }
+
+  function isInstanceLateDelivery(instanceId: string, obligationId: string): boolean {
+    if (!isInstanceCompleted(instanceId, obligationId)) return false;
+    const completedAt = getInstanceCompletedAt(instanceId);
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!completedAt || !dueDate) return false;
+    const completedDate = completedAt.split('T')[0];
+    return completedDate > dueDate;
+  }
+
+  function getLateDeliveryDays(instanceId: string): number | null {
+    const completedAt = getInstanceCompletedAt(instanceId);
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!completedAt || !dueDate) return null;
+    const completed = parseISO(completedAt.split('T')[0]);
+    const due = parseISO(dueDate);
+    const diff = Math.floor((completed.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : null;
+  }
+
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
     if (!detailInstanceId) return;
     const existing = getCompletion(activityId);
