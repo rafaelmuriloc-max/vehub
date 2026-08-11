@@ -413,6 +413,7 @@ function CalendarMain() {
       if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+      if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const compDate = obl.competence_rule === 'previous'
         ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
@@ -430,7 +431,7 @@ function CalendarMain() {
       });
     }
     return result.sort((a, b) => a.date.localeCompare(b.date));
-  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation]);
+  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, isInstanceLateDelivery]);
 
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
   useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient]);
