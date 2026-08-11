@@ -59,7 +59,8 @@ export function ObligationsPanel() {
   const upcomingCount = data?.upcoming?.length ?? 0;
 
   return (
-    <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col gap-5 h-full">
+    <Card className="relative overflow-hidden bg-card border-2 border-border/70 shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col gap-5 h-full">
+      <div className="absolute inset-x-0 top-0 h-1 bg-amber-500" />
       <div className="flex items-end justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
