@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, RefreshCw, CheckCircle2, AlertTriangle, SkipForward } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { formatClientLabel } from '@/lib/utils';
 
 type ReprocessResult = {
   instance_id: string;
@@ -85,11 +86,11 @@ export default function ReprocessChainDialog({ open, onOpenChange }: { open: boo
       const instanceIds = instances.map(i => i.id);
 
       const [clientsRes, completionsRes] = await Promise.all([
-        supabase.from('clients').select('id, company_name').in('id', clientIds),
+        supabase.from('clients').select('id, sci_code, company_name').in('id', clientIds),
         supabase.from('obligation_activity_completions').select('id, instance_id, activity_id, completed, file_url').in('instance_id', instanceIds),
       ]);
       const clientsMap = new Map<string, string>();
-      (clientsRes.data || []).forEach(c => clientsMap.set(c.id, c.company_name));
+      (clientsRes.data || []).forEach(c => clientsMap.set(c.id, formatClientLabel(c)));
       const completionsByInst = new Map<string, any[]>();
       (completionsRes.data || []).forEach(c => {
         const arr = completionsByInst.get(c.instance_id) ?? [];

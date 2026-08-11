@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import { formatClientLabel } from '@/lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -42,6 +43,7 @@ async function extractTextFromPdfBase64(base64: string): Promise<string> {
 
 type ClientWithSitfis = {
   id: string;
+  sci_code?: string | null;
   company_name: string;
   document: string | null;
   sitfis_status: string | null;
@@ -66,7 +68,7 @@ export default function SituacaoFiscalTab() {
     try {
       const { data: clientsData } = await supabase
         .from('clients')
-        .select('id, company_name, document, digital_certificate_url')
+        .select('id, sci_code, company_name, document, digital_certificate_url')
         .not('digital_certificate_url', 'is', null)
         .eq('status', 'active')
         .order('company_name');
@@ -84,6 +86,7 @@ export default function SituacaoFiscalTab() {
         const s = sitfisMap.get(c.id);
         return {
           id: c.id,
+          sci_code: c.sci_code,
           company_name: c.company_name,
           document: c.document,
           sitfis_status: s?.status || null,
@@ -330,6 +333,7 @@ export default function SituacaoFiscalTab() {
   const filtered = clients.filter(c => {
     const matchSearch = !search ||
       c.company_name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.sci_code || '').toLowerCase().includes(search.toLowerCase()) ||
       (c.document || '').includes(search);
     const matchStatus = filterStatus === 'all' ||
       (filterStatus === 'pending' && !c.sitfis_status) ||
@@ -444,7 +448,7 @@ export default function SituacaoFiscalTab() {
                           onCheckedChange={() => toggleSelect(c.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{c.company_name}</TableCell>
+                      <TableCell className="font-medium">{formatClientLabel(c)}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                         {c.document || '—'}
                       </TableCell>

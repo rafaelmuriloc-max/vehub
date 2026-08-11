@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Send, Loader2, Search } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 type Client = {
   id: string;
@@ -132,7 +133,7 @@ export default function InvoiceEmit() {
   async function loadClients() {
     const { data } = await supabase
       .from('clients')
-      .select('id, company_name, document, municipal_registration, address, tax_regime, contact_phone, contact_email')
+      .select('id, sci_code, company_name, document, municipal_registration, address, tax_regime, contact_phone, contact_email')
       .eq('status', 'active')
       .order('company_name');
     if (data) setClients(data);
@@ -404,7 +405,7 @@ export default function InvoiceEmit() {
                 </SelectTrigger>
                 <SelectContent>
                   {clients.filter(c => c.document).map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

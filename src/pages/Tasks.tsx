@@ -15,6 +15,7 @@ import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
+import { formatClientLabel } from '@/lib/utils';
 
 type Task = {
   id: string; task_number?: number | null; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
@@ -49,7 +50,7 @@ function AssigneeBadge({ name, color }: { name: string; color?: string | null })
     </Badge>
   );
 }
-type Client = { id: string; company_name: string };
+type Client = { id: string; sci_code?: string | null; company_name: string };
 type Department = { id: string; name: string };
 type TaskTemplate = {
   id: string; name: string; department_id: string; description: string | null; default_due_days: number;
@@ -133,7 +134,7 @@ export default function Tasks() {
     const [{ data: t }, { data: p }, { data: c }, { data: a }, { data: d }, { data: tpl }, { data: att }] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('user_id, full_name, tag_color'),
-      supabase.from('clients').select('id, company_name').order('company_name'),
+      supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
       supabase.from('task_assignments').select('task_id, user_id'),
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('task_templates').select('*').order('name'),
@@ -310,7 +311,7 @@ export default function Tasks() {
     return 'text-emerald-600';
   }
 
-  const getClientName = (id: string | null) => clients.find(c => c.id === id)?.company_name || '';
+  const getClientName = (id: string | null) => formatClientLabel(clients.find(c => c.id === id));
   const getProfileName = (uid: string) => profiles.find(p => p.user_id === uid)?.full_name || 'Sem nome';
   const getProfileColor = (uid: string) => profiles.find(p => p.user_id === uid)?.tag_color || null;
   const getDepartmentName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
@@ -671,7 +672,7 @@ export default function Tasks() {
                 <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

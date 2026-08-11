@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { ExternalLink, Copy, X, RefreshCw } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800',
@@ -28,7 +29,7 @@ export function AsaasChargesTab() {
   useEffect(() => { load(); }, []);
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from('asaas_charges').select('*, clients(company_name)').order('created_at', { ascending: false }).limit(200);
+    const { data } = await supabase.from('asaas_charges').select('*, clients(sci_code, company_name)').order('created_at', { ascending: false }).limit(200);
     setCharges(data || []); setLoading(false);
   }
 
@@ -39,7 +40,7 @@ export function AsaasChargesTab() {
     else { toast({ title: 'Cobrança cancelada' }); load(); }
   }
 
-  const filtered = charges.filter(c => !search || c.clients?.company_name?.toLowerCase().includes(search.toLowerCase()) || c.asaas_charge_id?.includes(search));
+  const filtered = charges.filter(c => !search || (c.clients?.company_name?.toLowerCase().includes(search.toLowerCase()) || c.clients?.sci_code?.toLowerCase().includes(search.toLowerCase())) || c.asaas_charge_id?.includes(search));
 
   return (
     <div className="space-y-4">
@@ -56,7 +57,7 @@ export function AsaasChargesTab() {
             {loading ? <TableRow><TableCell colSpan={6} className="text-center py-8">Carregando...</TableCell></TableRow> :
               filtered.map(c => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.clients?.company_name || '—'}</TableCell>
+                <TableCell className="font-medium">{formatClientLabel(c.clients, '—')}</TableCell>
                 <TableCell>{c.billing_type}</TableCell>
                 <TableCell>R$ {Number(c.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                 <TableCell>{c.due_date ? new Date(c.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</TableCell>

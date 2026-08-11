@@ -13,7 +13,7 @@ import {
   Inbox, Star, Send, Archive, Trash2, Mail, MailOpen, RefreshCw, Loader2,
   Pencil, Reply, Forward, Paperclip, Building2, ArrowLeft, X, Tag, FileText, Clock,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatClientLabel } from '@/lib/utils';
 
 type Folder = 'inbox' | 'inbox_fiscal' | 'inbox_pessoal' | 'starred' | 'sent' | 'archived' | 'trash';
 
@@ -50,7 +50,7 @@ interface Attachment {
   size_bytes: number | null;
 }
 
-interface Client { id: string; company_name: string; }
+interface Client { id: string; sci_code?: string | null; company_name: string; }
 
 const FOLDERS: { id: Folder; label: string; icon: any }[] = [
   { id: 'inbox', label: 'Caixa de entrada', icon: Inbox },
@@ -637,13 +637,13 @@ function ClientLinkPopover({ message }: { message: EmailMessage }) {
   const [linked, setLinked] = useState<Client | null>(null);
 
   useEffect(() => {
-    supabase.from('clients').select('id, company_name').order('company_name').limit(2000)
+    supabase.from('clients').select('id, sci_code, company_name').order('company_name').limit(2000)
       .then(({ data }) => setClients((data as any) || []));
   }, []);
 
   useEffect(() => {
     if (!message.client_id) { setLinked(null); return; }
-    supabase.from('clients').select('id, company_name').eq('id', message.client_id).maybeSingle()
+    supabase.from('clients').select('id, sci_code, company_name').eq('id', message.client_id).maybeSingle()
       .then(({ data }) => setLinked((data as any) || null));
   }, [message.client_id]);
 
@@ -661,7 +661,7 @@ function ClientLinkPopover({ message }: { message: EmailMessage }) {
       <PopoverTrigger asChild>
         <Button size="sm" variant="outline">
           <Building2 className="h-3 w-3 mr-1" />
-          {linked ? linked.company_name : 'Vincular cliente'}
+          {linked ? formatClientLabel(linked) : 'Vincular cliente'}
           {linked && (
             <X className="h-3 w-3 ml-2 hover:text-destructive" onClick={(e) => { e.stopPropagation(); link(null); }} />
           )}
@@ -674,8 +674,8 @@ function ClientLinkPopover({ message }: { message: EmailMessage }) {
             <CommandEmpty>Nenhum cliente.</CommandEmpty>
             <CommandGroup>
               {clients.map(c => (
-                <CommandItem key={c.id} value={c.company_name} onSelect={() => link(c.id)}>
-                  {c.company_name}
+                <CommandItem key={c.id} value={formatClientLabel(c)} onSelect={() => link(c.id)}>
+                  {formatClientLabel(c)}
                 </CommandItem>
               ))}
             </CommandGroup>

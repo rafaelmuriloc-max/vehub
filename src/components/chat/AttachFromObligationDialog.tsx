@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown, Loader2, FileText } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatClientLabel } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
-interface Company { id: string; company_name: string }
+interface Company { id: string; sci_code?: string | null; company_name: string }
 interface ObligationItem {
   instanceId: string;
   obligationName: string;
@@ -92,7 +92,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
         }
         const { data: clientsData } = await supabase
           .from('clients')
-          .select('id, company_name')
+          .select('id, sci_code, company_name')
           .in('id', clientIds)
           .order('company_name');
         if (!cancelled) {
@@ -282,7 +282,7 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
               <PopoverTrigger asChild>
                 <Button variant="outline" role="combobox" className="w-full justify-between font-normal min-w-0" disabled={loadingCompanies || companies.length === 0}>
                   <span className="truncate text-left flex-1 min-w-0">
-                    {loadingCompanies ? 'Carregando...' : (selectedCompany?.company_name || (companies.length === 0 ? 'Nenhuma empresa vinculada' : 'Selecione a empresa'))}
+                    {loadingCompanies ? 'Carregando...' : (( selectedCompany ? formatClientLabel(selectedCompany) : '') || (companies.length === 0 ? 'Nenhuma empresa vinculada' : 'Selecione a empresa'))}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -294,9 +294,9 @@ export function AttachFromObligationDialog({ open, onOpenChange, conversationCli
                     <CommandEmpty>Nenhuma empresa.</CommandEmpty>
                     <CommandGroup>
                       {companies.map(c => (
-                        <CommandItem key={c.id} value={c.company_name} onSelect={() => { setCompanyId(c.id); setCompanyOpen(false); }}>
+                        <CommandItem key={c.id} value={formatClientLabel(c)} onSelect={() => { setCompanyId(c.id); setCompanyOpen(false); }}>
                           <Check className={cn('mr-2 h-4 w-4', companyId === c.id ? 'opacity-100' : 'opacity-0')} />
-                          <span className="truncate">{c.company_name}</span>
+                          <span className="truncate">{formatClientLabel(c)}</span>
                         </CommandItem>
                       ))}
                     </CommandGroup>

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatClientLabel } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface RegisterContactDialogProps {
@@ -19,7 +19,7 @@ interface RegisterContactDialogProps {
   onSaved?: () => void;
 }
 
-interface ClientOpt { id: string; company_name: string }
+interface ClientOpt { id: string; sci_code?: string | null; company_name: string }
 interface DeptOpt { id: string; name: string }
 
 const normalize = (p?: string | null) => (p || '').replace(/\D/g, '');
@@ -45,7 +45,7 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
     setDepartmentIds([]);
     (async () => {
       const [cRes, dRes] = await Promise.all([
-        supabase.from('clients').select('id, company_name').order('company_name'),
+        supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
         supabase.from('departments').select('id, name').order('name'),
       ]);
       setClients((cRes.data as ClientOpt[]) || []);
@@ -149,7 +149,7 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
               <PopoverTrigger asChild>
                 <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
                   <span className={cn('truncate', !selectedClient && 'text-muted-foreground')}>
-                    {selectedClient?.company_name || 'Selecione a empresa...'}
+                    {selectedClient ? formatClientLabel(selectedClient) : 'Selecione a empresa...'}
                   </span>
                   <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
                 </Button>
@@ -163,11 +163,11 @@ export function RegisterContactDialog({ open, onOpenChange, conversationId, init
                       {clients.map(c => (
                         <CommandItem
                           key={c.id}
-                          value={c.company_name}
+                          value={formatClientLabel(c)}
                           onSelect={() => { setClientId(c.id); setClientOpen(false); }}
                         >
                           <Check className={cn('mr-2 h-4 w-4', clientId === c.id ? 'opacity-100' : 'opacity-0')} />
-                          {c.company_name}
+                          {formatClientLabel(c)}
                         </CommandItem>
                       ))}
                     </CommandGroup>

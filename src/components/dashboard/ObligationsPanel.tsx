@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Calendar, ListChecks } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 function monthRange() {
   const now = new Date();
@@ -23,7 +24,7 @@ export function ObligationsPanel() {
       const [upcoming, monthAll] = await Promise.all([
         supabase
           .from('obligation_instances')
-          .select('id, due_date, status, client:client_id(company_name), obligation:obligation_id(name, department:department_id(name))')
+          .select('id, due_date, status, client:client_id(sci_code, company_name), obligation:obligation_id(name, department:department_id(name))')
           .gte('due_date', todayISO)
           .lte('due_date', in7)
           .neq('status', 'done')
@@ -97,7 +98,7 @@ export function ObligationsPanel() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{o.obligation?.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{o.client?.company_name}</div>
+                  <div className="text-xs text-muted-foreground truncate">{formatClientLabel(o.client)}</div>
                 </div>
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{o.obligation?.department?.name}</span>
               </div>

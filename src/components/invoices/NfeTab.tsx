@@ -13,11 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
 type Client = {
   id: string;
+  sci_code?: string | null;
   company_name: string;
   document: string | null;
   digital_certificate_url: string | null;
@@ -112,7 +114,7 @@ export default function NfeTab() {
   async function loadClients() {
     const { data } = await supabase
       .from('clients')
-      .select('id, company_name, document, digital_certificate_url, digital_certificate_expiry')
+      .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry')
       .eq('status', 'active')
       .order('company_name');
     if (data) setClients(data);
@@ -153,7 +155,7 @@ export default function NfeTab() {
 
     try {
       for (let i = 0; i < clientIds.length; i++) {
-        const clientName = clients.find(c => c.id === clientIds[i])?.company_name || '';
+        const clientName = formatClientLabel(clients.find(c => c.id === clientIds[i]));
         setSyncProgress(clientIds.length > 1 ? `Consultando ${i + 1}/${clientIds.length} — ${clientName}` : `Consultando ${clientName}`);
 
         try {
@@ -341,7 +343,7 @@ export default function NfeTab() {
   }
 
   function getClientName(clientId: string) {
-    return clients.find(c => c.id === clientId)?.company_name || '—';
+    return formatClientLabel(clients.find(c => c.id === clientId), '—');
   }
 
   function formatCurrency(value: number) {
@@ -478,7 +480,7 @@ export default function NfeTab() {
                   <SelectContent>
                     <SelectItem value="all">Todos os clientes</SelectItem>
                     {clients.filter(c => c.document).map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -580,7 +582,7 @@ export default function NfeTab() {
                 <SelectContent>
                   <SelectItem value="all">Todos os clientes</SelectItem>
                   {clients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

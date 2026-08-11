@@ -9,12 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Paperclip, X, MessageSquare } from 'lucide-react';
 import { MessagePicker, type PickedItem } from './MessagePicker';
+import { formatClientLabel } from '@/lib/utils';
 
 type TaskTemplate = {
   id: string; name: string; department_id: string; description: string | null; default_due_days: number;
   notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null;
 };
-type Client = { id: string; company_name: string };
+type Client = { id: string; sci_code?: string | null; company_name: string };
 type Profile = { user_id: string; full_name: string | null; department_id: string | null };
 type Department = { id: string; name: string };
 
@@ -55,7 +56,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
     (async () => {
       const [{ data: tpl }, { data: c }, { data: p }, { data: d }] = await Promise.all([
         supabase.from('task_templates').select('*').order('name'),
-        supabase.from('clients').select('id, company_name').order('company_name'),
+        supabase.from('clients').select('id, sci_code, company_name').order('company_name'),
         supabase.from('profiles').select('user_id, full_name, department_id'),
         supabase.from('departments').select('id, name').order('name'),
       ]);
@@ -239,7 +240,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
             <Select value={requestForm.client_id} onValueChange={v => setRequestForm({ ...requestForm, client_id: v })}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {list.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                {list.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
               </SelectContent>
             </Select>
           );
