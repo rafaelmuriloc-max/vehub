@@ -944,10 +944,7 @@ function CalendarMain() {
           const completed = isInstanceCompleted(inst.id, inst.obligation_id);
 
           if (completed) {
-            // Find latest completion date
-            const instCompletions = completions.filter(c => c.instance_id === inst.id && c.completed);
-            // We don't have completed_at in local Completion type, so compare with dueDate using today as proxy
-            if (dueDate && todayStr > dueDate) {
+            if (isInstanceLateDelivery(inst.id, inst.obligation_id)) {
               doneLate++;
             } else {
               doneOnTime++;
