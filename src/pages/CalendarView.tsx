@@ -1193,6 +1193,7 @@ function CalendarMain() {
                         <div className="space-y-2">
                           {tab.items.map((ev, idx) => {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
+                            const isLateDelivery = completed && isInstanceLateDelivery(ev.instanceId, ev.obligationId);
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                             const isSelected = selectedInstanceIds.has(ev.instanceId);
                             const quick = completed && isQuickCompleted(ev.instanceId, ev.obligationId);
@@ -1204,11 +1205,13 @@ function CalendarMain() {
                                 onClick={() => setDetailInstanceId(ev.instanceId)}
                                 className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm
                                   ${isSelected ? 'ring-2 ring-primary/50' : ''}
-                                  ${completed
-                                    ? (quick
-                                        ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
-                                        : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
-                                    : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                  ${isLateDelivery
+                                    ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
+                                    : completed
+                                      ? (quick
+                                          ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
+                                          : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
+                                      : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
