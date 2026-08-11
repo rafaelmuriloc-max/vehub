@@ -155,7 +155,7 @@ export default function NfeTab() {
 
     try {
       for (let i = 0; i < clientIds.length; i++) {
-        const clientName = clients.find(c => c.id === clientIds[i])?.company_name || '';
+        const clientName = formatClientLabel(clients.find(c => c.id === clientIds[i]));
         setSyncProgress(clientIds.length > 1 ? `Consultando ${i + 1}/${clientIds.length} — ${clientName}` : `Consultando ${clientName}`);
 
         try {

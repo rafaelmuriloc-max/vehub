@@ -145,7 +145,7 @@ export default function SimplesNacionalTab() {
     const tokens = normalize(q).split(/\s+/).filter(Boolean);
     const digits = q.replace(/\D/g, '');
     return clients.filter(c => {
-      const name = normalize(c.company_name || '');
+      const name = normalize(formatClientLabel(c));
       const nameMatch = tokens.every(t => name.includes(t));
       const docMatch = digits.length > 0 &&
         (c.document || '').replace(/\D/g, '').includes(digits);

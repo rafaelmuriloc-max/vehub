@@ -182,7 +182,7 @@ export default function NfseTab() {
     try {
       for (let i = 0; i < clientIds.length; i++) {
         if (clientIds.length > 1) {
-          const clientName = clients.find(c => c.id === clientIds[i])?.company_name || '';
+          const clientName = formatClientLabel(clients.find(c => c.id === clientIds[i]));
           setSyncProgress(`Consultando ${i + 1}/${clientIds.length} — ${clientName}`);
         }
 

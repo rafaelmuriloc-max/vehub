@@ -693,7 +693,7 @@ export default function Clients() {
       const { error } = await supabase.from('clients').delete().eq('id', deleteTarget.id);
       if (error) throw error;
 
-      toast({ title: 'Cliente excluído', description: `${deleteTarget.company_name} foi removido.` });
+      toast({ title: 'Cliente excluído', description: `${formatClientLabel(deleteTarget)} foi removido.` });
       loadClients();
     } catch (err: any) {
       toast({ title: 'Erro ao excluir', description: err.message, variant: 'destructive' });
@@ -1625,7 +1625,7 @@ export default function Clients() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir cliente</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir <strong>{deleteTarget?.company_name}</strong>? Esta ação não pode ser desfeita. Todos os contatos por departamento e certificados associados serão removidos.
+              Tem certeza que deseja excluir <strong>{formatClientLabel(deleteTarget)}</strong>? Esta ação não pode ser desfeita. Todos os contatos por departamento e certificados associados serão removidos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
