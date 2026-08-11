@@ -434,7 +434,7 @@ function CalendarMain() {
   }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, isInstanceLateDelivery]);
 
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
-  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient]);
+  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient, filterLateDeliveries]);
 
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
