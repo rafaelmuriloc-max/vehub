@@ -17,6 +17,7 @@ import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
+import { TasksRankingTab } from '@/components/tasks/TasksRankingTab';
 import { formatClientLabel } from '@/lib/utils';
 
 type Task = {
@@ -590,6 +591,7 @@ export default function Tasks() {
         <TabsList>
           <TabsTrigger value="kanban">Kanban</TabsTrigger>
           <TabsTrigger value="list">Lista</TabsTrigger>
+          <TabsTrigger value="ranking">Ranking</TabsTrigger>
           <TabsTrigger value="catalog">Cadastro</TabsTrigger>
         </TabsList>
 
