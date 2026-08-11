@@ -1233,6 +1233,11 @@ function CalendarMain() {
                                     <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
                                       {typeConfig[ev.type].label}
                                     </Badge>
+                                    {isLateDelivery && (
+                                      <Badge className="bg-orange-500 text-white border-0 text-[10px]">
+                                        Fora do prazo
+                                      </Badge>
+                                    )}
                                     {!completed && (
                                       <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
                                         <Check className="h-3.5 w-3.5" />
