@@ -10,8 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
@@ -74,6 +76,12 @@ export default function Tasks() {
   const [editing, setEditing] = useState<Task | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [filterClient, setFilterClient] = useState<string>('all');
+  const [filterDepartment, setFilterDepartment] = useState<string>('all');
+  const [filterTemplate, setFilterTemplate] = useState<string>('all');
+  const [filterAssignee, setFilterAssignee] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
 
