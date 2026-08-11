@@ -672,25 +672,7 @@ export default function Tasks() {
         </TabsContent>
 
         <TabsContent value="list" className="space-y-4">
-          <div className="flex gap-4">
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {statusColumns.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterPriority} onValueChange={setFilterPriority}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Prioridade" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="low">Baixa</SelectItem>
-                <SelectItem value="medium">Média</SelectItem>
-                <SelectItem value="high">Alta</SelectItem>
-                <SelectItem value="urgent">Urgente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {filterBar}
           <div className="space-y-2">
             {filteredTasks.map(task => (
               <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(task)}>
