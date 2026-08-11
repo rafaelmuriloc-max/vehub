@@ -103,6 +103,32 @@ export default function Tasks() {
 
   useEffect(() => { loadData(); }, []);
 
+  // Mantém o quadro sincronizado quando o status muda no servidor (notificação
+  // automática) ou em outra tela.
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === 'visible') loadData(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    const channel = supabase
+      .channel('tasks-board')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => { loadData(); })
+      .subscribe();
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Nunca rebaixa uma tarefa que já teve a notificação enviada e foi concluída
+  // pelo servidor depois que a tela carregou.
+  async function guardStatus(taskId: string, desired: Task['status']): Promise<Task['status']> {
+    if (desired === 'done') return desired;
+    const { data } = await supabase.from('tasks').select('status, notify_sent_at').eq('id', taskId).maybeSingle();
+    if (data?.notify_sent_at && data.status === 'done') return 'done';
+    return desired;
+  }
+
   async function loadData() {
     const [{ data: t }, { data: p }, { data: c }, { data: a }, { data: d }, { data: tpl }, { data: att }] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
@@ -216,8 +242,9 @@ export default function Tasks() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    const nextStatus = editing ? await guardStatus(editing.id, form.status) : form.status;
     const payload = {
-      title: form.title, description: form.description || null, status: form.status,
+      title: form.title, description: form.description || null, status: nextStatus,
       priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
       department_id: form.department_id || null,
     };
@@ -241,7 +268,7 @@ export default function Tasks() {
     }
 
     setDialogOpen(false);
-    if (form.status === 'done' && !wasDone && editing && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
+    if (nextStatus === 'done' && !wasDone && editing && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
       await triggerNotify(taskId);
     }
     loadData();
@@ -250,7 +277,8 @@ export default function Tasks() {
 
   async function moveTask(taskId: string, newStatus: Task['status']) {
     const prev = tasks.find(t => t.id === taskId);
-    await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+    const safeStatus = await guardStatus(taskId, newStatus);
+    await supabase.from('tasks').update({ status: safeStatus }).eq('id', taskId);
     if (newStatus === 'done' && prev?.status !== 'done' && (prev?.notify_whatsapp || prev?.notify_email) && !prev?.notify_sent_at) {
       await triggerNotify(taskId);
     }

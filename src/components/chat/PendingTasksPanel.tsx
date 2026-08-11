@@ -274,6 +274,20 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
     }
     setBusyId(null);
     await loadAttachmentCounts(tasks.map(t => t.id));
+    // Anexar o documento de retorno tira a tarefa de "A Fazer" (falta só o envio).
+    if (failed.length < files.length) {
+      const current = tasks.find(t => t.id === taskId);
+      if (current && current.status === 'todo') {
+        const { error: upErr } = await supabase.from('tasks').update({ status: 'in_progress' } as any).eq('id', taskId);
+        if (!upErr) {
+          setTasks(curr => {
+            const next = curr.filter(t => t.id !== taskId);
+            onCountChangeRef.current?.(next.length);
+            return next;
+          });
+        }
+      }
+    }
     if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
     else toast({ title: 'Arquivos para o cliente anexados' });
   }
