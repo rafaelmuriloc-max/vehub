@@ -18,10 +18,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
-import { formatClientLabel } from '@/lib/utils';
   Plus, Pencil, Trash2, ClipboardList, FileText, CheckSquare, MessageCircle, Mail,
   ChevronDown, ChevronRight, Zap, Copy, Users, Search, CalendarDays,
 } from 'lucide-react';
+import { formatClientLabel } from '@/lib/utils';
 
 type Department = { id: string; name: string };
 type Obligation = { id: string; department_id: string; name: string; description: string | null; recurrence: string; due_day: number | null; target_day: number | null; alert_day: number | null; competence_rule: string; is_tax: boolean; tax_sphere: string | null; assignment_mode: string; segment_filters: any; annual_month: number | null; is_retention: boolean; retention_tax_type: string | null; system_code: string | null };
