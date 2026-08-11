@@ -55,24 +55,39 @@ export function ObligationsPanel() {
     },
   });
 
+  const navigate = useNavigate();
+  const upcomingCount = data?.upcoming?.length ?? 0;
+
   return (
-    <Card className="bg-card/40 border-border/40 p-5 flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <Calendar className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Obrigações</h2>
+    <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col gap-5 h-full">
+      <div className="flex items-end justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <Calendar className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold tracking-tight">Obrigações</h2>
+            <p className="text-xs text-muted-foreground font-medium">
+              {upcomingCount > 0 ? `${upcomingCount} ${upcomingCount === 1 ? 'vencendo nos próximos 7 dias' : 'vencendo nos próximos 7 dias'}` : 'Nenhuma obrigação urgente'}
+            </p>
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" className="gap-1 text-primary hover:text-primary hover:bg-primary/10" onClick={() => navigate('/calendar')}>
+          Ver tudo <ArrowRight className="h-4 w-4" />
+        </Button>
       </div>
 
       <div>
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-3">
           <ListChecks className="h-4 w-4 text-muted-foreground" />
           <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Conclusão do mês por departamento</span>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {data?.departments && data.departments.length > 0 ? data.departments.map((d, i) => {
             const pct = d.total ? Math.round((d.done / d.total) * 100) : 0;
             return (
               <div key={i}>
-                <div className="flex justify-between text-xs mb-1">
+                <div className="flex justify-between text-xs mb-1.5">
                   <span className="font-medium">{d.name}</span>
                   <span className="tabular-nums text-muted-foreground">{d.done}/{d.total} · <strong className="text-foreground">{pct}%</strong></span>
                 </div>
@@ -86,15 +101,15 @@ export function ObligationsPanel() {
       </div>
 
       <div className="flex-1 min-h-0">
-        <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Vencendo nos próximos 7 dias</div>
-        <div className="space-y-1.5 max-h-72 overflow-auto pr-1">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-3">Vencendo nos próximos 7 dias</div>
+        <div className="space-y-2 max-h-72 overflow-auto pr-1">
           {data?.upcoming && data.upcoming.length > 0 ? data.upcoming.map((o: any) => {
             const d = o.due_date ? new Date(o.due_date + 'T00:00:00') : null;
             const today = new Date(); today.setHours(0,0,0,0);
             const days = d ? Math.round((d.getTime() - today.getTime()) / 86400000) : null;
             const danger = days !== null && days <= 1;
             return (
-              <div key={o.id} className="flex items-center gap-3 text-sm py-1.5 px-2 rounded-md hover:bg-muted/30">
+              <div key={o.id} className="flex items-center gap-3 text-sm py-2 px-2 rounded-md hover:bg-muted/40 border border-transparent hover:border-border/50 transition-colors">
                 <div className={`tabular-nums font-bold w-14 text-center rounded-md py-1 text-xs ${danger ? 'bg-red-500/20 text-red-300' : 'bg-primary/15 text-primary'}`}>
                   {d?.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                 </div>

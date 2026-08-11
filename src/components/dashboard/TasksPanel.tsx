@@ -83,13 +83,29 @@ export function TasksPanel() {
     },
   });
 
+  const navigate = useNavigate();
+  const totalPending = (data?.pending ?? 0) + (data?.inProgress ?? 0);
+
   return (
-    <Card className="bg-card/40 border-border/40 p-5 flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <CheckSquare className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Tarefas do mês</h2>
+    <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col gap-5 h-full">
+      <div className="flex items-end justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <CheckSquare className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold tracking-tight">Tarefas do mês</h2>
+            <p className="text-xs text-muted-foreground font-medium">
+              {totalPending > 0 ? `${totalPending} ${totalPending === 1 ? 'pendente' : 'pendentes'}` : 'Tudo em dia'}
+            </p>
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" className="gap-1 text-primary hover:text-primary hover:bg-primary/10" onClick={() => navigate('/tasks')}>
+          Ver tudo <ArrowRight className="h-4 w-4" />
+        </Button>
       </div>
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+
+      <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3">
         <MetricCard label="Pendentes" value={data?.pending ?? '—'} />
         <MetricCard label="Em andamento" value={data?.inProgress ?? '—'} accent="warning" />
         <MetricCard label="Concluídas" value={data?.done ?? '—'} accent="success" />
@@ -101,21 +117,22 @@ export function TasksPanel() {
         />
         <MetricCard label="Hoje" value={data?.doneToday ?? '—'} accent="success" />
       </div>
-      <div>
-        <div className="flex items-center gap-2 mb-2">
+
+      <div className="flex-1 min-h-0">
+        <div className="flex items-center gap-2 mb-3">
           <Trophy className="h-4 w-4 text-amber-400" />
           <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Ranking de hoje</span>
         </div>
         {data?.ranking && data.ranking.length > 0 ? (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {data.ranking.map((r, i) => (
-              <div key={i} className="flex items-center gap-3 text-sm">
-                <span className="w-5 text-muted-foreground tabular-nums">{i + 1}.</span>
+              <div key={i} className="flex items-center gap-3 text-sm py-1.5 px-2 rounded-md hover:bg-muted/40">
+                <span className="w-5 text-muted-foreground tabular-nums font-medium">{i + 1}.</span>
                 <span
-                  className="inline-block h-2 w-2 rounded-full"
+                  className="inline-block h-2.5 w-2.5 rounded-full"
                   style={{ background: r.color ?? 'hsl(var(--primary))' }}
                 />
-                <span className="flex-1 truncate">{r.name}</span>
+                <span className="flex-1 truncate font-medium">{r.name}</span>
                 <span className="tabular-nums font-semibold">{r.count}</span>
               </div>
             ))}
