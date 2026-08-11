@@ -10,8 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
@@ -74,6 +76,12 @@ export default function Tasks() {
   const [editing, setEditing] = useState<Task | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [filterClient, setFilterClient] = useState<string>('all');
+  const [filterDepartment, setFilterDepartment] = useState<string>('all');
+  const [filterTemplate, setFilterTemplate] = useState<string>('all');
+  const [filterAssignee, setFilterAssignee] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
 
@@ -440,9 +448,136 @@ export default function Tasks() {
 
   const filteredTemplates = templates.filter(t => templateFilterDept === 'all' || t.department_id === templateFilterDept);
 
+  const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const searchTerm = normalize(search.trim());
+
   const filteredTasks = tasks.filter(t => {
-    return (filterStatus === 'all' || t.status === filterStatus) && (filterPriority === 'all' || t.priority === filterPriority);
+    if (filterStatus !== 'all' && t.status !== filterStatus) return false;
+    if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+    if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+    if (filterDepartment !== 'all' && t.department_id !== filterDepartment) return false;
+    if (filterTemplate !== 'all' && t.template_id !== filterTemplate) return false;
+    if (filterAssignee !== 'all') {
+      const list = assignments[t.id] ?? [];
+      if (filterAssignee === 'none' ? list.length > 0 : !list.includes(filterAssignee)) return false;
+    }
+    if (searchTerm) {
+      const haystack = normalize([t.title, t.description ?? '', formatTaskNumber(t.task_number)].join(' '));
+      if (!haystack.includes(searchTerm)) return false;
+    }
+    return true;
   });
+
+  const filtersActive =
+    filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all' ||
+    filterDepartment !== 'all' || filterTemplate !== 'all' || filterAssignee !== 'all' || search.trim() !== '';
+
+  const clearFilters = () => {
+    setFilterStatus('all'); setFilterPriority('all'); setFilterClient('all');
+    setFilterDepartment('all'); setFilterTemplate('all'); setFilterAssignee('all'); setSearch('');
+  };
+
+  const filterBar = (
+    <Card className="mb-4">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex flex-wrap gap-3">
+          <Popover open={clientPickerOpen} onOpenChange={setClientPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" role="combobox" className="w-full sm:w-64 justify-between font-normal">
+                <span className="truncate">
+                  {filterClient === 'all' ? 'Todos os clientes' : getClientName(filterClient)}
+                </span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Buscar empresa..." />
+                <CommandList>
+                  <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem value="Todos os clientes" onSelect={() => { setFilterClient('all'); setClientPickerOpen(false); }}>
+                      <Check className={`mr-2 h-4 w-4 ${filterClient === 'all' ? 'opacity-100' : 'opacity-0'}`} />
+                      Todos os clientes
+                    </CommandItem>
+                    {clients.map(c => (
+                      <CommandItem
+                        key={c.id}
+                        value={`${c.sci_code ?? ''} ${c.company_name}`}
+                        onSelect={() => { setFilterClient(c.id); setClientPickerOpen(false); }}
+                      >
+                        <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
+                        <span className="truncate">{formatClientLabel(c)}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+            <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Departamento" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os departamentos</SelectItem>
+              {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterTemplate} onValueChange={setFilterTemplate}>
+            <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Tarefa" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as tarefas</SelectItem>
+              {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+            <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Responsável" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os responsáveis</SelectItem>
+              <SelectItem value="none">Sem responsável</SelectItem>
+              {profiles.map(p => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || 'Sem nome'}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os status</SelectItem>
+              {statusColumns.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as prioridades</SelectItem>
+              <SelectItem value="low">Baixa</SelectItem>
+              <SelectItem value="medium">Média</SelectItem>
+              <SelectItem value="high">Alta</SelectItem>
+              <SelectItem value="urgent">Urgente</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-8" placeholder="Buscar título ou nº" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+        </div>
+        {filtersActive && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">
+              {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}
+            </span>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearFilters}>
+              <X className="mr-1 h-3 w-3" />Limpar filtros
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -459,14 +594,15 @@ export default function Tasks() {
         </TabsList>
 
         <TabsContent value="kanban">
+          {filterBar}
           <div className="grid gap-4 md:grid-cols-3">
             {statusColumns.map(col => (
               <div key={col} className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{statusLabels[col]}
-                  <Badge variant="secondary" className="ml-2">{tasks.filter(t => t.status === col).length}</Badge>
+                  <Badge variant="secondary" className="ml-2">{filteredTasks.filter(t => t.status === col).length}</Badge>
                 </h3>
                 <div className="space-y-2 min-h-[200px]">
-                  {tasks.filter(t => t.status === col).map(task => (
+                  {filteredTasks.filter(t => t.status === col).map(task => (
                     <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(task)}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
@@ -536,25 +672,7 @@ export default function Tasks() {
         </TabsContent>
 
         <TabsContent value="list" className="space-y-4">
-          <div className="flex gap-4">
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {statusColumns.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterPriority} onValueChange={setFilterPriority}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Prioridade" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="low">Baixa</SelectItem>
-                <SelectItem value="medium">Média</SelectItem>
-                <SelectItem value="high">Alta</SelectItem>
-                <SelectItem value="urgent">Urgente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {filterBar}
           <div className="space-y-2">
             {filteredTasks.map(task => (
               <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(task)}>
