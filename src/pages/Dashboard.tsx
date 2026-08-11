@@ -35,11 +35,21 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="p-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <ClientsPanel />
-        <TasksPanel />
-        <ObligationsPanel />
-        <TicketsPanel />
+      <div className="p-6 space-y-5">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <ClientsPanel />
+          <TicketsPanel />
+        </div>
+
+        <div className="flex flex-col xl:flex-row gap-8 xl:gap-10">
+          <div className="flex-1 min-w-0">
+            <TasksPanel />
+          </div>
+          <div className="hidden xl:block w-px bg-border/60 self-stretch" />
+          <div className="flex-1 min-w-0">
+            <ObligationsPanel />
+          </div>
+        </div>
       </div>
     </div>
   );
