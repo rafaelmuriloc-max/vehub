@@ -122,6 +122,7 @@ function CalendarMain() {
   const [monthCompletedPage, setMonthCompletedPage] = useState(1);
   const [monthDeletedPage, setMonthDeletedPage] = useState(1);
   const [monthSuspendedPage, setMonthSuspendedPage] = useState(1);
+  const [monthLatePage, setMonthLatePage] = useState(1);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailActivityId, setEmailActivityId] = useState<string | null>(null);
   const [emailVariables, setEmailVariables] = useState<Record<string, string>>({});
