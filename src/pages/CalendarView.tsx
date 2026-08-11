@@ -113,6 +113,7 @@ function CalendarMain() {
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
   const [filterObligation, setFilterObligation] = useState('all');
+  const [filterLateDeliveries, setFilterLateDeliveries] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
   const [dayPendingPage, setDayPendingPage] = useState(1);
