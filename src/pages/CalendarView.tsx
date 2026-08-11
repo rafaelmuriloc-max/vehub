@@ -1442,7 +1442,7 @@ function CalendarMain() {
             </div>
           ) : (
             <Tabs defaultValue="pending">
-              <TabsList className="mb-4">
+              <TabsList className="mb-4 flex-wrap h-auto gap-1">
                 <TabsTrigger value="pending">
                   A fazer
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsPending.length}</Badge>
@@ -1450,6 +1450,10 @@ function CalendarMain() {
                 <TabsTrigger value="completed">
                   Concluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="late">
+                  Fora do prazo
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsLate.length}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="deleted">
                   Excluídas
