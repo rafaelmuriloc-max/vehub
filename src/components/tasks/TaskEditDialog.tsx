@@ -162,8 +162,14 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
     e.preventDefault();
     if (!editing) return;
     const wasDone = editing.status === 'done';
+    // Não rebaixa tarefa já notificada/concluída pelo servidor após a tela abrir.
+    let nextStatus = form.status;
+    if (nextStatus !== 'done') {
+      const { data: fresh } = await supabase.from('tasks').select('status, notify_sent_at').eq('id', editing.id).maybeSingle();
+      if (fresh?.notify_sent_at && fresh.status === 'done') nextStatus = 'done';
+    }
     const payload = {
-      title: form.title, description: form.description || null, status: form.status,
+      title: form.title, description: form.description || null, status: nextStatus,
       priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
       department_id: form.department_id || null,
     };
@@ -173,7 +179,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
     if (form.assigned_to.length > 0) {
       await supabase.from('task_assignments').insert(form.assigned_to.map(uid => ({ task_id: editing.id, user_id: uid })));
     }
-    if (form.status === 'done' && !wasDone && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
+    if (nextStatus === 'done' && !wasDone && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
       await triggerNotify(editing.id);
     }
     onOpenChange(false);
