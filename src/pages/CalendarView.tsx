@@ -1298,6 +1298,83 @@ function CalendarMain() {
         </Card>
       </div>
 
+      {/* Overdue tasks of the month */}
+      {overdueMonthTasks.length > 0 && (
+        <Card className="border-red-200 dark:border-red-900/50">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <div>
+                  <CardTitle className="text-lg">Tarefas atrasadas</CardTitle>
+                  <CardDescription className="mt-0.5">{overdueMonthTasks.length} tarefa(s) vencida(s) ainda em aberto</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedOverdueTasks(
+                    selectedOverdueTasks.length === overdueMonthTasks.length ? [] : overdueMonthTasks.map(t => t.id)
+                  )}
+                >
+                  {selectedOverdueTasks.length === overdueMonthTasks.length ? 'Limpar seleção' : 'Selecionar todas'}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={selectedOverdueTasks.length === 0 || closingTasks}
+                  onClick={() => completeTasks(selectedOverdueTasks)}
+                >
+                  {closingTasks ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                  Concluir {selectedOverdueTasks.length > 0 ? `(${selectedOverdueTasks.length})` : ''}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {overdueMonthTasks.map(t => {
+                const cli = t.client_id ? clientMap.get(t.client_id) : null;
+                const dept = t.department_id ? deptMap.get(t.department_id) : null;
+                const checked = selectedOverdueTasks.includes(t.id);
+                return (
+                  <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => setSelectedOverdueTasks(prev => v ? [...prev, t.id] : prev.filter(id => id !== t.id))}
+                    />
+                    <button className="min-w-0 flex-1 text-left" onClick={() => setEditingTaskId(t.id)}>
+                      <p className="text-sm font-medium truncate">
+                        <span className="text-muted-foreground mr-1">#{String(t.task_number).padStart(6, '0')}</span>
+                        {t.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {cli && (<><Building2 className="h-3 w-3 inline mr-1" />{cli.company_name} · </>)}
+                        Venceu em {format(parseISO(t.due_date), 'dd/MM/yyyy')}
+                      </p>
+                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {dept && <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{dept.name}</Badge>}
+                      <Badge variant="outline" className="text-[10px]">{taskStatusLabels[t.status] || t.status}</Badge>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-emerald-600 hover:text-emerald-700"
+                        title="Marcar como concluída"
+                        disabled={closingTasks}
+                        onClick={() => completeTasks([t.id])}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Month obligations - below */}
       <Card>
         <CardHeader className="pb-3">
