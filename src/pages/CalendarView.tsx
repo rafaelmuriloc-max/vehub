@@ -308,6 +308,43 @@ function CalendarMain() {
     });
   }
 
+  const taskStatusLabels: Record<string, string> = {
+    todo: 'A Fazer',
+    in_progress: 'Aguardando',
+    in_review: 'Em Revisão',
+    done: 'Concluída',
+  };
+
+  function isTaskOverdue(t: TaskRow) {
+    return t.status !== 'done' && !!t.due_date && t.due_date < today;
+  }
+
+  const overdueMonthTasks = useMemo(
+    () => tasks
+      .filter(t => isTaskOverdue(t))
+      .filter(t => filterDept === 'all' || t.department_id === filterDept)
+      .filter(t => filterClient === 'all' || t.client_id === filterClient)
+      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')),
+    [tasks, filterDept, filterClient, today]
+  );
+
+  const [selectedOverdueTasks, setSelectedOverdueTasks] = useState<string[]>([]);
+  const [closingTasks, setClosingTasks] = useState(false);
+
+  async function completeTasks(ids: string[]) {
+    if (ids.length === 0) return;
+    setClosingTasks(true);
+    const { error } = await supabase.from('tasks').update({ status: 'done' }).in('id', ids);
+    setClosingTasks(false);
+    if (error) {
+      toast({ title: 'Erro ao concluir', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setSelectedOverdueTasks(prev => prev.filter(id => !ids.includes(id)));
+    toast({ title: ids.length > 1 ? `${ids.length} tarefas concluídas` : 'Tarefa concluída' });
+    await loadData();
+  }
+
   function getDayDots(day: number) {
     const dayEvents = getEventsForDay(day);
     const counts = { alert: 0, target: 0, due: 0 };
