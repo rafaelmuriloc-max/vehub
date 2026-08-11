@@ -323,6 +323,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
           }
           setEditAttachments(prev => [...prev, ...inserted]);
           setUploading(false);
+          if (inserted.length > 0 && drivePickerDir === 'output') await promoteOnOutbound();
           if (failed.length > 0) toast({ title: 'Alguns anexos falharam', description: failed.join(', '), variant: 'destructive' });
           else toast({ title: 'Anexos adicionados do Drive' });
         }}
