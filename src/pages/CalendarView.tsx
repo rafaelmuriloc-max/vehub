@@ -802,7 +802,7 @@ function CalendarMain() {
     <div className="space-y-6">
       {/* Header + Filters unified */}
       {(() => {
-        const activeFilters = [filterDept, filterClient, filterObligation].filter(v => v !== 'all').length;
+        const activeFilters = [filterDept, filterClient, filterObligation].filter(v => v !== 'all').length + (filterLateDeliveries ? 1 : 0);
         return (
           <div className="bg-card rounded-xl border p-6 space-y-5">
             <div className="flex items-center justify-between">
@@ -820,7 +820,7 @@ function CalendarMain() {
                   variant="ghost"
                   size="sm"
                   className="text-muted-foreground hover:text-foreground gap-1.5"
-                  onClick={() => { setFilterDept('all'); setFilterClient('all'); setFilterObligation('all'); setSelectedDay(null); }}
+                  onClick={() => { setFilterDept('all'); setFilterClient('all'); setFilterObligation('all'); setFilterLateDeliveries(false); setSelectedDay(null); }}
                 >
                   <X className="h-3.5 w-3.5" />
                   Limpar filtros
