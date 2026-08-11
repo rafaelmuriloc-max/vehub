@@ -19,12 +19,12 @@ import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
-import { sanitizeStorageName } from '@/lib/utils';
+import { sanitizeStorageName, formatClientLabel } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null; recurrence?: string | null };
-type Client = { id: string; company_name: string; services_suspended?: boolean };
+type Client = { id: string; sci_code?: string | null; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null; completed_at: string | null };
@@ -261,7 +261,7 @@ function CalendarMain() {
         ? `${String(refDate.getMonth() + 1).padStart(2, '0')}/${refDate.getFullYear()}`
         : `${compMonthNames[compDate.getMonth()]}/${compDate.getFullYear()}`;
 
-      const base = { clientId: client.id, clientName: client.company_name, obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id, competenceLabel };
+      const base = { clientId: client.id, clientName: formatClientLabel(client), obligationName: obl.name, deptName: dept.name, instanceId: inst.id, obligationId: obl.id, competenceLabel };
       const isQuarterly = obl.recurrence === 'trimestral';
       const alertDate = isQuarterly ? null : makeDate(obl.alert_day);
       const targetDate = isQuarterly ? null : makeDate(obl.target_day);
@@ -421,7 +421,7 @@ function CalendarMain() {
       const refDay = (obl.due_day ?? obl.target_day ?? obl.alert_day ?? 1);
       const date = inst.due_date ?? `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, '0')}-${String(refDay).padStart(2, '0')}`;
       result.push({
-        clientId: client.id, clientName: client.company_name,
+        clientId: client.id, clientName: formatClientLabel(client),
         obligationName: obl.name, deptName: dept.name,
         type: 'due', date, instanceId: inst.id, obligationId: obl.id, competenceLabel,
       });
@@ -813,7 +813,7 @@ function CalendarMain() {
                       className="w-full justify-between font-normal"
                     >
                       <span className="truncate">
-                        {filterClient === 'all' ? 'Todas as empresas' : clients.find(c => c.id === filterClient)?.company_name || 'Empresa'}
+                        {filterClient === 'all' ? 'Todas as empresas' : formatClientLabel(clients.find(c => c.id === filterClient), 'Empresa')}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -834,11 +834,11 @@ function CalendarMain() {
                           {clients.map(c => (
                             <CommandItem
                               key={c.id}
-                              value={c.company_name}
+                              value={formatClientLabel(c)}
                               onSelect={() => { setFilterClient(c.id); setSelectedDay(null); setClientOpen(false); }}
                             >
                               <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
-                              {c.company_name}
+                              {formatClientLabel(c)}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -1259,7 +1259,7 @@ function CalendarMain() {
                               </p>
                               {cli && (
                                 <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                  <Building2 className="h-3 w-3 inline mr-1" />{cli.company_name}
+                                  <Building2 className="h-3 w-3 inline mr-1" />{formatClientLabel(cli)}
                                 </p>
                               )}
                             </div>
@@ -1349,7 +1349,7 @@ function CalendarMain() {
                         {t.title}
                       </p>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {cli && (<><Building2 className="h-3 w-3 inline mr-1" />{cli.company_name} · </>)}
+                        {cli && (<><Building2 className="h-3 w-3 inline mr-1" />{formatClientLabel(cli)} · </>)}
                         Venceu em {format(parseISO(t.due_date), 'dd/MM/yyyy')}
                       </p>
                     </button>
@@ -1706,7 +1706,7 @@ function CalendarMain() {
             {detailInstance && (
               <p className="text-sm text-muted-foreground mt-1">
                 <Building2 className="h-3.5 w-3.5 inline mr-1" />
-                {clientMap.get(detailInstance.client_id)?.company_name}
+                {formatClientLabel(clientMap.get(detailInstance.client_id))}
               </p>
             )}
           </DialogHeader>
@@ -1786,7 +1786,7 @@ function CalendarMain() {
                       variant={isCompleted ? 'ghost' : 'default'}
                       className="shrink-0"
                       onClick={async () => {
-                        const clientName = detailInstance ? clientMap.get(detailInstance.client_id)?.company_name || '' : '';
+                        const clientName = detailInstance ? formatClientLabel(clientMap.get(detailInstance.client_id)) : '';
                         const refDate = detailInstance ? new Date(detailInstance.reference_month + 'T00:00:00') : new Date();
                         const competencia = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
                         const oblDueDay = detailObligation?.due_day;

@@ -26,6 +26,7 @@ import { Separator } from '@/components/ui/separator';
 import ContractTab from '@/components/ContractTab';
 import ClientObligationsTab from '@/components/ClientObligationsTab';
 import CertificateImportDialog from '@/components/CertificateImportDialog';
+import { formatClientLabel } from '@/lib/utils';
 
 type PermitItem = { name: string; enabled: boolean; expiry: string };
 
@@ -936,7 +937,7 @@ export default function Clients() {
         const n = Number(raw);
         return Number.isFinite(n) ? { v: n, empty: false } : { v: Infinity, empty: false };
       }
-      case 'company_name': return { v: (c.company_name || '').toLowerCase(), empty: !c.company_name };
+      case 'company_name': return { v: formatClientLabel(c).toLowerCase(), empty: !c.company_name };
       case 'document': return { v: (c.document || '').toLowerCase(), empty: !c.document };
       case 'tax_regime': return { v: (TAX_REGIME_LABELS[c.tax_regime as string] || c.tax_regime || '').toLowerCase(), empty: !c.tax_regime };
       case 'contact_name': return { v: (c.contact_name || '').toLowerCase(), empty: !c.contact_name };
@@ -1444,7 +1445,7 @@ export default function Clients() {
 
                   return (
                     <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditing(c); setViewOnly(true); setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(c).map(([k,v]) => [k, v ?? ''])) } as any); setDialogOpen(true); }}>
-                      <TableCell className="font-medium text-sm">{c.company_name}</TableCell>
+                      <TableCell className="font-medium text-sm">{formatClientLabel(c)}</TableCell>
                       <TableCell className="text-sm">{c.document || '-'}</TableCell>
                       <TableCell className="text-sm">{exp.toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell>{statusBadge}</TableCell>
@@ -1495,7 +1496,7 @@ export default function Clients() {
               {paginatedClients.map(c => (
                 <TableRow key={c.id}>
                   <TableCell>{c.sci_code || '-'}</TableCell>
-                  <TableCell className="font-medium">{c.company_name}</TableCell>
+                  <TableCell className="font-medium">{formatClientLabel(c)}</TableCell>
                   <TableCell>{c.document || '-'}</TableCell>
                   <TableCell>
                     {c.tax_regime ? (
@@ -1559,7 +1560,7 @@ export default function Clients() {
             <CardContent className="p-4">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <p className="font-medium text-foreground">{c.company_name}</p>
+                  <p className="font-medium text-foreground">{formatClientLabel(c)}</p>
                   <p className="text-sm text-muted-foreground">{c.document || 'Sem documento'}</p>
                   <p className="text-sm text-muted-foreground">R$ {Number(c.monthly_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   {c.digital_certificate_expiry && (() => {
@@ -2159,7 +2160,7 @@ export default function Clients() {
               {editing && (
                 <TabsContent value="contrato">
                   <ContractTab
-                    companyName={form.company_name}
+                    companyName={formatClientLabel({ sci_code: form.sci_code, company_name: form.company_name })}
                     document={form.document}
                     address={form.address}
                     contactName={form.contact_name}
