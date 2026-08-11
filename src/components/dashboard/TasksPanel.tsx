@@ -29,28 +29,35 @@ export function TasksPanel() {
       const today = new Date().toISOString().slice(0, 10);
       const td = todayRange();
 
-      const [pending, inProgress, done, overdue, doneToday, completions] = await Promise.all([
-        supabase.from('obligation_instances').select('id', { count: 'exact', head: true })
-          .gte('reference_month', start).lt('reference_month', end).eq('status', 'pending').is('deleted_at', null),
-        supabase.from('obligation_instances').select('id', { count: 'exact', head: true })
-          .gte('reference_month', start).lt('reference_month', end).eq('status', 'in_progress').is('deleted_at', null),
-        supabase.from('obligation_instances').select('id', { count: 'exact', head: true })
-          .gte('reference_month', start).lt('reference_month', end).eq('status', 'done').is('deleted_at', null),
-        supabase.from('obligation_instances').select('id', { count: 'exact', head: true })
-          .lt('due_date', today).neq('status', 'done').is('deleted_at', null),
-        supabase.from('obligation_activity_completions')
-          .select('id', { count: 'exact', head: true })
-          .eq('completed', true)
-          .gte('completed_at', td.start).lt('completed_at', td.end),
-        supabase.from('obligation_activity_completions')
-          .select('completed_by')
-          .eq('completed', true)
-          .gte('completed_at', td.start).lt('completed_at', td.end)
-          .not('completed_by', 'is', null)
+      const [pending, pendingNoDate, inProgress, done, overdue, doneToday, doneTodayIds] = await Promise.all([
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .gte('due_date', start).lt('due_date', end).eq('status', 'todo'),
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .is('due_date', null).eq('status', 'todo'),
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .gte('due_date', start).lt('due_date', end).in('status', ['in_progress', 'in_review']),
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .gte('due_date', start).lt('due_date', end).eq('status', 'done'),
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .gte('due_date', start).lt('due_date', today).neq('status', 'done'),
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .eq('status', 'done').gte('updated_at', td.start).lt('updated_at', td.end),
+        supabase.from('tasks').select('id')
+          .eq('status', 'done').gte('updated_at', td.start).lt('updated_at', td.end)
           .limit(500),
       ]);
 
-      const userIds = Array.from(new Set((completions.data ?? []).map((r: any) => r.completed_by).filter(Boolean)));
+      const taskIds = (doneTodayIds.data ?? []).map((t: any) => t.id);
+      let assignments: { user_id: string }[] = [];
+      if (taskIds.length > 0) {
+        const { data: asg } = await supabase
+          .from('task_assignments')
+          .select('user_id')
+          .in('task_id', taskIds);
+        assignments = (asg ?? []) as any;
+      }
+
+      const userIds = Array.from(new Set(assignments.map((r) => r.user_id).filter(Boolean)));
       const profileMap: Record<string, { name: string; color: string | null }> = {};
       if (userIds.length > 0) {
         const { data: profs } = await supabase
@@ -63,8 +70,8 @@ export function TasksPanel() {
       }
 
       const counts: Record<string, { name: string; color: string | null; count: number }> = {};
-      (completions.data ?? []).forEach((row: any) => {
-        const id = row.completed_by;
+      assignments.forEach((row) => {
+        const id = row.user_id;
         if (!id) return;
         const prof = profileMap[id];
         counts[id] = counts[id] || { name: prof?.name ?? 'Usuário', color: prof?.color ?? null, count: 0 };
@@ -73,7 +80,7 @@ export function TasksPanel() {
       const ranking = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 5);
 
       return {
-        pending: pending.count ?? 0,
+        pending: (pending.count ?? 0) + (pendingNoDate.count ?? 0),
         inProgress: inProgress.count ?? 0,
         done: done.count ?? 0,
         overdue: overdue.count ?? 0,
