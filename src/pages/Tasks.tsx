@@ -448,9 +448,34 @@ export default function Tasks() {
 
   const filteredTemplates = templates.filter(t => templateFilterDept === 'all' || t.department_id === templateFilterDept);
 
+  const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const searchTerm = normalize(search.trim());
+
   const filteredTasks = tasks.filter(t => {
-    return (filterStatus === 'all' || t.status === filterStatus) && (filterPriority === 'all' || t.priority === filterPriority);
+    if (filterStatus !== 'all' && t.status !== filterStatus) return false;
+    if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+    if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+    if (filterDepartment !== 'all' && t.department_id !== filterDepartment) return false;
+    if (filterTemplate !== 'all' && t.template_id !== filterTemplate) return false;
+    if (filterAssignee !== 'all') {
+      const list = assignments[t.id] ?? [];
+      if (filterAssignee === 'none' ? list.length > 0 : !list.includes(filterAssignee)) return false;
+    }
+    if (searchTerm) {
+      const haystack = normalize([t.title, t.description ?? '', formatTaskNumber(t.task_number)].join(' '));
+      if (!haystack.includes(searchTerm)) return false;
+    }
+    return true;
   });
+
+  const filtersActive =
+    filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all' ||
+    filterDepartment !== 'all' || filterTemplate !== 'all' || filterAssignee !== 'all' || search.trim() !== '';
+
+  const clearFilters = () => {
+    setFilterStatus('all'); setFilterPriority('all'); setFilterClient('all');
+    setFilterDepartment('all'); setFilterTemplate('all'); setFilterAssignee('all'); setSearch('');
+  };
 
   return (
     <div className="space-y-6">
@@ -467,14 +492,15 @@ export default function Tasks() {
         </TabsList>
 
         <TabsContent value="kanban">
+          {filterBar}
           <div className="grid gap-4 md:grid-cols-3">
             {statusColumns.map(col => (
               <div key={col} className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{statusLabels[col]}
-                  <Badge variant="secondary" className="ml-2">{tasks.filter(t => t.status === col).length}</Badge>
+                  <Badge variant="secondary" className="ml-2">{filteredTasks.filter(t => t.status === col).length}</Badge>
                 </h3>
                 <div className="space-y-2 min-h-[200px]">
-                  {tasks.filter(t => t.status === col).map(task => (
+                  {filteredTasks.filter(t => t.status === col).map(task => (
                     <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(task)}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
