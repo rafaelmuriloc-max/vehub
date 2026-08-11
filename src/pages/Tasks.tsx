@@ -703,6 +703,16 @@ export default function Tasks() {
           </div>
         </TabsContent>
 
+        <TabsContent value="ranking" className="space-y-4">
+          {filterBar}
+          <TasksRankingTab
+            tasks={filteredTasks}
+            clients={clients}
+            departments={departments}
+            templates={templates}
+          />
+        </TabsContent>
+
         <TabsContent value="catalog" className="space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <Select value={templateFilterDept} onValueChange={setTemplateFilterDept}>
