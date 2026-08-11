@@ -41,11 +41,11 @@ export default function Dashboard() {
           <TicketsPanel />
         </div>
 
-        <div className="flex flex-col xl:flex-row gap-8 xl:gap-10">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-10">
           <div className="flex-1 min-w-0">
             <TasksPanel />
           </div>
-          <div className="hidden xl:block w-px bg-border/60 self-stretch" />
+          <div className="hidden lg:block w-px bg-border/60 self-stretch" />
           <div className="flex-1 min-w-0">
             <ObligationsPanel />
           </div>

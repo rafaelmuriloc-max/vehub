@@ -87,7 +87,8 @@ export function TasksPanel() {
   const totalPending = (data?.pending ?? 0) + (data?.inProgress ?? 0);
 
   return (
-    <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col gap-5 h-full">
+    <Card className="relative overflow-hidden bg-card border-2 border-border/70 shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col gap-5 h-full">
+      <div className="absolute inset-x-0 top-0 h-1 bg-primary" />
       <div className="flex items-end justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
@@ -105,7 +106,7 @@ export function TasksPanel() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3">
         <MetricCard label="Pendentes" value={data?.pending ?? '—'} />
         <MetricCard label="Em andamento" value={data?.inProgress ?? '—'} accent="warning" />
         <MetricCard label="Concluídas" value={data?.done ?? '—'} accent="success" />
