@@ -117,7 +117,7 @@ export function NewConversationDialog({ open, onOpenChange, onCreated }: NewConv
           phone,
           displayPhone: c.contact_phone,
           name: c.contact_name || c.company_name,
-          companyName: c.company_name,
+          companyName: formatClientLabel(c),
           clientId: c.id,
           source: 'client',
         });
