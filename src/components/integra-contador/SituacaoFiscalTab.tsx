@@ -572,6 +572,9 @@ export default function SituacaoFiscalTab() {
     if (status === 'error') {
       return <Badge variant="secondary" className="gap-1 text-orange-600"><AlertCircle className="h-3 w-3" /> Erro</Badge>;
     }
+    if (status === 'sem_procuracao') {
+      return <Badge variant="secondary" className="gap-1 text-amber-600"><AlertCircle className="h-3 w-3" /> Sem procuração</Badge>;
+    }
     return <Badge variant="outline">{status}</Badge>;
   }
 
@@ -745,6 +748,7 @@ export default function SituacaoFiscalTab() {
                 <SelectItem value="regular">Regular</SelectItem>
                 <SelectItem value="irregular">Irregular</SelectItem>
                 <SelectItem value="error">Erro</SelectItem>
+                <SelectItem value="sem_procuracao">Sem procuração</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
               </SelectContent>
             </Select>
@@ -795,7 +799,7 @@ export default function SituacaoFiscalTab() {
                         ) : (
                           statusBadge(c.sitfis_status)
                         )}
-                        {c.error_message && c.sitfis_status === 'error' && (
+                        {c.error_message && (c.sitfis_status === 'error' || c.sitfis_status === 'sem_procuracao') && (
                           <p className="text-xs text-destructive mt-1 line-clamp-1" title={c.error_message}>
                             {c.error_message}
                           </p>
