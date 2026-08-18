@@ -2440,6 +2440,7 @@ export type Database = {
           error_message: string | null
           id: string
           pdf_base64: string | null
+          pendency_types: string[]
           raw_response: Json | null
           status: string
         }
@@ -2449,6 +2450,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           pdf_base64?: string | null
+          pendency_types?: string[]
           raw_response?: Json | null
           status?: string
         }
@@ -2458,6 +2460,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           pdf_base64?: string | null
+          pendency_types?: string[]
           raw_response?: Json | null
           status?: string
         }
