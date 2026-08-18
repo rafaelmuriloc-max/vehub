@@ -477,6 +477,36 @@ export default function SituacaoFiscalTab() {
   const downloadScope = selected.size > 0 ? filtered.filter(c => selected.has(c.id)) : filtered;
   const availablePdfCount = downloadScope.filter(c => !!c.pdf_base64).length;
 
+  const pendencyClients = pendencyKey
+    ? filtered.filter(c => c.sitfis_status === 'irregular' && (c.pendency_types || []).includes(pendencyKey))
+    : [];
+
+  useEffect(() => {
+    if (!pendencyKey) return;
+    let cancelled = false;
+    const targets = clients.filter(
+      c => c.sitfis_status === 'irregular' && (c.pendency_types || []).includes(pendencyKey) && !!c.pdf_base64
+    );
+    const pending = targets.filter(c => !textCache.current.has(c.id));
+    setExcerptsLoading(pending.length > 0);
+    (async () => {
+      for (const c of pending) {
+        if (cancelled) return;
+        const text = await extractTextFromPdfBase64(c.pdf_base64 as string);
+        textCache.current.set(c.id, text);
+      }
+      if (cancelled) return;
+      const next: Record<string, string[]> = {};
+      targets.forEach(c => {
+        next[c.id] = extractPendencyExcerpts(textCache.current.get(c.id) || '', pendencyKey);
+      });
+      setExcerpts(next);
+      setExcerptsLoading(false);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendencyKey]);
+
   function statusBadge(status: string | null) {
     if (!status || status === 'pending') {
       return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
