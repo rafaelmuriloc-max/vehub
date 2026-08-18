@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
 import JSZip from 'jszip';
+import SitfisOverviewPanel, { classifyPendencies } from './SitfisOverviewPanel';
 import * as pdfjsLib from 'pdfjs-dist';
 import { formatClientLabel } from '@/lib/utils';
 
@@ -51,6 +52,7 @@ type ClientWithSitfis = {
   consulted_at: string | null;
   pdf_base64: string | null;
   error_message: string | null;
+  pendency_types: string[];
 };
 
 export default function SituacaoFiscalTab() {
@@ -80,7 +82,7 @@ export default function SituacaoFiscalTab() {
 
       const { data: sitfisData } = await supabase
         .from('sitfis_results' as any)
-        .select('client_id, status, consulted_at, pdf_base64, error_message');
+        .select('client_id, status, consulted_at, pdf_base64, error_message, pendency_types');
 
       const sitfisMap = new Map<string, any>();
       (sitfisData || []).forEach((r: any) => sitfisMap.set(r.client_id, r));
@@ -96,6 +98,7 @@ export default function SituacaoFiscalTab() {
           consulted_at: s?.consulted_at || null,
           pdf_base64: s?.pdf_base64 || null,
           error_message: s?.error_message || null,
+          pendency_types: s?.pendency_types || [],
         };
       });
       setClients(merged);
@@ -106,6 +109,40 @@ export default function SituacaoFiscalTab() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Backfill: classifica pendências de relatórios já consultados antes desta funcionalidade
+  useEffect(() => {
+    const targets = clients.filter(
+      c => c.sitfis_status === 'irregular' && !!c.pdf_base64 && (!c.pendency_types || c.pendency_types.length === 0)
+    );
+    if (targets.length === 0) return;
+    let cancelled = false;
+
+    (async () => {
+      const updates: { id: string; types: string[] }[] = [];
+      for (const c of targets) {
+        if (cancelled) return;
+        const text = await extractTextFromPdfBase64(c.pdf_base64 as string);
+        const types = classifyPendencies(text);
+        if (types.length === 0) continue;
+        await supabase
+          .from('sitfis_results' as any)
+          .update({ pendency_types: types } as any)
+          .eq('client_id', c.id);
+        updates.push({ id: c.id, types });
+      }
+      if (cancelled || updates.length === 0) return;
+      setClients(prev =>
+        prev.map(p => {
+          const u = updates.find(x => x.id === p.id);
+          return u ? { ...p, pendency_types: u.types } : p;
+        })
+      );
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clients.length]);
 
   async function consultarSitfis(clientId: string): Promise<boolean> {
     try {
@@ -253,6 +290,7 @@ export default function SituacaoFiscalTab() {
         pdf_base64: pdfBase64,
         raw_response: responseData,
         error_message: null,
+        pendency_types: fiscalStatus === 'irregular' ? classifyPendencies(pdfText + ' ' + responseStr) : [],
       } as any, { onConflict: 'client_id' } as any);
 
       return true;
@@ -265,6 +303,7 @@ export default function SituacaoFiscalTab() {
         pdf_base64: null,
         raw_response: null,
         error_message: err.message || 'Erro desconhecido',
+        pendency_types: [],
       } as any, { onConflict: 'client_id' } as any);
       return false;
     }
@@ -441,6 +480,12 @@ export default function SituacaoFiscalTab() {
 
   return (
     <div className="space-y-4">
+      <SitfisOverviewPanel
+        items={filtered.map(c => ({ sitfis_status: c.sitfis_status, pendency_types: c.pendency_types || [] }))}
+        loading={loading && clients.length === 0}
+        activeStatus={filterStatus}
+        onSelectStatus={setFilterStatus}
+      />
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

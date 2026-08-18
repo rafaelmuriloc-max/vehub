@@ -1,0 +1,1 @@
+ALTER TABLE public.sitfis_results ADD COLUMN IF NOT EXISTS pendency_types text[] NOT NULL DEFAULT '{}'::text[];
