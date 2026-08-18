@@ -795,16 +795,6 @@ function CalendarMain() {
     await loadData();
   }
 
-  async function legacyRestoreInstance(instanceId: string) {
-    const { error } = await supabase.from('obligation_instances').update({ deleted_at: null }).eq('id', instanceId);
-    if (error) {
-      toast({ title: 'Erro ao restaurar', description: error.message, variant: 'destructive' });
-      return;
-    }
-    toast({ title: 'Obrigação restaurada' });
-    await loadData();
-  }
-
   async function hardDeleteInstance(instanceId: string) {
     await supabase.from('obligation_activity_completions').delete().eq('instance_id', instanceId);
     const { error } = await supabase.from('obligation_instances').delete().eq('id', instanceId);
