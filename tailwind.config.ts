@@ -87,6 +87,7 @@ export default {
   		},
   		fontFamily: {
   			sans: [
+  				'Manrope',
   				'Inter',
   				'ui-sans-serif',
   				'system-ui',
@@ -97,6 +98,13 @@ export default {
   				'Helvetica Neue',
   				'Arial',
   				'Noto Sans',
+  				'sans-serif'
+  			],
+  			display: [
+  				'Sora',
+  				'Manrope',
+  				'ui-sans-serif',
+  				'system-ui',
   				'sans-serif'
   			],
   			serif: [
