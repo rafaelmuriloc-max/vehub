@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
 import JSZip from 'jszip';
-import SitfisOverviewPanel, { classifyPendencies } from './SitfisOverviewPanel';
+import SitfisOverviewPanel, { classifyPendencies, extractPendencyExcerpts, PENDENCY_LABELS } from './SitfisOverviewPanel';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as pdfjsLib from 'pdfjs-dist';
 import { formatClientLabel } from '@/lib/utils';
 
@@ -67,6 +68,10 @@ export default function SituacaoFiscalTab() {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
+  const [pendencyKey, setPendencyKey] = useState<string | null>(null);
+  const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
+  const [excerptsLoading, setExcerptsLoading] = useState(false);
+  const textCache = useRef<Map<string, string>>(new Map());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -473,6 +478,36 @@ export default function SituacaoFiscalTab() {
   const downloadScope = selected.size > 0 ? filtered.filter(c => selected.has(c.id)) : filtered;
   const availablePdfCount = downloadScope.filter(c => !!c.pdf_base64).length;
 
+  const pendencyClients = pendencyKey
+    ? filtered.filter(c => c.sitfis_status === 'irregular' && (c.pendency_types || []).includes(pendencyKey))
+    : [];
+
+  useEffect(() => {
+    if (!pendencyKey) return;
+    let cancelled = false;
+    const targets = clients.filter(
+      c => c.sitfis_status === 'irregular' && (c.pendency_types || []).includes(pendencyKey) && !!c.pdf_base64
+    );
+    const pending = targets.filter(c => !textCache.current.has(c.id));
+    setExcerptsLoading(pending.length > 0);
+    (async () => {
+      for (const c of pending) {
+        if (cancelled) return;
+        const text = await extractTextFromPdfBase64(c.pdf_base64 as string);
+        textCache.current.set(c.id, text);
+      }
+      if (cancelled) return;
+      const next: Record<string, string[]> = {};
+      targets.forEach(c => {
+        next[c.id] = extractPendencyExcerpts(textCache.current.get(c.id) || '', pendencyKey);
+      });
+      setExcerpts(next);
+      setExcerptsLoading(false);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendencyKey]);
+
   function statusBadge(status: string | null) {
     if (!status || status === 'pending') {
       return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
@@ -504,7 +539,98 @@ export default function SituacaoFiscalTab() {
         loading={loading && clients.length === 0}
         activeStatus={filterStatus}
         onSelectStatus={setFilterStatus}
+        onSelectPendency={setPendencyKey}
       />
+
+      <Dialog open={!!pendencyKey} onOpenChange={open => !open && setPendencyKey(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {pendencyKey ? (PENDENCY_LABELS[pendencyKey] || pendencyKey) : ''}
+            </DialogTitle>
+            <DialogDescription>
+              {pendencyClients.length} cliente(s) com esta pendência
+            </DialogDescription>
+          </DialogHeader>
+          {excerptsLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Lendo relatórios...
+            </div>
+          )}
+          <div className="space-y-3">
+            {pendencyClients.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum cliente encontrado.</p>
+            ) : (
+              pendencyClients.map(c => {
+                const list = excerpts[c.id] || [];
+                return (
+                  <div key={c.id} className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{formatClientLabel(c)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {c.document || '—'}
+                          {c.consulted_at
+                            ? ` • ${new Date(c.consulted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+                            : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
+                          disabled={!c.pdf_base64}
+                        >
+                          <Eye className="h-3.5 w-3.5" /> Ver
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
+                          disabled={!c.pdf_base64}
+                        >
+                          <Download className="h-3.5 w-3.5" /> Baixar
+                        </Button>
+                      </div>
+                    </div>
+                    {(c.pendency_types || []).filter(t => t !== pendencyKey).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {(c.pendency_types || [])
+                          .filter(t => t !== pendencyKey)
+                          .map(t => (
+                            <Badge key={t} variant="outline" className="text-[10px]">
+                              {PENDENCY_LABELS[t] || t}
+                            </Badge>
+                          ))}
+                      </div>
+                    )}
+                    {!c.pdf_base64 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Descrição não disponível — refaça a consulta.
+                      </p>
+                    ) : list.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {excerptsLoading ? 'Carregando trechos...' : 'Trecho não localizado no relatório.'}
+                      </p>
+                    ) : (
+                      <div className="space-y-1">
+                        {list.map((ex, i) => (
+                          <p key={i} className="text-xs text-foreground bg-muted/50 rounded p-2 leading-relaxed">
+                            {ex}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
