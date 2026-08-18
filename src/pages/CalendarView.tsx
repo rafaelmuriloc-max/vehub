@@ -15,7 +15,6 @@ import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
 import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
-import { ObligationRow, ObligationRowHeader, getDueRisk } from '@/components/calendar/ObligationRow';
 import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -1493,36 +1492,14 @@ function CalendarMain() {
 
       {/* Month obligations - below */}
       <Card>
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
               <div>
-                <CardTitle className="text-base font-display tracking-tight">Obrigações de {monthNames[month]} {year}</CardTitle>
-                <CardDescription className="mt-0.5 text-xs">{monthEvents.length} com data de meta</CardDescription>
+                <CardTitle className="text-lg">Obrigações de {monthNames[month]} {year}</CardTitle>
+                <CardDescription className="mt-0.5">{monthEvents.length} obrigação(ões) com data de meta</CardDescription>
               </div>
-            </div>
-            <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-primary/70" />
-                <span className="font-semibold tabular-nums">{monthEventsPending.length}</span>
-                <span className="text-muted-foreground">a fazer</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="font-semibold tabular-nums">{monthEventsCompleted.length}</span>
-                <span className="text-muted-foreground">concluídas</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-orange-500" />
-                <span className="font-semibold tabular-nums">{monthEventsLate.length}</span>
-                <span className="text-muted-foreground">fora do prazo</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
-                <span className="font-semibold tabular-nums">{monthEventsHold.length}</span>
-                <span className="text-muted-foreground">aguardando</span>
-              </span>
             </div>
           </div>
         </CardHeader>
@@ -1534,28 +1511,28 @@ function CalendarMain() {
             </div>
           ) : (
             <Tabs defaultValue="pending">
-              <TabsList className="mb-3 flex w-full justify-start overflow-x-auto h-auto gap-1 p-1">
-                <TabsTrigger value="pending" className="text-xs">
+              <TabsList className="mb-4 flex-wrap h-auto gap-1">
+                <TabsTrigger value="pending">
                   A fazer
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsPending.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="completed" className="text-xs data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400">
+                <TabsTrigger value="completed">
                   Concluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="late" className="text-xs data-[state=active]:text-orange-700 dark:data-[state=active]:text-orange-400">
+                <TabsTrigger value="late">
                   Fora do prazo
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsLate.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="hold" className="text-xs data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-400">
+                <TabsTrigger value="hold">
                   Aguardando
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsHold.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="deleted" className="text-xs">
+                <TabsTrigger value="deleted">
                   Excluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="suspended" className="text-xs">
+                <TabsTrigger value="suspended">
                   Suspensos
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsSuspended.length}</Badge>
                 </TabsTrigger>
@@ -1590,45 +1567,66 @@ function CalendarMain() {
                         </div>
                       );
                     })()}
-                    <div className="rounded-lg border border-border/70 overflow-hidden">
-                      <ObligationRowHeader />
+                    <div className="space-y-2">
                       {paginatedMonthPending.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
                         const obl = oblMap.get(ev.obligationId);
                         const isDasSn = obl?.system_code === 'das-simples-nacional';
-                        const risk = getDueRisk(ev.date);
                         return (
-                          <ObligationRow
+                          <div
                             key={idx}
-                            date={ev.date}
-                            title={`${ev.obligationName} | ${ev.competenceLabel}`}
-                            client={ev.clientName}
-                            dept={ev.deptName}
-                            tone={risk.tone}
-                            dueLabel={risk.label}
-                            progress={progress}
-                            selected={isSelected}
-                            onToggleSelect={() => toggleSelection(ev.instanceId)}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            typeBadge={<Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>{typeConfig[ev.type].label}</Badge>}
-                            actions={<>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
-                                <Check className="h-3.5 w-3.5" />
-                              </Button>
-                              {isDasSn && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
-                                  <FileX className="h-3.5 w-3.5" />
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
+                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                                  {typeConfig[ev.type].label}
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
+                                  <Check className="h-3.5 w-3.5" />
                                 </Button>
+                                {isDasSn && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
+                                    <FileX className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className="text-[10px] font-medium text-muted-foreground">
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
                               )}
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
-                                <PauseCircle className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Excluir" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </>}
-                          />
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                          </div>
                         );
                       })}
                     </div>
@@ -1666,39 +1664,64 @@ function CalendarMain() {
                         </div>
                       );
                     })()}
-                    <div className="rounded-lg border border-border/70 overflow-hidden">
-                      <ObligationRowHeader />
+                    <div className="space-y-2">
                       {paginatedMonthCompleted.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
                         const quick = isQuickCompleted(ev.instanceId, ev.obligationId);
-                        const completedAt = getInstanceCompletedAt(ev.instanceId);
                         return (
-                          <ObligationRow
+                          <div
                             key={idx}
-                            date={ev.date}
-                            title={`${ev.obligationName} | ${ev.competenceLabel}`}
-                            client={ev.clientName}
-                            dept={ev.deptName}
-                            tone="done"
-                            dueLabel={quick ? 'Rápida' : 'Concluída'}
-                            progress={progress}
-                            selected={isSelected}
-                            onToggleSelect={() => toggleSelection(ev.instanceId)}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            typeBadge={<Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>{typeConfig[ev.type].label}</Badge>}
-                            actions={
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Excluir" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            }
-                            footer={completedAt ? (
-                              <div className="flex items-center gap-1 pl-7 text-[10px] text-emerald-600 dark:text-emerald-400">
-                                <Clock className="h-3 w-3" />
-                                <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}</span>
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${quick ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800' : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'} ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
+                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
-                            ) : undefined}
-                          />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                                  {typeConfig[ev.type].label}
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className={`text-[10px] font-medium ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                            {(() => {
+                              const completedAt = getInstanceCompletedAt(ev.instanceId);
+                              if (!completedAt) return null;
+                              return (
+                                <div className={`flex items-center gap-1 mt-2 text-[10px] ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
+                                  <Clock className="h-3 w-3" />
+                                  <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
                         );
                       })}
                     </div>
@@ -1736,39 +1759,64 @@ function CalendarMain() {
                         </div>
                       );
                     })()}
-                    <div className="rounded-lg border border-border/70 overflow-hidden">
-                      <ObligationRowHeader />
+                    <div className="space-y-2">
                       {paginatedMonthLate.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
                         const lateDays = getLateDeliveryDays(ev.instanceId);
-                        const completedAt = getInstanceCompletedAt(ev.instanceId);
                         return (
-                          <ObligationRow
+                          <div
                             key={idx}
-                            date={ev.date}
-                            title={`${ev.obligationName} | ${ev.competenceLabel}`}
-                            client={ev.clientName}
-                            dept={ev.deptName}
-                            tone="late"
-                            dueLabel={lateDays ? `+${lateDays}d` : 'Atraso'}
-                            progress={progress}
-                            selected={isSelected}
-                            onToggleSelect={() => toggleSelection(ev.instanceId)}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            typeBadge={<Badge className="bg-orange-500 text-white border-0 text-[10px] shrink-0">Fora do prazo</Badge>}
-                            actions={
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Excluir" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            }
-                            footer={completedAt ? (
-                              <div className="flex items-center gap-1 pl-7 text-[10px] text-orange-600 dark:text-orange-400">
-                                <Clock className="h-3 w-3" />
-                                <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}{lateDays ? ` · ${lateDays} dia${lateDays > 1 ? 's' : ''} de atraso` : ''}</span>
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
+                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
                               </div>
-                            ) : undefined}
-                          />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-orange-500 text-white border-0 text-[10px]">
+                                  Fora do prazo
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                            {(() => {
+                              const completedAt = getInstanceCompletedAt(ev.instanceId);
+                              if (!completedAt) return null;
+                              return (
+                                <div className="flex items-center gap-1 mt-2 text-[10px] text-orange-600 dark:text-orange-400">
+                                  <Clock className="h-3 w-3" />
+                                  <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}{lateDays ? ` · ${lateDays} dia${lateDays > 1 ? 's' : ''} de atraso` : ''}</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
                         );
                       })}
                     </div>
@@ -1785,39 +1833,48 @@ function CalendarMain() {
                   </div>
                 ) : (
                   <>
-                    <div className="rounded-lg border border-border/70 overflow-hidden">
-                      <ObligationRowHeader showProgress={false} />
+                    <div className="space-y-2">
                       {paginatedMonthHold.map((ev, idx) => {
                         const inst = instanceMap.get(ev.instanceId);
                         const by = inst?.hold_by ? profilesMap[inst.hold_by] : null;
                         return (
-                          <ObligationRow
+                          <div
                             key={idx}
-                            date={ev.date}
-                            title={`${ev.obligationName} | ${ev.competenceLabel}`}
-                            client={ev.clientName}
-                            dept={ev.deptName}
-                            tone="hold"
-                            dueLabel="Aguardando"
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            typeBadge={<Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-[10px] shrink-0">Aguardando</Badge>}
-                            actions={<>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-600" title="Editar motivo" onClick={e => { e.stopPropagation(); setHoldReason(inst?.hold_reason || ''); setHoldTarget([ev.instanceId]); }}>
-                                <PauseCircle className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-emerald-600" title="Retomar" onClick={e => { e.stopPropagation(); resumeInstance(ev.instanceId); }}>
-                                <PlayCircle className="h-3.5 w-3.5" />
-                              </Button>
-                            </>}
-                            footer={
-                              <p className="pl-7 text-[11px] text-amber-700 dark:text-amber-300 whitespace-pre-wrap">
-                                <strong>Motivo:</strong> {inst?.hold_reason || '—'}
-                                {inst?.hold_at && (
-                                  <span className="text-muted-foreground"> · {by ? `${by} • ` : ''}{format(parseISO(inst.hold_at), "dd/MM/yyyy HH:mm")}</span>
-                                )}
-                              </p>
-                            }
-                          />
+                            className="p-3 rounded-lg border border-amber-200 bg-amber-50/60 dark:bg-amber-900/10 dark:border-amber-900/40 cursor-pointer transition-all hover:shadow-sm"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-14 shrink-0 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-[10px]">Aguardando</Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Editar motivo" onClick={e => { e.stopPropagation(); setHoldReason(inst?.hold_reason || ''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Retomar" onClick={e => { e.stopPropagation(); resumeInstance(ev.instanceId); }}>
+                                  <PlayCircle className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 mt-2 whitespace-pre-wrap">
+                              <strong>Motivo:</strong> {inst?.hold_reason || '—'}
+                            </p>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {inst?.hold_at && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {by ? `${by} • ` : ''}{format(parseISO(inst.hold_at), "dd/MM/yyyy HH:mm")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
