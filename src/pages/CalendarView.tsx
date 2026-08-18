@@ -732,7 +732,7 @@ function CalendarMain() {
             await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
           }
         }
-        await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
+        await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick', on_hold: false, hold_reason: null, hold_at: null, hold_by: null }).eq('id', instanceId);
         done++;
       } catch {
         errors++;
@@ -818,7 +818,7 @@ function CalendarMain() {
           await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
         }
       }
-      await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
+      await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick', on_hold: false, hold_reason: null, hold_at: null, hold_by: null }).eq('id', instanceId);
       await loadData();
       toast({ title: 'Obrigação concluída' });
     } catch (e: any) {
@@ -826,13 +826,18 @@ function CalendarMain() {
     }
   }
 
-  const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
+  const onHoldIds = useMemo(() => new Set(instances.filter(i => i.on_hold).map(i => i.id)), [instances]);
+  const instanceMap = useMemo(() => new Map(instances.map(i => [i.id, i])), [instances]);
+  const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev) && !onHoldIds.has(ev.instanceId));
   const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const dayPendingTotalPages = Math.ceil(dayEventsPending.length / DAY_ITEMS_PER_PAGE);
   const dayCompletedTotalPages = Math.ceil(dayEventsCompleted.length / DAY_ITEMS_PER_PAGE);
   const paginatedDayPending = dayEventsPending.slice((dayPendingPage - 1) * DAY_ITEMS_PER_PAGE, dayPendingPage * DAY_ITEMS_PER_PAGE);
   const paginatedDayCompleted = dayEventsCompleted.slice((dayCompletedPage - 1) * DAY_ITEMS_PER_PAGE, dayCompletedPage * DAY_ITEMS_PER_PAGE);
-  const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
+  const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev) && !onHoldIds.has(ev.instanceId));
+  const monthEventsHold = monthEvents.filter(ev => onHoldIds.has(ev.instanceId) && !isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const monthHoldTotalPages = Math.ceil(monthEventsHold.length / ITEMS_PER_PAGE);
+  const paginatedMonthHold = monthEventsHold.slice((monthHoldPage - 1) * ITEMS_PER_PAGE, monthHoldPage * ITEMS_PER_PAGE);
   const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const monthEventsSuspended = monthEvents.filter(ev => isSuspendedEvent(ev));
   const monthEventsLate = monthEventsCompleted
