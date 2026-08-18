@@ -1304,6 +1304,11 @@ function CalendarMain() {
                                         <FileX className="h-3.5 w-3.5" />
                                       </Button>
                                     )}
+                                    {!completed && (
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                        <PauseCircle className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
