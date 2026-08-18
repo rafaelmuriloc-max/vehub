@@ -25,6 +25,23 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName, formatClientLabel } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
+const tabListClass =
+  "w-full justify-start gap-1 sm:gap-4 bg-transparent p-0 h-auto border-b border-border rounded-none overflow-x-auto flex-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+
+function ObligationTab({ value, label, count }: { value: string; label: string; count: number }) {
+  return (
+    <TabsTrigger
+      value={value}
+      className="relative shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+    >
+      <span className="whitespace-nowrap">{label}</span>
+      {count > 0 && (
+        <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">{count}</span>
+      )}
+    </TabsTrigger>
+  );
+}
+
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null; on_hold?: boolean | null; hold_reason?: string | null; hold_at?: string | null; hold_by?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null; recurrence?: string | null };
 type Client = { id: string; sci_code?: string | null; company_name: string; services_suspended?: boolean };
