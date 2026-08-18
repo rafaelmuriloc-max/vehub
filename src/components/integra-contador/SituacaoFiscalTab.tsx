@@ -20,7 +20,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
-async function extractTextFromPdfBase64(base64: string): Promise<string> {
+async function extractPdfInfoFromBase64(base64: string): Promise<{ text: string; numPages: number }> {
   try {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
@@ -37,11 +37,15 @@ async function extractTextFromPdfBase64(base64: string): Promise<string> {
         .join(' ');
       texts.push(pageText);
     }
-    return texts.join(' ');
+    return { text: texts.join(' '), numPages: doc.numPages };
   } catch (err) {
     console.error('[SITFIS] Erro ao extrair texto do PDF:', err);
-    return '';
+    return { text: '', numPages: 0 };
   }
+}
+
+async function extractTextFromPdfBase64(base64: string): Promise<string> {
+  return (await extractPdfInfoFromBase64(base64)).text;
 }
 
 type ClientWithSitfis = {
