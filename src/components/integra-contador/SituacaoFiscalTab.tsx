@@ -326,52 +326,10 @@ export default function SituacaoFiscalTab() {
       const pdfText = await extractTextFromPdfBase64(pdfBase64);
       console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500));
 
-      // Strip PDF/base64 blobs before keyword search to avoid false positives
-      const stripBinaryFields = (obj: any): any => {
-        if (!obj || typeof obj !== 'object') return obj;
-        if (Array.isArray(obj)) return obj.map(stripBinaryFields);
-        const clean: any = {};
-        for (const [k, v] of Object.entries(obj)) {
-          if (k === 'pdf' || k === 'pdf_base64') continue;
-          if (typeof v === 'string' && v.length > 500) continue;
-          if (typeof v === 'object') {
-            clean[k] = stripBinaryFields(v);
-          } else {
-            clean[k] = v;
-          }
-        }
-        return clean;
-      };
-      // Check for regular status - only if NO negative indicators found
-      // Search in parsed dados, responseData metadata, AND extracted PDF text
-      const strippedDados = stripBinaryFields(parsedDados);
-      const strippedResponse = stripBinaryFields(responseData);
-      const responseStr = (
-        JSON.stringify(strippedDados || '') +
-        JSON.stringify(strippedResponse || '') +
-        ' ' + pdfText
-      ).toLowerCase();
-      const negativeIndicators = [
-        'irregular',
-        'pendência', 'pendencia',
-        'débito', 'debito',
-        'inadimplente', 'inadimplência', 'inadimplencia',
-        'dívida', 'divida',
-        'multa',
-        'infração', 'infracao',
-        'não regular', 'nao regular',
-        'situação irregular', 'situacao irregular',
-        'exigibilidade suspensa',
-        'cobrança', 'cobranca',
-        'auto de infração', 'auto de infracao',
-        'omissão', 'omissao',
-        'parcelamento',
-      ];
-
-      const hasNegative = negativeIndicators.some(term => responseStr.includes(term));
-      if (!hasNegative) {
-        fiscalStatus = 'regular';
-      }
+      // Classificação baseada nos itens listados no relatório (não em palavras soltas)
+      const analysis = analyzeSitfisReport(pdfText);
+      fiscalStatus = analysis.status;
+      console.log('[SITFIS] Itens de pendência encontrados:', analysis.items.length, analysis.types);
 
       // Upsert result
       await supabase.from('sitfis_results' as any).upsert({
@@ -381,7 +339,7 @@ export default function SituacaoFiscalTab() {
         pdf_base64: pdfBase64,
         raw_response: responseData,
         error_message: null,
-        pendency_types: fiscalStatus === 'irregular' ? classifyPendencies(pdfText + ' ' + responseStr) : [],
+        pendency_types: analysis.types,
       } as any, { onConflict: 'client_id' } as any);
 
       return true;
