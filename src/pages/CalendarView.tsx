@@ -189,7 +189,7 @@ function CalendarMain() {
     const nextYear = m + 1 > 11 ? y + 1 : y;
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
-    const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, completion_kind';
+    const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, completion_kind, on_hold, hold_reason, hold_at, hold_by';
     const [instByRefRes, instByDueRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
       supabase.from('obligation_instances').select(instCols)
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
@@ -215,6 +215,13 @@ function CalendarMain() {
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
     setTasks((taskRes.data as TaskRow[]) || []);
+    const holdUserIds = Array.from(new Set(allMonthInstances.map(i => i.hold_by).filter(Boolean))) as string[];
+    if (holdUserIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', holdUserIds);
+      const map: Record<string, string> = {};
+      (profs || []).forEach((p: any) => { if (p.full_name) map[p.user_id] = p.full_name; });
+      setProfilesMap(map);
+    }
     // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
     const ids = allMonthInstances.map(i => i.id);
     const allComps: Completion[] = [];
