@@ -78,6 +78,7 @@ export default function SituacaoFiscalTab() {
   const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
   const [excerptsLoading, setExcerptsLoading] = useState(false);
   const textCache = useRef<Map<string, string>>(new Map());
+  const pagesCache = useRef<Map<string, number>>(new Map());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -133,10 +134,18 @@ export default function SituacaoFiscalTab() {
     const updates: { id: string; status: string; types: string[] }[] = [];
     for (let i = 0; i < targets.length; i++) {
       const c = targets[i];
-      const text = textCache.current.get(c.id) ?? await extractTextFromPdfBase64(c.pdf_base64 as string);
-      textCache.current.set(c.id, text);
+      const cached = textCache.current.get(c.id);
+      let text = cached ?? '';
+      let numPages = pagesCache.current.get(c.id);
+      if (cached === undefined || numPages === undefined) {
+        const info = await extractPdfInfoFromBase64(c.pdf_base64 as string);
+        text = info.text;
+        numPages = info.numPages;
+        textCache.current.set(c.id, text);
+        pagesCache.current.set(c.id, numPages);
+      }
       if (!text.trim()) { setReclassProgress({ current: i + 1, total: targets.length }); continue; }
-      const analysis = analyzeSitfisReport(text);
+      const analysis = analyzeSitfisReport(text, { numPages });
       if (analysis.status !== c.sitfis_status || (c.pendency_types || []).join(',') !== analysis.types.join(',')) {
         await supabase
           .from('sitfis_results' as any)
@@ -327,11 +336,11 @@ export default function SituacaoFiscalTab() {
       }
 
       // Extract text from PDF for keyword analysis
-      const pdfText = await extractTextFromPdfBase64(pdfBase64);
-      console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500));
+      const { text: pdfText, numPages } = await extractPdfInfoFromBase64(pdfBase64);
+      console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500), 'páginas:', numPages);
 
       // Classificação baseada nos itens listados no relatório (não em palavras soltas)
-      const analysis = analyzeSitfisReport(pdfText);
+      const analysis = analyzeSitfisReport(pdfText, { numPages });
       fiscalStatus = analysis.status;
       console.log('[SITFIS] Itens de pendência encontrados:', analysis.items.length, analysis.types);
 
