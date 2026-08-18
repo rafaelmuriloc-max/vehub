@@ -1739,8 +1739,12 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           due_date: string | null
+          hold_at: string | null
+          hold_by: string | null
+          hold_reason: string | null
           id: string
           obligation_id: string
+          on_hold: boolean
           reference_month: string
           status: Database["public"]["Enums"]["obligation_status"]
         }
@@ -1751,8 +1755,12 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null
+          hold_at?: string | null
+          hold_by?: string | null
+          hold_reason?: string | null
           id?: string
           obligation_id: string
+          on_hold?: boolean
           reference_month: string
           status?: Database["public"]["Enums"]["obligation_status"]
         }
@@ -1763,8 +1771,12 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           due_date?: string | null
+          hold_at?: string | null
+          hold_by?: string | null
+          hold_reason?: string | null
           id?: string
           obligation_id?: string
+          on_hold?: boolean
           reference_month?: string
           status?: Database["public"]["Enums"]["obligation_status"]
         }

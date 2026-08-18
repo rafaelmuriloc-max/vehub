@@ -13,7 +13,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
@@ -23,7 +25,7 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName, formatClientLabel } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
-type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
+type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null; on_hold?: boolean | null; hold_reason?: string | null; hold_at?: string | null; hold_by?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null; recurrence?: string | null };
 type Client = { id: string; sci_code?: string | null; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
@@ -137,6 +139,11 @@ function CalendarMain() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [semMovInstanceId, setSemMovInstanceId] = useState<string | null>(null);
   const [semMovLoading, setSemMovLoading] = useState(false);
+  const [holdTarget, setHoldTarget] = useState<string[] | null>(null);
+  const [holdReason, setHoldReason] = useState('');
+  const [holdSaving, setHoldSaving] = useState(false);
+  const [monthHoldPage, setMonthHoldPage] = useState(1);
+  const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
@@ -182,7 +189,7 @@ function CalendarMain() {
     const nextYear = m + 1 > 11 ? y + 1 : y;
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
-    const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, completion_kind';
+    const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, completion_kind, on_hold, hold_reason, hold_at, hold_by';
     const [instByRefRes, instByDueRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
       supabase.from('obligation_instances').select(instCols)
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
@@ -208,6 +215,13 @@ function CalendarMain() {
     setDepartments((deptRes.data as Department[]) || []);
     setActivities((actRes.data as Activity[]) || []);
     setTasks((taskRes.data as TaskRow[]) || []);
+    const holdUserIds = Array.from(new Set(allMonthInstances.map(i => i.hold_by).filter(Boolean))) as string[];
+    if (holdUserIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', holdUserIds);
+      const map: Record<string, string> = {};
+      (profs || []).forEach((p: any) => { if (p.full_name) map[p.user_id] = p.full_name; });
+      setProfilesMap(map);
+    }
     // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
     const ids = allMonthInstances.map(i => i.id);
     const allComps: Completion[] = [];
@@ -718,7 +732,7 @@ function CalendarMain() {
             await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
           }
         }
-        await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
+        await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick', on_hold: false, hold_reason: null, hold_at: null, hold_by: null }).eq('id', instanceId);
         done++;
       } catch {
         errors++;
@@ -741,6 +755,43 @@ function CalendarMain() {
       return;
     }
     toast({ title: 'Obrigação restaurada' });
+    await loadData();
+  }
+
+  async function confirmHold() {
+    const ids = holdTarget || [];
+    const reason = holdReason.trim();
+    if (ids.length === 0 || !reason) return;
+    setHoldSaving(true);
+    const { data: userRes } = await supabase.auth.getUser();
+    const { error } = await supabase.from('obligation_instances').update({
+      on_hold: true,
+      hold_reason: reason,
+      hold_at: new Date().toISOString(),
+      hold_by: userRes?.user?.id ?? null,
+    }).in('id', ids);
+    setHoldSaving(false);
+    if (error) {
+      toast({ title: 'Erro ao colocar em espera', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: ids.length > 1 ? `${ids.length} obrigações em espera` : 'Obrigação aguardando' });
+    setHoldTarget(null);
+    setHoldReason('');
+    clearSelection();
+    if (detailInstanceId && ids.includes(detailInstanceId)) setDetailInstanceId(null);
+    await loadData();
+  }
+
+  async function resumeInstance(instanceId: string) {
+    const { error } = await supabase.from('obligation_instances')
+      .update({ on_hold: false, hold_reason: null, hold_at: null, hold_by: null })
+      .eq('id', instanceId);
+    if (error) {
+      toast({ title: 'Erro ao retomar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Obrigação retomada' });
     await loadData();
   }
 
@@ -767,7 +818,7 @@ function CalendarMain() {
           await supabase.from('obligation_activity_completions').insert({ instance_id: instanceId, activity_id: act.id, completed: true, completed_at: nowIso, notes: 'quick_complete' });
         }
       }
-      await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick' }).eq('id', instanceId);
+      await supabase.from('obligation_instances').update({ status: 'done', completion_kind: 'quick', on_hold: false, hold_reason: null, hold_at: null, hold_by: null }).eq('id', instanceId);
       await loadData();
       toast({ title: 'Obrigação concluída' });
     } catch (e: any) {
@@ -775,13 +826,18 @@ function CalendarMain() {
     }
   }
 
-  const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
+  const onHoldIds = useMemo(() => new Set(instances.filter(i => i.on_hold).map(i => i.id)), [instances]);
+  const instanceMap = useMemo(() => new Map(instances.map(i => [i.id, i])), [instances]);
+  const dayEventsPending = selectedEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev) && !onHoldIds.has(ev.instanceId));
   const dayEventsCompleted = selectedEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const dayPendingTotalPages = Math.ceil(dayEventsPending.length / DAY_ITEMS_PER_PAGE);
   const dayCompletedTotalPages = Math.ceil(dayEventsCompleted.length / DAY_ITEMS_PER_PAGE);
   const paginatedDayPending = dayEventsPending.slice((dayPendingPage - 1) * DAY_ITEMS_PER_PAGE, dayPendingPage * DAY_ITEMS_PER_PAGE);
   const paginatedDayCompleted = dayEventsCompleted.slice((dayCompletedPage - 1) * DAY_ITEMS_PER_PAGE, dayCompletedPage * DAY_ITEMS_PER_PAGE);
-  const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
+  const monthEventsPending = monthEvents.filter(ev => !isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev) && !onHoldIds.has(ev.instanceId));
+  const monthEventsHold = monthEvents.filter(ev => onHoldIds.has(ev.instanceId) && !isInstanceCompleted(ev.instanceId, ev.obligationId));
+  const monthHoldTotalPages = Math.ceil(monthEventsHold.length / ITEMS_PER_PAGE);
+  const paginatedMonthHold = monthEventsHold.slice((monthHoldPage - 1) * ITEMS_PER_PAGE, monthHoldPage * ITEMS_PER_PAGE);
   const monthEventsCompleted = monthEvents.filter(ev => isInstanceCompleted(ev.instanceId, ev.obligationId) && !isSuspendedEvent(ev));
   const monthEventsSuspended = monthEvents.filter(ev => isSuspendedEvent(ev));
   const monthEventsLate = monthEventsCompleted
@@ -1248,6 +1304,11 @@ function CalendarMain() {
                                         <FileX className="h-3.5 w-3.5" />
                                       </Button>
                                     )}
+                                    {!completed && (
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                        <PauseCircle className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
@@ -1463,6 +1524,10 @@ function CalendarMain() {
                   Fora do prazo
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsLate.length}</Badge>
                 </TabsTrigger>
+                <TabsTrigger value="hold">
+                  Aguardando
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsHold.length}</Badge>
+                </TabsTrigger>
                 <TabsTrigger value="deleted">
                   Excluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
@@ -1542,6 +1607,9 @@ function CalendarMain() {
                                     <FileX className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -1757,6 +1825,64 @@ function CalendarMain() {
                 )}
               </TabsContent>
 
+              <TabsContent value="hold">
+                {monthEventsHold.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <PauseCircle className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação aguardando neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthHold.map((ev, idx) => {
+                        const inst = instanceMap.get(ev.instanceId);
+                        const by = inst?.hold_by ? profilesMap[inst.hold_by] : null;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setDetailInstanceId(ev.instanceId)}
+                            className="p-3 rounded-lg border border-amber-200 bg-amber-50/60 dark:bg-amber-900/10 dark:border-amber-900/40 cursor-pointer transition-all hover:shadow-sm"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-14 shrink-0 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-[10px]">Aguardando</Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Editar motivo" onClick={e => { e.stopPropagation(); setHoldReason(inst?.hold_reason || ''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Retomar" onClick={e => { e.stopPropagation(); resumeInstance(ev.instanceId); }}>
+                                  <PlayCircle className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 mt-2 whitespace-pre-wrap">
+                              <strong>Motivo:</strong> {inst?.hold_reason || '—'}
+                            </p>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {inst?.hold_at && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {by ? `${by} • ` : ''}{format(parseISO(inst.hold_at), "dd/MM/yyyy HH:mm")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <PaginationBlock page={monthHoldPage} totalPages={monthHoldTotalPages} total={monthEventsHold.length} onPageChange={setMonthHoldPage} />
+                  </>
+                )}
+              </TabsContent>
+
               <TabsContent value="deleted">
                 {deletedMonthEvents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 text-center">
@@ -1863,6 +1989,33 @@ function CalendarMain() {
               </p>
             )}
           </DialogHeader>
+
+          {detailInstance && (
+            detailInstance.on_hold ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-2">
+                <p className="text-xs text-amber-800 dark:text-amber-300 whitespace-pre-wrap">
+                  <strong>Aguardando:</strong> {detailInstance.hold_reason}
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => { setHoldReason(detailInstance.hold_reason || ''); setHoldTarget([detailInstance.id]); }}>
+                    Editar motivo
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => resumeInstance(detailInstance.id)}>
+                    <PlayCircle className="h-4 w-4 mr-1" /> Retomar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                onClick={() => { setHoldReason(''); setHoldTarget([detailInstance.id]); }}
+              >
+                <PauseCircle className="h-4 w-4 mr-2" />
+                Aguardar
+              </Button>
+            )
+          )}
 
           {detailObligation?.system_code === 'das-simples-nacional' && detailInstance && (
             <Button
@@ -2043,6 +2196,10 @@ function CalendarMain() {
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Excluir selecionados
           </Button>
+          <Button variant="outline" size="sm" onClick={() => { setHoldReason(''); setHoldTarget(Array.from(selectedInstanceIds)); }}>
+            <PauseCircle className="h-3.5 w-3.5 mr-1" />
+            Aguardar selecionadas
+          </Button>
           <Button variant="ghost" size="sm" onClick={clearSelection}>
             <X className="h-3.5 w-3.5 mr-1" />
             Limpar
@@ -2114,6 +2271,35 @@ function CalendarMain() {
         taskId={editingTaskId}
         onSaved={() => loadData()}
       />
+
+      <Dialog open={holdTarget !== null} onOpenChange={(v) => { if (!v) { setHoldTarget(null); setHoldReason(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Colocar em espera</DialogTitle>
+            <DialogDescription>
+              {holdTarget && holdTarget.length > 1
+                ? `${holdTarget.length} obrigações irão para a aba Aguardando.`
+                : 'A obrigação irá para a aba Aguardando até ser retomada.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Motivo <span className="text-destructive">*</span></label>
+            <Textarea
+              value={holdReason}
+              onChange={e => setHoldReason(e.target.value)}
+              placeholder="Descreva o motivo pelo qual esta obrigação não pode ser concluída agora"
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setHoldTarget(null); setHoldReason(''); }}>Cancelar</Button>
+            <Button onClick={confirmHold} disabled={!holdReason.trim() || holdSaving}>
+              {holdSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PauseCircle className="h-4 w-4 mr-2" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
