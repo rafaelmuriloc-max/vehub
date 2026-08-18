@@ -100,7 +100,7 @@ export default function SitfisOverviewPanel({ items, loading, activeStatus, onSe
       const key = i.sitfis_status && counts[i.sitfis_status] !== undefined ? i.sitfis_status : 'pending';
       counts[key] += 1;
     });
-    return STATUS_META.map(m => ({ ...m, value: counts[m.key] }));
+    return STATUS_META.map(m => ({ ...m, name: m.label, value: counts[m.key] }));
   }, [items]);
 
   const pendencyData = useMemo(() => {
