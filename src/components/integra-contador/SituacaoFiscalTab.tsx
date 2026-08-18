@@ -10,7 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
 import JSZip from 'jszip';
-import SitfisOverviewPanel, { classifyPendencies } from './SitfisOverviewPanel';
+import SitfisOverviewPanel, { classifyPendencies, extractPendencyExcerpts, PENDENCY_LABELS } from './SitfisOverviewPanel';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as pdfjsLib from 'pdfjs-dist';
 import { formatClientLabel } from '@/lib/utils';
 
@@ -67,6 +68,9 @@ export default function SituacaoFiscalTab() {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
+  const [pendencyKey, setPendencyKey] = useState<string | null>(null);
+  const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
+  const [excerptsLoading, setExcerptsLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
