@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
 import JSZip from 'jszip';
-import SitfisOverviewPanel, { classifyPendencies, extractPendencyExcerpts, PENDENCY_LABELS } from './SitfisOverviewPanel';
+import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS } from './SitfisOverviewPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as pdfjsLib from 'pdfjs-dist';
 import { formatClientLabel } from '@/lib/utils';
@@ -69,6 +69,8 @@ export default function SituacaoFiscalTab() {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
   const [pendencyKey, setPendencyKey] = useState<string | null>(null);
+  const [reclassifying, setReclassifying] = useState(false);
+  const [reclassProgress, setReclassProgress] = useState({ current: 0, total: 0 });
   const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
   const [excerptsLoading, setExcerptsLoading] = useState(false);
   const textCache = useRef<Map<string, string>>(new Map());
@@ -115,39 +117,43 @@ export default function SituacaoFiscalTab() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Backfill: classifica pendências de relatórios já consultados antes desta funcionalidade
-  useEffect(() => {
-    const targets = clients.filter(
-      c => c.sitfis_status === 'irregular' && !!c.pdf_base64 && (!c.pendency_types || c.pendency_types.length === 0)
-    );
-    if (targets.length === 0) return;
-    let cancelled = false;
-
-    (async () => {
-      const updates: { id: string; types: string[] }[] = [];
-      for (const c of targets) {
-        if (cancelled) return;
-        const text = await extractTextFromPdfBase64(c.pdf_base64 as string);
-        const types = classifyPendencies(text);
-        if (types.length === 0) continue;
+  // Reclassifica os relatórios já armazenados usando a análise por itens
+  async function handleReclassificar() {
+    const targets = clients.filter(c => !!c.pdf_base64);
+    if (targets.length === 0) {
+      toast({ title: 'Nada a reclassificar', description: 'Nenhum relatório armazenado.' });
+      return;
+    }
+    setReclassifying(true);
+    setReclassProgress({ current: 0, total: targets.length });
+    const updates: { id: string; status: string; types: string[] }[] = [];
+    for (let i = 0; i < targets.length; i++) {
+      const c = targets[i];
+      const text = textCache.current.get(c.id) ?? await extractTextFromPdfBase64(c.pdf_base64 as string);
+      textCache.current.set(c.id, text);
+      if (!text.trim()) { setReclassProgress({ current: i + 1, total: targets.length }); continue; }
+      const analysis = analyzeSitfisReport(text);
+      if (analysis.status !== c.sitfis_status || (c.pendency_types || []).join(',') !== analysis.types.join(',')) {
         await supabase
           .from('sitfis_results' as any)
-          .update({ pendency_types: types } as any)
+          .update({ status: analysis.status, pendency_types: analysis.types, error_message: null } as any)
           .eq('client_id', c.id);
-        updates.push({ id: c.id, types });
+        updates.push({ id: c.id, status: analysis.status, types: analysis.types });
       }
-      if (cancelled || updates.length === 0) return;
-      setClients(prev =>
-        prev.map(p => {
-          const u = updates.find(x => x.id === p.id);
-          return u ? { ...p, pendency_types: u.types } : p;
-        })
-      );
-    })();
-
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients.length]);
+      setReclassProgress({ current: i + 1, total: targets.length });
+    }
+    setClients(prev =>
+      prev.map(p => {
+        const u = updates.find(x => x.id === p.id);
+        return u ? { ...p, sitfis_status: u.status, pendency_types: u.types, error_message: null } : p;
+      })
+    );
+    setReclassifying(false);
+    toast({
+      title: 'Reclassificação concluída',
+      description: `${updates.length} de ${targets.length} relatório(s) atualizados.`,
+    });
+  }
 
   async function consultarSitfis(clientId: string): Promise<boolean> {
     // Erro que indica protocolo caduco: SERPRO pede nova solicitação em /Apoiar
