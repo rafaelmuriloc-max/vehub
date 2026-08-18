@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
+import JSZip from 'jszip';
 import * as pdfjsLib from 'pdfjs-dist';
 import { formatClientLabel } from '@/lib/utils';
 
@@ -62,6 +63,8 @@ export default function SituacaoFiscalTab() {
   const [consultingId, setConsultingId] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [zipping, setZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -314,6 +317,74 @@ export default function SituacaoFiscalTab() {
     link.click();
   }
 
+  function sanitizeName(value: string) {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  async function handleDownloadLote() {
+    const scope = selected.size > 0
+      ? filtered.filter(c => selected.has(c.id))
+      : filtered;
+    const withPdf = scope.filter(c => !!c.pdf_base64);
+    const missing = scope.length - withPdf.length;
+
+    if (withPdf.length === 0) {
+      toast({
+        title: 'Nenhum relatório disponível',
+        description: 'Consulte a situação fiscal antes de baixar os PDFs.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setZipping(true);
+    setZipProgress({ current: 0, total: withPdf.length });
+    try {
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+
+      for (let i = 0; i < withPdf.length; i++) {
+        const c = withPdf[i];
+        const base = sanitizeName(
+          `${c.sci_code ? `${c.sci_code} - ` : ''}${c.company_name}`
+        ) || 'Situacao_Fiscal';
+        let fileName = `${base}.pdf`;
+        let n = 2;
+        while (usedNames.has(fileName)) {
+          fileName = `${base}_${n++}.pdf`;
+        }
+        usedNames.add(fileName);
+        zip.file(fileName, c.pdf_base64 as string, { base64: true });
+        setZipProgress({ current: i + 1, total: withPdf.length });
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Situacao_Fiscal_${new Date().toISOString().slice(0, 10)}.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Download concluído',
+        description: `${withPdf.length} PDF(s) baixados${missing > 0 ? `, ${missing} sem relatório` : ''}.`,
+      });
+    } catch (err: any) {
+      console.error('[SITFIS] Erro ao gerar ZIP:', err);
+      toast({
+        title: 'Erro ao gerar arquivo',
+        description: err?.message || 'Não foi possível compactar os PDFs.',
+        variant: 'destructive',
+      });
+    }
+    setZipping(false);
+  }
+
   function toggleSelect(id: string) {
     setSelected(prev => {
       const next = new Set(prev);
@@ -340,6 +411,9 @@ export default function SituacaoFiscalTab() {
       c.sitfis_status === filterStatus;
     return matchSearch && matchStatus;
   });
+
+  const downloadScope = selected.size > 0 ? filtered.filter(c => selected.has(c.id)) : filtered;
+  const availablePdfCount = downloadScope.filter(c => !!c.pdf_base64).length;
 
   function statusBadge(status: string | null) {
     if (!status || status === 'pending') {
@@ -371,9 +445,28 @@ export default function SituacaoFiscalTab() {
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
+            <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={handleDownloadLote}
+              disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
+              className="gap-2"
+            >
+              {zipping ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {zipProgress.current}/{zipProgress.total}
+                </>
+              ) : (
+                <>
+                  <FileArchive className="h-4 w-4" />
+                  Baixar PDFs ({availablePdfCount})
+                </>
+              )}
+            </Button>
             <Button
               onClick={handleConsultarLote}
-              disabled={batchRunning || !!consultingId}
+              disabled={batchRunning || !!consultingId || zipping}
               className="gap-2"
             >
               {batchRunning ? (
@@ -388,6 +481,7 @@ export default function SituacaoFiscalTab() {
                 </>
               )}
             </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
