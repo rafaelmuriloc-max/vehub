@@ -20,19 +20,6 @@ export const PENDENCY_RULES: { key: string; terms: string[] }[] = [
   { key: 'debitos', terms: ['débito', 'debito', 'inadimpl', 'cobrança', 'cobranca', 'multa', 'auto de infração', 'auto de infracao', 'pendência de pagamento', 'pendencia de pagamento'] },
 ];
 
-/** Frases que indicam seção sem nenhuma pendência listada. */
-const CLEAN_PHRASES = [
-  'não constam pendências', 'nao constam pendencias',
-  'não constam pendencias', 'nao constam pendências',
-  'não foram detectadas pendências', 'nao foram detectadas pendencias',
-  'não existem pendências', 'nao existem pendencias',
-  'não há pendências', 'nao ha pendencias',
-  'nada consta',
-  'não constam débitos', 'nao constam debitos',
-  'não há débitos', 'nao ha debitos',
-  'sem pendências', 'sem pendencias',
-];
-
 /** Linhas que representam um item real de pendência no relatório SITFIS. */
 const ITEM_LINE_RE =
   /^\s*(pend[êe]ncia|parcelamento|processo|inscri[çc][ãa]o|omiss[ãa]o|d[ée]bito)\b/i;
