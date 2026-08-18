@@ -55,34 +55,63 @@ function toLines(text: string): string[] {
 
 /** Retorna as linhas do relatório que representam itens reais de pendência. */
 export function extractPendencyItems(text: string): string[] {
-  return toLines(text).filter(l => ITEM_LINE_RE.test(l) && ITEM_MARKER_RE.test(l));
+  return toLines(text).filter(
+    l => ITEM_LINE_RE.test(l) && ITEM_MARKER_RE.test(l) && !HEADER_LIKE_RE.test(l),
+  );
 }
 
 export type SitfisAnalysis = {
   status: 'regular' | 'irregular';
   types: string[];
   items: string[];
+  needsReview?: boolean;
 };
+
+export type SitfisReportMeta = {
+  /** Número de páginas do PDF, quando disponível. */
+  numPages?: number;
+};
+
+/** Divide o relatório nas seções de origem (RFB / PGFN) para avaliar cada uma. */
+function splitSections(text: string): string[] {
+  const lower = text || '';
+  const parts = lower.split(/(?=(?:receita federal do brasil|procuradoria[- ]geral da fazenda nacional|pgfn)\b)/i);
+  return parts.filter(p => p.trim().length > 0);
+}
+
+function sectionIsClean(section: string): boolean {
+  const lower = section.toLowerCase();
+  return CLEAN_PHRASES.some(p => lower.includes(p));
+}
 
 /**
  * Analisa o texto do relatório SITFIS pelos itens listados,
  * e não por palavras soltas (que aparecem em títulos/legendas).
+ *
+ * Regra de segurança: nunca concluir "Regular" por ausência de evidência —
+ * relatório extenso sem itens reconhecidos vira "Irregular (a revisar)".
  */
-export function analyzeSitfisReport(text: string): SitfisAnalysis {
+export function analyzeSitfisReport(text: string, meta: SitfisReportMeta = {}): SitfisAnalysis {
   const items = extractPendencyItems(text);
-  const lower = (text || '').toLowerCase();
-  const hasCleanPhrase = CLEAN_PHRASES.some(p => lower.includes(p));
 
-  if (items.length === 0 && hasCleanPhrase) {
+  if (items.length > 0) {
+    const joined = items.join(' \n ').toLowerCase();
+    const types = PENDENCY_RULES.filter(r => r.terms.some(term => joined.includes(term))).map(r => r.key);
+    return { status: 'irregular', types: types.length > 0 ? types : ['outros'], items };
+  }
+
+  // Sem itens reconhecidos: só é Regular com "nada consta" em todas as seções
+  // e relatório do tamanho de um relatório vazio (página única).
+  const sections = splitSections(text);
+  const allClean = sections.length > 0 && sections.every(sectionIsClean);
+  const singlePage = meta.numPages === undefined ? true : meta.numPages <= 1;
+
+  if (allClean && singlePage) {
     return { status: 'regular', types: [], items: [] };
   }
-  if (items.length === 0) {
-    // Sem itens e sem frase de "nada consta": não há evidência de pendência.
-    return { status: 'regular', types: [], items: [] };
-  }
-  const joined = items.join(' \n ').toLowerCase();
-  const types = PENDENCY_RULES.filter(r => r.terms.some(term => joined.includes(term))).map(r => r.key);
-  return { status: 'irregular', types: types.length > 0 ? types : ['outros'], items };
+
+  // Relatório extenso ou sem frase de "nada consta": exige conferência humana.
+  return { status: 'irregular', types: ['outros'], items: [], needsReview: true };
 }
 
 export function classifyPendencies(text: string): string[] {
