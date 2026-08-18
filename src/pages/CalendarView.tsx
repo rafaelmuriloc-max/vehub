@@ -1567,66 +1567,45 @@ function CalendarMain() {
                         </div>
                       );
                     })()}
-                    <div className="space-y-2">
+                    <div className="rounded-lg border border-border/70 overflow-hidden">
+                      <ObligationRowHeader />
                       {paginatedMonthPending.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
                         const obl = oblMap.get(ev.obligationId);
                         const isDasSn = obl?.system_code === 'das-simples-nacional';
+                        const risk = getDueRisk(ev.date);
                         return (
-                          <div
+                          <ObligationRow
                             key={idx}
+                            date={ev.date}
+                            title={`${ev.obligationName} | ${ev.competenceLabel}`}
+                            client={ev.clientName}
+                            dept={ev.deptName}
+                            tone={risk.tone}
+                            dueLabel={risk.label}
+                            progress={progress}
+                            selected={isSelected}
+                            onToggleSelect={() => toggleSelection(ev.instanceId)}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm border-border hover:border-primary/30 hover:bg-muted/30 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelection(ev.instanceId)}
-                                onClick={e => e.stopPropagation()}
-                                className="shrink-0"
-                              />
-                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
-                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
-                                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
-                                  {typeConfig[ev.type].label}
-                                </Badge>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
-                                  <Check className="h-3.5 w-3.5" />
+                            typeBadge={<Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>{typeConfig[ev.type].label}</Badge>}
+                            actions={<>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                              {isDasSn && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
+                                  <FileX className="h-3.5 w-3.5" />
                                 </Button>
-                                {isDasSn && (
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
-                                    <FileX className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
-                                  <PauseCircle className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
-                              {progress.total > 0 && (
-                                <span className="text-[10px] font-medium text-muted-foreground">
-                                  {progress.completed}/{progress.total} atividades
-                                </span>
                               )}
-                            </div>
-                            {progress.total > 0 && (
-                              <Progress value={progress.percent} className="h-1 mt-2" />
-                            )}
-                          </div>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                <PauseCircle className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Excluir" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>}
+                          />
                         );
                       })}
                     </div>
