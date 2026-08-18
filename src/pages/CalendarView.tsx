@@ -1493,14 +1493,36 @@ function CalendarMain() {
 
       {/* Month obligations - below */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
               <div>
-                <CardTitle className="text-lg">Obrigações de {monthNames[month]} {year}</CardTitle>
-                <CardDescription className="mt-0.5">{monthEvents.length} obrigação(ões) com data de meta</CardDescription>
+                <CardTitle className="text-base font-display tracking-tight">Obrigações de {monthNames[month]} {year}</CardTitle>
+                <CardDescription className="mt-0.5 text-xs">{monthEvents.length} com data de meta</CardDescription>
               </div>
+            </div>
+            <div className="flex items-center gap-4 text-xs">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-primary/70" />
+                <span className="font-semibold tabular-nums">{monthEventsPending.length}</span>
+                <span className="text-muted-foreground">a fazer</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="font-semibold tabular-nums">{monthEventsCompleted.length}</span>
+                <span className="text-muted-foreground">concluídas</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-orange-500" />
+                <span className="font-semibold tabular-nums">{monthEventsLate.length}</span>
+                <span className="text-muted-foreground">fora do prazo</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                <span className="font-semibold tabular-nums">{monthEventsHold.length}</span>
+                <span className="text-muted-foreground">aguardando</span>
+              </span>
             </div>
           </div>
         </CardHeader>
@@ -1512,28 +1534,28 @@ function CalendarMain() {
             </div>
           ) : (
             <Tabs defaultValue="pending">
-              <TabsList className="mb-4 flex-wrap h-auto gap-1">
-                <TabsTrigger value="pending">
+              <TabsList className="mb-3 flex w-full justify-start overflow-x-auto h-auto gap-1 p-1">
+                <TabsTrigger value="pending" className="text-xs">
                   A fazer
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsPending.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="completed">
+                <TabsTrigger value="completed" className="text-xs data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400">
                   Concluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="late">
+                <TabsTrigger value="late" className="text-xs data-[state=active]:text-orange-700 dark:data-[state=active]:text-orange-400">
                   Fora do prazo
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsLate.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="hold">
+                <TabsTrigger value="hold" className="text-xs data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-400">
                   Aguardando
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsHold.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="deleted">
+                <TabsTrigger value="deleted" className="text-xs">
                   Excluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="suspended">
+                <TabsTrigger value="suspended" className="text-xs">
                   Suspensos
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsSuspended.length}</Badge>
                 </TabsTrigger>
