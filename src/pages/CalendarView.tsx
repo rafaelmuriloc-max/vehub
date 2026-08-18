@@ -1990,6 +1990,33 @@ function CalendarMain() {
             )}
           </DialogHeader>
 
+          {detailInstance && (
+            detailInstance.on_hold ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-2">
+                <p className="text-xs text-amber-800 dark:text-amber-300 whitespace-pre-wrap">
+                  <strong>Aguardando:</strong> {detailInstance.hold_reason}
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => { setHoldReason(detailInstance.hold_reason || ''); setHoldTarget([detailInstance.id]); }}>
+                    Editar motivo
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => resumeInstance(detailInstance.id)}>
+                    <PlayCircle className="h-4 w-4 mr-1" /> Retomar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                onClick={() => { setHoldReason(''); setHoldTarget([detailInstance.id]); }}
+              >
+                <PauseCircle className="h-4 w-4 mr-2" />
+                Aguardar
+              </Button>
+            )
+          )}
+
           {detailObligation?.system_code === 'das-simples-nacional' && detailInstance && (
             <Button
               variant="outline"
@@ -2168,6 +2195,10 @@ function CalendarMain() {
           <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Excluir selecionados
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setHoldReason(''); setHoldTarget(Array.from(selectedInstanceIds)); }}>
+            <PauseCircle className="h-3.5 w-3.5 mr-1" />
+            Aguardar selecionadas
           </Button>
           <Button variant="ghost" size="sm" onClick={clearSelection}>
             <X className="h-3.5 w-3.5 mr-1" />
