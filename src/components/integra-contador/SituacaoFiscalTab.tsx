@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
 import JSZip from 'jszip';
-import SitfisOverviewPanel, { classifyPendencies, extractPendencyExcerpts, PENDENCY_LABELS } from './SitfisOverviewPanel';
+import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS } from './SitfisOverviewPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as pdfjsLib from 'pdfjs-dist';
 import { formatClientLabel } from '@/lib/utils';
@@ -69,6 +69,8 @@ export default function SituacaoFiscalTab() {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
   const [pendencyKey, setPendencyKey] = useState<string | null>(null);
+  const [reclassifying, setReclassifying] = useState(false);
+  const [reclassProgress, setReclassProgress] = useState({ current: 0, total: 0 });
   const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
   const [excerptsLoading, setExcerptsLoading] = useState(false);
   const textCache = useRef<Map<string, string>>(new Map());
@@ -115,39 +117,43 @@ export default function SituacaoFiscalTab() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Backfill: classifica pendências de relatórios já consultados antes desta funcionalidade
-  useEffect(() => {
-    const targets = clients.filter(
-      c => c.sitfis_status === 'irregular' && !!c.pdf_base64 && (!c.pendency_types || c.pendency_types.length === 0)
-    );
-    if (targets.length === 0) return;
-    let cancelled = false;
-
-    (async () => {
-      const updates: { id: string; types: string[] }[] = [];
-      for (const c of targets) {
-        if (cancelled) return;
-        const text = await extractTextFromPdfBase64(c.pdf_base64 as string);
-        const types = classifyPendencies(text);
-        if (types.length === 0) continue;
+  // Reclassifica os relatórios já armazenados usando a análise por itens
+  async function handleReclassificar() {
+    const targets = clients.filter(c => !!c.pdf_base64);
+    if (targets.length === 0) {
+      toast({ title: 'Nada a reclassificar', description: 'Nenhum relatório armazenado.' });
+      return;
+    }
+    setReclassifying(true);
+    setReclassProgress({ current: 0, total: targets.length });
+    const updates: { id: string; status: string; types: string[] }[] = [];
+    for (let i = 0; i < targets.length; i++) {
+      const c = targets[i];
+      const text = textCache.current.get(c.id) ?? await extractTextFromPdfBase64(c.pdf_base64 as string);
+      textCache.current.set(c.id, text);
+      if (!text.trim()) { setReclassProgress({ current: i + 1, total: targets.length }); continue; }
+      const analysis = analyzeSitfisReport(text);
+      if (analysis.status !== c.sitfis_status || (c.pendency_types || []).join(',') !== analysis.types.join(',')) {
         await supabase
           .from('sitfis_results' as any)
-          .update({ pendency_types: types } as any)
+          .update({ status: analysis.status, pendency_types: analysis.types, error_message: null } as any)
           .eq('client_id', c.id);
-        updates.push({ id: c.id, types });
+        updates.push({ id: c.id, status: analysis.status, types: analysis.types });
       }
-      if (cancelled || updates.length === 0) return;
-      setClients(prev =>
-        prev.map(p => {
-          const u = updates.find(x => x.id === p.id);
-          return u ? { ...p, pendency_types: u.types } : p;
-        })
-      );
-    })();
-
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients.length]);
+      setReclassProgress({ current: i + 1, total: targets.length });
+    }
+    setClients(prev =>
+      prev.map(p => {
+        const u = updates.find(x => x.id === p.id);
+        return u ? { ...p, sitfis_status: u.status, pendency_types: u.types, error_message: null } : p;
+      })
+    );
+    setReclassifying(false);
+    toast({
+      title: 'Reclassificação concluída',
+      description: `${updates.length} de ${targets.length} relatório(s) atualizados.`,
+    });
+  }
 
   async function consultarSitfis(clientId: string): Promise<boolean> {
     // Erro que indica protocolo caduco: SERPRO pede nova solicitação em /Apoiar
@@ -320,52 +326,10 @@ export default function SituacaoFiscalTab() {
       const pdfText = await extractTextFromPdfBase64(pdfBase64);
       console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500));
 
-      // Strip PDF/base64 blobs before keyword search to avoid false positives
-      const stripBinaryFields = (obj: any): any => {
-        if (!obj || typeof obj !== 'object') return obj;
-        if (Array.isArray(obj)) return obj.map(stripBinaryFields);
-        const clean: any = {};
-        for (const [k, v] of Object.entries(obj)) {
-          if (k === 'pdf' || k === 'pdf_base64') continue;
-          if (typeof v === 'string' && v.length > 500) continue;
-          if (typeof v === 'object') {
-            clean[k] = stripBinaryFields(v);
-          } else {
-            clean[k] = v;
-          }
-        }
-        return clean;
-      };
-      // Check for regular status - only if NO negative indicators found
-      // Search in parsed dados, responseData metadata, AND extracted PDF text
-      const strippedDados = stripBinaryFields(parsedDados);
-      const strippedResponse = stripBinaryFields(responseData);
-      const responseStr = (
-        JSON.stringify(strippedDados || '') +
-        JSON.stringify(strippedResponse || '') +
-        ' ' + pdfText
-      ).toLowerCase();
-      const negativeIndicators = [
-        'irregular',
-        'pendência', 'pendencia',
-        'débito', 'debito',
-        'inadimplente', 'inadimplência', 'inadimplencia',
-        'dívida', 'divida',
-        'multa',
-        'infração', 'infracao',
-        'não regular', 'nao regular',
-        'situação irregular', 'situacao irregular',
-        'exigibilidade suspensa',
-        'cobrança', 'cobranca',
-        'auto de infração', 'auto de infracao',
-        'omissão', 'omissao',
-        'parcelamento',
-      ];
-
-      const hasNegative = negativeIndicators.some(term => responseStr.includes(term));
-      if (!hasNegative) {
-        fiscalStatus = 'regular';
-      }
+      // Classificação baseada nos itens listados no relatório (não em palavras soltas)
+      const analysis = analyzeSitfisReport(pdfText);
+      fiscalStatus = analysis.status;
+      console.log('[SITFIS] Itens de pendência encontrados:', analysis.items.length, analysis.types);
 
       // Upsert result
       await supabase.from('sitfis_results' as any).upsert({
@@ -375,7 +339,7 @@ export default function SituacaoFiscalTab() {
         pdf_base64: pdfBase64,
         raw_response: responseData,
         error_message: null,
-        pendency_types: fiscalStatus === 'irregular' ? classifyPendencies(pdfText + ' ' + responseStr) : [],
+        pendency_types: analysis.types,
       } as any, { onConflict: 'client_id' } as any);
 
       return true;
@@ -690,6 +654,24 @@ export default function SituacaoFiscalTab() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
             <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={handleReclassificar}
+              disabled={reclassifying || zipping || batchRunning || !!consultingId}
+              className="gap-2"
+            >
+              {reclassifying ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {reclassProgress.current}/{reclassProgress.total}
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4" />
+                  Reclassificar relatórios
+                </>
+              )}
+            </Button>
             <Button
               variant="outline"
               onClick={handleDownloadLote}
