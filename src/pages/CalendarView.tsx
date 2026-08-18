@@ -13,7 +13,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import EmailComposeDialog from '@/components/EmailComposeDialog';
@@ -23,7 +25,7 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName, formatClientLabel } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 
-type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null };
+type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null; on_hold?: boolean | null; hold_reason?: string | null; hold_at?: string | null; hold_by?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null; recurrence?: string | null };
 type Client = { id: string; sci_code?: string | null; company_name: string; services_suspended?: boolean };
 type Department = { id: string; name: string };
@@ -137,6 +139,11 @@ function CalendarMain() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [semMovInstanceId, setSemMovInstanceId] = useState<string | null>(null);
   const [semMovLoading, setSemMovLoading] = useState(false);
+  const [holdTarget, setHoldTarget] = useState<string[] | null>(null);
+  const [holdReason, setHoldReason] = useState('');
+  const [holdSaving, setHoldSaving] = useState(false);
+  const [monthHoldPage, setMonthHoldPage] = useState(1);
+  const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
