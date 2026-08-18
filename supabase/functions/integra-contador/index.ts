@@ -514,6 +514,25 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { client_id, idSistema, idServico, tipo, dados, versaoSistema, sitfis_context } = body;
 
+    // Invalidação do contexto SITFIS em cache (protocolo expirado — ER05)
+    if (body?.sitfis_invalidate_cache && client_id) {
+      const { data: c } = await supabase
+        .from("clients")
+        .select("document")
+        .eq("id", client_id)
+        .single();
+      const doc = (c?.document || "").replace(/\D/g, "");
+      if (doc) {
+        const svc = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        await svc.from("integra_contador_cache").delete().eq("cache_key", `sitfis_contexto:${doc}`);
+        console.log(`[SITFIS] Cache invalidado para sitfis_contexto:${doc}`);
+      }
+      return jsonResponse({ success: true, invalidated: true });
+    }
+
     if (!client_id || !idSistema || !idServico || !tipo) {
       return jsonResponse({ error: "Campos obrigatórios: client_id, idSistema, idServico, tipo" }, 400);
     }
@@ -922,7 +941,8 @@ Deno.serve(async (req) => {
           .upsert({
             cache_key: cacheKey,
             cache_value: JSON.stringify(sitfisContext),
-            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            // Protocolo SITFIS caduca rápido no SERPRO — cache curto evita ER05
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
           }, { onConflict: 'cache_key' });
       }
 

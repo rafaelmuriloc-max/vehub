@@ -150,6 +150,56 @@ export default function SituacaoFiscalTab() {
   }, [clients.length]);
 
   async function consultarSitfis(clientId: string): Promise<boolean> {
+    // Erro que indica protocolo caduco: SERPRO pede nova solicitação em /Apoiar
+    const isProtocolExpired = (msg: string) =>
+      /er05|inicie uma nova solicita/i.test(msg || '');
+    const isProcuracaoError = (msg: string) =>
+      /procurador|procura[çc][ãa]o/i.test(msg || '');
+
+    const maxCiclos = 2;
+    let ultimoErro: Error | null = null;
+
+    for (let ciclo = 0; ciclo < maxCiclos; ciclo++) {
+      try {
+        const ok = await executarCicloSitfis(clientId);
+        return ok;
+      } catch (err: any) {
+        const msg = err?.message || 'Erro desconhecido';
+        ultimoErro = err;
+        // Protocolo caducou: limpar cache e refazer a etapa /Apoiar
+        if (isProtocolExpired(msg) && ciclo < maxCiclos - 1) {
+          console.warn('[SITFIS] Protocolo expirado (ER05) — reiniciando fluxo em /Apoiar');
+          await supabase.functions.invoke('integra-contador', {
+            body: { client_id: clientId, sitfis_invalidate_cache: true },
+          }).catch(() => {});
+          continue;
+        }
+        break;
+      }
+    }
+
+    const msg = ultimoErro?.message || 'Erro desconhecido';
+    const status = isProcuracaoError(msg) ? 'sem_procuracao' : 'error';
+    const errorMessage = status === 'sem_procuracao'
+      ? 'Procuração eletrônica ausente ou vencida no e-CAC'
+      : isProtocolExpired(msg)
+        ? 'Protocolo expirado no SERPRO. Reconsulte este cliente.'
+        : msg;
+
+    console.error(`[SITFIS] Erro para ${clientId}:`, ultimoErro);
+    await supabase.from('sitfis_results' as any).upsert({
+      client_id: clientId,
+      status,
+      consulted_at: new Date().toISOString(),
+      pdf_base64: null,
+      raw_response: null,
+      error_message: errorMessage,
+      pendency_types: [],
+    } as any, { onConflict: 'client_id' } as any);
+    return false;
+  }
+
+  async function executarCicloSitfis(clientId: string): Promise<boolean> {
     try {
       // Step 1: request protocol with retries
       let protocoloRelatorio: string | null = null;
@@ -227,6 +277,17 @@ export default function SituacaoFiscalTab() {
         if (step2.error) throw step2.error;
 
         responseData = step2.data?.data;
+
+        // Mensagens de erro do SERPRO (ex.: ER05 protocolo expirado)
+        const serproMsgs: string = Array.isArray(responseData?.mensagens)
+          ? responseData.mensagens.map((m: any) => `${m.codigo || ''} ${m.texto || ''}`).join('; ')
+          : '';
+        if (serproMsgs && /er05|inicie uma nova solicita/i.test(serproMsgs)) {
+          throw new Error(serproMsgs.trim());
+        }
+        if (Number(responseData?.status) >= 500) {
+          throw new Error(serproMsgs.trim() || 'Erro 500 no SERPRO ao emitir relatório');
+        }
 
         // Erro de runtime do gateway (ex.: endpoint SUSPENDED)
         if (responseData?.code || responseData?.message === 'Runtime Error') {
@@ -319,17 +380,7 @@ export default function SituacaoFiscalTab() {
 
       return true;
     } catch (err: any) {
-      console.error(`[SITFIS] Erro para ${clientId}:`, err);
-      await supabase.from('sitfis_results' as any).upsert({
-        client_id: clientId,
-        status: 'error',
-        consulted_at: new Date().toISOString(),
-        pdf_base64: null,
-        raw_response: null,
-        error_message: err.message || 'Erro desconhecido',
-        pendency_types: [],
-      } as any, { onConflict: 'client_id' } as any);
-      return false;
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 
@@ -521,6 +572,9 @@ export default function SituacaoFiscalTab() {
     if (status === 'error') {
       return <Badge variant="secondary" className="gap-1 text-orange-600"><AlertCircle className="h-3 w-3" /> Erro</Badge>;
     }
+    if (status === 'sem_procuracao') {
+      return <Badge variant="secondary" className="gap-1 text-amber-600"><AlertCircle className="h-3 w-3" /> Sem procuração</Badge>;
+    }
     return <Badge variant="outline">{status}</Badge>;
   }
 
@@ -694,6 +748,7 @@ export default function SituacaoFiscalTab() {
                 <SelectItem value="regular">Regular</SelectItem>
                 <SelectItem value="irregular">Irregular</SelectItem>
                 <SelectItem value="error">Erro</SelectItem>
+                <SelectItem value="sem_procuracao">Sem procuração</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
               </SelectContent>
             </Select>
@@ -744,7 +799,7 @@ export default function SituacaoFiscalTab() {
                         ) : (
                           statusBadge(c.sitfis_status)
                         )}
-                        {c.error_message && c.sitfis_status === 'error' && (
+                        {c.error_message && (c.sitfis_status === 'error' || c.sitfis_status === 'sem_procuracao') && (
                           <p className="text-xs text-destructive mt-1 line-clamp-1" title={c.error_message}>
                             {c.error_message}
                           </p>

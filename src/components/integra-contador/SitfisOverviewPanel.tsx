@@ -62,6 +62,7 @@ const STATUS_META: { key: string; label: string; color: string }[] = [
   { key: 'regular', label: 'Regular', color: 'hsl(142 71% 40%)' },
   { key: 'irregular', label: 'Irregular', color: 'hsl(0 72% 51%)' },
   { key: 'error', label: 'Erro', color: 'hsl(25 95% 53%)' },
+  { key: 'sem_procuracao', label: 'Sem procuração', color: 'hsl(45 93% 47%)' },
   { key: 'pending', label: 'Pendente', color: 'hsl(215 16% 65%)' },
 ];
 
