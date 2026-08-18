@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,6 +71,7 @@ export default function SituacaoFiscalTab() {
   const [pendencyKey, setPendencyKey] = useState<string | null>(null);
   const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
   const [excerptsLoading, setExcerptsLoading] = useState(false);
+  const textCache = useRef<Map<string, string>>(new Map());
 
   const loadData = useCallback(async () => {
     setLoading(true);
