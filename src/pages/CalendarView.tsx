@@ -2271,6 +2271,35 @@ function CalendarMain() {
         taskId={editingTaskId}
         onSaved={() => loadData()}
       />
+
+      <Dialog open={holdTarget !== null} onOpenChange={(v) => { if (!v) { setHoldTarget(null); setHoldReason(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Colocar em espera</DialogTitle>
+            <DialogDescription>
+              {holdTarget && holdTarget.length > 1
+                ? `${holdTarget.length} obrigações irão para a aba Aguardando.`
+                : 'A obrigação irá para a aba Aguardando até ser retomada.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Motivo <span className="text-destructive">*</span></label>
+            <Textarea
+              value={holdReason}
+              onChange={e => setHoldReason(e.target.value)}
+              placeholder="Descreva o motivo pelo qual esta obrigação não pode ser concluída agora"
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setHoldTarget(null); setHoldReason(''); }}>Cancelar</Button>
+            <Button onClick={confirmHold} disabled={!holdReason.trim() || holdSaving}>
+              {holdSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PauseCircle className="h-4 w-4 mr-2" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
