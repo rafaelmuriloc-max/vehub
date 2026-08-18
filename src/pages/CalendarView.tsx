@@ -1224,15 +1224,9 @@ function CalendarMain() {
               <>
               {selectedEvents.length > 0 && (
               <Tabs defaultValue="pending">
-                <TabsList className="mb-4 w-full grid grid-cols-2">
-                  <TabsTrigger value="pending">
-                    A Fazer
-                    <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{dayEventsPending.length}</Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="completed">
-                    Concluído
-                    <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{dayEventsCompleted.length}</Badge>
-                  </TabsTrigger>
+                <TabsList className={`mb-4 ${tabListClass}`}>
+                  <ObligationTab value="pending" label="A Fazer" count={dayEventsPending.length} />
+                  <ObligationTab value="completed" label="Concluído" count={dayEventsCompleted.length} />
                 </TabsList>
                 {[
                   { key: 'pending', items: paginatedDayPending, allItems: dayEventsPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
@@ -1528,31 +1522,13 @@ function CalendarMain() {
             </div>
           ) : (
             <Tabs defaultValue="pending">
-              <TabsList className="mb-4 flex-wrap h-auto gap-1">
-                <TabsTrigger value="pending">
-                  A fazer
-                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsPending.length}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="completed">
-                  Concluídas
-                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsCompleted.length}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="late">
-                  Fora do prazo
-                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsLate.length}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="hold">
-                  Aguardando
-                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsHold.length}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="deleted">
-                  Excluídas
-                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="suspended">
-                  Suspensos
-                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsSuspended.length}</Badge>
-                </TabsTrigger>
+              <TabsList className={`mb-4 ${tabListClass}`}>
+                <ObligationTab value="pending" label="A fazer" count={monthEventsPending.length} />
+                <ObligationTab value="completed" label="Concluídas" count={monthEventsCompleted.length} />
+                <ObligationTab value="late" label="Fora do prazo" count={monthEventsLate.length} />
+                <ObligationTab value="hold" label="Aguardando" count={monthEventsHold.length} />
+                <ObligationTab value="deleted" label="Excluídas" count={deletedMonthEvents.length} />
+                <ObligationTab value="suspended" label="Suspensos" count={monthEventsSuspended.length} />
               </TabsList>
 
               <TabsContent value="pending">
