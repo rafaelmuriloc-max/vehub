@@ -1820,8 +1820,65 @@ function CalendarMain() {
                 )}
               </TabsContent>
 
+              <TabsContent value="hold">
+                {monthEventsHold.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <PauseCircle className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação aguardando neste mês</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {paginatedMonthHold.map((ev, idx) => {
+                        const inst = instanceMap.get(ev.instanceId);
+                        const by = inst?.hold_by ? profilesMap[inst.hold_by] : null;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setDetailInstanceId(ev.instanceId)}
+                            className="p-3 rounded-lg border border-amber-200 bg-amber-50/60 dark:bg-amber-900/10 dark:border-amber-900/40 cursor-pointer transition-all hover:shadow-sm"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-14 shrink-0 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-[10px]">Aguardando</Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Editar motivo" onClick={e => { e.stopPropagation(); setHoldReason(inst?.hold_reason || ''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Retomar" onClick={e => { e.stopPropagation(); resumeInstance(ev.instanceId); }}>
+                                  <PlayCircle className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 mt-2 whitespace-pre-wrap">
+                              <strong>Motivo:</strong> {inst?.hold_reason || '—'}
+                            </p>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {inst?.hold_at && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {by ? `${by} • ` : ''}{format(parseISO(inst.hold_at), "dd/MM/yyyy HH:mm")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <PaginationBlock page={monthHoldPage} totalPages={monthHoldTotalPages} total={monthEventsHold.length} onPageChange={setMonthHoldPage} />
+                  </>
+                )}
+              </TabsContent>
+
               <TabsContent value="deleted">
-                {null}
                 {deletedMonthEvents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 text-center">
                     <Trash2 className="h-8 w-8 text-muted-foreground/40 mb-2" />
