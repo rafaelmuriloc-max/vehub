@@ -1519,6 +1519,10 @@ function CalendarMain() {
                   Fora do prazo
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsLate.length}</Badge>
                 </TabsTrigger>
+                <TabsTrigger value="hold">
+                  Aguardando
+                  <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{monthEventsHold.length}</Badge>
+                </TabsTrigger>
                 <TabsTrigger value="deleted">
                   Excluídas
                   <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">{deletedMonthEvents.length}</Badge>
@@ -1598,6 +1602,9 @@ function CalendarMain() {
                                     <FileX className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -1814,6 +1821,7 @@ function CalendarMain() {
               </TabsContent>
 
               <TabsContent value="deleted">
+                {null}
                 {deletedMonthEvents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 text-center">
                     <Trash2 className="h-8 w-8 text-muted-foreground/40 mb-2" />
