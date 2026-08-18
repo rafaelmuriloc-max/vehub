@@ -20,42 +20,80 @@ export const PENDENCY_RULES: { key: string; terms: string[] }[] = [
   { key: 'debitos', terms: ['débito', 'debito', 'inadimpl', 'cobrança', 'cobranca', 'multa', 'auto de infração', 'auto de infracao', 'pendência de pagamento', 'pendencia de pagamento'] },
 ];
 
-export function classifyPendencies(text: string): string[] {
-  const t = (text || '').toLowerCase();
-  if (!t.trim()) return [];
-  const found = PENDENCY_RULES.filter(r => r.terms.some(term => t.includes(term))).map(r => r.key);
-  return found.length > 0 ? found : ['outros'];
+/** Frases que indicam seção sem nenhuma pendência listada. */
+const CLEAN_PHRASES = [
+  'não constam pendências', 'nao constam pendencias',
+  'não constam pendencias', 'nao constam pendências',
+  'não foram detectadas pendências', 'nao foram detectadas pendencias',
+  'não existem pendências', 'nao existem pendencias',
+  'não há pendências', 'nao ha pendencias',
+  'nada consta',
+  'não constam débitos', 'nao constam debitos',
+  'não há débitos', 'nao ha debitos',
+  'sem pendências', 'sem pendencias',
+];
+
+/** Linhas que representam um item real de pendência no relatório SITFIS. */
+const ITEM_LINE_RE =
+  /^\s*(pend[êe]ncia|parcelamento|processo|inscri[çc][ãa]o|omiss[ãa]o|d[ée]bito)\b[^\n]{0,200}$/i;
+const ITEM_MARKER_RE =
+  /(pend[êe]ncia|parcelamento|processo|inscri[çc][ãa]o|omiss[ãa]o|d[ée]bito)\s*[-–:]\s*\S/i;
+
+/** Quebra o texto do PDF em linhas lógicas (pdf.js entrega tudo numa linha só). */
+function toLines(text: string): string[] {
+  return (text || '')
+    .replace(/\r/g, '\n')
+    // separa antes de cada marcador de item, mesmo sem quebra de linha real
+    .replace(/(Pend[êe]ncia|Parcelamento|Processo|Inscri[çc][ãa]o|Omiss[ãa]o|D[ée]bito)\s*[-–:]/g, '\n$1 -')
+    .split('\n')
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
 }
 
-/** Extrai trechos do relatório onde as palavras-chave do tipo de pendência aparecem. */
-export function extractPendencyExcerpts(text: string, key: string, max = 3): string[] {
-  const clean = (text || '').replace(/\s+/g, ' ').trim();
-  if (!clean) return [];
-  const rule = PENDENCY_RULES.find(r => r.key === key);
-  const terms = rule?.terms ?? PENDENCY_RULES.flatMap(r => r.terms);
-  const lower = clean.toLowerCase();
-  const excerpts: string[] = [];
-  const usedRanges: [number, number][] = [];
+/** Retorna as linhas do relatório que representam itens reais de pendência. */
+export function extractPendencyItems(text: string): string[] {
+  return toLines(text).filter(l => ITEM_LINE_RE.test(l) && ITEM_MARKER_RE.test(l));
+}
 
-  for (const term of terms) {
-    let from = 0;
-    while (excerpts.length < max) {
-      const idx = lower.indexOf(term, from);
-      if (idx === -1) break;
-      const start = Math.max(0, idx - 120);
-      const end = Math.min(clean.length, idx + term.length + 180);
-      const overlaps = usedRanges.some(([s, e]) => idx >= s && idx <= e);
-      if (!overlaps) {
-        usedRanges.push([start, end]);
-        excerpts.push(
-          `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`
-        );
-      }
-      from = idx + term.length;
-    }
-    if (excerpts.length >= max) break;
+export type SitfisAnalysis = {
+  status: 'regular' | 'irregular';
+  types: string[];
+  items: string[];
+};
+
+/**
+ * Analisa o texto do relatório SITFIS pelos itens listados,
+ * e não por palavras soltas (que aparecem em títulos/legendas).
+ */
+export function analyzeSitfisReport(text: string): SitfisAnalysis {
+  const items = extractPendencyItems(text);
+  const lower = (text || '').toLowerCase();
+  const hasCleanPhrase = CLEAN_PHRASES.some(p => lower.includes(p));
+
+  if (items.length === 0 && hasCleanPhrase) {
+    return { status: 'regular', types: [], items: [] };
   }
-  return excerpts;
+  if (items.length === 0) {
+    // Sem itens e sem frase de "nada consta": não há evidência de pendência.
+    return { status: 'regular', types: [], items: [] };
+  }
+  const joined = items.join(' \n ').toLowerCase();
+  const types = PENDENCY_RULES.filter(r => r.terms.some(term => joined.includes(term))).map(r => r.key);
+  return { status: 'irregular', types: types.length > 0 ? types : ['outros'], items };
+}
+
+export function classifyPendencies(text: string): string[] {
+  return analyzeSitfisReport(text).types;
+}
+
+/** Retorna as linhas de item do relatório correspondentes ao tipo de pendência. */
+export function extractPendencyExcerpts(text: string, key: string, max = 5): string[] {
+  const items = extractPendencyItems(text);
+  if (items.length === 0) return [];
+  const rule = PENDENCY_RULES.find(r => r.key === key);
+  if (!rule) return items.slice(0, max);
+  const matched = items.filter(l => rule.terms.some(t => l.toLowerCase().includes(t)));
+  return (matched.length > 0 ? matched : items).slice(0, max);
 }
 
 const STATUS_META: { key: string; label: string; color: string }[] = [
