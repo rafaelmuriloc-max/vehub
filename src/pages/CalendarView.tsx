@@ -758,6 +758,53 @@ function CalendarMain() {
     await loadData();
   }
 
+  async function confirmHold() {
+    const ids = holdTarget || [];
+    const reason = holdReason.trim();
+    if (ids.length === 0 || !reason) return;
+    setHoldSaving(true);
+    const { data: userRes } = await supabase.auth.getUser();
+    const { error } = await supabase.from('obligation_instances').update({
+      on_hold: true,
+      hold_reason: reason,
+      hold_at: new Date().toISOString(),
+      hold_by: userRes?.user?.id ?? null,
+    }).in('id', ids);
+    setHoldSaving(false);
+    if (error) {
+      toast({ title: 'Erro ao colocar em espera', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: ids.length > 1 ? `${ids.length} obrigações em espera` : 'Obrigação aguardando' });
+    setHoldTarget(null);
+    setHoldReason('');
+    clearSelection();
+    if (detailInstanceId && ids.includes(detailInstanceId)) setDetailInstanceId(null);
+    await loadData();
+  }
+
+  async function resumeInstance(instanceId: string) {
+    const { error } = await supabase.from('obligation_instances')
+      .update({ on_hold: false, hold_reason: null, hold_at: null, hold_by: null })
+      .eq('id', instanceId);
+    if (error) {
+      toast({ title: 'Erro ao retomar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Obrigação retomada' });
+    await loadData();
+  }
+
+  async function legacyRestoreInstance(instanceId: string) {
+    const { error } = await supabase.from('obligation_instances').update({ deleted_at: null }).eq('id', instanceId);
+    if (error) {
+      toast({ title: 'Erro ao restaurar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Obrigação restaurada' });
+    await loadData();
+  }
+
   async function hardDeleteInstance(instanceId: string) {
     await supabase.from('obligation_activity_completions').delete().eq('instance_id', instanceId);
     const { error } = await supabase.from('obligation_instances').delete().eq('id', instanceId);
