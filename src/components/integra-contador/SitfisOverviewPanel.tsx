@@ -72,26 +72,11 @@ export type SitfisReportMeta = {
   numPages?: number;
 };
 
-/** Divide o relatório nas seções de origem (RFB / PGFN) para avaliar cada uma. */
-function splitSections(text: string): string[] {
-  const lower = text || '';
-  const parts = lower.split(/(?=(?:receita federal do brasil|procuradoria[- ]geral da fazenda nacional|pgfn)\b)/i);
-  return parts.filter(p => p.trim().length > 0);
-}
-
-function sectionIsClean(section: string): boolean {
-  const lower = section.toLowerCase();
-  return CLEAN_PHRASES.some(p => lower.includes(p));
-}
-
 /**
- * Analisa o texto do relatório SITFIS pelos itens listados,
- * e não por palavras soltas (que aparecem em títulos/legendas).
- *
- * Regra de segurança: nunca concluir "Regular" por ausência de evidência —
- * relatório extenso sem itens reconhecidos vira "Irregular (a revisar)".
+ * Analisa o texto do relatório SITFIS pelos itens listados.
+ * Regra: qualquer item de pendência → Irregular; nenhum item → Regular.
  */
-export function analyzeSitfisReport(text: string, meta: SitfisReportMeta = {}): SitfisAnalysis {
+export function analyzeSitfisReport(text: string, _meta: SitfisReportMeta = {}): SitfisAnalysis {
   const items = extractPendencyItems(text);
 
   if (items.length > 0) {
@@ -100,18 +85,7 @@ export function analyzeSitfisReport(text: string, meta: SitfisReportMeta = {}): 
     return { status: 'irregular', types: types.length > 0 ? types : ['outros'], items };
   }
 
-  // Sem itens reconhecidos: só é Regular quando o relatório traz "nada consta"
-  // e tem o tamanho de um relatório vazio (página única).
-  const sections = splitSections(text);
-  const hasCleanPhrase = sections.some(sectionIsClean) || sectionIsClean(text);
-  const singlePage = meta.numPages === undefined ? true : meta.numPages <= 1;
-
-  if (hasCleanPhrase && singlePage) {
-    return { status: 'regular', types: [], items: [] };
-  }
-
-  // Relatório extenso ou sem frase de "nada consta": exige conferência humana.
-  return { status: 'irregular', types: ['outros'], items: [], needsReview: true };
+  return { status: 'regular', types: [], items: [] };
 }
 
 export function classifyPendencies(text: string): string[] {
