@@ -539,7 +539,98 @@ export default function SituacaoFiscalTab() {
         loading={loading && clients.length === 0}
         activeStatus={filterStatus}
         onSelectStatus={setFilterStatus}
+        onSelectPendency={setPendencyKey}
       />
+
+      <Dialog open={!!pendencyKey} onOpenChange={open => !open && setPendencyKey(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {pendencyKey ? (PENDENCY_LABELS[pendencyKey] || pendencyKey) : ''}
+            </DialogTitle>
+            <DialogDescription>
+              {pendencyClients.length} cliente(s) com esta pendência
+            </DialogDescription>
+          </DialogHeader>
+          {excerptsLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Lendo relatórios...
+            </div>
+          )}
+          <div className="space-y-3">
+            {pendencyClients.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum cliente encontrado.</p>
+            ) : (
+              pendencyClients.map(c => {
+                const list = excerpts[c.id] || [];
+                return (
+                  <div key={c.id} className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{formatClientLabel(c)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {c.document || '—'}
+                          {c.consulted_at
+                            ? ` • ${new Date(c.consulted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+                            : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
+                          disabled={!c.pdf_base64}
+                        >
+                          <Eye className="h-3.5 w-3.5" /> Ver
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
+                          disabled={!c.pdf_base64}
+                        >
+                          <Download className="h-3.5 w-3.5" /> Baixar
+                        </Button>
+                      </div>
+                    </div>
+                    {(c.pendency_types || []).filter(t => t !== pendencyKey).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {(c.pendency_types || [])
+                          .filter(t => t !== pendencyKey)
+                          .map(t => (
+                            <Badge key={t} variant="outline" className="text-[10px]">
+                              {PENDENCY_LABELS[t] || t}
+                            </Badge>
+                          ))}
+                      </div>
+                    )}
+                    {!c.pdf_base64 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Descrição não disponível — refaça a consulta.
+                      </p>
+                    ) : list.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {excerptsLoading ? 'Carregando trechos...' : 'Trecho não localizado no relatório.'}
+                      </p>
+                    ) : (
+                      <div className="space-y-1">
+                        {list.map((ex, i) => (
+                          <p key={i} className="text-xs text-foreground bg-muted/50 rounded p-2 leading-relaxed">
+                            {ex}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
