@@ -185,24 +185,11 @@ export default function SituacaoFiscalTab() {
         throw new Error('Protocolo não encontrado após tentativas.');
       }
 
-      // Step 2: emit report
-      const step2 = await supabase.functions.invoke('integra-contador', {
-        body: {
-          client_id: clientId,
-          idSistema: 'SITFIS',
-          idServico: 'RELATORIOSITFIS92',
-          tipo: 'Emitir',
-          versaoSistema: '2.0',
-          dados: JSON.stringify({ protocoloRelatorio }),
-          sitfis_context: sitfisCtx,
-        },
-      });
-      if (step2.error) throw step2.error;
-
-      // Extract PDF and status from response
-      const responseData = step2.data?.data;
+      // Step 2: emit report (com polling — SERPRO pode responder 202 "em processamento")
+      let responseData: any = null;
       let pdfBase64: string | null = null;
       let fiscalStatus = 'irregular';
+      const maxEmissoes = 5;
 
       // Walk response to find PDF
       const walkForPdf = (obj: any): string | null => {
@@ -218,22 +205,54 @@ export default function SituacaoFiscalTab() {
         return null;
       };
 
-      // Try to parse dados field
       let parsedDados: any = null;
-      if (typeof responseData?.dados === 'string') {
-        try { parsedDados = JSON.parse(responseData.dados); } catch {}
-      } else if (typeof responseData?.dados === 'object') {
-        parsedDados = responseData.dados;
+
+      for (let tentativa = 0; tentativa < maxEmissoes; tentativa++) {
+        const step2 = await supabase.functions.invoke('integra-contador', {
+          body: {
+            client_id: clientId,
+            idSistema: 'SITFIS',
+            idServico: 'RELATORIOSITFIS92',
+            tipo: 'Emitir',
+            versaoSistema: '2.0',
+            dados: JSON.stringify({ protocoloRelatorio }),
+            sitfis_context: sitfisCtx,
+          },
+        });
+        if (step2.error) throw step2.error;
+
+        responseData = step2.data?.data;
+
+        // Erro de runtime do gateway (ex.: endpoint SUSPENDED)
+        if (responseData?.code || responseData?.message === 'Runtime Error') {
+          throw new Error(responseData?.description || responseData?.message || 'Erro no gateway SERPRO');
+        }
+
+        parsedDados = null;
+        if (typeof responseData?.dados === 'string') {
+          try { parsedDados = JSON.parse(responseData.dados); } catch {}
+        } else if (typeof responseData?.dados === 'object') {
+          parsedDados = responseData.dados;
+        }
+
+        pdfBase64 = walkForPdf(parsedDados) || walkForPdf(responseData);
+        if (pdfBase64) break;
+
+        // Relatório ainda em processamento: aguardar tempoEspera e repetir
+        const tempoEspera = Number(parsedDados?.tempoEspera ?? responseData?.tempoEspera ?? 0);
+        if (tentativa < maxEmissoes - 1) {
+          await new Promise(resolve => setTimeout(resolve, tempoEspera > 0 ? tempoEspera : 4000));
+          continue;
+        }
       }
 
-      pdfBase64 = walkForPdf(parsedDados) || walkForPdf(responseData);
+      if (!pdfBase64) {
+        throw new Error('Relatório não ficou pronto a tempo. Reconsulte este cliente.');
+      }
 
       // Extract text from PDF for keyword analysis
-      let pdfText = '';
-      if (pdfBase64) {
-        pdfText = await extractTextFromPdfBase64(pdfBase64);
-        console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500));
-      }
+      const pdfText = await extractTextFromPdfBase64(pdfBase64);
+      console.log('[SITFIS] Texto extraído do PDF (primeiros 500 chars):', pdfText.substring(0, 500));
 
       // Strip PDF/base64 blobs before keyword search to avoid false positives
       const stripBinaryFields = (obj: any): any => {
