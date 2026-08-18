@@ -1644,64 +1644,39 @@ function CalendarMain() {
                         </div>
                       );
                     })()}
-                    <div className="space-y-2">
+                    <div className="rounded-lg border border-border/70 overflow-hidden">
+                      <ObligationRowHeader />
                       {paginatedMonthCompleted.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
                         const quick = isQuickCompleted(ev.instanceId, ev.obligationId);
+                        const completedAt = getInstanceCompletedAt(ev.instanceId);
                         return (
-                          <div
+                          <ObligationRow
                             key={idx}
+                            date={ev.date}
+                            title={`${ev.obligationName} | ${ev.competenceLabel}`}
+                            client={ev.clientName}
+                            dept={ev.deptName}
+                            tone="done"
+                            dueLabel={quick ? 'Rápida' : 'Concluída'}
+                            progress={progress}
+                            selected={isSelected}
+                            onToggleSelect={() => toggleSelection(ev.instanceId)}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${quick ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800' : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'} ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelection(ev.instanceId)}
-                                onClick={e => e.stopPropagation()}
-                                className="shrink-0"
-                              />
-                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
-                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                            typeBadge={<Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px] shrink-0`}>{typeConfig[ev.type].label}</Badge>}
+                            actions={
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Excluir" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            }
+                            footer={completedAt ? (
+                              <div className="flex items-center gap-1 pl-7 text-[10px] text-emerald-600 dark:text-emerald-400">
+                                <Clock className="h-3 w-3" />
+                                <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}</span>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
-                                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
-                                  {typeConfig[ev.type].label}
-                                </Badge>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
-                              {progress.total > 0 && (
-                                <span className={`text-[10px] font-medium ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
-                                  {progress.completed}/{progress.total} atividades
-                                </span>
-                              )}
-                            </div>
-                            {progress.total > 0 && (
-                              <Progress value={progress.percent} className="h-1 mt-2" />
-                            )}
-                            {(() => {
-                              const completedAt = getInstanceCompletedAt(ev.instanceId);
-                              if (!completedAt) return null;
-                              return (
-                                <div className={`flex items-center gap-1 mt-2 text-[10px] ${quick ? 'text-sky-600 dark:text-sky-400' : 'text-green-600 dark:text-green-400'}`}>
-                                  <Clock className="h-3 w-3" />
-                                  <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}</span>
-                                </div>
-                              );
-                            })()}
-                          </div>
+                            ) : undefined}
+                          />
                         );
                       })}
                     </div>
@@ -1739,64 +1714,39 @@ function CalendarMain() {
                         </div>
                       );
                     })()}
-                    <div className="space-y-2">
+                    <div className="rounded-lg border border-border/70 overflow-hidden">
+                      <ObligationRowHeader />
                       {paginatedMonthLate.map((ev, idx) => {
                         const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                         const isSelected = selectedInstanceIds.has(ev.instanceId);
                         const lateDays = getLateDeliveryDays(ev.instanceId);
+                        const completedAt = getInstanceCompletedAt(ev.instanceId);
                         return (
-                          <div
+                          <ObligationRow
                             key={idx}
+                            date={ev.date}
+                            title={`${ev.obligationName} | ${ev.competenceLabel}`}
+                            client={ev.clientName}
+                            dept={ev.deptName}
+                            tone="late"
+                            dueLabel={lateDays ? `+${lateDays}d` : 'Atraso'}
+                            progress={progress}
+                            selected={isSelected}
+                            onToggleSelect={() => toggleSelection(ev.instanceId)}
                             onClick={() => setDetailInstanceId(ev.instanceId)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelection(ev.instanceId)}
-                                onClick={e => e.stopPropagation()}
-                                className="shrink-0"
-                              />
-                              <div className="w-14 shrink-0 text-sm font-semibold text-primary">
-                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                            typeBadge={<Badge className="bg-orange-500 text-white border-0 text-[10px] shrink-0">Fora do prazo</Badge>}
+                            actions={
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Excluir" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            }
+                            footer={completedAt ? (
+                              <div className="flex items-center gap-1 pl-7 text-[10px] text-orange-600 dark:text-orange-400">
+                                <Clock className="h-3 w-3" />
+                                <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}{lateDays ? ` · ${lateDays} dia${lateDays > 1 ? 's' : ''} de atraso` : ''}</span>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
-                                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className="bg-orange-500 text-white border-0 text-[10px]">
-                                  Fora do prazo
-                                </Badge>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
-                              {progress.total > 0 && (
-                                <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">
-                                  {progress.completed}/{progress.total} atividades
-                                </span>
-                              )}
-                            </div>
-                            {progress.total > 0 && (
-                              <Progress value={progress.percent} className="h-1 mt-2" />
-                            )}
-                            {(() => {
-                              const completedAt = getInstanceCompletedAt(ev.instanceId);
-                              if (!completedAt) return null;
-                              return (
-                                <div className="flex items-center gap-1 mt-2 text-[10px] text-orange-600 dark:text-orange-400">
-                                  <Clock className="h-3 w-3" />
-                                  <span>Concluído em {format(parseISO(completedAt), "dd/MM/yyyy 'às' HH:mm")}{lateDays ? ` · ${lateDays} dia${lateDays > 1 ? 's' : ''} de atraso` : ''}</span>
-                                </div>
-                              );
-                            })()}
-                          </div>
+                            ) : undefined}
+                          />
                         );
                       })}
                     </div>
