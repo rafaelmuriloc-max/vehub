@@ -100,13 +100,13 @@ export function analyzeSitfisReport(text: string, meta: SitfisReportMeta = {}): 
     return { status: 'irregular', types: types.length > 0 ? types : ['outros'], items };
   }
 
-  // Sem itens reconhecidos: só é Regular com "nada consta" em todas as seções
-  // e relatório do tamanho de um relatório vazio (página única).
+  // Sem itens reconhecidos: só é Regular quando o relatório traz "nada consta"
+  // e tem o tamanho de um relatório vazio (página única).
   const sections = splitSections(text);
-  const allClean = sections.length > 0 && sections.every(sectionIsClean);
+  const hasCleanPhrase = sections.some(sectionIsClean) || sectionIsClean(text);
   const singlePage = meta.numPages === undefined ? true : meta.numPages <= 1;
 
-  if (allClean && singlePage) {
+  if (hasCleanPhrase && singlePage) {
     return { status: 'regular', types: [], items: [] };
   }
 
