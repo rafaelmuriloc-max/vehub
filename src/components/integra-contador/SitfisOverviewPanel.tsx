@@ -35,9 +35,12 @@ const CLEAN_PHRASES = [
 
 /** Linhas que representam um item real de pendência no relatório SITFIS. */
 const ITEM_LINE_RE =
-  /^\s*(pend[êe]ncia|parcelamento|processo|inscri[çc][ãa]o|omiss[ãa]o|d[ée]bito)\b[^\n]{0,200}$/i;
+  /^\s*(pend[êe]ncia|parcelamento|processo|inscri[çc][ãa]o|omiss[ãa]o|d[ée]bito)\b/i;
 const ITEM_MARKER_RE =
   /(pend[êe]ncia|parcelamento|processo|inscri[çc][ãa]o|omiss[ãa]o|d[ée]bito)\s*[-–:]\s*\S/i;
+/** Termos que aparecem em títulos/legendas e não representam item listado. */
+const HEADER_LIKE_RE =
+  /^\s*(pend[êe]ncias?|d[ée]bitos?|parcelamentos?|processos?|inscri[çc][õo]es|omiss[õo]es)\s*[-–:]?\s*$/i;
 
 /** Quebra o texto do PDF em linhas lógicas (pdf.js entrega tudo numa linha só). */
 function toLines(text: string): string[] {
