@@ -12,7 +12,7 @@ export const PENDENCY_LABELS: Record<string, string> = {
   outros: 'Outros',
 };
 
-const PENDENCY_RULES: { key: string; terms: string[] }[] = [
+export const PENDENCY_RULES: { key: string; terms: string[] }[] = [
   { key: 'divida_ativa', terms: ['dívida ativa', 'divida ativa', 'inscrição em dívida', 'inscricao em divida', 'pgfn'] },
   { key: 'omissao', terms: ['omissão', 'omissao', 'omisso', 'declaração não entregue', 'declaracao nao entregue', 'falta de entrega'] },
   { key: 'parcelamento', terms: ['parcelamento', 'parcelado', 'parcelas em atraso'] },
@@ -25,6 +25,37 @@ export function classifyPendencies(text: string): string[] {
   if (!t.trim()) return [];
   const found = PENDENCY_RULES.filter(r => r.terms.some(term => t.includes(term))).map(r => r.key);
   return found.length > 0 ? found : ['outros'];
+}
+
+/** Extrai trechos do relatório onde as palavras-chave do tipo de pendência aparecem. */
+export function extractPendencyExcerpts(text: string, key: string, max = 3): string[] {
+  const clean = (text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  const rule = PENDENCY_RULES.find(r => r.key === key);
+  const terms = rule?.terms ?? PENDENCY_RULES.flatMap(r => r.terms);
+  const lower = clean.toLowerCase();
+  const excerpts: string[] = [];
+  const usedRanges: [number, number][] = [];
+
+  for (const term of terms) {
+    let from = 0;
+    while (excerpts.length < max) {
+      const idx = lower.indexOf(term, from);
+      if (idx === -1) break;
+      const start = Math.max(0, idx - 120);
+      const end = Math.min(clean.length, idx + term.length + 180);
+      const overlaps = usedRanges.some(([s, e]) => idx >= s && idx <= e);
+      if (!overlaps) {
+        usedRanges.push([start, end]);
+        excerpts.push(
+          `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`
+        );
+      }
+      from = idx + term.length;
+    }
+    if (excerpts.length >= max) break;
+  }
+  return excerpts;
 }
 
 const STATUS_META: { key: string; label: string; color: string }[] = [
@@ -53,9 +84,16 @@ type Props = {
   loading?: boolean;
   activeStatus: string;
   onSelectStatus: (status: string) => void;
+  onSelectPendency?: (key: string) => void;
 };
 
-function Donut({ data }: { data: { name: string; value: number; color: string }[] }) {
+function Donut({
+  data,
+  onSliceClick,
+}: {
+  data: { name: string; value: number; color: string; key?: string }[];
+  onSliceClick?: (key: string) => void;
+}) {
   const total = data.reduce((s, d) => s + d.value, 0);
   return (
     <div className="relative h-44 w-full sm:w-44 shrink-0">
@@ -69,9 +107,13 @@ function Donut({ data }: { data: { name: string; value: number; color: string }[
             outerRadius={76}
             paddingAngle={2}
             stroke="none"
+            onClick={(entry: any) => {
+              const k = entry?.payload?.key ?? entry?.key;
+              if (k && onSliceClick) onSliceClick(k);
+            }}
           >
             {data.map((d, i) => (
-              <Cell key={i} fill={d.color} />
+              <Cell key={i} fill={d.color} cursor={onSliceClick ? 'pointer' : undefined} />
             ))}
           </Pie>
           <Tooltip
@@ -93,7 +135,7 @@ function Donut({ data }: { data: { name: string; value: number; color: string }[
   );
 }
 
-export default function SitfisOverviewPanel({ items, loading, activeStatus, onSelectStatus }: Props) {
+export default function SitfisOverviewPanel({ items, loading, activeStatus, onSelectStatus, onSelectPendency }: Props) {
   const statusData = useMemo(() => {
     const counts: Record<string, number> = { regular: 0, irregular: 0, error: 0, pending: 0 };
     items.forEach(i => {
@@ -174,7 +216,7 @@ export default function SitfisOverviewPanel({ items, loading, activeStatus, onSe
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Tipos de pendência</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Clientes irregulares — um cliente pode ter mais de um tipo
+            Clientes irregulares — clique para ver os clientes e a descrição
           </p>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row items-center gap-4">
@@ -184,16 +226,21 @@ export default function SitfisOverviewPanel({ items, loading, activeStatus, onSe
             </p>
           ) : (
             <>
-              <Donut data={pendencyData} />
+              <Donut data={pendencyData} onSliceClick={onSelectPendency} />
               <div className="grid gap-2 w-full">
                 {pendencyData.map(p => (
-                  <div key={p.key} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2">
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => onSelectPendency?.(p.key)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-border p-2 text-left transition-colors hover:bg-muted/60"
+                  >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: p.color }} />
                       <span className="text-xs text-muted-foreground truncate">{p.name}</span>
                     </div>
                     <span className="text-sm font-semibold text-foreground">{p.value}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </>
