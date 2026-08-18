@@ -941,7 +941,8 @@ Deno.serve(async (req) => {
           .upsert({
             cache_key: cacheKey,
             cache_value: JSON.stringify(sitfisContext),
-            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            // Protocolo SITFIS caduca rápido no SERPRO — cache curto evita ER05
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
           }, { onConflict: 'cache_key' });
       }
 
