@@ -160,6 +160,8 @@ function CalendarMain() {
   const [holdReason, setHoldReason] = useState('');
   const [holdSaving, setHoldSaving] = useState(false);
   const [monthHoldPage, setMonthHoldPage] = useState(1);
+  const [dayOverduePage, setDayOverduePage] = useState(1);
+  const [monthOverduePage, setMonthOverduePage] = useState(1);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
 
   const toggleSelection = (id: string) => {
