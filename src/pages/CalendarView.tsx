@@ -1028,8 +1028,10 @@ function CalendarMain() {
               doneOnTime++;
             }
           } else {
-            if (dueDate && todayStr >= dueDate) {
+            if (dueDate && todayStr > dueDate) {
               overdue++;
+            } else if (dueDate && todayStr === dueDate) {
+              dueToday++;
             } else if (targetDate && todayStr >= targetDate) {
               afterTarget++;
             } else if (alertDate && todayStr >= alertDate) {
