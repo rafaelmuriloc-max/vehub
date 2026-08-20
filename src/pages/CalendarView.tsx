@@ -998,7 +998,7 @@ function CalendarMain() {
           return previousBusinessDay(raw, hols);
         };
 
-        let todo = 0, afterAlert = 0, afterTarget = 0, overdue = 0, doneOnTime = 0, doneLate = 0;
+        let todo = 0, afterAlert = 0, afterTarget = 0, overdue = 0, doneOnTime = 0, doneLate = 0, dueToday = 0;
 
         // Filter instances for current month view
         const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
