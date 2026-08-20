@@ -1256,10 +1256,12 @@ function CalendarMain() {
               <Tabs defaultValue="pending">
                 <TabsList className={`mb-4 ${tabListClass}`}>
                   <ObligationTab value="pending" label="A Fazer" count={dayEventsPending.length} />
+                  <ObligationTab value="overdue" label="Atrasadas" count={dayEventsOverdue.length} />
                   <ObligationTab value="completed" label="Concluído" count={dayEventsCompleted.length} />
                 </TabsList>
                 {[
                   { key: 'pending', items: paginatedDayPending, allItems: dayEventsPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
+                  { key: 'overdue', items: paginatedDayOverdue, allItems: dayEventsOverdue, page: dayOverduePage, totalPages: dayOverdueTotalPages, total: dayEventsOverdue.length, setPage: setDayOverduePage },
                   { key: 'completed', items: paginatedDayCompleted, allItems: dayEventsCompleted, page: dayCompletedPage, totalPages: dayCompletedTotalPages, total: dayEventsCompleted.length, setPage: setDayCompletedPage },
                 ].map(tab => {
                   const allIds = tab.allItems.map(e => e.instanceId);
@@ -1268,8 +1270,9 @@ function CalendarMain() {
                   <TabsContent key={tab.key} value={tab.key}>
                     {tab.items.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-6 text-center">
-                        <p className="text-muted-foreground text-sm">{tab.key === 'pending' ? 'Nenhuma obrigação pendente' : 'Nenhuma obrigação concluída'}</p>
+                        <p className="text-muted-foreground text-sm">{tab.key === 'pending' ? 'Nenhuma obrigação pendente' : tab.key === 'overdue' ? 'Nenhuma obrigação atrasada' : 'Nenhuma obrigação concluída'}</p>
                       </div>
+
                     ) : (
                       <>
                         <div className="flex items-center justify-between mb-2">
