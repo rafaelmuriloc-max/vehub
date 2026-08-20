@@ -1043,15 +1043,15 @@ function CalendarMain() {
         }
 
         const doneTotal = doneOnTime + doneLate;
-        const toDoTotal = todo + afterAlert + afterTarget;
+        const toDoTotal = todo + afterAlert + afterTarget + dueToday;
         const grandTotal = toDoTotal + overdue + doneTotal;
         const pct = (v: number) => grandTotal > 0 ? Math.round((v / grandTotal) * 100) : 0;
         const cards = [
-          { label: 'A Fazer', value: toDoTotal, icon: ListChecks, sub: toDoTotal === 0 ? 'Nenhuma pendência' : 'Aguardando conclusão', pct: pct(toDoTotal),
+          { label: 'A Fazer', value: toDoTotal, icon: ListChecks, sub: toDoTotal === 0 ? 'Nenhuma pendência' : (dueToday > 0 ? `${dueToday} vencem hoje` : 'Aguardando conclusão'), pct: pct(toDoTotal),
             bg: 'bg-blue-50/60 dark:bg-blue-950/20', border: 'border-blue-100 dark:border-blue-900/40',
             iconBg: 'bg-blue-600', labelText: 'text-blue-700 dark:text-blue-300', valueText: 'text-blue-900 dark:text-blue-100',
             subText: 'text-blue-600/70 dark:text-blue-300/60', track: 'bg-blue-200/50 dark:bg-blue-900/40', bar: 'bg-blue-600' },
-          { label: 'Atrasadas', value: overdue, icon: AlertTriangle, sub: overdue === 0 ? 'Tudo em dia' : 'Crítico', pct: pct(overdue),
+          { label: 'Atrasadas', value: overdue, icon: AlertTriangle, sub: overdue === 0 ? (dueToday > 0 ? `${dueToday} vencem hoje` : 'Tudo em dia') : (dueToday > 0 ? `Crítico • ${dueToday} vencem hoje` : 'Crítico'), pct: pct(overdue),
             bg: 'bg-red-50/60 dark:bg-red-950/20', border: 'border-red-100 dark:border-red-900/40',
             iconBg: 'bg-red-600', labelText: 'text-red-700 dark:text-red-300', valueText: 'text-red-900 dark:text-red-100',
             subText: 'text-red-600/70 dark:text-red-300/60', track: 'bg-red-200/50 dark:bg-red-900/40', bar: 'bg-red-600' },
