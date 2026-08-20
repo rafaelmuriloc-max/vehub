@@ -1566,6 +1566,7 @@ function CalendarMain() {
             <Tabs defaultValue="pending">
               <TabsList className={`mb-4 ${tabListClass}`}>
                 <ObligationTab value="pending" label="A fazer" count={monthEventsPending.length} />
+                <ObligationTab value="overdue" label="Atrasadas" count={monthEventsOverdue.length} />
                 <ObligationTab value="completed" label="Concluídas" count={monthEventsCompleted.length} />
                 <ObligationTab value="late" label="Fora do prazo" count={monthEventsLate.length} />
                 <ObligationTab value="hold" label="Aguardando" count={monthEventsHold.length} />
