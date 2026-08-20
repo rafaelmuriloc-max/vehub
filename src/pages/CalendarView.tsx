@@ -886,6 +886,16 @@ function CalendarMain() {
   const paginatedMonthDeleted = deletedMonthEvents.slice((monthDeletedPage - 1) * ITEMS_PER_PAGE, monthDeletedPage * ITEMS_PER_PAGE);
   const monthSuspendedTotalPages = Math.ceil(monthEventsSuspended.length / ITEMS_PER_PAGE);
   const paginatedMonthSuspended = monthEventsSuspended.slice((monthSuspendedPage - 1) * ITEMS_PER_PAGE, monthSuspendedPage * ITEMS_PER_PAGE);
+  const dayEventsOverdue = dayEventsPending
+    .filter(ev => isOverdueEvent(ev.instanceId, ev.obligationId))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const dayOverdueTotalPages = Math.ceil(dayEventsOverdue.length / DAY_ITEMS_PER_PAGE);
+  const paginatedDayOverdue = dayEventsOverdue.slice((dayOverduePage - 1) * DAY_ITEMS_PER_PAGE, dayOverduePage * DAY_ITEMS_PER_PAGE);
+  const monthEventsOverdue = monthEventsPending
+    .filter(ev => isOverdueEvent(ev.instanceId, ev.obligationId))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const monthOverdueTotalPages = Math.ceil(monthEventsOverdue.length / ITEMS_PER_PAGE);
+  const paginatedMonthOverdue = monthEventsOverdue.slice((monthOverduePage - 1) * ITEMS_PER_PAGE, monthOverduePage * ITEMS_PER_PAGE);
 
   // Dialog progress
   const dialogProgress = detailInstance
