@@ -1294,6 +1294,8 @@ function CalendarMain() {
                           {tab.items.map((ev, idx) => {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
                             const isLateDelivery = completed && isInstanceLateDelivery(ev.instanceId, ev.obligationId);
+                            const isOverdue = !completed && isOverdueEvent(ev.instanceId, ev.obligationId);
+                            const overdueDays = isOverdue ? getOverdueDays(ev.instanceId) : null;
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                             const isSelected = selectedInstanceIds.has(ev.instanceId);
                             const quick = completed && isQuickCompleted(ev.instanceId, ev.obligationId);
@@ -1311,7 +1313,9 @@ function CalendarMain() {
                                       ? (quick
                                           ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
                                           : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
-                                      : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                      : isOverdue
+                                        ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                                        : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
