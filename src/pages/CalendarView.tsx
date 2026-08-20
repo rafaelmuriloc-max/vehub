@@ -160,6 +160,8 @@ function CalendarMain() {
   const [holdReason, setHoldReason] = useState('');
   const [holdSaving, setHoldSaving] = useState(false);
   const [monthHoldPage, setMonthHoldPage] = useState(1);
+  const [dayOverduePage, setDayOverduePage] = useState(1);
+  const [monthOverduePage, setMonthOverduePage] = useState(1);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
 
   const toggleSelection = (id: string) => {
@@ -546,6 +548,22 @@ function CalendarMain() {
     return diff > 0 ? diff : null;
   }
 
+  function isOverdueEvent(instanceId: string, obligationId: string): boolean {
+    if (isInstanceCompleted(instanceId, obligationId)) return false;
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!dueDate) return false;
+    return format(new Date(), 'yyyy-MM-dd') > dueDate;
+  }
+
+  function getOverdueDays(instanceId: string): number | null {
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!dueDate) return null;
+    const today = parseISO(format(new Date(), 'yyyy-MM-dd'));
+    const diff = Math.floor((today.getTime() - parseISO(dueDate).getTime()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : null;
+  }
+
+
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
     if (!detailInstanceId) return;
     const existing = getCompletion(activityId);
@@ -870,6 +888,16 @@ function CalendarMain() {
   const paginatedMonthDeleted = deletedMonthEvents.slice((monthDeletedPage - 1) * ITEMS_PER_PAGE, monthDeletedPage * ITEMS_PER_PAGE);
   const monthSuspendedTotalPages = Math.ceil(monthEventsSuspended.length / ITEMS_PER_PAGE);
   const paginatedMonthSuspended = monthEventsSuspended.slice((monthSuspendedPage - 1) * ITEMS_PER_PAGE, monthSuspendedPage * ITEMS_PER_PAGE);
+  const dayEventsOverdue = dayEventsPending
+    .filter(ev => isOverdueEvent(ev.instanceId, ev.obligationId))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const dayOverdueTotalPages = Math.ceil(dayEventsOverdue.length / DAY_ITEMS_PER_PAGE);
+  const paginatedDayOverdue = dayEventsOverdue.slice((dayOverduePage - 1) * DAY_ITEMS_PER_PAGE, dayOverduePage * DAY_ITEMS_PER_PAGE);
+  const monthEventsOverdue = monthEventsPending
+    .filter(ev => isOverdueEvent(ev.instanceId, ev.obligationId))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const monthOverdueTotalPages = Math.ceil(monthEventsOverdue.length / ITEMS_PER_PAGE);
+  const paginatedMonthOverdue = monthEventsOverdue.slice((monthOverduePage - 1) * ITEMS_PER_PAGE, monthOverduePage * ITEMS_PER_PAGE);
 
   // Dialog progress
   const dialogProgress = detailInstance
@@ -1228,10 +1256,12 @@ function CalendarMain() {
               <Tabs defaultValue="pending">
                 <TabsList className={`mb-4 ${tabListClass}`}>
                   <ObligationTab value="pending" label="A Fazer" count={dayEventsPending.length} />
+                  <ObligationTab value="overdue" label="Atrasadas" count={dayEventsOverdue.length} />
                   <ObligationTab value="completed" label="Concluído" count={dayEventsCompleted.length} />
                 </TabsList>
                 {[
                   { key: 'pending', items: paginatedDayPending, allItems: dayEventsPending, page: dayPendingPage, totalPages: dayPendingTotalPages, total: dayEventsPending.length, setPage: setDayPendingPage },
+                  { key: 'overdue', items: paginatedDayOverdue, allItems: dayEventsOverdue, page: dayOverduePage, totalPages: dayOverdueTotalPages, total: dayEventsOverdue.length, setPage: setDayOverduePage },
                   { key: 'completed', items: paginatedDayCompleted, allItems: dayEventsCompleted, page: dayCompletedPage, totalPages: dayCompletedTotalPages, total: dayEventsCompleted.length, setPage: setDayCompletedPage },
                 ].map(tab => {
                   const allIds = tab.allItems.map(e => e.instanceId);
@@ -1240,8 +1270,9 @@ function CalendarMain() {
                   <TabsContent key={tab.key} value={tab.key}>
                     {tab.items.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-6 text-center">
-                        <p className="text-muted-foreground text-sm">{tab.key === 'pending' ? 'Nenhuma obrigação pendente' : 'Nenhuma obrigação concluída'}</p>
+                        <p className="text-muted-foreground text-sm">{tab.key === 'pending' ? 'Nenhuma obrigação pendente' : tab.key === 'overdue' ? 'Nenhuma obrigação atrasada' : 'Nenhuma obrigação concluída'}</p>
                       </div>
+
                     ) : (
                       <>
                         <div className="flex items-center justify-between mb-2">
@@ -1263,6 +1294,8 @@ function CalendarMain() {
                           {tab.items.map((ev, idx) => {
                             const completed = isInstanceCompleted(ev.instanceId, ev.obligationId);
                             const isLateDelivery = completed && isInstanceLateDelivery(ev.instanceId, ev.obligationId);
+                            const isOverdue = !completed && isOverdueEvent(ev.instanceId, ev.obligationId);
+                            const overdueDays = isOverdue ? getOverdueDays(ev.instanceId) : null;
                             const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
                             const isSelected = selectedInstanceIds.has(ev.instanceId);
                             const quick = completed && isQuickCompleted(ev.instanceId, ev.obligationId);
@@ -1280,7 +1313,9 @@ function CalendarMain() {
                                       ? (quick
                                           ? 'bg-sky-50 border-sky-200 dark:bg-sky-900/20 dark:border-sky-800'
                                           : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800')
-                                      : 'border-border hover:border-primary/30 hover:bg-muted/30'
+                                      : isOverdue
+                                        ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                                        : 'border-border hover:border-primary/30 hover:bg-muted/30'
                                   }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
@@ -1305,6 +1340,11 @@ function CalendarMain() {
                                     {isLateDelivery && (
                                       <Badge className="bg-orange-500 text-white border-0 text-[10px]">
                                         Fora do prazo
+                                      </Badge>
+                                    )}
+                                    {isOverdue && (
+                                      <Badge className="bg-red-600 text-white border-0 text-[10px]">
+                                        {overdueDays ? `Atrasada • ${overdueDays}d` : 'Atrasada'}
                                       </Badge>
                                     )}
                                     {!completed && (
@@ -1526,6 +1566,7 @@ function CalendarMain() {
             <Tabs defaultValue="pending">
               <TabsList className={`mb-4 ${tabListClass}`}>
                 <ObligationTab value="pending" label="A fazer" count={monthEventsPending.length} />
+                <ObligationTab value="overdue" label="Atrasadas" count={monthEventsOverdue.length} />
                 <ObligationTab value="completed" label="Concluídas" count={monthEventsCompleted.length} />
                 <ObligationTab value="late" label="Fora do prazo" count={monthEventsLate.length} />
                 <ObligationTab value="hold" label="Aguardando" count={monthEventsHold.length} />
@@ -1626,6 +1667,104 @@ function CalendarMain() {
                       })}
                     </div>
                     <PaginationBlock page={monthPendingPage} totalPages={monthPendingTotalPages} total={monthEventsPending.length} onPageChange={setMonthPendingPage} />
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="overdue">
+                {monthEventsOverdue.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckSquare className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação atrasada</p>
+                  </div>
+                ) : (
+                  <>
+                    {(() => {
+                      const allIds = monthEventsOverdue.map(e => e.instanceId);
+                      const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                      return (
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
+                      );
+                    })()}
+                    <div className="space-y-2">
+                      {paginatedMonthOverdue.map((ev, idx) => {
+                        const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        const isSelected = selectedInstanceIds.has(ev.instanceId);
+                        const obl = oblMap.get(ev.obligationId);
+                        const isDasSn = obl?.system_code === 'das-simples-nacional';
+                        const overdueDays = getOverdueDays(ev.instanceId);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setDetailInstanceId(ev.instanceId)}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
+                              <div className="w-14 shrink-0 text-sm font-semibold text-red-600 dark:text-red-400">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-red-600 text-white border-0 text-[10px]">
+                                  {overdueDays ? `${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'} de atraso` : 'Atrasada'}
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                {isDasSn && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
+                                    <FileX className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className="text-[10px] font-medium text-muted-foreground">
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <PaginationBlock page={monthOverduePage} totalPages={monthOverdueTotalPages} total={monthEventsOverdue.length} onPageChange={setMonthOverduePage} />
                   </>
                 )}
               </TabsContent>
