@@ -1342,6 +1342,11 @@ function CalendarMain() {
                                         Fora do prazo
                                       </Badge>
                                     )}
+                                    {isOverdue && (
+                                      <Badge className="bg-red-600 text-white border-0 text-[10px]">
+                                        {overdueDays ? `Atrasada • ${overdueDays}d` : 'Atrasada'}
+                                      </Badge>
+                                    )}
                                     {!completed && (
                                       <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
                                         <Check className="h-3.5 w-3.5" />
