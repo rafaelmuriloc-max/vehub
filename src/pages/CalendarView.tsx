@@ -546,6 +546,22 @@ function CalendarMain() {
     return diff > 0 ? diff : null;
   }
 
+  function isOverdueEvent(instanceId: string, obligationId: string): boolean {
+    if (isInstanceCompleted(instanceId, obligationId)) return false;
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!dueDate) return false;
+    return format(new Date(), 'yyyy-MM-dd') > dueDate;
+  }
+
+  function getOverdueDays(instanceId: string): number | null {
+    const dueDate = getInstanceDueDate(instanceId);
+    if (!dueDate) return null;
+    const today = parseISO(format(new Date(), 'yyyy-MM-dd'));
+    const diff = Math.floor((today.getTime() - parseISO(dueDate).getTime()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : null;
+  }
+
+
   async function toggleCompletion(activityId: string, currentlyCompleted: boolean) {
     if (!detailInstanceId) return;
     const existing = getCompletion(activityId);
