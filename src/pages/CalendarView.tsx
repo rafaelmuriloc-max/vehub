@@ -1671,6 +1671,104 @@ function CalendarMain() {
                 )}
               </TabsContent>
 
+              <TabsContent value="overdue">
+                {monthEventsOverdue.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckSquare className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma obrigação atrasada</p>
+                  </div>
+                ) : (
+                  <>
+                    {(() => {
+                      const allIds = monthEventsOverdue.map(e => e.instanceId);
+                      const allSelected = allIds.length > 0 && allIds.every(id => selectedInstanceIds.has(id));
+                      return (
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={() => {
+                                if (allSelected) {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.delete(id)); return next; });
+                                } else {
+                                  setSelectedInstanceIds(prev => { const next = new Set(prev); allIds.forEach(id => next.add(id)); return next; });
+                                }
+                              }}
+                            />
+                            Selecionar todos
+                          </label>
+                        </div>
+                      );
+                    })()}
+                    <div className="space-y-2">
+                      {paginatedMonthOverdue.map((ev, idx) => {
+                        const progress = getInstanceProgress(ev.instanceId, ev.obligationId);
+                        const isSelected = selectedInstanceIds.has(ev.instanceId);
+                        const obl = oblMap.get(ev.obligationId);
+                        const isDasSn = obl?.system_code === 'das-simples-nacional';
+                        const overdueDays = getOverdueDays(ev.instanceId);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setDetailInstanceId(ev.instanceId)}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800 ${isSelected ? 'ring-2 ring-primary/50' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelection(ev.instanceId)}
+                                onClick={e => e.stopPropagation()}
+                                className="shrink-0"
+                              />
+                              <div className="w-14 shrink-0 text-sm font-semibold text-red-600 dark:text-red-400">
+                                {ev.date.split('-').reverse().slice(0, 2).join('/')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground truncate">{ev.obligationName} | {ev.competenceLabel}</p>
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-red-600 text-white border-0 text-[10px]">
+                                  {overdueDays ? `${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'} de atraso` : 'Atrasada'}
+                                </Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                {isDasSn && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Declarar Sem Movimento" onClick={e => { e.stopPropagation(); setSemMovInstanceId(ev.instanceId); }}>
+                                    <FileX className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Aguardar" onClick={e => { e.stopPropagation(); setHoldReason(''); setHoldTarget([ev.instanceId]); }}>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <Badge variant="outline" className="text-[10px]">{ev.deptName}</Badge>
+                              {progress.total > 0 && (
+                                <span className="text-[10px] font-medium text-muted-foreground">
+                                  {progress.completed}/{progress.total} atividades
+                                </span>
+                              )}
+                            </div>
+                            {progress.total > 0 && (
+                              <Progress value={progress.percent} className="h-1 mt-2" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <PaginationBlock page={monthOverduePage} totalPages={monthOverdueTotalPages} total={monthEventsOverdue.length} onPageChange={setMonthOverduePage} />
+                  </>
+                )}
+              </TabsContent>
+
               <TabsContent value="completed">
                 {monthEventsCompleted.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 text-center">
