@@ -846,8 +846,8 @@ Deno.serve(async (req) => {
           headers: apiHeaders,
           body: JSON.stringify(requestBody),
         },
-        certPem,
-        keyPem,
+        apiCertPem,
+        apiKeyPem,
         "serpro-api"
       );
     }
