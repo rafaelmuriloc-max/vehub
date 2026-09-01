@@ -117,10 +117,57 @@ export default function SituacaoFiscalTab() {
     } catch (err) {
       console.error(err);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Espelhos para o worker em segundo plano
+  const clientsRef = useRef<ClientWithSitfis[]>([]);
+  const busyRef = useRef(false);
+  useEffect(() => { clientsRef.current = clients; }, [clients]);
+  useEffect(() => {
+    busyRef.current = !!consultingId || batchRunning || zipping || reclassifying;
+  }, [consultingId, batchRunning, zipping, reclassifying]);
+
+  // Reprocessa automaticamente, em segundo plano, os clientes com status "error"
+  useEffect(() => {
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+    (async () => {
+      await sleep(15000);
+      let rodada = 0;
+      while (!cancelled) {
+        const alvos = clientsRef.current.filter(c => c.sitfis_status === 'error').map(c => c.id);
+        if (alvos.length === 0) {
+          await sleep(60000);
+          continue;
+        }
+        rodada++;
+        console.log(`[SITFIS] Reprocessamento automático — rodada ${rodada}, ${alvos.length} cliente(s) com erro`);
+        for (const id of alvos) {
+          if (cancelled) return;
+          while (!cancelled && busyRef.current) await sleep(5000);
+          if (cancelled) return;
+          try {
+            await consultarSitfis(id);
+          } catch (err) {
+            console.error('[SITFIS] Falha no reprocessamento automático:', err);
+          }
+          if (cancelled) return;
+          await loadData(true);
+          await sleep(3000);
+        }
+        await sleep(Math.min(30000 * 2 ** (rodada - 1), 300000));
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   // Reclassifica os relatórios já armazenados usando a análise por itens
   async function handleReclassificar() {
