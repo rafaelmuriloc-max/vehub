@@ -131,21 +131,28 @@ export default function SituacaoFiscalTab() {
   }, [consultingId, batchRunning, zipping, reclassifying]);
 
   // Reprocessa automaticamente, em segundo plano, os clientes com status "error"
+  // e, uma vez por sessão, os "sem_procuracao" (agora o backend tenta o certificado próprio)
   useEffect(() => {
     let cancelled = false;
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const semProcuracaoTentados = new Set<string>();
 
     (async () => {
       await sleep(15000);
       let rodada = 0;
       while (!cancelled) {
-        const alvos = clientsRef.current.filter(c => c.sitfis_status === 'error').map(c => c.id);
+        const comErro = clientsRef.current.filter(c => c.sitfis_status === 'error').map(c => c.id);
+        const semProcuracao = clientsRef.current
+          .filter(c => c.sitfis_status === 'sem_procuracao' && !semProcuracaoTentados.has(c.id))
+          .map(c => c.id);
+        semProcuracao.forEach(id => semProcuracaoTentados.add(id));
+        const alvos = [...comErro, ...semProcuracao];
         if (alvos.length === 0) {
           await sleep(60000);
           continue;
         }
         rodada++;
-        console.log(`[SITFIS] Reprocessamento automático — rodada ${rodada}, ${alvos.length} cliente(s) com erro`);
+        console.log(`[SITFIS] Reprocessamento automático — rodada ${rodada}, ${comErro.length} com erro + ${semProcuracao.length} sem procuração`);
         for (const id of alvos) {
           if (cancelled) return;
           while (!cancelled && busyRef.current) await sleep(5000);
