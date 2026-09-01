@@ -115,16 +115,31 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Cliente não possui certificado digital A1 configurado" }, 400);
     }
 
-    const { data: certData, error: certError } = await adminClient.storage
-      .from("certificates")
-      .download(client.digital_certificate_url);
+    // Download do certificado com retentativas (o storage pode responder 504 esporadicamente)
+    let certData: Blob | null = null;
+    let certError: { message?: string } | null = null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const res = await adminClient.storage
+        .from("certificates")
+        .download(client.digital_certificate_url);
+      certData = res.data as Blob | null;
+      certError = res.error as { message?: string } | null;
+      if (certData && !certError) break;
+      console.warn(
+        `[nfse-query] Falha ao baixar certificado (tentativa ${attempt}/4): ${certError?.message ?? "sem dados"}`,
+      );
+      if (attempt < 4) await new Promise((r) => setTimeout(r, attempt * 1500));
+    }
 
     if (certError || !certData) {
       return jsonResponse(
-        { error: `Erro ao baixar certificado digital: ${certError?.message || "arquivo não encontrado"}` },
-        500,
+        {
+          error: `Erro ao baixar certificado digital: ${certError?.message || "arquivo não encontrado"}. Tente novamente em instantes.`,
+        },
+        503,
       );
     }
+
 
     const cnpj = client.document.replace(/\D/g, "");
     const certBytes = new Uint8Array(await certData.arrayBuffer());
