@@ -871,6 +871,9 @@ export default function SituacaoFiscalTab() {
                         ) : (
                           statusBadge(c.sitfis_status)
                         )}
+                        {certMode.has(c.id) && (
+                          <span className="ml-1 text-[10px] text-muted-foreground align-middle">via certificado</span>
+                        )}
                         {c.error_message && (c.sitfis_status === 'error' || c.sitfis_status === 'sem_procuracao') && (
                           <p className="text-xs text-destructive mt-1 line-clamp-1" title={c.error_message}>
                             {c.error_message}
