@@ -80,8 +80,8 @@ export default function SituacaoFiscalTab() {
   const textCache = useRef<Map<string, string>>(new Map());
   const pagesCache = useRef<Map<string, number>>(new Map());
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const { data: clientsData } = await supabase
         .from('clients')
@@ -117,10 +117,57 @@ export default function SituacaoFiscalTab() {
     } catch (err) {
       console.error(err);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Espelhos para o worker em segundo plano
+  const clientsRef = useRef<ClientWithSitfis[]>([]);
+  const busyRef = useRef(false);
+  useEffect(() => { clientsRef.current = clients; }, [clients]);
+  useEffect(() => {
+    busyRef.current = !!consultingId || batchRunning || zipping || reclassifying;
+  }, [consultingId, batchRunning, zipping, reclassifying]);
+
+  // Reprocessa automaticamente, em segundo plano, os clientes com status "error"
+  useEffect(() => {
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+    (async () => {
+      await sleep(15000);
+      let rodada = 0;
+      while (!cancelled) {
+        const alvos = clientsRef.current.filter(c => c.sitfis_status === 'error').map(c => c.id);
+        if (alvos.length === 0) {
+          await sleep(60000);
+          continue;
+        }
+        rodada++;
+        console.log(`[SITFIS] Reprocessamento automático — rodada ${rodada}, ${alvos.length} cliente(s) com erro`);
+        for (const id of alvos) {
+          if (cancelled) return;
+          while (!cancelled && busyRef.current) await sleep(5000);
+          if (cancelled) return;
+          try {
+            await consultarSitfis(id);
+          } catch (err) {
+            console.error('[SITFIS] Falha no reprocessamento automático:', err);
+          }
+          if (cancelled) return;
+          await loadData(true);
+          await sleep(3000);
+        }
+        await sleep(Math.min(30000 * 2 ** (rodada - 1), 300000));
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   // Reclassifica os relatórios já armazenados usando a análise por itens
   async function handleReclassificar() {
@@ -174,8 +221,14 @@ export default function SituacaoFiscalTab() {
       /er05|inicie uma nova solicita/i.test(msg || '');
     const isProcuracaoError = (msg: string) =>
       /procurador|procura[çc][ãa]o/i.test(msg || '');
+    // Falhas passageiras: rede, timeout, gateway, protocolo caduco, relatório não pronto
+    const isTransientError = (msg: string) =>
+      /failed to send|failed to fetch|network|timeout|tempo limite|gateway|runtime error|502|503|504|erro 500|n[ãa]o ficou pronto|consulta incompleta|protocolo n[ãa]o encontrado/i.test(msg || '')
+      || isProtocolExpired(msg);
 
-    const maxCiclos = 2;
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const esperas = [2000, 5000, 10000, 20000, 30000];
+    const maxCiclos = 5;
     let ultimoErro: Error | null = null;
 
     for (let ciclo = 0; ciclo < maxCiclos; ciclo++) {
@@ -185,15 +238,17 @@ export default function SituacaoFiscalTab() {
       } catch (err: any) {
         const msg = err?.message || 'Erro desconhecido';
         ultimoErro = err;
-        // Protocolo caducou: limpar cache e refazer a etapa /Apoiar
-        if (isProtocolExpired(msg) && ciclo < maxCiclos - 1) {
+
+        if (isProcuracaoError(msg)) break;
+        if (!isTransientError(msg) || ciclo === maxCiclos - 1) break;
+
+        if (isProtocolExpired(msg)) {
           console.warn('[SITFIS] Protocolo expirado (ER05) — reiniciando fluxo em /Apoiar');
           await supabase.functions.invoke('integra-contador', {
             body: { client_id: clientId, sitfis_invalidate_cache: true },
           }).catch(() => {});
-          continue;
         }
-        break;
+        await sleep(esperas[Math.min(ciclo, esperas.length - 1)]);
       }
     }
 
@@ -202,21 +257,31 @@ export default function SituacaoFiscalTab() {
     const errorMessage = status === 'sem_procuracao'
       ? 'Procuração eletrônica ausente ou vencida no e-CAC'
       : isProtocolExpired(msg)
-        ? 'Protocolo expirado no SERPRO. Reconsulte este cliente.'
+        ? 'Protocolo expirado no SERPRO. Nova tentativa automática em andamento.'
         : msg;
 
     console.error(`[SITFIS] Erro para ${clientId}:`, ultimoErro);
+
+    // Preserva relatório válido já existente — não apaga PDF/pendências por falha transitória
+    const { data: existente } = await supabase
+      .from('sitfis_results' as any)
+      .select('pdf_base64, pendency_types')
+      .eq('client_id', clientId)
+      .maybeSingle();
+    const temPdf = !!(existente as any)?.pdf_base64;
+
     await supabase.from('sitfis_results' as any).upsert({
       client_id: clientId,
       status,
       consulted_at: new Date().toISOString(),
-      pdf_base64: null,
+      pdf_base64: temPdf ? (existente as any).pdf_base64 : null,
       raw_response: null,
       error_message: errorMessage,
-      pendency_types: [],
+      pendency_types: temPdf ? ((existente as any).pendency_types || []) : [],
     } as any, { onConflict: 'client_id' } as any);
     return false;
   }
+
 
   async function executarCicloSitfis(clientId: string): Promise<boolean> {
     try {
@@ -385,7 +450,8 @@ export default function SituacaoFiscalTab() {
       setBatchProgress({ current: i + 1, total: ids.length });
       const ok = await consultarSitfis(ids[i]);
       if (ok) successCount++;
-      await loadData();
+      await loadData(true);
+      if (i < ids.length - 1) await new Promise(r => setTimeout(r, 1000));
     }
 
     setBatchRunning(false);
