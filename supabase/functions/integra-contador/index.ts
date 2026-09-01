@@ -861,7 +861,7 @@ Deno.serve(async (req) => {
     // Retry on 401 (token expired)
     if (apiResponse.status === 401) {
       console.log(`[integra-contador] API retornou 401, re-autenticando...`);
-      const newAuth = await authenticateSerpro();
+      const newAuth = await authenticateSerpro(apiCertPem, apiKeyPem);
       bearerToken = newAuth.bearerToken;
       jwtToken = newAuth.jwtToken;
       apiResponse = await callSerproApi(bearerToken, jwtToken);
