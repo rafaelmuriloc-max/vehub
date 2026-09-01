@@ -1003,6 +1003,7 @@ Deno.serve(async (req) => {
       data: responseData,
       client_name: client.company_name,
       service: { idSistema, idServico, tipo },
+      auth_mode: authMode,
     });
   } catch (error) {
     console.error("Erro na integração SERPRO:", error);
