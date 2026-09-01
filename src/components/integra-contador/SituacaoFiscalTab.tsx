@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
 import JSZip from 'jszip';
-import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS } from './SitfisOverviewPanel';
+import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS, resolveStatusKey } from './SitfisOverviewPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as pdfjsLib from 'pdfjs-dist';
 import { formatClientLabel } from '@/lib/utils';
@@ -498,8 +498,7 @@ export default function SituacaoFiscalTab() {
       (c.sci_code || '').toLowerCase().includes(search.toLowerCase()) ||
       (c.document || '').includes(search);
     const matchStatus = filterStatus === 'all' ||
-      (filterStatus === 'pending' && !c.sitfis_status) ||
-      c.sitfis_status === filterStatus;
+      resolveStatusKey(c.sitfis_status) === filterStatus;
     return matchSearch && matchStatus;
   });
 
