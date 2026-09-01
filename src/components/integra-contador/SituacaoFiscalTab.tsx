@@ -80,8 +80,8 @@ export default function SituacaoFiscalTab() {
   const textCache = useRef<Map<string, string>>(new Map());
   const pagesCache = useRef<Map<string, number>>(new Map());
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const { data: clientsData } = await supabase
         .from('clients')
