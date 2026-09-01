@@ -655,6 +655,12 @@ Deno.serve(async (req) => {
     // When autorPedidoDados (client) differs from contratante (office), we need the procurador token
     let procuradorToken: string | null = null;
 
+    // Modo de autenticação usado na chamada final (procuração ou certificado da própria empresa)
+    let authMode: "procuracao" | "certificado_proprio" = "procuracao";
+    // Certificado usado no transporte mTLS da chamada final (padrão: e-CNPJ do escritório)
+    let apiCertPem = certPem;
+    let apiKeyPem = keyPem;
+
     // Hoist client certificate variables so they're accessible for 403 retry
     let clientCertPem: string | undefined;
     let clientKeyPem: string | undefined;
