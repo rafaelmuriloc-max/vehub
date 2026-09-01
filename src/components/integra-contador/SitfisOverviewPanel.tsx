@@ -97,6 +97,11 @@ const STATUS_META: { key: string; label: string; color: string }[] = [
   { key: 'pending', label: 'Pendente', color: 'hsl(215 16% 65%)' },
 ];
 
+export function resolveStatusKey(status: string | null | undefined): string {
+  if (status && STATUS_META.some(m => m.key === status)) return status;
+  return 'pending';
+}
+
 const PENDENCY_COLORS = [
   'hsl(0 72% 51%)',
   'hsl(25 95% 53%)',
