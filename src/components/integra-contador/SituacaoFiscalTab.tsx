@@ -77,6 +77,7 @@ export default function SituacaoFiscalTab() {
   const [reclassProgress, setReclassProgress] = useState({ current: 0, total: 0 });
   const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
   const [excerptsLoading, setExcerptsLoading] = useState(false);
+  const [certMode, setCertMode] = useState<Set<string>>(new Set());
   const textCache = useRef<Map<string, string>>(new Map());
   const pagesCache = useRef<Map<string, number>>(new Map());
 
@@ -131,21 +132,28 @@ export default function SituacaoFiscalTab() {
   }, [consultingId, batchRunning, zipping, reclassifying]);
 
   // Reprocessa automaticamente, em segundo plano, os clientes com status "error"
+  // e, uma vez por sessão, os "sem_procuracao" (agora o backend tenta o certificado próprio)
   useEffect(() => {
     let cancelled = false;
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const semProcuracaoTentados = new Set<string>();
 
     (async () => {
       await sleep(15000);
       let rodada = 0;
       while (!cancelled) {
-        const alvos = clientsRef.current.filter(c => c.sitfis_status === 'error').map(c => c.id);
+        const comErro = clientsRef.current.filter(c => c.sitfis_status === 'error').map(c => c.id);
+        const semProcuracao = clientsRef.current
+          .filter(c => c.sitfis_status === 'sem_procuracao' && !semProcuracaoTentados.has(c.id))
+          .map(c => c.id);
+        semProcuracao.forEach(id => semProcuracaoTentados.add(id));
+        const alvos = [...comErro, ...semProcuracao];
         if (alvos.length === 0) {
           await sleep(60000);
           continue;
         }
         rodada++;
-        console.log(`[SITFIS] Reprocessamento automático — rodada ${rodada}, ${alvos.length} cliente(s) com erro`);
+        console.log(`[SITFIS] Reprocessamento automático — rodada ${rodada}, ${comErro.length} com erro + ${semProcuracao.length} sem procuração`);
         for (const id of alvos) {
           if (cancelled) return;
           while (!cancelled && busyRef.current) await sleep(5000);
@@ -359,6 +367,10 @@ export default function SituacaoFiscalTab() {
           },
         });
         if (step2.error) throw step2.error;
+
+        if (step2.data?.auth_mode === 'certificado_proprio') {
+          setCertMode(prev => (prev.has(clientId) ? prev : new Set(prev).add(clientId)));
+        }
 
         responseData = step2.data?.data;
 
@@ -858,6 +870,9 @@ export default function SituacaoFiscalTab() {
                           </Badge>
                         ) : (
                           statusBadge(c.sitfis_status)
+                        )}
+                        {certMode.has(c.id) && (
+                          <span className="ml-1 text-[10px] text-muted-foreground align-middle">via certificado</span>
                         )}
                         {c.error_message && (c.sitfis_status === 'error' || c.sitfis_status === 'sem_procuracao') && (
                           <p className="text-xs text-destructive mt-1 line-clamp-1" title={c.error_message}>
