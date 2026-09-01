@@ -816,6 +816,15 @@ Deno.serve(async (req) => {
         },
       };
     }
+
+    // Fallback por certificado próprio: a empresa é contratante e autora do próprio pedido
+    if (authMode === "certificado_proprio") {
+      requestBody.contratante = { numero: clientCnpjClean, tipo: clientCnpjClean.length <= 11 ? 1 : 2 };
+      requestBody.autorPedidoDados = { numero: clientCnpjClean, tipo: clientCnpjClean.length <= 11 ? 1 : 2 };
+      console.log(`[fallback-cert] Request body ajustado: contratante/autor = ${clientCnpjClean}`);
+    }
+
+
     
     console.log(`[integra-contador] Request body: ${JSON.stringify(requestBody).substring(0, 500)}`);
 
