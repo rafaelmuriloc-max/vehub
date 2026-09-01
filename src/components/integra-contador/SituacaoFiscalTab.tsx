@@ -450,7 +450,8 @@ export default function SituacaoFiscalTab() {
       setBatchProgress({ current: i + 1, total: ids.length });
       const ok = await consultarSitfis(ids[i]);
       if (ok) successCount++;
-      await loadData();
+      await loadData(true);
+      if (i < ids.length - 1) await new Promise(r => setTimeout(r, 1000));
     }
 
     setBatchRunning(false);
