@@ -367,6 +367,10 @@ export default function SituacaoFiscalTab() {
         });
         if (step2.error) throw step2.error;
 
+        if (step2.data?.auth_mode === 'certificado_proprio') {
+          setCertMode(prev => (prev.has(clientId) ? prev : new Set(prev).add(clientId)));
+        }
+
         responseData = step2.data?.data;
 
         // Mensagens de erro do SERPRO (ex.: ER05 protocolo expirado)
