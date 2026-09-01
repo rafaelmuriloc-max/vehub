@@ -740,37 +740,49 @@ Deno.serve(async (req) => {
       }
 
       // Check if result is an error object or a valid token string
-      if (typeof procuradorResult === "object" && procuradorResult !== null && (procuradorResult as any).error) {
-        const errInfo = procuradorResult as any;
-        console.error(`[integra-contador] Falha obrigatória na etapa de procurador. Abortando.`);
+      const procuradorErro = (typeof procuradorResult === "object" && procuradorResult !== null && (procuradorResult as any).error)
+        ? procuradorResult as any
+        : (typeof procuradorResult === "string" && procuradorResult.length > 0 ? null : { error: true, reason: "token_ausente" });
 
+      if (procuradorErro) {
         let serproDetails: unknown;
-        try { serproDetails = JSON.parse(errInfo.body); } catch { serproDetails = errInfo.body; }
+        try { serproDetails = JSON.parse(procuradorErro.body); } catch { serproDetails = procuradorErro.body; }
 
-        return jsonResponse({
-          success: false,
-          stage: "autentica_procurador",
-          error: "Não foi possível obter autorização de procurador junto ao SERPRO. A consulta não pode prosseguir.",
-          reason: errInfo.reason || "serpro_rejected",
-          serpro_status: errInfo.status,
-          serpro_response: serproDetails,
-          client_name: client.company_name,
-          service: { idSistema, idServico, tipo },
-        });
-      }
+        // ===== Fallback: consulta com o certificado digital da própria empresa =====
+        console.warn(`[fallback-cert] Procuração indisponível (status ${procuradorErro.status ?? '-'}, reason ${procuradorErro.reason ?? '-'}). Tentando rota do certificado próprio do cliente...`);
 
-      if (typeof procuradorResult === "string" && procuradorResult.length > 0) {
-        procuradorToken = procuradorResult;
-        console.log(`[integra-contador] Token de procurador obtido com sucesso (${procuradorToken.length} chars)`);
+        let fallbackOk = false;
+        try {
+          const fallbackAuth = await authenticateSerpro(clientCertPem, clientKeyPem);
+          bearerToken = fallbackAuth.bearerToken;
+          jwtToken = fallbackAuth.jwtToken;
+          apiCertPem = clientCertPem!;
+          apiKeyPem = clientKeyPem!;
+          procuradorToken = null;
+          authMode = "certificado_proprio";
+          fallbackOk = true;
+          console.log(`[fallback-cert] ✅ Autenticado no SERPRO com o certificado do próprio contribuinte (${clientCnpjClean}). Prosseguindo sem token de procurador.`);
+        } catch (fbErr) {
+          console.error(`[fallback-cert] Falha ao autenticar com o certificado do cliente: ${(fbErr as Error).message}`);
+        }
+
+        if (!fallbackOk) {
+          console.error(`[integra-contador] Falha na etapa de procurador e no fallback por certificado. Abortando.`);
+          return jsonResponse({
+            success: false,
+            stage: "autentica_procurador",
+            error: "Não foi possível obter autorização de procurador junto ao SERPRO e a consulta pelo certificado digital da empresa também falhou.",
+            reason: procuradorErro.reason || "serpro_rejected",
+            fallback_tentado: true,
+            serpro_status: procuradorErro.status,
+            serpro_response: serproDetails,
+            client_name: client.company_name,
+            service: { idSistema, idServico, tipo },
+          });
+        }
       } else {
-        console.error(`[integra-contador] Resultado inesperado do obtainProcuradorToken: ${JSON.stringify(procuradorResult)}`);
-        return jsonResponse({
-          success: false,
-          stage: "autentica_procurador",
-          error: "Token de procurador não retornado pelo SERPRO. A consulta não pode prosseguir sem autorização.",
-          client_name: client.company_name,
-          service: { idSistema, idServico, tipo },
-        });
+        procuradorToken = procuradorResult as string;
+        console.log(`[integra-contador] Token de procurador obtido com sucesso (${procuradorToken.length} chars)`);
       }
     }
 
