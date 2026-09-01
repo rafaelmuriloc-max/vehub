@@ -603,7 +603,10 @@ Deno.serve(async (req) => {
     }
 
     // Reusable auth function with retry support
-    async function authenticateSerpro(): Promise<{ bearerToken: string; jwtToken: string | undefined }> {
+    async function authenticateSerpro(
+      authCertPem: string = certPem,
+      authKeyPem: string = keyPem,
+    ): Promise<{ bearerToken: string; jwtToken: string | undefined }> {
       console.log("Autenticando no SERPRO via OAuth2 (mTLS + Role-Type: TERCEIROS)...");
       const authCredentials = btoa(`${consumerKey}:${consumerSecret}`);
 
