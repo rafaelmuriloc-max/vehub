@@ -169,10 +169,10 @@ function Donut({
 
 export default function SitfisOverviewPanel({ items, loading, activeStatus, onSelectStatus, onSelectPendency }: Props) {
   const statusData = useMemo(() => {
-    const counts: Record<string, number> = { regular: 0, irregular: 0, error: 0, pending: 0 };
+    const counts: Record<string, number> = {};
+    STATUS_META.forEach(m => { counts[m.key] = 0; });
     items.forEach(i => {
-      const key = i.sitfis_status && counts[i.sitfis_status] !== undefined ? i.sitfis_status : 'pending';
-      counts[key] += 1;
+      counts[resolveStatusKey(i.sitfis_status)] += 1;
     });
     return STATUS_META.map(m => ({ ...m, name: m.label, value: counts[m.key] }));
   }, [items]);
