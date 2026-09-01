@@ -621,8 +621,8 @@ Deno.serve(async (req) => {
           },
           body: "grant_type=client_credentials",
         },
-        certPem,
-        keyPem,
+        authCertPem,
+        authKeyPem,
         "office-auth"
       );
 
