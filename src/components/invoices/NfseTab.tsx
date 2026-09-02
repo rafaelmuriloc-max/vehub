@@ -275,37 +275,59 @@ export default function NfseTab() {
   const [exporting, setExporting] = useState(false);
   const [retentionDetail, setRetentionDetail] = useState<{ type: 'prestado' | 'tomado'; taxKey: keyof Retentions } | null>(null);
 
-  useEffect(() => {
-    loadClients();
-    loadInvoices();
-  }, []);
+  const queryClient = useQueryClient();
 
-  async function loadClients() {
-    const { data } = await supabase
-      .from('clients')
-      .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry')
-      .eq('status', 'active')
-      .order('company_name');
-    if (data) setClients(data);
-  }
+  const { data: clientsData } = useQuery({
+    queryKey: ['invoice-clients'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('clients')
+        .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry')
+        .eq('status', 'active')
+        .order('company_name');
+      return (data || []) as Client[];
+    },
+  });
+
+  useEffect(() => {
+    if (clientsData) setClients(clientsData);
+  }, [clientsData]);
+
+  const { data: invoicesData, isFetching } = useQuery({
+    queryKey: ['nfse-invoices', filterClient, filterDateFrom, filterDateTo],
+    queryFn: async () => {
+      const build = (from: number, to: number) => {
+        let q = supabase
+          .from('invoices')
+          .select('id, client_id, access_key, invoice_number, issue_date, service_description, gross_value, tax_value, net_value, status, xml_url, pdf_url, issuer_cnpj, taker_cnpj, created_at, raw_data')
+          .order('issue_date', { ascending: false })
+          .range(from, to);
+        if (filterClient !== 'all') q = q.eq('client_id', filterClient);
+        if (filterDateFrom) q = q.gte('issue_date', filterDateFrom);
+        if (filterDateTo) q = q.lte('issue_date', filterDateTo);
+        return q;
+      };
+
+      let countQuery = supabase.from('invoices').select('id', { count: 'exact', head: true });
+      if (filterClient !== 'all') countQuery = countQuery.eq('client_id', filterClient);
+      if (filterDateFrom) countQuery = countQuery.gte('issue_date', filterDateFrom);
+      if (filterDateTo) countQuery = countQuery.lte('issue_date', filterDateTo);
+      const { count } = await countQuery;
+
+      return fetchInChunks<Invoice>((from, to) => build(from, to) as never, count) as Promise<Invoice[]>;
+    },
+  });
+
+  useEffect(() => {
+    if (invoicesData) setInvoices(invoicesData);
+  }, [invoicesData]);
+
+  const loading = isFetching && invoices.length === 0;
 
   async function loadInvoices() {
-    setLoading(true);
-    const CHUNK = 1000;
-    const all: Invoice[] = [];
-    for (let offset = 0; ; offset += CHUNK) {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('issue_date', { ascending: false })
-        .range(offset, offset + CHUNK - 1);
-      if (error || !data) break;
-      all.push(...(data as Invoice[]));
-      if (data.length < CHUNK) break;
-    }
-    setInvoices(all);
-    setLoading(false);
+    await queryClient.invalidateQueries({ queryKey: ['nfse-invoices'] });
   }
+
 
 
   async function handleSync() {
