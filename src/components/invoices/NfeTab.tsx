@@ -499,20 +499,91 @@ export default function NfeTab() {
   // Reset page when filters change
   useEffect(() => { setPage(0); }, [filterClient, datePeriod, filterDateFrom, filterDateTo, directionTab]);
 
+  type SummaryVariant = 'blue' | 'orange';
+
+  const VARIANT_STYLES: Record<SummaryVariant, { panel: string; headerIcon: string; iconCircle: string; iconColor: string }> = {
+    blue: {
+      panel: 'border-l-4 border-l-blue-500 bg-blue-50/40 dark:bg-blue-950/20',
+      headerIcon: 'bg-blue-600 text-white',
+      iconCircle: 'bg-blue-100 dark:bg-blue-900/50',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+    },
+    orange: {
+      panel: 'border-l-4 border-l-orange-500 bg-orange-50/40 dark:bg-orange-950/20',
+      headerIcon: 'bg-orange-500 text-white',
+      iconCircle: 'bg-orange-100 dark:bg-orange-900/50',
+      iconColor: 'text-orange-600 dark:text-orange-400',
+    },
+  };
+
+  function NfeSummarySection({
+    variant,
+    title,
+    icon: Icon,
+    invoices,
+    totalValue,
+  }: {
+    variant: SummaryVariant;
+    title: string;
+    icon: LucideIcon;
+    invoices: NfeInvoice[];
+    totalValue: number;
+  }) {
+    const s = VARIANT_STYLES[variant];
+    const count = invoices.length;
+    const average = count > 0 ? totalValue / count : 0;
+    const stats = [
+      { label: 'Total de Notas', value: String(count), icon: FileText },
+      { label: 'Valor Total', value: formatCurrency(totalValue), icon: Wallet },
+      { label: 'Valor Médio', value: formatCurrency(average), icon: TrendingUp },
+    ];
+
+    return (
+      <Card className={s.panel}>
+        <CardContent className="p-4 md:p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${s.headerIcon}`}>
+              <Icon className="h-5 w-5" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">{title}</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {stats.map(stat => (
+              <Card key={stat.label} className="bg-card">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${s.iconCircle}`}>
+                    <stat.icon className={`h-5 w-5 ${s.iconColor}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    <p className="text-xl font-bold text-foreground truncate">{stat.value}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-6">
       {/* Sync Card */}
       {isAdmin && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Search className="h-5 w-5" />
-              Consultar NF-e
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                <Search className="h-5 w-5 text-muted-foreground" />
+              </div>
+              Consultar NF-e no Ambiente Nacional
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="border-t border-border pt-6">
             <div className="flex flex-wrap items-end gap-4">
-              <div className="flex-1 min-w-[200px]">
+              <div className="flex-1 min-w-[200px] space-y-2">
                 <Label>Cliente</Label>
                 <Select value={selectedClient} onValueChange={setSelectedClient}>
                   <SelectTrigger>
@@ -526,7 +597,7 @@ export default function NfeTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-[180px]">
+              <div className="min-w-[180px] space-y-2">
                 <Label>Período</Label>
                 <Select value={syncPeriod} onValueChange={(v) => setSyncPeriod(v as typeof syncPeriod)}>
                   <SelectTrigger>
@@ -542,17 +613,17 @@ export default function NfeTab() {
               </div>
               {syncPeriod === 'custom' && (
                 <>
-                  <div>
+                  <div className="space-y-2">
                     <Label>De</Label>
                     <Input type="date" value={syncDateFrom} onChange={e => setSyncDateFrom(e.target.value)} className="w-[160px]" />
                   </div>
-                  <div>
+                  <div className="space-y-2">
                     <Label>Até</Label>
                     <Input type="date" value={syncDateTo} onChange={e => setSyncDateTo(e.target.value)} className="w-[160px]" />
                   </div>
                 </>
               )}
-              <Button onClick={handleSync} disabled={syncing}>
+              <Button onClick={handleSync} disabled={syncing} className="ml-auto">
                 {syncing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
                 {syncing ? (syncProgress || 'Consultando...') : 'Buscar NF-e'}
               </Button>
@@ -561,99 +632,111 @@ export default function NfeTab() {
         </Card>
       )}
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total de NF-e</p>
-            <p className="text-2xl font-bold text-foreground">{filteredInvoices.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Valor Total</p>
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(totalValue)}</p>
-          </CardContent>
-        </Card>
+      {/* Filters toolbar */}
+      <div className="flex flex-col md:flex-row md:items-center gap-4">
+        <h3 className="text-lg font-bold text-foreground">Notas Fiscais</h3>
+        <div className="flex items-center gap-2 flex-wrap md:ml-auto">
+          <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os períodos</SelectItem>
+              <SelectItem value="this_month">Esse Mês</SelectItem>
+              <SelectItem value="last_month">Mês Anterior</SelectItem>
+              <SelectItem value="this_year">Esse Ano</SelectItem>
+              <SelectItem value="last_year">Ano Anterior</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {datePeriod === 'custom' && (
+            <>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">De:</Label>
+                <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-[160px]" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">Até:</Label>
+                <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-[160px]" />
+              </div>
+            </>
+          )}
+          <Select value={filterClient} onValueChange={setFilterClient}>
+            <SelectTrigger className="w-full md:w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os clientes</SelectItem>
+              {clients.map(c => (
+                <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => runBulkDownload('xml')}
+            disabled={bulkRunning !== null || filteredInvoices.length === 0}
+          >
+            {bulkRunning === 'xml'
+              ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              : <FileCode className="h-4 w-4 mr-2" />}
+            {bulkRunning === 'xml'
+              ? `Baixando ${bulkProgress.done}/${bulkProgress.total}...`
+              : `Baixar XMLs (${filteredInvoices.length})`}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => runBulkDownload('pdf')}
+            disabled={bulkRunning !== null || filteredInvoices.length === 0}
+          >
+            {bulkRunning === 'pdf'
+              ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              : <Download className="h-4 w-4 mr-2" />}
+            {bulkRunning === 'pdf'
+              ? `Baixando ${bulkProgress.done}/${bulkProgress.total}...`
+              : `Baixar PDFs (${filteredInvoices.length})`}
+          </Button>
+        </div>
       </div>
 
-      {/* Filter + Table */}
+      {/* Summary panels */}
+      <NfeSummarySection
+        variant="blue"
+        title="NF-e Recebidas (Entradas)"
+        icon={ArrowDownLeft}
+        invoices={entradaInvoices}
+        totalValue={entradaTotalValue}
+      />
+      <NfeSummarySection
+        variant="orange"
+        title="NF-e Emitidas (Saídas)"
+        icon={ArrowUpRight}
+        invoices={saidaInvoices}
+        totalValue={saidaTotalValue}
+      />
+
+      {/* List */}
       <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <CardTitle className="text-lg">
-              {directionTab === 'saida' ? 'NF-e Emitidas (Saídas)' : 'NF-e Recebidas (Entradas)'}
-            </CardTitle>
-            <Tabs value={directionTab} onValueChange={(v) => setDirectionTab(v as 'entrada' | 'saida')}>
-              <TabsList>
-                <TabsTrigger value="entrada">Entradas ({entradaCount})</TabsTrigger>
-                <TabsTrigger value="saida">Saídas ({saidaCount})</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <div className="flex items-center gap-2 flex-wrap md:ml-auto">
-              <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os períodos</SelectItem>
-                  <SelectItem value="this_month">Esse Mês</SelectItem>
-                  <SelectItem value="last_month">Mês Anterior</SelectItem>
-                  <SelectItem value="this_year">Esse Ano</SelectItem>
-                  <SelectItem value="last_year">Ano Anterior</SelectItem>
-                  <SelectItem value="custom">Personalizado</SelectItem>
-                </SelectContent>
-              </Select>
-              {datePeriod === 'custom' && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm whitespace-nowrap">De:</Label>
-                    <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-[160px]" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm whitespace-nowrap">Até:</Label>
-                    <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-[160px]" />
-                  </div>
-                </>
-              )}
-              <Select value={filterClient} onValueChange={setFilterClient}>
-                <SelectTrigger className="w-full md:w-[220px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os clientes</SelectItem>
-                  {clients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => runBulkDownload('xml')}
-                disabled={bulkRunning !== null || filteredInvoices.length === 0}
+        <CardHeader className="pb-0">
+          <div className="flex border-b border-border">
+            {([
+              { key: 'entrada' as const, label: 'Entradas', count: entradaCount },
+              { key: 'saida' as const, label: 'Saídas', count: saidaCount },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setDirectionTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  directionTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
               >
-                {bulkRunning === 'xml'
-                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  : <FileCode className="h-4 w-4 mr-2" />}
-                {bulkRunning === 'xml'
-                  ? `Baixando ${bulkProgress.done}/${bulkProgress.total}...`
-                  : `Baixar XMLs (${filteredInvoices.length})`}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => runBulkDownload('pdf')}
-                disabled={bulkRunning !== null || filteredInvoices.length === 0}
-              >
-                {bulkRunning === 'pdf'
-                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  : <Download className="h-4 w-4 mr-2" />}
-                {bulkRunning === 'pdf'
-                  ? `Baixando ${bulkProgress.done}/${bulkProgress.total}...`
-                  : `Baixar PDFs (${filteredInvoices.length})`}
-              </Button>
-            </div>
+                {tab.label} ({tab.count})
+              </button>
+            ))}
           </div>
         </CardHeader>
         <CardContent>
@@ -670,8 +753,8 @@ export default function NfeTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
-                    <TableHead className="max-w-[150px]">Emitente</TableHead>
-                    <TableHead className="hidden lg:table-cell">Destinatário</TableHead>
+                    <TableHead className="max-w-[180px]">{directionTab === 'saida' ? 'Destinatário' : 'Emitente'}</TableHead>
+                    <TableHead className="max-w-[150px] hidden lg:table-cell">Cliente</TableHead>
                     <TableHead>Data Emissão</TableHead>
                     <TableHead className="text-right">Valor Total</TableHead>
                     <TableHead className="hidden lg:table-cell">Status</TableHead>
@@ -685,18 +768,17 @@ export default function NfeTab() {
                     return (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                        <TableCell className="max-w-[150px] truncate">
+                        <TableCell className="max-w-[180px] truncate">
                           <div>
-                            <p className="truncate">{inv.emitter_name || getClientName(inv.client_id)}</p>
-                            {inv.emitter_cnpj && <p className="text-xs text-muted-foreground hidden lg:block">{inv.emitter_cnpj}</p>}
+                            <p className="truncate">
+                              {directionTab === 'saida' ? (inv.recipient_name || '—') : (inv.emitter_name || '—')}
+                            </p>
+                            <p className="text-xs text-muted-foreground hidden lg:block">
+                              {directionTab === 'saida' ? (inv.recipient_cnpj || '—') : (inv.emitter_cnpj || '—')}
+                            </p>
                           </div>
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <div>
-                            <p className="text-sm">{inv.recipient_name || '—'}</p>
-                            {inv.recipient_cnpj && <p className="text-xs text-muted-foreground">{inv.recipient_cnpj}</p>}
-                          </div>
-                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate hidden lg:table-cell">{getClientName(inv.client_id)}</TableCell>
                         <TableCell>{formatDate(inv.issue_date)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(inv.total_value)}</TableCell>
                         <TableCell className="hidden lg:table-cell">
@@ -757,4 +839,5 @@ export default function NfeTab() {
       </Card>
     </div>
   );
+}
 }
