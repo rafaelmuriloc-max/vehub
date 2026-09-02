@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DANFe } from 'node-sped-pdf';
 import JSZip from 'jszip';
+import { fetchInChunks } from '@/lib/fetchInChunks';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -40,7 +42,7 @@ type NfeInvoice = {
   status: string | null;
   nsu: string | null;
   xml_url: string | null;
-  raw_xml: string | null;
+  raw_xml?: string | null;
   created_at: string;
   direction?: string | null;
 };
@@ -62,7 +64,7 @@ export default function NfeTab() {
   const [clients, setClients] = useState<Client[]>([]);
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
   const [selectedClient, setSelectedClient] = useState('');
-  const [loading, setLoading] = useState(false);
+  
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
@@ -109,34 +111,59 @@ export default function NfeTab() {
     setFilterDateTo(to!.toISOString().slice(0, 10));
   }
 
-  useEffect(() => { loadClients(); loadInvoices(); }, []);
+  const queryClient = useQueryClient();
 
-  async function loadClients() {
-    const { data } = await supabase
-      .from('clients')
-      .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry')
-      .eq('status', 'active')
-      .order('company_name');
-    if (data) setClients(data);
-  }
+  const { data: clientsData } = useQuery({
+    queryKey: ['invoice-clients'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('clients')
+        .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry')
+        .eq('status', 'active')
+        .order('company_name');
+      return (data || []) as Client[];
+    },
+  });
+
+  useEffect(() => {
+    if (clientsData) setClients(clientsData);
+  }, [clientsData]);
+
+  const { data: invoicesData, isFetching } = useQuery({
+    queryKey: ['nfe-invoices', filterClient, filterDateFrom, filterDateTo],
+    queryFn: async () => {
+      const build = (from: number, to: number) => {
+        let q = supabase
+          .from('nfe_invoices')
+          .select('id, client_id, access_key, invoice_number, issue_date, emitter_cnpj, emitter_name, recipient_cnpj, recipient_name, total_value, status, nsu, xml_url, created_at, direction')
+          .order('issue_date', { ascending: false })
+          .range(from, to);
+        if (filterClient !== 'all') q = q.eq('client_id', filterClient);
+        if (filterDateFrom) q = q.gte('issue_date', filterDateFrom);
+        if (filterDateTo) q = q.lte('issue_date', filterDateTo);
+        return q;
+      };
+
+      let countQuery = supabase.from('nfe_invoices').select('id', { count: 'exact', head: true });
+      if (filterClient !== 'all') countQuery = countQuery.eq('client_id', filterClient);
+      if (filterDateFrom) countQuery = countQuery.gte('issue_date', filterDateFrom);
+      if (filterDateTo) countQuery = countQuery.lte('issue_date', filterDateTo);
+      const { count } = await countQuery;
+
+      return fetchInChunks<NfeInvoice>((from, to) => build(from, to) as never, count) as Promise<NfeInvoice[]>;
+    },
+  });
+
+  useEffect(() => {
+    if (invoicesData) setInvoices(invoicesData);
+  }, [invoicesData]);
+
+  const loading = isFetching && invoices.length === 0;
 
   async function loadInvoices() {
-    setLoading(true);
-    const all: NfeInvoice[] = [];
-    const CHUNK = 1000;
-    for (let offset = 0; ; offset += CHUNK) {
-      const { data, error } = await supabase
-        .from('nfe_invoices')
-        .select('*')
-        .order('issue_date', { ascending: false })
-        .range(offset, offset + CHUNK - 1);
-      if (error || !data) break;
-      all.push(...(data as NfeInvoice[]));
-      if (data.length < CHUNK) break;
-    }
-    setInvoices(all);
-    setLoading(false);
+    await queryClient.invalidateQueries({ queryKey: ['nfe-invoices'] });
   }
+
 
 
   async function handleSync() {
