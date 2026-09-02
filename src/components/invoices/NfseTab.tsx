@@ -18,6 +18,7 @@ import { formatClientLabel } from '@/lib/utils';
 const PAGE_SIZE = 20;
 
 type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null; digital_certificate_url: string | null; digital_certificate_expiry: string | null };
+type ServiceTaker = { document: string; company_name: string };
 type Invoice = {
   id: string;
   client_id: string;
