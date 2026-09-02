@@ -561,6 +561,18 @@ export default function NfseTab() {
     return formatClientLabel(clients.find(c => c.id === clientId), '—');
   }
 
+  function formatCnpj(doc: string | null) {
+    const digits = cleanCnpj(doc);
+    if (digits.length !== 14) return digits || '—';
+    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  }
+
+  function getCounterpartyName(inv: Invoice, type: 'prestado' | 'tomado') {
+    const cnpj = type === 'prestado' ? inv.taker_cnpj : inv.issuer_cnpj;
+    const name = cnpj ? cnpjNameMap[cleanCnpj(cnpj)] : undefined;
+    return name || formatCnpj(cnpj);
+  }
+
   function formatCurrency(value: number) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   }
