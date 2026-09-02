@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DANFe } from 'node-sped-pdf';
 import JSZip from 'jszip';
+import { fetchInChunks } from '@/lib/fetchInChunks';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
