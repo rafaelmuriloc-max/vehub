@@ -287,7 +287,9 @@ async function handlePdfDownload(
   // Update invoice
   await adminClient
     .from("invoices")
-    .update({ pdf_url: storagePath })
+    // Só cacheia o DANFSe oficial. O espelho de contingência deve ser
+    // substituído automaticamente assim que o Portal voltar a responder.
+    .update({ pdf_url: lastErr ? null : storagePath })
     .eq("id", invoice.id);
 
   // Return signed URL
