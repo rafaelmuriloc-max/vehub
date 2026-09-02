@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import * as forge from 'node-forge';
@@ -241,24 +241,36 @@ export default function Clients() {
     const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
     const now = new Date();
     const in15 = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+    const byExpiry = (a: Client, b: Client) =>
+      new Date(a.digital_certificate_expiry! + 'T00:00:00').getTime() - new Date(b.digital_certificate_expiry! + 'T00:00:00').getTime();
 
-    const filtered = clients
+    const withCert = clients.filter(c => !!c.digital_certificate_expiry);
+
+    // Todos os vencidos, de qualquer mês
+    const expiredList = withCert
+      .filter(c => new Date(c.digital_certificate_expiry! + 'T00:00:00') < now)
+      .sort(byExpiry);
+
+    // Vencimentos do mês navegado que ainda não venceram
+    const monthList = withCert
       .filter(c => {
-        if (!c.digital_certificate_expiry) return false;
-        const exp = new Date(c.digital_certificate_expiry + 'T00:00:00');
-        return exp >= monthStart && exp <= monthEnd;
+        const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
+        return exp >= now && exp >= monthStart && exp <= monthEnd;
       })
-      .sort((a, b) => new Date(a.digital_certificate_expiry! + 'T00:00:00').getTime() - new Date(b.digital_certificate_expiry! + 'T00:00:00').getTime());
+      .sort(byExpiry);
 
-    let expired = 0, soon = 0;
-    filtered.forEach(c => {
-      const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
-      if (exp < now) expired++;
-      else if (exp <= in15) soon++;
-    });
+    const soon = monthList.filter(c => new Date(c.digital_certificate_expiry! + 'T00:00:00') <= in15).length;
 
-    return { clients: filtered, total: filtered.length, expired, soon };
+    return {
+      clients: [...expiredList, ...monthList],
+      expiredList,
+      monthList,
+      total: expiredList.length + monthList.length,
+      expired: expiredList.length,
+      soon,
+    };
   }, [clients, certMonth]);
+
 
   const certMonthLabel = useMemo(() => {
     return certMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, l => l.toUpperCase());
@@ -1422,7 +1434,7 @@ export default function Clients() {
             </Button>
           </div>
           {certMonthData.clients.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum certificado vence neste mês</p>
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum certificado vencido ou vencendo neste mês</p>
           ) : (
             <Table>
               <TableHeader>
@@ -1434,27 +1446,40 @@ export default function Clients() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {certMonthData.clients.map(c => {
-                  const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
-                  const now = new Date();
-                  const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                  let statusBadge: React.ReactNode;
-                  if (diffDays < 0) statusBadge = <Badge variant="destructive" className="text-xs">Vencido</Badge>;
-                  else if (diffDays <= 30) statusBadge = <Badge className="bg-amber-100 text-amber-800 text-xs border-amber-200">{diffDays}d restantes</Badge>;
-                  else statusBadge = <Badge className="bg-emerald-100 text-emerald-800 text-xs border-emerald-200">{diffDays}d restantes</Badge>;
-
-                  return (
-                    <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditing(c); setViewOnly(true); setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(c).map(([k,v]) => [k, v ?? ''])) } as any); setDialogOpen(true); }}>
-                      <TableCell className="font-medium text-sm">{formatClientLabel(c)}</TableCell>
-                      <TableCell className="text-sm">{c.document || '-'}</TableCell>
-                      <TableCell className="text-sm">{exp.toLocaleDateString('pt-BR')}</TableCell>
-                      <TableCell>{statusBadge}</TableCell>
+                {([
+                  { key: 'expired', label: 'Vencidos', rows: certMonthData.expiredList },
+                  { key: 'month', label: `Vence em ${certMonthLabel}`, rows: certMonthData.monthList },
+                ] as const).map(group => group.rows.length === 0 ? null : (
+                  <React.Fragment key={group.key}>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={4} className="bg-muted/40 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group.label} ({group.rows.length})
+                      </TableCell>
                     </TableRow>
-                  );
-                })}
+                    {group.rows.map(c => {
+                      const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
+                      const now = new Date();
+                      const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                      let statusBadge: React.ReactNode;
+                      if (diffDays < 0) statusBadge = <Badge variant="destructive" className="text-xs">Vencido</Badge>;
+                      else if (diffDays <= 30) statusBadge = <Badge className="bg-amber-100 text-amber-800 text-xs border-amber-200">{diffDays}d restantes</Badge>;
+                      else statusBadge = <Badge className="bg-emerald-100 text-emerald-800 text-xs border-emerald-200">{diffDays}d restantes</Badge>;
+
+                      return (
+                        <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditing(c); setViewOnly(true); setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(c).map(([k,v]) => [k, v ?? ''])) } as any); setDialogOpen(true); }}>
+                          <TableCell className="font-medium text-sm">{formatClientLabel(c)}</TableCell>
+                          <TableCell className="text-sm">{c.document || '-'}</TableCell>
+                          <TableCell className="text-sm">{exp.toLocaleDateString('pt-BR')}</TableCell>
+                          <TableCell>{statusBadge}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </TableBody>
             </Table>
           )}
+
         </CardContent>
       </Card>
 
