@@ -301,7 +301,17 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
   try {
     while (true) {
       const buffer = new Uint8Array(16_384);
-      const bytesRead = await conn.read(buffer);
+      let bytesRead: number | null;
+      try {
+        bytesRead = await conn.read(buffer);
+      } catch (err) {
+        const msg = (err as Error)?.message || "";
+        // Alguns servidores encerram o TLS sem close_notify: usar o que já foi lido
+        if (msg.includes("close_notify") || (err as Error)?.name === "UnexpectedEof") {
+          break;
+        }
+        throw err;
+      }
       if (bytesRead === null) break;
       const chunk = buffer.slice(0, bytesRead);
       chunks.push(chunk);
@@ -310,6 +320,7 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
   } finally {
     clearTimeout(timeout);
   }
+
 
   if (didTimeout) {
     throw new Error(`Timeout ao baixar PDF após ${timeoutMs}ms`);
