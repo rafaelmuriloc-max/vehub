@@ -53,6 +53,22 @@ function fmtDuration(seconds?: number | null) {
   return `${h}h${(m % 60).toString().padStart(2, '0')}`;
 }
 
+/** Duração resolvida: campo gravado -> fechamento-abertura -> tempo em andamento */
+function ticketDuration(t: { handle_seconds: number | null; opened_at: string; closed_at: string | null; status: string }, nowMs: number) {
+  const openedMs = new Date(t.opened_at).getTime();
+  if (t.closed_at) {
+    const diff = Math.round((new Date(t.closed_at).getTime() - openedMs) / 1000);
+    const stored = t.handle_seconds != null && t.handle_seconds >= 0 ? t.handle_seconds : null;
+    const value = stored ?? (Number.isFinite(diff) && diff >= 0 ? diff : null);
+    return value == null ? '—' : fmtDuration(value);
+  }
+  if (t.handle_seconds != null && t.handle_seconds >= 0) return fmtDuration(t.handle_seconds);
+  const elapsed = Math.round((nowMs - openedMs) / 1000);
+  if (!Number.isFinite(elapsed) || elapsed < 0) return '—';
+  return `${fmtDuration(elapsed)} (em andamento)`;
+}
+
+
 const PERIODS = [
   { value: 'today', label: 'Hoje' },
   { value: '7', label: 'Últimos 7 dias' },
