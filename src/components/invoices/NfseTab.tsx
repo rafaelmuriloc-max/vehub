@@ -18,6 +18,7 @@ import { formatClientLabel } from '@/lib/utils';
 const PAGE_SIZE = 20;
 
 type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null; digital_certificate_url: string | null; digital_certificate_expiry: string | null };
+type ServiceTaker = { document: string; company_name: string };
 type Invoice = {
   id: string;
   client_id: string;
@@ -239,6 +240,7 @@ export default function NfseTab() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [page, setPage] = useState(0);
+  const [cnpjNameMap, setCnpjNameMap] = useState<Record<string, string>>({});
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
@@ -292,6 +294,28 @@ export default function NfseTab() {
   useEffect(() => {
     if (clientsData) setClients(clientsData);
   }, [clientsData]);
+
+  const { data: serviceTakersData } = useQuery({
+    queryKey: ['nfse-service-takers'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('service_takers')
+        .select('document, company_name')
+        .order('company_name');
+      return (data || []) as ServiceTaker[];
+    },
+  });
+
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    clientsData?.forEach(c => {
+      if (c.document) map[cleanCnpj(c.document)] = formatClientLabel(c);
+    });
+    serviceTakersData?.forEach(t => {
+      if (t.document) map[cleanCnpj(t.document)] = t.company_name;
+    });
+    setCnpjNameMap(map);
+  }, [clientsData, serviceTakersData]);
 
   const { data: invoicesData, isFetching } = useQuery({
     queryKey: ['nfse-invoices', filterClient, filterDateFrom, filterDateTo],
@@ -537,6 +561,18 @@ export default function NfseTab() {
     return formatClientLabel(clients.find(c => c.id === clientId), '—');
   }
 
+  function formatCnpj(doc: string | null) {
+    const digits = cleanCnpj(doc);
+    if (digits.length !== 14) return digits || '—';
+    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  }
+
+  function getCounterpartyName(inv: Invoice, type: 'prestado' | 'tomado') {
+    const cnpj = type === 'prestado' ? inv.taker_cnpj : inv.issuer_cnpj;
+    const name = cnpj ? cnpjNameMap[cleanCnpj(cnpj)] : undefined;
+    return name || formatCnpj(cnpj);
+  }
+
   function formatCurrency(value: number) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   }
@@ -751,7 +787,8 @@ export default function NfseTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
-                    <TableHead className="max-w-[150px]">Cliente</TableHead>
+                    <TableHead className="max-w-[180px]">{listTab === 'prestados' ? 'Destinatário' : 'Emitente'}</TableHead>
+                    <TableHead className="max-w-[150px] hidden lg:table-cell">Cliente</TableHead>
                     <TableHead>Data Emissão</TableHead>
                     <TableHead className="hidden lg:table-cell">Descrição</TableHead>
                     <TableHead className="text-right">Valor Bruto</TableHead>
@@ -767,7 +804,10 @@ export default function NfseTab() {
                     return (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                        <TableCell className="max-w-[150px] truncate">{getClientName(inv.client_id)}</TableCell>
+                        <TableCell className="max-w-[180px] truncate" title={getCounterpartyName(inv, listTab === 'prestados' ? 'prestado' : 'tomado')}>
+                          {getCounterpartyName(inv, listTab === 'prestados' ? 'prestado' : 'tomado')}
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate hidden lg:table-cell">{getClientName(inv.client_id)}</TableCell>
                         <TableCell>{formatDate(inv.issue_date)}</TableCell>
                         <TableCell className="max-w-[150px] truncate hidden lg:table-cell">{inv.service_description || '—'}</TableCell>
                         <TableCell className="text-right">{formatCurrency(inv.gross_value)}</TableCell>
