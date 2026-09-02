@@ -42,7 +42,7 @@ type NfeInvoice = {
   status: string | null;
   nsu: string | null;
   xml_url: string | null;
-  raw_xml: string | null;
+  raw_xml?: string | null;
   created_at: string;
   direction?: string | null;
 };
