@@ -234,7 +234,7 @@ export default function NfseTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
-  const [filterType, setFilterType] = useState<'all' | 'prestados' | 'tomados'>('all');
+  const [listTab, setListTab] = useState<'prestados' | 'tomados'>('prestados');
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -551,8 +551,7 @@ export default function NfseTab() {
   if (filterDateFrom) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
   if (filterDateTo) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
-  let filteredInvoices = baseFiltered;
-  if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(i => getInvoiceType(i) === (filterType === 'prestados' ? 'prestado' : 'tomado'));
+  const filteredInvoices = baseFiltered.filter(i => getInvoiceType(i) === (listTab === 'prestados' ? 'prestado' : 'tomado'));
 
   const prestadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'prestado');
 
@@ -584,7 +583,7 @@ export default function NfseTab() {
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [filterClient, filterType, datePeriod, filterDateFrom, filterDateTo]);
+  useEffect(() => { setPage(0); }, [filterClient, listTab, datePeriod, filterDateFrom, filterDateTo]);
 
   return (
     <div className="space-y-6 pt-6">
