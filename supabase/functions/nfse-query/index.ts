@@ -77,16 +77,19 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Configuração do Supabase incompleta" }, 500);
     }
 
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const {
-      data: { user },
-      error: authError,
-    } = await userClient.auth.getUser();
+    const isServiceCall = authHeader.replace(/^Bearer\s+/i, "") === supabaseServiceKey;
+    if (!isServiceCall) {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const {
+        data: { user },
+        error: authError,
+      } = await userClient.auth.getUser();
 
-    if (authError || !user) {
-      return jsonResponse({ error: "Não autorizado" }, 401);
+      if (authError || !user) {
+        return jsonResponse({ error: "Não autorizado" }, 401);
+      }
     }
 
     const { client_id, reference_month } = await req.json();

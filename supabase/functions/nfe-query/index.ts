@@ -89,12 +89,15 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const anonClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: userError } = await anonClient.auth.getUser();
-    if (userError || !user) {
-      return jsonResponse({ error: "Não autenticado" }, 401);
+    const isServiceCall = authHeader.replace(/^Bearer\s+/i, "") === supabaseServiceKey;
+    if (!isServiceCall) {
+      const anonClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: userError } = await anonClient.auth.getUser();
+      if (userError || !user) {
+        return jsonResponse({ error: "Não autenticado" }, 401);
+      }
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
