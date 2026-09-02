@@ -439,39 +439,79 @@ export async function createDanfsePdf(
 
   // ===== Cabeçalho =====
   const headerTop = d.y;
-  d.draw("NFS", MARGIN + 4, headerTop - 16, 17, true);
-  d.draw("e", MARGIN + 32, headerTop - 16, 17, true);
-  d.draw("Nota Fiscal de", MARGIN + 44, headerTop - 10, 5.5, true);
-  d.draw("Serviço eletrônica", MARGIN + 44, headerTop - 17, 5.5, true);
+  const headerH = 34;
+  d.page.drawRectangle({
+    x: MARGIN,
+    y: headerTop - headerH,
+    width: CONTENT_W,
+    height: headerH,
+    color: rgb(0.96, 0.96, 0.96),
+  });
+
+  // Marca NFS-e
+  const brandGrey = rgb(0.22, 0.24, 0.27);
+  const brandGreen = rgb(0.29, 0.62, 0.24);
+  d.page.drawText("NFS", {
+    x: MARGIN + 4,
+    y: headerTop - 20,
+    size: 18,
+    font: d.bold,
+    color: brandGrey,
+  });
+  const brandDotX = MARGIN + 4 + d.bold.widthOfTextAtSize("NFS", 18) + 6;
+  d.page.drawCircle({
+    x: brandDotX,
+    y: headerTop - 14.5,
+    size: 7.5,
+    color: brandGreen,
+  });
+  d.page.drawText("e", {
+    x: brandDotX - 3,
+    y: headerTop - 19,
+    size: 12,
+    font: d.bold,
+    color: rgb(1, 1, 1),
+  });
+  d.page.drawText("Nota Fiscal de", {
+    x: brandDotX + 11,
+    y: headerTop - 12,
+    size: 5.5,
+    font: d.bold,
+    color: brandGrey,
+  });
+  d.page.drawText("Serviço eletrônica", {
+    x: brandDotX + 11,
+    y: headerTop - 19,
+    size: 5.5,
+    font: d.bold,
+    color: brandGrey,
+  });
 
   const centerText = (value: string, size: number, offset: number) => {
     const w = d.width(value, size, true);
     d.draw(value, MARGIN + (CONTENT_W - w) / 2, headerTop - offset, size, true);
   };
-  centerText("DANFSe v2.0", 9, 12);
-  centerText("Documento Auxiliar da NFS-e", 8, 23);
+  centerText("DANFSe v2.0", 9, 14);
+  centerText("Documento Auxiliar da NFS-e", 8, 25);
 
   const rightX = MARGIN + CONTENT_W * 0.72;
-  d.draw(
-    `Município: ${orDash(municipioEmitFull)}`,
-    rightX,
-    headerTop - 10,
-    6.5,
-  );
+  const municipioHeader = municipioEmitFull.replace(" / ", " - ");
+  d.draw(`Município: ${orDash(municipioHeader)}`, rightX, headerTop - 12, 6.5);
   d.draw(
     `Ambiente Gerador: ${orDash(text(infNFSe, ["ambGer"]))}`,
     rightX,
-    headerTop - 18,
+    headerTop - 20,
     5.5,
   );
   d.draw(
     `Tipo de Ambiente: ${orDash(text(dps, ["tpAmb"]))}`,
     rightX,
-    headerTop - 25,
+    headerTop - 27,
     5.5,
   );
-  d.y = headerTop - 32;
+  d.y = headerTop - headerH;
   d.hline(d.y);
+
 
   // ===== Chave / identificação + QR =====
   const blockTop = d.y;
