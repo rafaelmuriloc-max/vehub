@@ -269,10 +269,11 @@ class Danfse {
   }
 
   // Linha de células com rótulo pequeno em cima e valor abaixo
-  row(cells: Cell[], options: { shaded?: boolean } = {}) {
+  row(cells: Cell[], options: { shaded?: boolean; noBreak?: boolean } = {}) {
     const height = 15;
 
-    this.ensure(height);
+    if (!options.noBreak) this.ensure(height);
+
     const top = this.y;
     const bottom = top - height;
     if (options.shaded) {
