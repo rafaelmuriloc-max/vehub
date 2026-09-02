@@ -295,6 +295,28 @@ export default function NfseTab() {
     if (clientsData) setClients(clientsData);
   }, [clientsData]);
 
+  const { data: serviceTakersData } = useQuery({
+    queryKey: ['nfse-service-takers'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('service_takers')
+        .select('document, company_name')
+        .order('company_name');
+      return (data || []) as ServiceTaker[];
+    },
+  });
+
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    clientsData?.forEach(c => {
+      if (c.document) map[cleanCnpj(c.document)] = formatClientLabel(c);
+    });
+    serviceTakersData?.forEach(t => {
+      if (t.document) map[cleanCnpj(t.document)] = t.company_name;
+    });
+    setCnpjNameMap(map);
+  }, [clientsData, serviceTakersData]);
+
   const { data: invoicesData, isFetching } = useQuery({
     queryKey: ['nfse-invoices', filterClient, filterDateFrom, filterDateTo],
     queryFn: async () => {
