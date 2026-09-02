@@ -23,7 +23,10 @@ Deno.serve(async (req) => {
   try {
     const { invoice_id, type } = await req.json();
     if (!invoice_id || !type || !["xml", "pdf"].includes(type)) {
-      return jsonResponse({ error: "invoice_id e type (xml|pdf) são obrigatórios" }, 400);
+      return jsonResponse(
+        { error: "invoice_id e type (xml|pdf) são obrigatórios" },
+        400,
+      );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -67,7 +70,9 @@ async function handleXmlDownload(
 ) {
   // If already uploaded, return signed URL
   if (invoice.xml_url) {
-    const { data } = await adminClient.storage.from("documents").createSignedUrl(invoice.xml_url, 300);
+    const { data } = await adminClient.storage
+      .from("documents")
+      .createSignedUrl(invoice.xml_url, 300);
     if (data?.signedUrl) {
       return jsonResponse({ signed_url: data.signedUrl, cached: true });
     }
@@ -93,7 +98,10 @@ async function handleXmlDownload(
 
   const { error: uploadErr } = await adminClient.storage
     .from("documents")
-    .upload(storagePath, xmlBlob, { upsert: true, contentType: "application/xml" });
+    .upload(storagePath, xmlBlob, {
+      upsert: true,
+      contentType: "application/xml",
+    });
 
   if (uploadErr) {
     console.error("XML upload error:", uploadErr);
@@ -101,10 +109,15 @@ async function handleXmlDownload(
   }
 
   // Update invoice
-  await adminClient.from("invoices").update({ xml_url: storagePath }).eq("id", invoice.id);
+  await adminClient
+    .from("invoices")
+    .update({ xml_url: storagePath })
+    .eq("id", invoice.id);
 
   // Return signed URL
-  const { data } = await adminClient.storage.from("documents").createSignedUrl(storagePath, 300);
+  const { data } = await adminClient.storage
+    .from("documents")
+    .createSignedUrl(storagePath, 300);
   return jsonResponse({ signed_url: data?.signedUrl || null, cached: false });
 }
 
@@ -116,7 +129,9 @@ async function handlePdfDownload(
 ) {
   // If already uploaded, return signed URL
   if (invoice.pdf_url) {
-    const { data } = await adminClient.storage.from("documents").createSignedUrl(invoice.pdf_url, 300);
+    const { data } = await adminClient.storage
+      .from("documents")
+      .createSignedUrl(invoice.pdf_url, 300);
     if (data?.signedUrl) {
       return jsonResponse({ signed_url: data.signedUrl, cached: true });
     }
@@ -129,8 +144,15 @@ async function handlePdfDownload(
     .eq("id", clientId)
     .single();
 
-  if (clientErr || !client?.digital_certificate_url || !client?.digital_certificate_password) {
-    return jsonResponse({ error: "Certificado digital do cliente não configurado" }, 400);
+  if (
+    clientErr ||
+    !client?.digital_certificate_url ||
+    !client?.digital_certificate_password
+  ) {
+    return jsonResponse(
+      { error: "Certificado digital do cliente não configurado" },
+      400,
+    );
   }
 
   // Download certificate from storage
@@ -143,7 +165,10 @@ async function handlePdfDownload(
   }
 
   const pfxBytes = new Uint8Array(await certFile.arrayBuffer());
-  const { certPem, keyPem } = await parsePfx(pfxBytes, client.digital_certificate_password);
+  const { certPem, keyPem } = await parsePfx(
+    pfxBytes,
+    client.digital_certificate_password,
+  );
 
   // O manual oficial do ADN define GET /danfse/{chaveAcesso} como a rota
   // canônica. O SEFIN permanece apenas como compatibilidade para notas antigas.
@@ -156,20 +181,26 @@ async function handlePdfDownload(
   let lastErr: Error | null = null;
   const MAX_ATTEMPTS = 3;
 
-  outer:
-  for (const pdfUrl of candidateUrls) {
+  outer: for (const pdfUrl of candidateUrls) {
     console.log(`Fetching PDF from: ${pdfUrl.toString()}`);
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        pdfBytes = await requestBinaryWithMTLS(pdfUrl, {
-          method: "GET",
-          headers: { "Accept": "application/pdf" },
-        }, certPem, keyPem);
+        pdfBytes = await requestBinaryWithMTLS(
+          pdfUrl,
+          {
+            method: "GET",
+            headers: { Accept: "application/pdf" },
+          },
+          certPem,
+          keyPem,
+        );
         if (pdfBytes && pdfBytes.length > 0) break outer;
         lastErr = new Error("PDF vazio");
       } catch (err) {
         lastErr = err as Error;
-        console.error(`[PDF] ${pdfUrl.host} tentativa ${attempt} falhou: ${lastErr.message}`);
+        console.error(
+          `[PDF] ${pdfUrl.host} tentativa ${attempt} falhou: ${lastErr.message}`,
+        );
       }
 
       const msg = lastErr?.message ?? "";
@@ -178,7 +209,9 @@ async function handlePdfDownload(
 
       if (attempt < MAX_ATTEMPTS) {
         const isRate = /429|Rate limit/i.test(msg);
-        const delay = isRate ? 8000 : Math.min(2000 * Math.pow(2, attempt - 1), 12000);
+        const delay = isRate
+          ? 8000
+          : Math.min(2000 * Math.pow(2, attempt - 1), 12000);
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -189,7 +222,10 @@ async function handlePdfDownload(
     const d = detail ?? "";
     const forbidden = /status 403|status 401/i.test(d);
     const notFound = /status 404/i.test(d);
-    const tlsGlitch = /cannot decrypt peer's message|close_notify|UnexpectedEof|connection error/i.test(d);
+    const tlsGlitch =
+      /cannot decrypt peer's message|close_notify|UnexpectedEof|connection error/i.test(
+        d,
+      );
 
     // O XML distribuído pelo próprio ADN é a fonte fiscal oficial. Quando a
     // API de apresentação do DANFSe está temporariamente fora do ar, entregar
@@ -199,33 +235,38 @@ async function handlePdfDownload(
     if (!forbidden && !notFound && officialXml) {
       try {
         pdfBytes = await createNfseMirrorPdf(officialXml, accessKey);
-        console.warn(`[PDF] Portal indisponível; gerando espelho local para ${accessKey}`);
+        console.warn(
+          `[PDF] Portal indisponível; gerando espelho local para ${accessKey}`,
+        );
       } catch (fallbackError) {
-        console.error(`[PDF] Falha ao gerar espelho local: ${(fallbackError as Error).message}`);
+        console.error(
+          `[PDF] Falha ao gerar espelho local: ${(fallbackError as Error).message}`,
+        );
       }
     }
 
     if (!pdfBytes || pdfBytes.length === 0) {
       let error: string;
-    let status = 503;
+      let status = 503;
       if (forbidden) {
-        error = "Acesso negado pelo Portal Nacional NFS-e (403). Verifique se o certificado digital do cliente tem autorização para baixar esta nota.";
+        error =
+          "Acesso negado pelo Portal Nacional NFS-e (403). Verifique se o certificado digital do cliente tem autorização para baixar esta nota.";
         status = 403;
       } else if (notFound) {
-        error = "DANFSE não encontrado no Portal Nacional para esta chave de acesso (404).";
+        error =
+          "DANFSE não encontrado no Portal Nacional para esta chave de acesso (404).";
         status = 404;
       } else if (tlsGlitch) {
-        error = "Falha de conexão TLS com o Portal Nacional NFS-e (instabilidade do portal). Tente novamente em alguns minutos.";
+        error =
+          "Falha de conexão TLS com o Portal Nacional NFS-e (instabilidade do portal). Tente novamente em alguns minutos.";
       } else {
-        error = "Portal Nacional NFS-e indisponível no momento (503). Tente novamente em alguns instantes.";
+        error =
+          "Portal Nacional NFS-e indisponível no momento (503). Tente novamente em alguns instantes.";
       }
 
       return jsonResponse({ error, detail }, status);
     }
   }
-
-
-
 
   // Upload to storage
   const storagePath = `nfse/${clientId}/${accessKey}.pdf`;
@@ -233,7 +274,10 @@ async function handlePdfDownload(
 
   const { error: uploadErr } = await adminClient.storage
     .from("documents")
-    .upload(storagePath, pdfBlob, { upsert: true, contentType: "application/pdf" });
+    .upload(storagePath, pdfBlob, {
+      upsert: true,
+      contentType: "application/pdf",
+    });
 
   if (uploadErr) {
     console.error("PDF upload error:", uploadErr);
@@ -241,10 +285,15 @@ async function handlePdfDownload(
   }
 
   // Update invoice
-  await adminClient.from("invoices").update({ pdf_url: storagePath }).eq("id", invoice.id);
+  await adminClient
+    .from("invoices")
+    .update({ pdf_url: storagePath })
+    .eq("id", invoice.id);
 
   // Return signed URL
-  const { data } = await adminClient.storage.from("documents").createSignedUrl(storagePath, 300);
+  const { data } = await adminClient.storage
+    .from("documents")
+    .createSignedUrl(storagePath, 300);
   const isMirror = Boolean(lastErr);
   return jsonResponse({
     signed_url: data?.signedUrl || null,
@@ -265,7 +314,12 @@ function getInvoiceXml(rawData: unknown): string | null {
 function xmlValue(xml: string, names: string[]): string {
   for (const name of names) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = xml.match(new RegExp(`<(?:\\w+:)?${escaped}(?:\\s[^>]*)?>([^<]*)<\\/(?:\\w+:)?${escaped}>`, "i"));
+    const match = xml.match(
+      new RegExp(
+        `<(?:\\w+:)?${escaped}(?:\\s[^>]*)?>([^<]*)<\\/(?:\\w+:)?${escaped}>`,
+        "i",
+      ),
+    );
     if (match?.[1]) return decodeXmlText(match[1].trim());
   }
   return "";
@@ -283,7 +337,10 @@ function decodeXmlText(value: string): string {
 function formatMoney(value: string): string {
   const number = Number(value.replace(",", "."));
   return Number.isFinite(number)
-    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(number)
+    ? new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(number)
     : "—";
 }
 
@@ -303,7 +360,10 @@ function wrapPdfText(text: string, maxChars = 92): string[] {
   return lines.length ? lines : ["—"];
 }
 
-async function createNfseMirrorPdf(xml: string, accessKey: string): Promise<Uint8Array> {
+async function createNfseMirrorPdf(
+  xml: string,
+  accessKey: string,
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -311,12 +371,23 @@ async function createNfseMirrorPdf(xml: string, accessKey: string): Promise<Uint
   let y = 798;
   const left = 42;
 
-  const draw = (text: string, size = 10, isBold = false, color = rgb(0.12, 0.15, 0.2)) => {
+  const draw = (
+    text: string,
+    size = 10,
+    isBold = false,
+    color = rgb(0.12, 0.15, 0.2),
+  ) => {
     if (y < 55) {
       page = doc.addPage([595.28, 841.89]);
       y = 798;
     }
-    page.drawText(text.replace(/[^\x20-\xFF]/g, " "), { x: left, y, size, font: isBold ? bold : regular, color });
+    page.drawText(text.replace(/[^\x20-\xFF]/g, " "), {
+      x: left,
+      y,
+      size,
+      font: isBold ? bold : regular,
+      color,
+    });
     y -= size + 6;
   };
   const field = (label: string, value: string) => {
@@ -326,24 +397,59 @@ async function createNfseMirrorPdf(xml: string, accessKey: string): Promise<Uint
   };
 
   draw("ESPELHO DA NFS-e", 18, true, rgb(0.91, 0.44, 0.04));
-  draw("Gerado a partir do XML oficial distribuído pelo Ambiente de Dados Nacional", 9);
-  draw("O DANFSe oficial do Portal Nacional estava temporariamente indisponível.", 8, false, rgb(0.55, 0.2, 0.08));
+  draw(
+    "Gerado a partir do XML oficial distribuído pelo Ambiente de Dados Nacional",
+    9,
+  );
+  draw(
+    "O DANFSe oficial do Portal Nacional estava temporariamente indisponível.",
+    8,
+    false,
+    rgb(0.55, 0.2, 0.08),
+  );
   y -= 10;
   field("Chave de acesso", accessKey);
   field("Número da NFS-e", xmlValue(xml, ["nNFSe", "numero", "Numero"]));
   field("Data de emissão", xmlValue(xml, ["dhEmi", "dEmi", "DataEmissao"]));
   field("Emitente", xmlValue(xml, ["xNome", "RazaoSocial", "NomeRazaoSocial"]));
   field("CNPJ do emitente", xmlValue(xml, ["CNPJ", "Cnpj"]));
-  field("Tomador", xmlValue(xml, ["xNomeTomador", "RazaoSocialTomador", "NomeTomador"]));
-  field("Serviço", xmlValue(xml, ["xDescServ", "Discriminacao", "discriminacao"]));
-  field("Valor dos serviços", formatMoney(xmlValue(xml, ["vServ", "ValorServicos", "vLiq"])));
-  field("Valor líquido", formatMoney(xmlValue(xml, ["vLiq", "ValorLiquidoNfse", "ValorLiquido"])));
-  field("Código de verificação", xmlValue(xml, ["cVerif", "CodigoVerificacao"]));
+  field(
+    "Tomador",
+    xmlValue(xml, ["xNomeTomador", "RazaoSocialTomador", "NomeTomador"]),
+  );
+  field(
+    "Serviço",
+    xmlValue(xml, ["xDescServ", "Discriminacao", "discriminacao"]),
+  );
+  field(
+    "Valor dos serviços",
+    formatMoney(xmlValue(xml, ["vServ", "ValorServicos", "vLiq"])),
+  );
+  field(
+    "Valor líquido",
+    formatMoney(xmlValue(xml, ["vLiq", "ValorLiquidoNfse", "ValorLiquido"])),
+  );
+  field(
+    "Código de verificação",
+    xmlValue(xml, ["cVerif", "CodigoVerificacao"]),
+  );
 
-  page.drawLine({ start: { x: left, y: 38 }, end: { x: 553, y: 38 }, thickness: 0.5, color: rgb(0.7, 0.72, 0.75) });
-  page.drawText("Documento auxiliar de contingência — consulte a autenticidade pela chave de acesso.", {
-    x: left, y: 24, size: 7, font: regular, color: rgb(0.42, 0.45, 0.5),
+  page.drawLine({
+    start: { x: left, y: 38 },
+    end: { x: 553, y: 38 },
+    thickness: 0.5,
+    color: rgb(0.7, 0.72, 0.75),
   });
+  page.drawText(
+    "Documento auxiliar de contingência — consulte a autenticidade pela chave de acesso.",
+    {
+      x: left,
+      y: 24,
+      size: 7,
+      font: regular,
+      color: rgb(0.42, 0.45, 0.5),
+    },
+  );
   return await doc.save();
 }
 
@@ -387,10 +493,14 @@ async function requestBinaryWithMTLS(
       }
 
       const text = await response.text();
-      console.error(`[PDF] fetch-http1 non-200: ${response.status} - ${text.substring(0, 200)}`);
-      
+      console.error(
+        `[PDF] fetch-http1 non-200: ${response.status} - ${text.substring(0, 200)}`,
+      );
+
       if (response.status === 429) {
-        throw new Error("Rate limit do portal (429). Tente novamente em alguns segundos.");
+        throw new Error(
+          "Rate limit do portal (429). Tente novamente em alguns segundos.",
+        );
       }
       throw new Error(`Portal retornou status ${response.status}`);
     } finally {
@@ -399,7 +509,7 @@ async function requestBinaryWithMTLS(
   } catch (err) {
     const msg = (err as Error).message || "";
     console.error(`[PDF] fetch-http1 failed: ${msg}`);
-    
+
     // If it's a meaningful error (not connection), rethrow
     if (msg.includes("429") || msg.includes("Rate limit")) {
       throw err;
@@ -435,13 +545,17 @@ async function requestBinaryRawTls(
     const headers = new Headers(init.headers || {});
     if (!headers.has("Host")) headers.set("Host", url.host);
     if (!headers.has("Accept")) headers.set("Accept", "application/pdf");
-    if (!headers.has("Accept-Encoding")) headers.set("Accept-Encoding", "identity");
+    if (!headers.has("Accept-Encoding"))
+      headers.set("Accept-Encoding", "identity");
     if (!headers.has("Connection")) headers.set("Connection", "close");
-    if (!headers.has("User-Agent")) headers.set("User-Agent", "Lovable-NFSe/1.0");
+    if (!headers.has("User-Agent"))
+      headers.set("User-Agent", "Lovable-NFSe/1.0");
 
     const requestHead = [
       `${init.method} ${url.pathname}${url.search} HTTP/1.1`,
-      ...Array.from(headers.entries()).map(([name, value]) => `${name}: ${value}`),
+      ...Array.from(headers.entries()).map(
+        ([name, value]) => `${name}: ${value}`,
+      ),
       "",
       "",
     ].join("\r\n");
@@ -449,7 +563,7 @@ async function requestBinaryRawTls(
     await conn.write(encoder.encode(requestHead));
 
     const responseBytes = await readAllFromConnection(conn, 30000);
-    
+
     // Parse HTTP response to extract binary body
     return parseRawHttpBinaryResponse(responseBytes);
   } finally {
@@ -457,14 +571,21 @@ async function requestBinaryRawTls(
   }
 }
 
-async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promise<Uint8Array> {
+async function readAllFromConnection(
+  conn: Deno.Conn,
+  timeoutMs: number,
+): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   let totalLength = 0;
   let didTimeout = false;
 
   const timeout = setTimeout(() => {
     didTimeout = true;
-    try { conn.close(); } catch { /* no-op */ }
+    try {
+      conn.close();
+    } catch {
+      /* no-op */
+    }
   }, timeoutMs);
 
   try {
@@ -476,7 +597,10 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
       } catch (err) {
         const msg = (err as Error)?.message || "";
         // Alguns servidores encerram o TLS sem close_notify: usar o que já foi lido
-        if (msg.includes("close_notify") || (err as Error)?.name === "UnexpectedEof") {
+        if (
+          msg.includes("close_notify") ||
+          (err as Error)?.name === "UnexpectedEof"
+        ) {
           break;
         }
         throw err;
@@ -489,7 +613,6 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
   } finally {
     clearTimeout(timeout);
   }
-
 
   if (didTimeout) {
     throw new Error(`Timeout ao baixar PDF após ${timeoutMs}ms`);
@@ -508,9 +631,14 @@ function parseRawHttpBinaryResponse(raw: Uint8Array): Uint8Array {
   // Find header/body separator: \r\n\r\n
   const separator = [13, 10, 13, 10]; // \r\n\r\n
   let sepIndex = -1;
-  
+
   for (let i = 0; i < raw.length - 3; i++) {
-    if (raw[i] === separator[0] && raw[i+1] === separator[1] && raw[i+2] === separator[2] && raw[i+3] === separator[3]) {
+    if (
+      raw[i] === separator[0] &&
+      raw[i + 1] === separator[1] &&
+      raw[i + 2] === separator[2] &&
+      raw[i + 3] === separator[3]
+    ) {
       sepIndex = i;
       break;
     }
@@ -523,21 +651,25 @@ function parseRawHttpBinaryResponse(raw: Uint8Array): Uint8Array {
   const headerText = new TextDecoder().decode(raw.slice(0, sepIndex));
   const statusMatch = headerText.match(/^HTTP\/\d\.\d\s+(\d{3})/);
   const status = statusMatch ? parseInt(statusMatch[1]) : 0;
-  
-  console.log(`[PDF] Raw response status: ${status}, total bytes: ${raw.length}`);
-  
+
+  console.log(
+    `[PDF] Raw response status: ${status}, total bytes: ${raw.length}`,
+  );
+
   if (status !== 200) {
-    const bodyPreview = new TextDecoder().decode(raw.slice(sepIndex + 4, sepIndex + 504));
+    const bodyPreview = new TextDecoder().decode(
+      raw.slice(sepIndex + 4, sepIndex + 504),
+    );
     throw new Error(`Portal retornou status ${status}: ${bodyPreview}`);
   }
 
   const body = raw.slice(sepIndex + 4);
-  
+
   // Check if chunked transfer encoding
   if (headerText.toLowerCase().includes("transfer-encoding: chunked")) {
     return decodeChunkedBinaryBody(body);
   }
-  
+
   return body;
 }
 
@@ -549,14 +681,17 @@ function decodeChunkedBinaryBody(body: Uint8Array): Uint8Array {
     // Find end of chunk size line
     let lineEnd = -1;
     for (let i = pos; i < body.length - 1; i++) {
-      if (body[i] === 13 && body[i+1] === 10) {
+      if (body[i] === 13 && body[i + 1] === 10) {
         lineEnd = i;
         break;
       }
     }
     if (lineEnd === -1) break;
 
-    const sizeHex = new TextDecoder().decode(body.slice(pos, lineEnd)).split(";")[0].trim();
+    const sizeHex = new TextDecoder()
+      .decode(body.slice(pos, lineEnd))
+      .split(";")[0]
+      .trim();
     const chunkSize = parseInt(sizeHex, 16);
     if (isNaN(chunkSize) || chunkSize === 0) break;
 
@@ -577,7 +712,10 @@ function decodeChunkedBinaryBody(body: Uint8Array): Uint8Array {
 
 // ========== PFX parsing (from nfse-query) ==========
 
-async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certPem: string; keyPem: string }> {
+async function parsePfx(
+  pfxBytes: Uint8Array,
+  password: string,
+): Promise<{ certPem: string; keyPem: string }> {
   let binary = "";
   const chunkSize = 0x8000;
   for (let i = 0; i < pfxBytes.length; i += chunkSize) {
@@ -589,13 +727,16 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
 
   const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
   const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
-  if (!keyBag?.key) throw new Error("Chave privada não encontrada no certificado");
+  if (!keyBag?.key)
+    throw new Error("Chave privada não encontrada no certificado");
 
   const keyPem = forge.pki.privateKeyToPem(keyBag.key);
   const keyLocalKeyId = normalizeLocalKeyId(keyBag.attributes?.localKeyId?.[0]);
 
   const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const parsedCerts: ParsedCertificate[] = ((certBags[forge.pki.oids.certBag] || []) as Array<any>)
+  const parsedCerts: ParsedCertificate[] = (
+    (certBags[forge.pki.oids.certBag] || []) as Array<any>
+  )
     .filter((bag) => bag?.cert)
     .map((bag) => ({
       issuer: stringifyDN(bag.cert.issuer),
@@ -604,14 +745,19 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
       subject: stringifyDN(bag.cert.subject),
     }));
 
-  if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no arquivo PFX");
+  if (parsedCerts.length === 0)
+    throw new Error("Certificado não encontrado no arquivo PFX");
 
-  const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId) || parsedCerts[0];
+  const leafCert =
+    parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId) ||
+    parsedCerts[0];
   const chain = [leafCert];
   const visited = new Set([leafCert.pem]);
   let current = leafCert;
   while (true) {
-    const next = parsedCerts.find((c) => !visited.has(c.pem) && c.subject === current.issuer);
+    const next = parsedCerts.find(
+      (c) => !visited.has(c.pem) && c.subject === current.issuer,
+    );
     if (!next) break;
     chain.push(next);
     visited.add(next.pem);
@@ -628,11 +774,19 @@ async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certP
 function normalizeLocalKeyId(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === "string") return forge.util.bytesToHex(value);
-  if (value instanceof Uint8Array) return Array.from(value).map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (Array.isArray(value)) return value.map((b) => Number(b).toString(16).padStart(2, "0")).join("");
+  if (value instanceof Uint8Array)
+    return Array.from(value)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  if (Array.isArray(value))
+    return value.map((b) => Number(b).toString(16).padStart(2, "0")).join("");
   return null;
 }
 
-function stringifyDN(dn: { attributes?: Array<{ shortName?: string; name?: string; value?: string }> }): string {
-  return (dn.attributes || []).map((a) => `${a.shortName || a.name || "attr"}=${a.value || ""}`).join(",");
+function stringifyDN(dn: {
+  attributes?: Array<{ shortName?: string; name?: string; value?: string }>;
+}): string {
+  return (dn.attributes || [])
+    .map((a) => `${a.shortName || a.name || "attr"}=${a.value || ""}`)
+    .join(",");
 }
