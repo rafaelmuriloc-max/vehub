@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,6 +53,22 @@ function fmtDuration(seconds?: number | null) {
   return `${h}h${(m % 60).toString().padStart(2, '0')}`;
 }
 
+/** Duração resolvida: campo gravado -> fechamento-abertura -> tempo em andamento */
+function ticketDuration(t: { handle_seconds: number | null; opened_at: string; closed_at: string | null; status: string }, nowMs: number) {
+  const openedMs = new Date(t.opened_at).getTime();
+  if (t.closed_at) {
+    const diff = Math.round((new Date(t.closed_at).getTime() - openedMs) / 1000);
+    const stored = t.handle_seconds != null && t.handle_seconds >= 0 ? t.handle_seconds : null;
+    const value = stored ?? (Number.isFinite(diff) && diff >= 0 ? diff : null);
+    return value == null ? '—' : fmtDuration(value);
+  }
+  if (t.handle_seconds != null && t.handle_seconds >= 0) return fmtDuration(t.handle_seconds);
+  const elapsed = Math.round((nowMs - openedMs) / 1000);
+  if (!Number.isFinite(elapsed) || elapsed < 0) return '—';
+  return `${fmtDuration(elapsed)} (em andamento)`;
+}
+
+
 const PERIODS = [
   { value: 'today', label: 'Hoje' },
   { value: '7', label: 'Últimos 7 dias' },
@@ -80,6 +96,14 @@ export default function Tickets() {
     else d.setDate(d.getDate() - Number(period));
     return d.toISOString();
   }, [period]);
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+
 
   const { data: meta } = useQuery({
     queryKey: ['tickets-meta'],
@@ -257,7 +281,7 @@ export default function Tickets() {
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">{t.ticket_number}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.opened_at)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.closed_at)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{fmtDuration(t.handle_seconds)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{ticketDuration(t, nowMs)}</td>
                   <td className="px-3 py-2 truncate max-w-[180px]">{t.contact_name || t.contact_phone || '—'}</td>
                   <td className="px-3 py-2 hidden md:table-cell truncate max-w-[220px]">{t.client_id ? clientMap[t.client_id] ?? '—' : '—'}</td>
                   <td className="px-3 py-2 hidden lg:table-cell truncate max-w-[280px]">
@@ -303,7 +327,7 @@ export default function Tickets() {
                 <div><p className="text-xs text-muted-foreground">Abertura</p><p>{fmtDate(detail.opened_at)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Encerramento</p><p>{fmtDate(detail.closed_at)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Tempo de espera</p><p>{fmtDuration(detail.wait_seconds)}</p></div>
-                <div><p className="text-xs text-muted-foreground">Duração</p><p>{fmtDuration(detail.handle_seconds)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Duração</p><p>{ticketDuration(detail, nowMs)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Mensagens</p><p>{detail.messages_count}</p></div>
                 <div><p className="text-xs text-muted-foreground">Categoria</p><p>{detail.category || '—'}</p></div>
               </div>
