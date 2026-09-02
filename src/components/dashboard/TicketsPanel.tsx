@@ -103,10 +103,16 @@ export function TicketsPanel() {
 
   return (
     <Card className="bg-card/40 border-border/40 p-5 flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <MessageCircle className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Chamados</h2>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold tracking-tight">Chamados</h2>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate('/tickets')}>
+          <List className="h-4 w-4 mr-2" /> Ver chamados
+        </Button>
       </div>
+
 
       <div className="grid grid-cols-3 gap-3">
         <MetricCard label="Abertos" value={data?.open ?? '—'} />
