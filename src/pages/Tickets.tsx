@@ -323,7 +323,7 @@ export default function Tickets() {
             <div className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div><p className="text-xs text-muted-foreground">Contato</p><p>{detail.contact_name || detail.contact_phone || '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Empresa</p><p>{detail.client_id ? clientMap[detail.client_id] ?? '—' : '—'}</p></div>
+                <div><p className="text-xs text-muted-foreground">Empresa</p><p>{detail.client_id ? clientMap[detail.client_id] ?? '—' : 'Não cadastrado'}</p></div>
                 <div><p className="text-xs text-muted-foreground">Departamento</p><p>{detail.department_id ? deptMap[detail.department_id] ?? '—' : '—'}</p></div>
                 <div><p className="text-xs text-muted-foreground">Responsável</p><p>{detail.assigned_to ? profileMap[detail.assigned_to]?.name ?? '—' : '—'}</p></div>
                 <div><p className="text-xs text-muted-foreground">Abertura</p><p>{fmtDate(detail.opened_at)}</p></div>
