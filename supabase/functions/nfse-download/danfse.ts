@@ -303,7 +303,7 @@ class Danfse {
         this.draw(
           this.clip(cell.value, inner, VALUE_SIZE, cell.bold),
           x + 3,
-          top - 14,
+          top - 13.5,
           VALUE_SIZE,
           cell.bold,
         );
