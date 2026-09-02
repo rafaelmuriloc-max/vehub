@@ -767,11 +767,6 @@ export default function NfseTab() {
                     return (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                        <TableCell>
-                          <Badge variant={getInvoiceType(inv) === 'prestado' ? 'default' : 'outline'} className={getInvoiceType(inv) === 'prestado' ? 'bg-blue-500 hover:bg-blue-600' : 'border-orange-400 text-orange-600'}>
-                            {getInvoiceType(inv) === 'prestado' ? 'Prestado' : 'Tomado'}
-                          </Badge>
-                        </TableCell>
                         <TableCell className="max-w-[150px] truncate">{getClientName(inv.client_id)}</TableCell>
                         <TableCell>{formatDate(inv.issue_date)}</TableCell>
                         <TableCell className="max-w-[150px] truncate hidden lg:table-cell">{inv.service_description || '—'}</TableCell>
