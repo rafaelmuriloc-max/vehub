@@ -150,7 +150,8 @@ async function handlePdfDownload(
 
   let pdfBytes: Uint8Array | null = null;
   let lastErr: Error | null = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       pdfBytes = await requestBinaryWithMTLS(pdfUrl, {
         method: "GET",
@@ -161,16 +162,26 @@ async function handlePdfDownload(
     } catch (err) {
       lastErr = err as Error;
       console.error(`[PDF] tentativa ${attempt} falhou: ${lastErr.message}`);
+      // Rate limit: aguardar mais e continuar tentando
     }
-    if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2000));
+    if (attempt < MAX_ATTEMPTS) {
+      const isRate = /429|Rate limit/i.test(lastErr?.message ?? "");
+      const delay = isRate ? 8000 : Math.min(2000 * Math.pow(2, attempt - 1), 12000);
+      await new Promise((r) => setTimeout(r, delay));
+    }
   }
 
   if (!pdfBytes || pdfBytes.length === 0) {
+    const detail = lastErr?.message ?? null;
+    const tlsGlitch = /cannot decrypt peer's message|close_notify|UnexpectedEof|connection error/i.test(detail ?? "");
     return jsonResponse({
-      error: "Portal Nacional NFS-e indisponível no momento (503). Tente novamente em alguns instantes.",
-      detail: lastErr?.message ?? null,
+      error: tlsGlitch
+        ? "Falha de conexão TLS com o Portal Nacional NFS-e (instabilidade do portal). Tente novamente em alguns minutos."
+        : "Portal Nacional NFS-e indisponível no momento (503). Tente novamente em alguns instantes.",
+      detail,
     }, 503);
   }
+
 
 
   // Upload to storage
