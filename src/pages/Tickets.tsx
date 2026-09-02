@@ -97,6 +97,14 @@ export default function Tickets() {
     return d.toISOString();
   }, [period]);
 
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+
+
   const { data: meta } = useQuery({
     queryKey: ['tickets-meta'],
     queryFn: async () => {
