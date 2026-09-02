@@ -567,10 +567,27 @@ export default function NfseTab() {
     return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
   }
 
+  function extractXmlName(xml: string | undefined, type: 'prestado' | 'tomado'): string | undefined {
+    if (!xml) return undefined;
+    const blockPatterns = type === 'prestado'
+      ? [/<toma>[\s\S]*?<\/toma>/i, /<Tomador[\s>][\s\S]*?<\/Tomador>/i, /<dest[\s>][\s\S]*?<\/dest>/i]
+      : [/<emit>[\s\S]*?<\/emit>/i, /<Prestador[\s>][\s\S]*?<\/Prestador>/i];
+    for (const pattern of blockPatterns) {
+      const block = xml.match(pattern)?.[0];
+      if (!block) continue;
+      const name = block.match(/<xNome>([\s\S]*?)<\/xNome>/i)?.[1]
+        || block.match(/<RazaoSocial>([\s\S]*?)<\/RazaoSocial>/i)?.[1]
+        || block.match(/<xNome[^>]*>([\s\S]*?)<\/xNome>/i)?.[1];
+      if (name?.trim()) return name.trim();
+    }
+    return undefined;
+  }
+
   function getCounterpartyName(inv: Invoice, type: 'prestado' | 'tomado') {
     const cnpj = type === 'prestado' ? inv.taker_cnpj : inv.issuer_cnpj;
     const name = cnpj ? cnpjNameMap[cleanCnpj(cnpj)] : undefined;
-    return name || '—';
+    if (name) return name;
+    return extractXmlName(inv.raw_data?.xml, type) || '—';
   }
 
   function formatCurrency(value: number) {
