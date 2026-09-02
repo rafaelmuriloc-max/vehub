@@ -589,28 +589,21 @@ export default function NfseTab() {
   useEffect(() => { setPage(0); }, [filterClient, filterType, datePeriod, filterDateFrom, filterDateTo]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        {isAdmin && (
-          <Button onClick={() => navigate('/invoices/emit')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Emitir NFS-e
-          </Button>
-        )}
-      </div>
-
+    <div className="space-y-6 pt-6">
       {/* Sync Card */}
       {isAdmin && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Search className="h-5 w-5" />
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                <Search className="h-5 w-5 text-muted-foreground" />
+              </div>
               Consultar Notas no Portal Nacional
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="border-t border-border pt-6">
             <div className="flex flex-wrap items-end gap-4">
-              <div className="flex-1 min-w-[200px]">
+              <div className="flex-1 min-w-[200px] space-y-2">
                 <Label>Cliente</Label>
                 <Select value={selectedClient} onValueChange={setSelectedClient}>
                   <SelectTrigger>
@@ -624,7 +617,7 @@ export default function NfseTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="w-[180px]">
+              <div className="w-[200px] space-y-2">
                 <Label>Mês de Referência</Label>
                 <Input
                   type="month"
@@ -632,7 +625,7 @@ export default function NfseTab() {
                   onChange={e => setReferenceMonth(e.target.value)}
                 />
               </div>
-              <Button onClick={handleSync} disabled={syncing}>
+              <Button onClick={handleSync} disabled={syncing} className="ml-auto">
                 {syncing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
                 {syncing ? (syncProgress || 'Consultando...') : 'Buscar Notas'}
               </Button>
