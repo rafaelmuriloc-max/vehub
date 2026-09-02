@@ -144,43 +144,68 @@ async function handlePdfDownload(
   const pfxBytes = new Uint8Array(await certFile.arrayBuffer());
   const { certPem, keyPem } = await parsePfx(pfxBytes, client.digital_certificate_password);
 
-  // Fetch PDF from ADN via mTLS
-  const pdfUrl = new URL(`https://adn.nfse.gov.br/danfse/${accessKey}`);
-  console.log(`Fetching PDF from: ${pdfUrl.toString()}`);
+  // DANFSE é servido pelo SEFIN Nacional (o host do ADN não expõe /danfse).
+  const candidateUrls = [
+    new URL(`https://sefin.nfse.gov.br/sefinnacional/danfse/${accessKey}`),
+    new URL(`https://adn.nfse.gov.br/danfse/${accessKey}`), // fallback legado
+  ];
 
   let pdfBytes: Uint8Array | null = null;
   let lastErr: Error | null = null;
-  const MAX_ATTEMPTS = 5;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      pdfBytes = await requestBinaryWithMTLS(pdfUrl, {
-        method: "GET",
-        headers: { "Accept": "application/pdf" },
-      }, certPem, keyPem);
-      if (pdfBytes && pdfBytes.length > 0) break;
-      lastErr = new Error("PDF vazio");
-    } catch (err) {
-      lastErr = err as Error;
-      console.error(`[PDF] tentativa ${attempt} falhou: ${lastErr.message}`);
-      // Rate limit: aguardar mais e continuar tentando
-    }
-    if (attempt < MAX_ATTEMPTS) {
-      const isRate = /429|Rate limit/i.test(lastErr?.message ?? "");
-      const delay = isRate ? 8000 : Math.min(2000 * Math.pow(2, attempt - 1), 12000);
-      await new Promise((r) => setTimeout(r, delay));
+  const MAX_ATTEMPTS = 4;
+
+  outer:
+  for (const pdfUrl of candidateUrls) {
+    console.log(`Fetching PDF from: ${pdfUrl.toString()}`);
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        pdfBytes = await requestBinaryWithMTLS(pdfUrl, {
+          method: "GET",
+          headers: { "Accept": "application/pdf" },
+        }, certPem, keyPem);
+        if (pdfBytes && pdfBytes.length > 0) break outer;
+        lastErr = new Error("PDF vazio");
+      } catch (err) {
+        lastErr = err as Error;
+        console.error(`[PDF] ${pdfUrl.host} tentativa ${attempt} falhou: ${lastErr.message}`);
+      }
+
+      const msg = lastErr?.message ?? "";
+      // Erros definitivos: não adianta repetir na mesma URL
+      if (/status 403|status 404|status 401/i.test(msg)) break;
+
+      if (attempt < MAX_ATTEMPTS) {
+        const isRate = /429|Rate limit/i.test(msg);
+        const delay = isRate ? 8000 : Math.min(2000 * Math.pow(2, attempt - 1), 12000);
+        await new Promise((r) => setTimeout(r, delay));
+      }
     }
   }
 
   if (!pdfBytes || pdfBytes.length === 0) {
     const detail = lastErr?.message ?? null;
-    const tlsGlitch = /cannot decrypt peer's message|close_notify|UnexpectedEof|connection error/i.test(detail ?? "");
-    return jsonResponse({
-      error: tlsGlitch
-        ? "Falha de conexão TLS com o Portal Nacional NFS-e (instabilidade do portal). Tente novamente em alguns minutos."
-        : "Portal Nacional NFS-e indisponível no momento (503). Tente novamente em alguns instantes.",
-      detail,
-    }, 503);
+    const d = detail ?? "";
+    const forbidden = /status 403|status 401/i.test(d);
+    const notFound = /status 404/i.test(d);
+    const tlsGlitch = /cannot decrypt peer's message|close_notify|UnexpectedEof|connection error/i.test(d);
+
+    let error: string;
+    let status = 503;
+    if (forbidden) {
+      error = "Acesso negado pelo Portal Nacional NFS-e (403). Verifique se o certificado digital do cliente tem autorização para baixar esta nota.";
+      status = 403;
+    } else if (notFound) {
+      error = "DANFSE não encontrado no Portal Nacional para esta chave de acesso (404).";
+      status = 404;
+    } else if (tlsGlitch) {
+      error = "Falha de conexão TLS com o Portal Nacional NFS-e (instabilidade do portal). Tente novamente em alguns minutos.";
+    } else {
+      error = "Portal Nacional NFS-e indisponível no momento (503). Tente novamente em alguns instantes.";
+    }
+
+    return jsonResponse({ error, detail }, status);
   }
+
 
 
 
