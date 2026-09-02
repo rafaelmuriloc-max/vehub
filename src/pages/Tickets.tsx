@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -281,7 +281,7 @@ export default function Tickets() {
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">{t.ticket_number}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.opened_at)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.closed_at)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{fmtDuration(t.handle_seconds)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{ticketDuration(t, nowMs)}</td>
                   <td className="px-3 py-2 truncate max-w-[180px]">{t.contact_name || t.contact_phone || '—'}</td>
                   <td className="px-3 py-2 hidden md:table-cell truncate max-w-[220px]">{t.client_id ? clientMap[t.client_id] ?? '—' : '—'}</td>
                   <td className="px-3 py-2 hidden lg:table-cell truncate max-w-[280px]">
@@ -327,7 +327,7 @@ export default function Tickets() {
                 <div><p className="text-xs text-muted-foreground">Abertura</p><p>{fmtDate(detail.opened_at)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Encerramento</p><p>{fmtDate(detail.closed_at)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Tempo de espera</p><p>{fmtDuration(detail.wait_seconds)}</p></div>
-                <div><p className="text-xs text-muted-foreground">Duração</p><p>{fmtDuration(detail.handle_seconds)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Duração</p><p>{ticketDuration(detail, nowMs)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Mensagens</p><p>{detail.messages_count}</p></div>
                 <div><p className="text-xs text-muted-foreground">Categoria</p><p>{detail.category || '—'}</p></div>
               </div>
