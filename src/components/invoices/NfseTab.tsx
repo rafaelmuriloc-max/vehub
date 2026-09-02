@@ -735,6 +735,8 @@ export default function NfseTab() {
               </button>
             ))}
           </div>
+          </div>
+        </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Carregando...</p>
@@ -749,7 +751,6 @@ export default function NfseTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
-                    <TableHead>Tipo</TableHead>
                     <TableHead className="max-w-[150px]">Cliente</TableHead>
                     <TableHead>Data Emissão</TableHead>
                     <TableHead className="hidden lg:table-cell">Descrição</TableHead>
