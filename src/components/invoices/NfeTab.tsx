@@ -64,7 +64,7 @@ export default function NfeTab() {
   const [clients, setClients] = useState<Client[]>([]);
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
   const [selectedClient, setSelectedClient] = useState('');
-  const [loading, setLoading] = useState(false);
+  
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
