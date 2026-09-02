@@ -117,6 +117,17 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location.pathname === '/tickets'}
+                  onClick={() => navigate('/tickets')}
+                  className="transition-colors duration-150"
+                >
+                  <Ticket className="h-4 w-4" />
+                  <span>Chamados</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {isAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
