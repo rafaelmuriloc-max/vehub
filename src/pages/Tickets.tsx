@@ -258,6 +258,7 @@ export default function Tickets() {
             <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 text-left">#</th>
+                <th className="px-3 py-2 text-left">Categoria</th>
                 <th className="px-3 py-2 text-left">Abertura</th>
                 <th className="px-3 py-2 text-left">Fechamento</th>
                 <th className="px-3 py-2 text-left">Duração</th>
@@ -270,7 +271,7 @@ export default function Tickets() {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">Nenhum chamado encontrado.</td></tr>
+                <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">Nenhum chamado encontrado.</td></tr>
               )}
               {rows.map((t) => (
                 <tr
@@ -279,6 +280,7 @@ export default function Tickets() {
                   className="border-t border-border/40 hover:bg-muted/40 cursor-pointer"
                 >
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">{t.ticket_number}</td>
+                  <td className="px-3 py-2 truncate max-w-[160px]">{t.department_id ? deptMap[t.department_id] ?? '—' : '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.opened_at)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.closed_at)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{ticketDuration(t, nowMs)}</td>
