@@ -1595,6 +1595,63 @@ export type Database = {
           },
         ]
       }
+      nfe_sync_runs: {
+        Row: {
+          clients_processed: number
+          clients_total: number
+          created_at: string
+          details: Json
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          lease_expires_at: string
+          nfe_errors: number
+          nfe_success: number
+          nfse_errors: number
+          nfse_success: number
+          reference_date: string
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          clients_processed?: number
+          clients_total?: number
+          created_at?: string
+          details?: Json
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          lease_expires_at?: string
+          nfe_errors?: number
+          nfe_success?: number
+          nfse_errors?: number
+          nfse_success?: number
+          reference_date: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          clients_processed?: number
+          clients_total?: number
+          created_at?: string
+          details?: Json
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          lease_expires_at?: string
+          nfe_errors?: number
+          nfe_success?: number
+          nfse_errors?: number
+          nfse_success?: number
+          reference_date?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       obligation_activities: {
         Row: {
           auto_start: boolean
