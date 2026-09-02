@@ -465,15 +465,6 @@ export default function NfeTab() {
     return formatClientLabel(clients.find(c => c.id === clientId), '—');
   }
 
-  function formatCurrency(value: number) {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  }
-
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return '—';
-    return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
-  }
-
   async function fetchXmlContent(inv: NfeInvoice): Promise<string | null> {
     const res = await supabase.functions.invoke('nfe-download', {
       body: { nfe_invoice_id: inv.id, type: 'xml' },
