@@ -148,14 +148,30 @@ async function handlePdfDownload(
   const pdfUrl = new URL(`https://adn.nfse.gov.br/danfse/${accessKey}`);
   console.log(`Fetching PDF from: ${pdfUrl.toString()}`);
 
-  const pdfBytes = await requestBinaryWithMTLS(pdfUrl, {
-    method: "GET",
-    headers: { "Accept": "application/pdf" },
-  }, certPem, keyPem);
+  let pdfBytes: Uint8Array | null = null;
+  let lastErr: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      pdfBytes = await requestBinaryWithMTLS(pdfUrl, {
+        method: "GET",
+        headers: { "Accept": "application/pdf" },
+      }, certPem, keyPem);
+      if (pdfBytes && pdfBytes.length > 0) break;
+      lastErr = new Error("PDF vazio");
+    } catch (err) {
+      lastErr = err as Error;
+      console.error(`[PDF] tentativa ${attempt} falhou: ${lastErr.message}`);
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2000));
+  }
 
   if (!pdfBytes || pdfBytes.length === 0) {
-    return jsonResponse({ error: "PDF vazio ou não disponível no portal" }, 404);
+    return jsonResponse({
+      error: "Portal Nacional NFS-e indisponível no momento (503). Tente novamente em alguns instantes.",
+      detail: lastErr?.message ?? null,
+    }, 503);
   }
+
 
   // Upload to storage
   const storagePath = `nfse/${clientId}/${accessKey}.pdf`;
@@ -301,7 +317,17 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
   try {
     while (true) {
       const buffer = new Uint8Array(16_384);
-      const bytesRead = await conn.read(buffer);
+      let bytesRead: number | null;
+      try {
+        bytesRead = await conn.read(buffer);
+      } catch (err) {
+        const msg = (err as Error)?.message || "";
+        // Alguns servidores encerram o TLS sem close_notify: usar o que já foi lido
+        if (msg.includes("close_notify") || (err as Error)?.name === "UnexpectedEof") {
+          break;
+        }
+        throw err;
+      }
       if (bytesRead === null) break;
       const chunk = buffer.slice(0, bytesRead);
       chunks.push(chunk);
@@ -310,6 +336,7 @@ async function readAllFromConnection(conn: Deno.Conn, timeoutMs: number): Promis
   } finally {
     clearTimeout(timeout);
   }
+
 
   if (didTimeout) {
     throw new Error(`Timeout ao baixar PDF após ${timeoutMs}ms`);
