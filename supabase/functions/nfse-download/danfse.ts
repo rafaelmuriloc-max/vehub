@@ -346,8 +346,16 @@ class Danfse {
     this.y = bottom;
   }
 
-  textBlock(lines: string[], size = VALUE_SIZE, padding = 4) {
-    const height = Math.max(14, lines.length * (size + 2) + padding * 2 - 4);
+  textBlock(
+    lines: string[],
+    size = VALUE_SIZE,
+    padding = 4,
+    fixedHeight?: number,
+  ) {
+    const height =
+      fixedHeight ??
+      Math.max(13, lines.length * (size + 2) + padding * 2 - 4);
+
     this.ensure(height);
     const top = this.y;
     const bottom = top - height;
