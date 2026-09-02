@@ -492,7 +492,6 @@ export default function NfeTab() {
 
   const entradaTotalValue = entradaInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
   const saidaTotalValue = saidaInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
-  const totalValue = filteredInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
   const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
