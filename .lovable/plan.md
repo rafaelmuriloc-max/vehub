@@ -16,7 +16,7 @@ Buscando pelo telefone do contato nos cadastros:
    - contatos por departamento (`client_department_contacts.contact_phone`).
    Só vincula quando o telefone aponta para uma única empresa; se houver ambiguidade, fica em branco (sem chute).
 2. **Manter sincronizado**: se a conversa for vinculada a uma empresa depois (registro do contato no chat), o chamado aberto correspondente passa a refletir essa empresa.
-3. **Corrigir os registros existentes**: aplicar a mesma resolução aos chamados já criados que estão sem empresa (deve resolver 5 dos 10 casos atuais).
+3. **Corrigir os registros existentes**: aplicar a mesma resolução aos chamados já criados que estão sem empresa (resolve 5 dos 10 casos atuais) e também gravar a empresa na conversa do chat correspondente, que hoje segue sem vínculo mesmo com o contato já cadastrado.
 4. **Lista de chamados**: quando não houver empresa, mostrar "Não cadastrado" em vez de apenas um traço, para diferenciar de dado ausente.
 
 ## Detalhes técnicos
