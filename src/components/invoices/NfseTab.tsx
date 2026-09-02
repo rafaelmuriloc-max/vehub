@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen, ChevronLeft, ChevronRight, Building2, Wallet, Landmark, ShieldCheck, User, Coins, PieChart, Briefcase, Heart, Building } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatClientLabel } from '@/lib/utils';
 
@@ -70,6 +70,153 @@ function parseRetentions(inv: Invoice): Retentions {
   const total = iss + federalTotal;
 
   return { iss, irrf, pis, cofins, csll, inss, cp, total };
+}
+
+const brl = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+
+const TAX_META: { key: Exclude<keyof Retentions, 'total'>; label: string; icon: typeof User }[] = [
+  { key: 'iss', label: 'ISS', icon: User },
+  { key: 'irrf', label: 'IRRF', icon: FileText },
+  { key: 'pis', label: 'PIS', icon: Coins },
+  { key: 'cofins', label: 'COFINS', icon: PieChart },
+  { key: 'csll', label: 'CSLL', icon: Briefcase },
+  { key: 'inss', label: 'INSS', icon: Heart },
+  { key: 'cp', label: 'CP', icon: Building },
+];
+
+type SummaryVariant = 'blue' | 'orange';
+
+const VARIANT_STYLES: Record<SummaryVariant, {
+  panel: string;
+  headerIcon: string;
+  iconCircle: string;
+  iconColor: string;
+  banner: string;
+  bannerIcon: string;
+  bannerLabel: string;
+  bannerValue: string;
+  taxIcon: string;
+}> = {
+  blue: {
+    panel: 'border-l-4 border-l-blue-500 bg-blue-50/40 dark:bg-blue-950/20',
+    headerIcon: 'bg-blue-600 text-white',
+    iconCircle: 'bg-blue-100 dark:bg-blue-900/50',
+    iconColor: 'text-blue-600 dark:text-blue-400',
+    banner: 'bg-blue-100/80 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800',
+    bannerIcon: 'bg-blue-600 text-white',
+    bannerLabel: 'text-blue-600 dark:text-blue-400',
+    bannerValue: 'text-blue-700 dark:text-blue-300',
+    taxIcon: 'text-blue-500 dark:text-blue-400',
+  },
+  orange: {
+    panel: 'border-l-4 border-l-orange-500 bg-orange-50/40 dark:bg-orange-950/20',
+    headerIcon: 'bg-orange-500 text-white',
+    iconCircle: 'bg-orange-100 dark:bg-orange-900/50',
+    iconColor: 'text-orange-600 dark:text-orange-400',
+    banner: 'bg-orange-100/80 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800',
+    bannerIcon: 'bg-orange-500 text-white',
+    bannerLabel: 'text-orange-600 dark:text-orange-400',
+    bannerValue: 'text-orange-600 dark:text-orange-400',
+    taxIcon: 'text-orange-500 dark:text-orange-400',
+  },
+};
+
+function ServiceSummarySection({
+  variant,
+  title,
+  type,
+  invoices,
+  totalGross,
+  totalTax,
+  retentions,
+  showRetentions,
+  onRetentionClick,
+}: {
+  variant: SummaryVariant;
+  title: string;
+  type: 'prestado' | 'tomado';
+  invoices: Invoice[];
+  totalGross: number;
+  totalTax: number;
+  retentions: Retentions;
+  showRetentions: boolean;
+  onRetentionClick: (detail: { type: 'prestado' | 'tomado'; taxKey: keyof Retentions }) => void;
+}) {
+  const s = VARIANT_STYLES[variant];
+
+  const statCards = [
+    { label: 'Total de Notas', value: String(invoices.length), icon: FileText },
+    { label: 'Valor Bruto Total', value: brl(totalGross), icon: Wallet },
+    { label: 'Total de Impostos', value: brl(totalTax), icon: Landmark },
+  ];
+
+  return (
+    <Card className={s.panel}>
+      <CardContent className="p-4 md:p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${s.headerIcon}`}>
+            <Building2 className="h-5 w-5" />
+          </div>
+          <h3 className="text-lg font-bold text-foreground">{title}</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {statCards.map(stat => (
+            <Card key={stat.label} className="bg-card">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${s.iconCircle}`}>
+                  <stat.icon className={`h-5 w-5 ${s.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className="text-xl font-bold text-foreground truncate">{stat.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {showRetentions && (
+          <>
+            <button
+              type="button"
+              onClick={() => onRetentionClick({ type, taxKey: 'total' })}
+              className={`w-full rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 cursor-pointer hover:shadow-md transition-shadow ${s.banner}`}
+            >
+              <span className="flex items-center gap-2">
+                <span className={`h-7 w-7 rounded-full flex items-center justify-center ${s.bannerIcon}`}>
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <span className={`text-sm font-semibold ${s.bannerLabel}`}>Impostos Retidos</span>
+              </span>
+              <span className={`hidden sm:block h-6 w-px ${variant === 'blue' ? 'bg-blue-300 dark:bg-blue-700' : 'bg-orange-300 dark:bg-orange-700'}`} />
+              <span className={`text-xs ${s.bannerLabel}`}>Total Retido</span>
+              <span className={`text-xl font-bold ${s.bannerValue}`}>{brl(retentions.total)}</span>
+            </button>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {TAX_META.map(tax => (
+                <Card
+                  key={tax.key}
+                  className="bg-card cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => onRetentionClick({ type, taxKey: tax.key })}
+                >
+                  <CardContent className="p-3 space-y-1">
+                    <span className="flex items-center gap-1.5">
+                      <tax.icon className={`h-4 w-4 ${s.taxIcon}`} />
+                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">{tax.label}</span>
+                    </span>
+                    <p className="text-sm font-bold text-foreground">{brl(retentions[tax.key])}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function NfseTab() {
@@ -470,103 +617,29 @@ export default function NfseTab() {
         </Card>
       )}
 
-      {/* Serviços Prestados */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full bg-blue-500" />
-          Serviços Prestados
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-blue-200 dark:border-blue-800">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Total de Notas</p>
-              <p className="text-2xl font-bold text-foreground">{prestadosInvoices.length}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-blue-200 dark:border-blue-800">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Valor Bruto Total</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(prestadosTotalGross)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-blue-200 dark:border-blue-800">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Total de Impostos</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(prestadosTotalTax)}</p>
-            </CardContent>
-          </Card>
-        </div>
-        {showPrestadosRetentions && (
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Impostos Retidos</p>
-            <Card className="border-l-[3px] border-l-blue-500 border-blue-200 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-800 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setRetentionDetail({ type: 'prestado', taxKey: 'total' })}>
-              <CardContent className="pt-5 pb-4 px-5">
-                <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wide">Total Retido</p>
-                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(prestadosRetentionTotals.total)}</p>
-              </CardContent>
-            </Card>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              {(['iss','irrf','pis','cofins','csll','inss','cp'] as const).map(key => (
-                <Card key={key} className="border-blue-100 dark:border-blue-900/50 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setRetentionDetail({ type: 'prestado', taxKey: key })}>
-                  <CardContent className="pt-5 pb-4 px-5">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{key.toUpperCase()}</p>
-                    <p className="text-xl font-bold text-foreground">{formatCurrency(prestadosRetentionTotals[key])}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <ServiceSummarySection
+        variant="blue"
+        title="Serviços Prestados"
+        type="prestado"
+        invoices={prestadosInvoices}
+        totalGross={prestadosTotalGross}
+        totalTax={prestadosTotalTax}
+        retentions={prestadosRetentionTotals}
+        showRetentions={showPrestadosRetentions}
+        onRetentionClick={setRetentionDetail}
+      />
 
-      {/* Serviços Tomados */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full bg-orange-500" />
-          Serviços Tomados
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-orange-200 dark:border-orange-800">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Total de Notas</p>
-              <p className="text-2xl font-bold text-foreground">{tomadosInvoices.length}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-orange-200 dark:border-orange-800">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Valor Bruto Total</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(tomadosTotalGross)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-orange-200 dark:border-orange-800">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Total de Impostos</p>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(tomadosTotalTax)}</p>
-            </CardContent>
-          </Card>
-        </div>
-        {showTomadosRetentions && (
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Impostos Retidos</p>
-            <Card className="border-l-[3px] border-l-orange-500 border-orange-200 bg-orange-50/80 dark:bg-orange-950/30 dark:border-orange-800 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setRetentionDetail({ type: 'tomado', taxKey: 'total' })}>
-              <CardContent className="pt-5 pb-4 px-5">
-                <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wide">Total Retido</p>
-                <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(tomadosRetentionTotals.total)}</p>
-              </CardContent>
-            </Card>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              {(['iss','irrf','pis','cofins','csll','inss','cp'] as const).map(key => (
-                <Card key={key} className="border-orange-100 dark:border-orange-900/50 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setRetentionDetail({ type: 'tomado', taxKey: key })}>
-                  <CardContent className="pt-5 pb-4 px-5">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">{key.toUpperCase()}</p>
-                    <p className="text-xl font-bold text-foreground">{formatCurrency(tomadosRetentionTotals[key])}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <ServiceSummarySection
+        variant="orange"
+        title="Serviços Tomados"
+        type="tomado"
+        invoices={tomadosInvoices}
+        totalGross={tomadosTotalGross}
+        totalTax={tomadosTotalTax}
+        retentions={tomadosRetentionTotals}
+        showRetentions={showTomadosRetentions}
+        onRetentionClick={setRetentionDetail}
+      />
 
       <Card>
         <CardHeader>
