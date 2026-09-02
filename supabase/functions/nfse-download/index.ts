@@ -337,7 +337,7 @@ async function createNfseMirrorPdf(xml: string, accessKey: string): Promise<Uint
   field("Tomador", xmlValue(xml, ["xNomeTomador", "RazaoSocialTomador", "NomeTomador"]));
   field("Serviço", xmlValue(xml, ["xDescServ", "Discriminacao", "discriminacao"]));
   field("Valor dos serviços", formatMoney(xmlValue(xml, ["vServ", "ValorServicos", "vLiq"])));
-  field("Valor líquido", formatMoney(xmlValue(xml, ["vLiq", "ValorLiquidoNfse", "ValorLiquido"]));
+  field("Valor líquido", formatMoney(xmlValue(xml, ["vLiq", "ValorLiquidoNfse", "ValorLiquido"])));
   field("Código de verificação", xmlValue(xml, ["cVerif", "CodigoVerificacao"]));
 
   page.drawLine({ start: { x: left, y: 38 }, end: { x: 553, y: 38 }, thickness: 0.5, color: rgb(0.7, 0.72, 0.75) });
