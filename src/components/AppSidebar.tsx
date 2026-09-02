@@ -1,4 +1,4 @@
-import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive, MonitorPlay, Send } from 'lucide-react';
+import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive, MonitorPlay, Send, Ticket } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
