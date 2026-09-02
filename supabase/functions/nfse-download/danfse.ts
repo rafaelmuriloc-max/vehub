@@ -515,12 +515,12 @@ export async function createDanfsePdf(
 
   // ===== Chave / identificação + QR =====
   const blockTop = d.y;
-  const qrSize = 62;
-  const qrX = PAGE_W - MARGIN - qrSize - 12;
+  const qrSize = 54;
+  const qrX = PAGE_W - MARGIN - qrSize - 8;
   await d.qrcode(
     `https://www.nfse.gov.br/consultapublica/?tpc=1&chave=${accessKey}`,
     qrX,
-    blockTop - qrSize - 6,
+    blockTop - qrSize - 5,
     qrSize,
   );
   const noteLines = [
@@ -528,16 +528,17 @@ export async function createDanfsePdf(
     "pela leitura deste código QR ou pela consulta da",
     "chave de acesso no portal nacional da NFS-e",
   ];
-  let noteY = blockTop - qrSize - 16;
+  let noteY = blockTop - qrSize - 13;
   for (const line of noteLines) {
-    d.draw(line, qrX - 22, noteY, 5.2);
-    noteY -= 7;
+    const lw = d.width(line, 5, false);
+    d.draw(line, qrX + qrSize / 2 - lw / 2, noteY, 5);
+    noteY -= 6.5;
   }
 
   const idColumns = CONTENT_W * 0.72;
   const idUnit = idColumns / 3;
   const idRow = (cells: Cell[]) => {
-    const height = 17;
+    const height = 15;
     const top = d.y;
     let x = MARGIN;
     for (const cell of cells) {
@@ -555,9 +556,10 @@ export async function createDanfsePdf(
         d.draw(
           d.clip(cell.value, cellWidth - 6, VALUE_SIZE),
           x + 3,
-          top - 14,
+          top - 13.5,
           VALUE_SIZE,
         );
+
       }
       x += cellWidth;
     }
