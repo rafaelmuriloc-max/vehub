@@ -235,6 +235,8 @@ export default function Tickets() {
               <tr>
                 <th className="px-3 py-2 text-left">#</th>
                 <th className="px-3 py-2 text-left">Abertura</th>
+                <th className="px-3 py-2 text-left">Fechamento</th>
+                <th className="px-3 py-2 text-left">Duração</th>
                 <th className="px-3 py-2 text-left">Contato</th>
                 <th className="px-3 py-2 text-left hidden md:table-cell">Empresa</th>
                 <th className="px-3 py-2 text-left hidden lg:table-cell">Assunto</th>
@@ -244,7 +246,7 @@ export default function Tickets() {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">Nenhum chamado encontrado.</td></tr>
+                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">Nenhum chamado encontrado.</td></tr>
               )}
               {rows.map((t) => (
                 <tr
@@ -254,6 +256,8 @@ export default function Tickets() {
                 >
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">{t.ticket_number}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.opened_at)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.closed_at)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{fmtDuration(t.handle_seconds)}</td>
                   <td className="px-3 py-2 truncate max-w-[180px]">{t.contact_name || t.contact_phone || '—'}</td>
                   <td className="px-3 py-2 hidden md:table-cell truncate max-w-[220px]">{t.client_id ? clientMap[t.client_id] ?? '—' : '—'}</td>
                   <td className="px-3 py-2 hidden lg:table-cell truncate max-w-[280px]">
