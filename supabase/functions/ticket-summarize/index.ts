@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
       for (const [convId, firstAt] of firstByConv) {
         const { data: conv } = await supabase
           .from("chat_conversations")
-          .select("id, name, whatsapp_phone, client_id, assigned_to, status, closed_at, triaged_department_id, total_wait_seconds, is_group")
+          .select("id, name, whatsapp_phone, client_id, assigned_to, status, closed_at, created_at, triaged_department_id, total_wait_seconds, is_group")
           .eq("id", convId)
           .maybeSingle();
         if (!conv) continue;
@@ -141,6 +141,17 @@ Deno.serve(async (req) => {
           .limit(1);
         if (exists && exists.length > 0) continue;
 
+        // Última mensagem do período (fallback de fechamento coerente)
+        let lastAt = firstAt;
+        for (const m of recentMsgs || []) {
+          if (m.conversation_id === convId && m.created_at > lastAt) lastAt = m.created_at;
+        }
+        const openedAt = conv.created_at && conv.created_at < firstAt ? conv.created_at : firstAt;
+        let closedAt: string | null = null;
+        if (conv.status === "closed") {
+          closedAt = conv.closed_at && conv.closed_at >= openedAt ? conv.closed_at : lastAt;
+        }
+
         const { error: insErr } = await supabase.from("support_tickets").insert({
           conversation_id: conv.id,
           client_id: conv.client_id,
@@ -149,8 +160,8 @@ Deno.serve(async (req) => {
           department_id: conv.triaged_department_id,
           assigned_to: conv.assigned_to,
           status: conv.status === "closed" ? "closed" : "open",
-          opened_at: firstAt,
-          closed_at: conv.status === "closed" ? conv.closed_at : null,
+          opened_at: openedAt,
+          closed_at: closedAt,
           wait_seconds: conv.total_wait_seconds ?? 0,
           summary_status: "pending",
         });
