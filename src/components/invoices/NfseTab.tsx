@@ -703,7 +703,7 @@ export default function NfseTab() {
       if (data?.signed_url) {
         await triggerDownload(data.signed_url, filename);
         if (data.fallback && data.warning) {
-          toast({ title: "PDF-espelho gerado", description: data.warning });
+          toast({ title: "DANFSe gerado do XML", description: data.warning });
         }
         setInvoices((prev) =>
           prev.map((inv) => {

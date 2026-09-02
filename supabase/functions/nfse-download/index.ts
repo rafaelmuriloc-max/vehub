@@ -304,7 +304,7 @@ async function handlePdfDownload(
     cached: false,
     fallback: isMirror,
     warning: isMirror
-      ? "Portal Nacional indisponível. Foi gerado um PDF-espelho com os dados do XML oficial da NFS-e."
+      ? "Portal Nacional indisponível. O DANFSe foi gerado a partir do XML oficial da NFS-e."
       : null,
   });
 }
