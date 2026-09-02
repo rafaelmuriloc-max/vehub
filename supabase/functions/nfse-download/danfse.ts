@@ -978,11 +978,20 @@ export async function createDanfsePdf(
     );
   }
   if (!infoLines.length) infoLines.push(DASH);
-  d.textBlock(infoLines, VALUE_SIZE, 6);
+  const naturalInfoH = Math.max(13, infoLines.length * (VALUE_SIZE + 2) + 8);
+  // Estica o bloco até o rodapé, que fica ancorado na base da página
+  const footerH = 15;
+  const footerTop = MARGIN + footerH + 12;
+  const available = d.y - footerTop;
+  const infoH = available > naturalInfoH ? available : naturalInfoH;
+  d.textBlock(infoLines, VALUE_SIZE, 6, infoH);
 
   // ===== Rodapé =====
-  d.ensure(40);
-  d.y -= 12;
+  if (d.y - footerH < MARGIN) {
+    d.newPage();
+    d.y = MARGIN + footerH + 12;
+  }
+  d.y = Math.min(d.y - 12, MARGIN + footerH);
   d.row([
     { label: "DATA CIENTIFICAÇÃO:", value: "" },
     { label: "IDENTIFICAÇÃO E ASSINATURA", value: "" },
@@ -992,6 +1001,7 @@ export async function createDanfsePdf(
       span: 2,
     },
   ]);
+
 
   return await d.doc.save();
 }
