@@ -18,6 +18,8 @@ function formatWait(seconds: number) {
 
 export function TicketsPanel() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+
 
   const { data } = useQuery({
     queryKey: ['dashboard-tickets'],
