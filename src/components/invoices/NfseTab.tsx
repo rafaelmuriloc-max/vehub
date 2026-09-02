@@ -234,7 +234,7 @@ export default function NfseTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
-  const [filterType, setFilterType] = useState<'all' | 'prestados' | 'tomados'>('all');
+  const [listTab, setListTab] = useState<'prestados' | 'tomados'>('prestados');
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -551,8 +551,7 @@ export default function NfseTab() {
   if (filterDateFrom) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
   if (filterDateTo) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
-  let filteredInvoices = baseFiltered;
-  if (filterType !== 'all') filteredInvoices = filteredInvoices.filter(i => getInvoiceType(i) === (filterType === 'prestados' ? 'prestado' : 'tomado'));
+  const filteredInvoices = baseFiltered.filter(i => getInvoiceType(i) === (listTab === 'prestados' ? 'prestado' : 'tomado'));
 
   const prestadosInvoices = baseFiltered.filter(i => getInvoiceType(i) === 'prestado');
 
@@ -584,7 +583,7 @@ export default function NfseTab() {
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [filterClient, filterType, datePeriod, filterDateFrom, filterDateTo]);
+  useEffect(() => { setPage(0); }, [filterClient, listTab, datePeriod, filterDateFrom, filterDateTo]);
 
   return (
     <div className="space-y-6 pt-6">
@@ -696,16 +695,6 @@ export default function NfseTab() {
                   </div>
                 </>
               )}
-              <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  <SelectItem value="prestados">Serviços Prestados</SelectItem>
-                  <SelectItem value="tomados">Serviços Tomados</SelectItem>
-                </SelectContent>
-              </Select>
               <Select value={filterClient} onValueChange={setFilterClient}>
                 <SelectTrigger className="w-full md:w-[220px]">
                   <SelectValue />
@@ -728,6 +717,24 @@ export default function NfseTab() {
                 {exporting ? 'Exportando...' : 'Exportar XMLs'}
               </Button>
             </div>
+          <div className="flex border-b border-border mt-4 -mb-6">
+            {([
+              { key: 'prestados' as const, label: 'Prestados', count: prestadosInvoices.length },
+              { key: 'tomados' as const, label: 'Tomados', count: tomadosInvoices.length },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setListTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  listTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            ))}
+          </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -744,7 +751,6 @@ export default function NfseTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
-                    <TableHead>Tipo</TableHead>
                     <TableHead className="max-w-[150px]">Cliente</TableHead>
                     <TableHead>Data Emissão</TableHead>
                     <TableHead className="hidden lg:table-cell">Descrição</TableHead>
@@ -761,11 +767,6 @@ export default function NfseTab() {
                     return (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                        <TableCell>
-                          <Badge variant={getInvoiceType(inv) === 'prestado' ? 'default' : 'outline'} className={getInvoiceType(inv) === 'prestado' ? 'bg-blue-500 hover:bg-blue-600' : 'border-orange-400 text-orange-600'}>
-                            {getInvoiceType(inv) === 'prestado' ? 'Prestado' : 'Tomado'}
-                          </Badge>
-                        </TableCell>
                         <TableCell className="max-w-[150px] truncate">{getClientName(inv.client_id)}</TableCell>
                         <TableCell>{formatDate(inv.issue_date)}</TableCell>
                         <TableCell className="max-w-[150px] truncate hidden lg:table-cell">{inv.service_description || '—'}</TableCell>
