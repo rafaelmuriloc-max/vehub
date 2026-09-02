@@ -2,15 +2,20 @@
 
 ## O que foi verificado
 
-Consulta na tabela de chamados: dos 25 chamados existentes, os 23 fechados têm duração gravada corretamente. Os únicos sem duração são os 2 chamados ainda **abertos** — a duração só é calculada no fechamento, então a coluna mostra "—".
+- No banco, hoje, os 23 chamados encerrados têm `handle_seconds` gravado e apenas os 2 abertos estão sem duração.
+- Na tela (print enviado) vários encerrados ainda aparecem com "—" — a lista está exibindo apenas o valor gravado no momento em que o chamado foi carregado/fechado, sem recalcular. Chamados encerrados por caminhos que não gravaram o campo (ou carregados antes do preenchimento) ficam com traço permanente.
 
 ## O que muda
 
-- Chamados abertos passam a exibir a **duração em andamento** (tempo desde a abertura até agora), com indicação de que ainda está em curso (ex.: `1h 12min (em andamento)`), atualizada automaticamente enquanto a tela estiver aberta.
-- Chamados fechados que, por qualquer motivo, estejam sem o valor gravado passam a calcular a duração a partir de abertura x fechamento na exibição, em vez de mostrar "—".
-- Mesma regra aplicada na lista e no painel de detalhes do chamado.
+- A duração passa a ser **calculada na exibição**, sem depender exclusivamente do campo gravado:
+  1. usa `handle_seconds` quando existir e for coerente;
+  2. senão, calcula `fechamento − abertura`;
+  3. se o chamado está aberto, mostra o tempo decorrido desde a abertura com o rótulo "em andamento", atualizando sozinho enquanto a tela estiver aberta.
+- Mesma regra na lista e no painel de detalhes.
+- Formatação de duração mais legível (ex.: `2s`, `23min`, `1h20`, `3h05`).
+- Correção de dados: recalcular `handle_seconds` de todos os chamados encerrados que estejam nulos ou inconsistentes com abertura/fechamento, para que relatórios futuros também fiquem certos.
 
 ## Detalhes técnicos
 
-- `src/pages/Tickets.tsx`: helper de duração passa a receber o ticket inteiro e resolver na ordem `handle_seconds` → `closed_at - opened_at` → `now - opened_at` (aberto). Timer leve (1 min) para atualizar chamados abertos.
-- Nenhuma alteração de banco necessária: a trigger de normalização já garante `handle_seconds` coerente no fechamento.
+- `src/pages/Tickets.tsx`: `fmtDuration` passa a receber o ticket (`handle_seconds`, `opened_at`, `closed_at`, `status`) e resolver pela ordem acima; timer de 60s para atualizar chamados abertos.
+- Uma atualização de dados única em `support_tickets` recalcula `handle_seconds = closed_at − opened_at` onde nulo ou negativo. A trigger `trg_ticket_normalize_dates` já mantém a coerência nas próximas gravações.
