@@ -570,7 +570,7 @@ export default function NfseTab() {
   function getCounterpartyName(inv: Invoice, type: 'prestado' | 'tomado') {
     const cnpj = type === 'prestado' ? inv.taker_cnpj : inv.issuer_cnpj;
     const name = cnpj ? cnpjNameMap[cleanCnpj(cnpj)] : undefined;
-    return name || formatCnpj(cnpj);
+    return name || '—';
   }
 
   function formatCurrency(value: number) {
