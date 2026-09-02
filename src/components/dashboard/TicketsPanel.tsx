@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { MetricCard } from './MetricCard';
-import { MessageCircle, Clock, UserX } from 'lucide-react';
+import { MessageCircle, Clock, UserX, List } from 'lucide-react';
+
 
 function formatWait(seconds: number) {
   if (seconds < 60) return `${seconds}s`;
