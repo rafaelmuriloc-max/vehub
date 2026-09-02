@@ -23,5 +23,5 @@ Buscando pelo telefone do contato nos cadastros:
 
 - Função `public.resolve_client_by_phone(_phone text)` (SECURITY DEFINER, STABLE): normaliza para dígitos, gera as variantes com/sem o 9º dígito, procura em `clients.contact_phone` e `client_department_contacts.contact_phone`, retorna o `client_id` somente se houver 1 resultado distinto.
 - `trg_ticket_open_on_conversation` e `trg_ticket_sync_on_conversation` passam a usar `coalesce(NEW.client_id, public.resolve_client_by_phone(NEW.whatsapp_phone))`; o sync também atualiza `client_id` do chamado aberto quando a conversa ganha empresa.
-- Backfill (`UPDATE support_tickets`) usando a mesma função para os chamados com `client_id is null`.
+- Backfill (`UPDATE support_tickets` e `UPDATE chat_conversations`) usando a mesma função para os registros com `client_id is null`.
 - `src/pages/Tickets.tsx`: rótulo "Não cadastrado" na coluna Empresa e no dialog de detalhe quando `client_id` for nulo.
