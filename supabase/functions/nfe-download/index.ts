@@ -145,6 +145,14 @@ Deno.serve(async (req) => {
       if (cStat === "137") hint = " — Faça a Manifestação do Destinatário (Ciência da Operação) antes de baixar.";
       else if (cStat === "656") hint = " — Consumo indevido: aguarde 1 hora antes de tentar novamente.";
       else if (cStat === "108" || cStat === "109") hint = " — Serviço da Receita indisponível, tente novamente mais tarde.";
+      else if (cStat === "632") {
+        // Prazo de download no Ambiente Nacional expirado (~90 dias). Não é erro de código.
+        return jsonResponse({
+          error: "XML indisponível: o prazo de download da NF-e no Ambiente Nacional expirou (até 90 dias após a emissão). Solicite o XML diretamente ao emitente.",
+          cStat,
+          expired: true,
+        }, 404);
+      }
       return jsonResponse({
         error: cStat
           ? `AN: ${cStat} - ${xMotivo}${hint}`
@@ -153,6 +161,7 @@ Deno.serve(async (req) => {
         httpStatus: response.status,
         bodySnippet: response.bodyText.slice(0, 800),
       }, 400);
+
     }
 
     // Iterate <docZip> elements (base64 + gzip) and find one matching the chave/procNFe
