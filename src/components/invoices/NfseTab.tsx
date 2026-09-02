@@ -236,9 +236,15 @@ export default function NfseTab() {
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [listTab, setListTab] = useState<'prestados' | 'tomados'>('prestados');
-  const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
+  const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('this_month');
+  const [filterDateFrom, setFilterDateFrom] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  });
+  const [filterDateTo, setFilterDateTo] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  });
   const [page, setPage] = useState(0);
   const [cnpjNameMap, setCnpjNameMap] = useState<Record<string, string>>({});
 
@@ -684,6 +690,68 @@ export default function NfseTab() {
         </Card>
       )}
 
+      <div className="flex flex-col md:flex-row md:items-center gap-4">
+        <h3 className="text-lg font-bold text-foreground">Notas Fiscais</h3>
+        <div className="flex items-center gap-2 flex-wrap md:ml-auto">
+          <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
+            <SelectTrigger className="w-full md:w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os períodos</SelectItem>
+              <SelectItem value="this_month">Esse Mês</SelectItem>
+              <SelectItem value="last_month">Mês Anterior</SelectItem>
+              <SelectItem value="this_year">Esse Ano</SelectItem>
+              <SelectItem value="last_year">Ano Anterior</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {datePeriod === 'custom' && (
+            <>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">De:</Label>
+                <Input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={e => setFilterDateFrom(e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">Até:</Label>
+                <Input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={e => setFilterDateTo(e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+            </>
+          )}
+          <Select value={filterClient} onValueChange={setFilterClient}>
+            <SelectTrigger className="w-full md:w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os clientes</SelectItem>
+              {clients.map(c => (
+                <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full md:w-auto"
+            disabled={exporting || filteredInvoices.filter(i => i.access_key).length === 0}
+            onClick={handleBatchExportXml}
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PackageOpen className="h-4 w-4 mr-2" />}
+            {exporting ? 'Exportando...' : 'Exportar XMLs'}
+          </Button>
+        </div>
+      </div>
+
       <ServiceSummarySection
         variant="blue"
         title="Serviços Prestados"
@@ -709,68 +777,8 @@ export default function NfseTab() {
       />
 
       <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <CardTitle className="text-lg">Notas Fiscais</CardTitle>
-            <div className="flex items-center gap-2 flex-wrap md:ml-auto">
-              <Select value={datePeriod} onValueChange={(v) => handleDatePeriodChange(v as typeof datePeriod)}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os períodos</SelectItem>
-                  <SelectItem value="this_month">Esse Mês</SelectItem>
-                  <SelectItem value="last_month">Mês Anterior</SelectItem>
-                  <SelectItem value="this_year">Esse Ano</SelectItem>
-                  <SelectItem value="last_year">Ano Anterior</SelectItem>
-                  <SelectItem value="custom">Personalizado</SelectItem>
-                </SelectContent>
-              </Select>
-              {datePeriod === 'custom' && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm whitespace-nowrap">De:</Label>
-                    <Input
-                      type="date"
-                      value={filterDateFrom}
-                      onChange={e => setFilterDateFrom(e.target.value)}
-                      className="w-[160px]"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm whitespace-nowrap">Até:</Label>
-                    <Input
-                      type="date"
-                      value={filterDateTo}
-                      onChange={e => setFilterDateTo(e.target.value)}
-                      className="w-[160px]"
-                    />
-                  </div>
-                </>
-              )}
-              <Select value={filterClient} onValueChange={setFilterClient}>
-                <SelectTrigger className="w-full md:w-[220px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os clientes</SelectItem>
-                  {clients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full md:w-auto"
-                disabled={exporting || filteredInvoices.filter(i => i.access_key).length === 0}
-                onClick={handleBatchExportXml}
-              >
-                {exporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PackageOpen className="h-4 w-4 mr-2" />}
-                {exporting ? 'Exportando...' : 'Exportar XMLs'}
-              </Button>
-            </div>
-          <div className="flex border-b border-border mt-4 -mb-6">
+        <CardHeader className="pb-0">
+          <div className="flex border-b border-border">
             {([
               { key: 'prestados' as const, label: 'Prestados', count: prestadosInvoices.length },
               { key: 'tomados' as const, label: 'Tomados', count: tomadosInvoices.length },
@@ -787,7 +795,6 @@ export default function NfseTab() {
                 {tab.label} ({tab.count})
               </button>
             ))}
-          </div>
           </div>
         </CardHeader>
         <CardContent>
