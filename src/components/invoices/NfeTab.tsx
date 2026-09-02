@@ -122,13 +122,22 @@ export default function NfeTab() {
 
   async function loadInvoices() {
     setLoading(true);
-    const { data } = await supabase
-      .from('nfe_invoices')
-      .select('*')
-      .order('issue_date', { ascending: false });
-    if (data) setInvoices(data as NfeInvoice[]);
+    const all: NfeInvoice[] = [];
+    const CHUNK = 1000;
+    for (let offset = 0; ; offset += CHUNK) {
+      const { data, error } = await supabase
+        .from('nfe_invoices')
+        .select('*')
+        .order('issue_date', { ascending: false })
+        .range(offset, offset + CHUNK - 1);
+      if (error || !data) break;
+      all.push(...(data as NfeInvoice[]));
+      if (data.length < CHUNK) break;
+    }
+    setInvoices(all);
     setLoading(false);
   }
+
 
   async function handleSync() {
     const clientIds = selectedClient && selectedClient !== 'all'
