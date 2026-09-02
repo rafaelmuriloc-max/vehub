@@ -1434,7 +1434,7 @@ export default function Clients() {
             </Button>
           </div>
           {certMonthData.clients.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum certificado vence neste mês</p>
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum certificado vencido ou vencendo neste mês</p>
           ) : (
             <Table>
               <TableHeader>
@@ -1446,27 +1446,40 @@ export default function Clients() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {certMonthData.clients.map(c => {
-                  const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
-                  const now = new Date();
-                  const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                  let statusBadge: React.ReactNode;
-                  if (diffDays < 0) statusBadge = <Badge variant="destructive" className="text-xs">Vencido</Badge>;
-                  else if (diffDays <= 30) statusBadge = <Badge className="bg-amber-100 text-amber-800 text-xs border-amber-200">{diffDays}d restantes</Badge>;
-                  else statusBadge = <Badge className="bg-emerald-100 text-emerald-800 text-xs border-emerald-200">{diffDays}d restantes</Badge>;
-
-                  return (
-                    <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditing(c); setViewOnly(true); setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(c).map(([k,v]) => [k, v ?? ''])) } as any); setDialogOpen(true); }}>
-                      <TableCell className="font-medium text-sm">{formatClientLabel(c)}</TableCell>
-                      <TableCell className="text-sm">{c.document || '-'}</TableCell>
-                      <TableCell className="text-sm">{exp.toLocaleDateString('pt-BR')}</TableCell>
-                      <TableCell>{statusBadge}</TableCell>
+                {([
+                  { key: 'expired', label: 'Vencidos', rows: certMonthData.expiredList },
+                  { key: 'month', label: `Vence em ${certMonthLabel}`, rows: certMonthData.monthList },
+                ] as const).map(group => group.rows.length === 0 ? null : (
+                  <React.Fragment key={group.key}>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={4} className="bg-muted/40 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group.label} ({group.rows.length})
+                      </TableCell>
                     </TableRow>
-                  );
-                })}
+                    {group.rows.map(c => {
+                      const exp = new Date(c.digital_certificate_expiry! + 'T00:00:00');
+                      const now = new Date();
+                      const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                      let statusBadge: React.ReactNode;
+                      if (diffDays < 0) statusBadge = <Badge variant="destructive" className="text-xs">Vencido</Badge>;
+                      else if (diffDays <= 30) statusBadge = <Badge className="bg-amber-100 text-amber-800 text-xs border-amber-200">{diffDays}d restantes</Badge>;
+                      else statusBadge = <Badge className="bg-emerald-100 text-emerald-800 text-xs border-emerald-200">{diffDays}d restantes</Badge>;
+
+                      return (
+                        <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditing(c); setViewOnly(true); setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(c).map(([k,v]) => [k, v ?? ''])) } as any); setDialogOpen(true); }}>
+                          <TableCell className="font-medium text-sm">{formatClientLabel(c)}</TableCell>
+                          <TableCell className="text-sm">{c.document || '-'}</TableCell>
+                          <TableCell className="text-sm">{exp.toLocaleDateString('pt-BR')}</TableCell>
+                          <TableCell>{statusBadge}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </TableBody>
             </Table>
           )}
+
         </CardContent>
       </Card>
 
