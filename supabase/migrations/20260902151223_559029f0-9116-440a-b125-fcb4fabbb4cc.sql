@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.trg_ticket_open_on_conversation() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.trg_ticket_sync_on_conversation() FROM PUBLIC, anon, authenticated;
