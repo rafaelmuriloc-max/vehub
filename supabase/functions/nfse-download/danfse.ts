@@ -269,9 +269,11 @@ class Danfse {
   }
 
   // Linha de células com rótulo pequeno em cima e valor abaixo
-  row(cells: Cell[], options: { shaded?: boolean } = {}) {
-    const height = 17;
-    this.ensure(height);
+  row(cells: Cell[], options: { shaded?: boolean; noBreak?: boolean } = {}) {
+    const height = 15;
+
+    if (!options.noBreak) this.ensure(height);
+
     const top = this.y;
     const bottom = top - height;
     if (options.shaded) {
@@ -302,7 +304,7 @@ class Danfse {
         this.draw(
           this.clip(cell.value, inner, VALUE_SIZE, cell.bold),
           x + 3,
-          top - 14,
+          top - 13.5,
           VALUE_SIZE,
           cell.bold,
         );
@@ -345,8 +347,15 @@ class Danfse {
     this.y = bottom;
   }
 
-  textBlock(lines: string[], size = VALUE_SIZE, padding = 4) {
-    const height = Math.max(14, lines.length * (size + 2) + padding * 2 - 4);
+  textBlock(
+    lines: string[],
+    size = VALUE_SIZE,
+    padding = 4,
+    fixedHeight?: number,
+  ) {
+    const height =
+      fixedHeight ?? Math.max(13, lines.length * (size + 2) + padding * 2 - 4);
+
     this.ensure(height);
     const top = this.y;
     const bottom = top - height;
@@ -439,48 +448,87 @@ export async function createDanfsePdf(
 
   // ===== Cabeçalho =====
   const headerTop = d.y;
-  d.draw("NFS", MARGIN + 4, headerTop - 16, 17, true);
-  d.draw("e", MARGIN + 32, headerTop - 16, 17, true);
-  d.draw("Nota Fiscal de", MARGIN + 44, headerTop - 10, 5.5, true);
-  d.draw("Serviço eletrônica", MARGIN + 44, headerTop - 17, 5.5, true);
+  const headerH = 34;
+  d.page.drawRectangle({
+    x: MARGIN,
+    y: headerTop - headerH,
+    width: CONTENT_W,
+    height: headerH,
+    color: rgb(0.96, 0.96, 0.96),
+  });
+
+  // Marca NFS-e
+  const brandGrey = rgb(0.22, 0.24, 0.27);
+  const brandGreen = rgb(0.29, 0.62, 0.24);
+  d.page.drawText("NFS", {
+    x: MARGIN + 4,
+    y: headerTop - 20,
+    size: 18,
+    font: d.bold,
+    color: brandGrey,
+  });
+  const brandDotX = MARGIN + 4 + d.bold.widthOfTextAtSize("NFS", 18) + 6;
+  d.page.drawCircle({
+    x: brandDotX,
+    y: headerTop - 14.5,
+    size: 7.5,
+    color: brandGreen,
+  });
+  d.page.drawText("e", {
+    x: brandDotX - 3,
+    y: headerTop - 19,
+    size: 12,
+    font: d.bold,
+    color: rgb(1, 1, 1),
+  });
+  d.page.drawText("Nota Fiscal de", {
+    x: brandDotX + 11,
+    y: headerTop - 12,
+    size: 5.5,
+    font: d.bold,
+    color: brandGrey,
+  });
+  d.page.drawText("Serviço eletrônica", {
+    x: brandDotX + 11,
+    y: headerTop - 19,
+    size: 5.5,
+    font: d.bold,
+    color: brandGrey,
+  });
 
   const centerText = (value: string, size: number, offset: number) => {
     const w = d.width(value, size, true);
     d.draw(value, MARGIN + (CONTENT_W - w) / 2, headerTop - offset, size, true);
   };
-  centerText("DANFSe v2.0", 9, 12);
-  centerText("Documento Auxiliar da NFS-e", 8, 23);
+  centerText("DANFSe v2.0", 9, 14);
+  centerText("Documento Auxiliar da NFS-e", 8, 25);
 
   const rightX = MARGIN + CONTENT_W * 0.72;
-  d.draw(
-    `Município: ${orDash(municipioEmitFull)}`,
-    rightX,
-    headerTop - 10,
-    6.5,
-  );
+  const municipioHeader = municipioEmitFull.replace(" / ", " - ");
+  d.draw(`Município: ${orDash(municipioHeader)}`, rightX, headerTop - 12, 6.5);
   d.draw(
     `Ambiente Gerador: ${orDash(text(infNFSe, ["ambGer"]))}`,
     rightX,
-    headerTop - 18,
+    headerTop - 20,
     5.5,
   );
   d.draw(
     `Tipo de Ambiente: ${orDash(text(dps, ["tpAmb"]))}`,
     rightX,
-    headerTop - 25,
+    headerTop - 27,
     5.5,
   );
-  d.y = headerTop - 32;
+  d.y = headerTop - headerH;
   d.hline(d.y);
 
   // ===== Chave / identificação + QR =====
   const blockTop = d.y;
-  const qrSize = 62;
-  const qrX = PAGE_W - MARGIN - qrSize - 12;
+  const qrSize = 54;
+  const qrX = PAGE_W - MARGIN - qrSize - 8;
   await d.qrcode(
     `https://www.nfse.gov.br/consultapublica/?tpc=1&chave=${accessKey}`,
     qrX,
-    blockTop - qrSize - 6,
+    blockTop - qrSize - 5,
     qrSize,
   );
   const noteLines = [
@@ -488,16 +536,17 @@ export async function createDanfsePdf(
     "pela leitura deste código QR ou pela consulta da",
     "chave de acesso no portal nacional da NFS-e",
   ];
-  let noteY = blockTop - qrSize - 16;
+  let noteY = blockTop - qrSize - 13;
   for (const line of noteLines) {
-    d.draw(line, qrX - 22, noteY, 5.2);
-    noteY -= 7;
+    const lw = d.width(line, 5, false);
+    d.draw(line, qrX + qrSize / 2 - lw / 2, noteY, 5);
+    noteY -= 6.5;
   }
 
   const idColumns = CONTENT_W * 0.72;
   const idUnit = idColumns / 3;
   const idRow = (cells: Cell[]) => {
-    const height = 17;
+    const height = 15;
     const top = d.y;
     let x = MARGIN;
     for (const cell of cells) {
@@ -515,7 +564,7 @@ export async function createDanfsePdf(
         d.draw(
           d.clip(cell.value, cellWidth - 6, VALUE_SIZE),
           x + 3,
-          top - 14,
+          top - 13.5,
           VALUE_SIZE,
         );
       }
@@ -575,7 +624,7 @@ export async function createDanfsePdf(
       })(),
     },
   ]);
-  d.y = Math.min(d.y, blockTop - qrSize - 40);
+  d.y = Math.min(d.y, blockTop - qrSize - 32);
   d.hline(d.y);
 
   // ===== Prestador =====
@@ -927,20 +976,32 @@ export async function createDanfsePdf(
     );
   }
   if (!infoLines.length) infoLines.push(DASH);
-  d.textBlock(infoLines, VALUE_SIZE, 6);
+  const naturalInfoH = Math.max(13, infoLines.length * (VALUE_SIZE + 2) + 8);
+  // Estica o bloco até o rodapé, que fica ancorado na base da página
+  const footerH = 15;
+  const footerTop = MARGIN + footerH + 12;
+  const available = d.y - footerTop;
+  const infoH = available > naturalInfoH ? available : naturalInfoH;
+  d.textBlock(infoLines, VALUE_SIZE, 6, infoH);
 
   // ===== Rodapé =====
-  d.ensure(40);
-  d.y -= 12;
-  d.row([
-    { label: "DATA CIENTIFICAÇÃO:", value: "" },
-    { label: "IDENTIFICAÇÃO E ASSINATURA", value: "" },
-    {
-      label: "N° NFS-e / CHAVE NFS-e",
-      value: `${orDash(text(infNFSe, ["nNFSe"]))} / ${accessKey}`,
-      span: 2,
-    },
-  ]);
+  if (d.y - footerH < MARGIN) {
+    d.newPage();
+    d.y = MARGIN + footerH + 12;
+  }
+  d.y = Math.min(d.y - 12, MARGIN + footerH);
+  d.row(
+    [
+      { label: "DATA CIENTIFICAÇÃO:", value: "" },
+      { label: "IDENTIFICAÇÃO E ASSINATURA", value: "" },
+      {
+        label: "N° NFS-e / CHAVE NFS-e",
+        value: `${orDash(text(infNFSe, ["nNFSe"]))} / ${accessKey}`,
+        span: 2,
+      },
+    ],
+    { noBreak: true },
+  );
 
   return await d.doc.save();
 }
