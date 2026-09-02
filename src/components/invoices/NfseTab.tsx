@@ -230,7 +230,7 @@ export default function NfseTab() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [loading, setLoading] = useState(false);
+  
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
