@@ -144,13 +144,22 @@ export default function NfseTab() {
 
   async function loadInvoices() {
     setLoading(true);
-    const { data } = await supabase
-      .from('invoices')
-      .select('*')
-      .order('issue_date', { ascending: false });
-    if (data) setInvoices(data as Invoice[]);
+    const CHUNK = 1000;
+    const all: Invoice[] = [];
+    for (let offset = 0; ; offset += CHUNK) {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .order('issue_date', { ascending: false })
+        .range(offset, offset + CHUNK - 1);
+      if (error || !data) break;
+      all.push(...(data as Invoice[]));
+      if (data.length < CHUNK) break;
+    }
+    setInvoices(all);
     setLoading(false);
   }
+
 
   async function handleSync() {
     if (!referenceMonth) {
