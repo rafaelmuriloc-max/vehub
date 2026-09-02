@@ -523,7 +523,15 @@ export default function NfseTab() {
       });
 
       if (error) {
-        toast({ title: `Erro ao baixar ${type.toUpperCase()}`, description: error.message, variant: 'destructive' });
+        let description = error.message;
+        try {
+          const context = (error as { context?: Response }).context;
+          const payload = context ? await context.clone().json() as { error?: string } : null;
+          if (payload?.error) description = payload.error;
+        } catch {
+          // Mantém a mensagem original quando a resposta não contiver JSON.
+        }
+        toast({ title: `Erro ao baixar ${type.toUpperCase()}`, description, variant: 'destructive' });
         return;
       }
 
@@ -534,6 +542,9 @@ export default function NfseTab() {
 
       if (data?.signed_url) {
         await triggerDownload(data.signed_url, filename);
+        if (data.fallback && data.warning) {
+          toast({ title: 'PDF-espelho gerado', description: data.warning });
+        }
         setInvoices(prev => prev.map(inv => {
           if (inv.id !== invoiceId) return inv;
           return type === 'xml'
