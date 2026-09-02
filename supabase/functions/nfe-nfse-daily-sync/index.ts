@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
 
   // ---- Clientes elegíveis: ativos, com CNPJ e certificado válido ----
   const today = new Date().toISOString().slice(0, 10);
-  const { data: clients, error: clientsError } = await supabase
+  const clientsQuery = supabase
     .from("clients")
     .select("id, company_name, sci_code, document, digital_certificate_url, digital_certificate_expiry")
     .eq("status", "active")
@@ -82,6 +82,10 @@ Deno.serve(async (req) => {
     .not("digital_certificate_url", "is", null)
     .gte("digital_certificate_expiry", today)
     .order("company_name");
+
+  if (typeof body?.client_id === "string") clientsQuery.eq("id", body.client_id);
+
+  const { data: clients, error: clientsError } = await clientsQuery;
 
   if (clientsError) return jsonResponse({ error: clientsError.message }, 500);
 
