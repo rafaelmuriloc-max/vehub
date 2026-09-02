@@ -627,7 +627,7 @@ export async function createDanfsePdf(
       })(),
     },
   ]);
-  d.y = Math.min(d.y, blockTop - qrSize - 40);
+  d.y = Math.min(d.y, blockTop - qrSize - 32);
   d.hline(d.y);
 
   // ===== Prestador =====
@@ -1001,7 +1001,7 @@ export async function createDanfsePdf(
       value: `${orDash(text(infNFSe, ["nNFSe"]))} / ${accessKey}`,
       span: 2,
     },
-  ]);
+  ], { noBreak: true });
 
 
   return await d.doc.save();
