@@ -695,16 +695,6 @@ export default function NfseTab() {
                   </div>
                 </>
               )}
-              <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  <SelectItem value="prestados">Serviços Prestados</SelectItem>
-                  <SelectItem value="tomados">Serviços Tomados</SelectItem>
-                </SelectContent>
-              </Select>
               <Select value={filterClient} onValueChange={setFilterClient}>
                 <SelectTrigger className="w-full md:w-[220px]">
                   <SelectValue />
@@ -727,8 +717,24 @@ export default function NfseTab() {
                 {exporting ? 'Exportando...' : 'Exportar XMLs'}
               </Button>
             </div>
+          <div className="flex border-b border-border mt-4 -mb-6">
+            {([
+              { key: 'prestados' as const, label: 'Prestados', count: prestadosInvoices.length },
+              { key: 'tomados' as const, label: 'Tomados', count: tomadosInvoices.length },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setListTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  listTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            ))}
           </div>
-        </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Carregando...</p>
