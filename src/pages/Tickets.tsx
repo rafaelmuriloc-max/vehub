@@ -283,7 +283,9 @@ export default function Tickets() {
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(t.closed_at)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{ticketDuration(t, nowMs)}</td>
                   <td className="px-3 py-2 truncate max-w-[180px]">{t.contact_name || t.contact_phone || '—'}</td>
-                  <td className="px-3 py-2 hidden md:table-cell truncate max-w-[220px]">{t.client_id ? clientMap[t.client_id] ?? '—' : '—'}</td>
+                  <td className="px-3 py-2 hidden md:table-cell truncate max-w-[220px]">
+                    {t.client_id ? clientMap[t.client_id] ?? '—' : <span className="text-muted-foreground">Não cadastrado</span>}
+                  </td>
                   <td className="px-3 py-2 hidden lg:table-cell truncate max-w-[280px]">
                     {t.subject || (t.summary_status === 'pending' ? <span className="text-muted-foreground">Resumo pendente</span> : '—')}
                   </td>
