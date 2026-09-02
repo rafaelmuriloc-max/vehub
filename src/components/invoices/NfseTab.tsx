@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, FileCode, Plus, Loader2, PackageOpen, ChevronLeft, ChevronRight, Building2, Wallet, Landmark, ShieldCheck, User, Coins, PieChart, Briefcase, Heart, Building } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatClientLabel } from '@/lib/utils';
 
