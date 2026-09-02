@@ -16,12 +16,12 @@ Buscando pelo telefone do contato nos cadastros:
    - contatos por departamento (`client_department_contacts.contact_phone`).
    Só vincula quando o telefone aponta para uma única empresa; se houver ambiguidade, fica em branco (sem chute).
 2. **Manter sincronizado**: se a conversa for vinculada a uma empresa depois (registro do contato no chat), o chamado aberto correspondente passa a refletir essa empresa.
-3. **Corrigir os registros existentes**: aplicar a mesma resolução aos chamados já criados que estão sem empresa (deve resolver 5 dos 10 casos atuais).
+3. **Corrigir os registros existentes**: aplicar a mesma resolução aos chamados já criados que estão sem empresa (resolve 5 dos 10 casos atuais) e também gravar a empresa na conversa do chat correspondente, que hoje segue sem vínculo mesmo com o contato já cadastrado.
 4. **Lista de chamados**: quando não houver empresa, mostrar "Não cadastrado" em vez de apenas um traço, para diferenciar de dado ausente.
 
 ## Detalhes técnicos
 
 - Função `public.resolve_client_by_phone(_phone text)` (SECURITY DEFINER, STABLE): normaliza para dígitos, gera as variantes com/sem o 9º dígito, procura em `clients.contact_phone` e `client_department_contacts.contact_phone`, retorna o `client_id` somente se houver 1 resultado distinto.
 - `trg_ticket_open_on_conversation` e `trg_ticket_sync_on_conversation` passam a usar `coalesce(NEW.client_id, public.resolve_client_by_phone(NEW.whatsapp_phone))`; o sync também atualiza `client_id` do chamado aberto quando a conversa ganha empresa.
-- Backfill (`UPDATE support_tickets`) usando a mesma função para os chamados com `client_id is null`.
+- Backfill (`UPDATE support_tickets` e `UPDATE chat_conversations`) usando a mesma função para os registros com `client_id is null`.
 - `src/pages/Tickets.tsx`: rótulo "Não cadastrado" na coluna Empresa e no dialog de detalhe quando `client_id` for nulo.
