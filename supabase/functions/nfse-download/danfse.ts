@@ -354,8 +354,7 @@ class Danfse {
     fixedHeight?: number,
   ) {
     const height =
-      fixedHeight ??
-      Math.max(13, lines.length * (size + 2) + padding * 2 - 4);
+      fixedHeight ?? Math.max(13, lines.length * (size + 2) + padding * 2 - 4);
 
     this.ensure(height);
     const top = this.y;
@@ -522,7 +521,6 @@ export async function createDanfsePdf(
   d.y = headerTop - headerH;
   d.hline(d.y);
 
-
   // ===== Chave / identificação + QR =====
   const blockTop = d.y;
   const qrSize = 54;
@@ -569,7 +567,6 @@ export async function createDanfsePdf(
           top - 13.5,
           VALUE_SIZE,
         );
-
       }
       x += cellWidth;
     }
@@ -993,16 +990,18 @@ export async function createDanfsePdf(
     d.y = MARGIN + footerH + 12;
   }
   d.y = Math.min(d.y - 12, MARGIN + footerH);
-  d.row([
-    { label: "DATA CIENTIFICAÇÃO:", value: "" },
-    { label: "IDENTIFICAÇÃO E ASSINATURA", value: "" },
-    {
-      label: "N° NFS-e / CHAVE NFS-e",
-      value: `${orDash(text(infNFSe, ["nNFSe"]))} / ${accessKey}`,
-      span: 2,
-    },
-  ], { noBreak: true });
-
+  d.row(
+    [
+      { label: "DATA CIENTIFICAÇÃO:", value: "" },
+      { label: "IDENTIFICAÇÃO E ASSINATURA", value: "" },
+      {
+        label: "N° NFS-e / CHAVE NFS-e",
+        value: `${orDash(text(infNFSe, ["nNFSe"]))} / ${accessKey}`,
+        span: 2,
+      },
+    ],
+    { noBreak: true },
+  );
 
   return await d.doc.save();
 }
