@@ -98,12 +98,13 @@ function cep(value: string): string {
 
 function ibge(value: string): string {
   const digits = (value || "").replace(/\D/g, "");
-  if (digits.length !== 7) return orDash(value);
-  return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return digits.length === 7 ? digits : orDash(value);
 }
 
 function phone(value: string): string {
-  const digits = (value || "").replace(/\D/g, "");
+  let digits = (value || "").replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.length === 12 && digits.startsWith("0")) digits = digits.slice(1);
   if (digits.length === 11) {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   }
@@ -557,7 +558,14 @@ export async function createDanfsePdf(
     },
     {
       label: "FINALIDADE",
-      value: orDash(text(ibsCbsDps, ["finNFSe"])),
+      value: (() => {
+        const fin = text(ibsCbsDps, ["finNFSe"]) || text(dps, ["finNFSe"]);
+        return fin === "0"
+          ? "NFS-e Normal"
+          : fin === "1"
+          ? "NFS-e de Substituição"
+          : orDash(fin);
+      })(),
     },
   ]);
   d.y = Math.min(d.y, blockTop - qrSize - 40);
