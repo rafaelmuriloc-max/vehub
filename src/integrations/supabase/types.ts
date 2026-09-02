@@ -2942,6 +2942,7 @@ export type Database = {
         Args: { _instance_id: string }
         Returns: undefined
       }
+      resolve_client_by_phone: { Args: { _phone: string }; Returns: string }
       user_can_access_department: {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
