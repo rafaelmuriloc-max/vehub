@@ -72,6 +72,153 @@ function parseRetentions(inv: Invoice): Retentions {
   return { iss, irrf, pis, cofins, csll, inss, cp, total };
 }
 
+const brl = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+
+const TAX_META: { key: Exclude<keyof Retentions, 'total'>; label: string; icon: typeof User }[] = [
+  { key: 'iss', label: 'ISS', icon: User },
+  { key: 'irrf', label: 'IRRF', icon: FileText },
+  { key: 'pis', label: 'PIS', icon: Coins },
+  { key: 'cofins', label: 'COFINS', icon: PieChart },
+  { key: 'csll', label: 'CSLL', icon: Briefcase },
+  { key: 'inss', label: 'INSS', icon: Heart },
+  { key: 'cp', label: 'CP', icon: Building },
+];
+
+type SummaryVariant = 'blue' | 'orange';
+
+const VARIANT_STYLES: Record<SummaryVariant, {
+  panel: string;
+  headerIcon: string;
+  iconCircle: string;
+  iconColor: string;
+  banner: string;
+  bannerIcon: string;
+  bannerLabel: string;
+  bannerValue: string;
+  taxIcon: string;
+}> = {
+  blue: {
+    panel: 'border-l-4 border-l-blue-500 bg-blue-50/40 dark:bg-blue-950/20',
+    headerIcon: 'bg-blue-600 text-white',
+    iconCircle: 'bg-blue-100 dark:bg-blue-900/50',
+    iconColor: 'text-blue-600 dark:text-blue-400',
+    banner: 'bg-blue-100/80 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800',
+    bannerIcon: 'bg-blue-600 text-white',
+    bannerLabel: 'text-blue-600 dark:text-blue-400',
+    bannerValue: 'text-blue-700 dark:text-blue-300',
+    taxIcon: 'text-blue-500 dark:text-blue-400',
+  },
+  orange: {
+    panel: 'border-l-4 border-l-orange-500 bg-orange-50/40 dark:bg-orange-950/20',
+    headerIcon: 'bg-orange-500 text-white',
+    iconCircle: 'bg-orange-100 dark:bg-orange-900/50',
+    iconColor: 'text-orange-600 dark:text-orange-400',
+    banner: 'bg-orange-100/80 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800',
+    bannerIcon: 'bg-orange-500 text-white',
+    bannerLabel: 'text-orange-600 dark:text-orange-400',
+    bannerValue: 'text-orange-600 dark:text-orange-400',
+    taxIcon: 'text-orange-500 dark:text-orange-400',
+  },
+};
+
+function ServiceSummarySection({
+  variant,
+  title,
+  type,
+  invoices,
+  totalGross,
+  totalTax,
+  retentions,
+  showRetentions,
+  onRetentionClick,
+}: {
+  variant: SummaryVariant;
+  title: string;
+  type: 'prestado' | 'tomado';
+  invoices: Invoice[];
+  totalGross: number;
+  totalTax: number;
+  retentions: Retentions;
+  showRetentions: boolean;
+  onRetentionClick: (detail: { type: 'prestado' | 'tomado'; taxKey: keyof Retentions }) => void;
+}) {
+  const s = VARIANT_STYLES[variant];
+
+  const statCards = [
+    { label: 'Total de Notas', value: String(invoices.length), icon: FileText },
+    { label: 'Valor Bruto Total', value: brl(totalGross), icon: Wallet },
+    { label: 'Total de Impostos', value: brl(totalTax), icon: Landmark },
+  ];
+
+  return (
+    <Card className={s.panel}>
+      <CardContent className="p-4 md:p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${s.headerIcon}`}>
+            <Building2 className="h-5 w-5" />
+          </div>
+          <h3 className="text-lg font-bold text-foreground">{title}</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {statCards.map(stat => (
+            <Card key={stat.label} className="bg-card">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${s.iconCircle}`}>
+                  <stat.icon className={`h-5 w-5 ${s.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className="text-xl font-bold text-foreground truncate">{stat.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {showRetentions && (
+          <>
+            <button
+              type="button"
+              onClick={() => onRetentionClick({ type, taxKey: 'total' })}
+              className={`w-full rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 cursor-pointer hover:shadow-md transition-shadow ${s.banner}`}
+            >
+              <span className="flex items-center gap-2">
+                <span className={`h-7 w-7 rounded-full flex items-center justify-center ${s.bannerIcon}`}>
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <span className={`text-sm font-semibold ${s.bannerLabel}`}>Impostos Retidos</span>
+              </span>
+              <span className={`hidden sm:block h-6 w-px ${variant === 'blue' ? 'bg-blue-300 dark:bg-blue-700' : 'bg-orange-300 dark:bg-orange-700'}`} />
+              <span className={`text-xs ${s.bannerLabel}`}>Total Retido</span>
+              <span className={`text-xl font-bold ${s.bannerValue}`}>{brl(retentions.total)}</span>
+            </button>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {TAX_META.map(tax => (
+                <Card
+                  key={tax.key}
+                  className="bg-card cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => onRetentionClick({ type, taxKey: tax.key })}
+                >
+                  <CardContent className="p-3 space-y-1">
+                    <span className="flex items-center gap-1.5">
+                      <tax.icon className={`h-4 w-4 ${s.taxIcon}`} />
+                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">{tax.label}</span>
+                    </span>
+                    <p className="text-sm font-bold text-foreground">{brl(retentions[tax.key])}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function NfseTab() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
