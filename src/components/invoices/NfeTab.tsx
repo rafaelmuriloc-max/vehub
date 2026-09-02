@@ -57,6 +57,84 @@ type NfeQueryResponse = {
   success?: boolean;
 };
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return '—';
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+type SummaryVariant = 'blue' | 'orange';
+
+const VARIANT_STYLES: Record<SummaryVariant, { panel: string; headerIcon: string; iconCircle: string; iconColor: string }> = {
+  blue: {
+    panel: 'border-l-4 border-l-blue-500 bg-blue-50/40 dark:bg-blue-950/20',
+    headerIcon: 'bg-blue-600 text-white',
+    iconCircle: 'bg-blue-100 dark:bg-blue-900/50',
+    iconColor: 'text-blue-600 dark:text-blue-400',
+  },
+  orange: {
+    panel: 'border-l-4 border-l-orange-500 bg-orange-50/40 dark:bg-orange-950/20',
+    headerIcon: 'bg-orange-500 text-white',
+    iconCircle: 'bg-orange-100 dark:bg-orange-900/50',
+    iconColor: 'text-orange-600 dark:text-orange-400',
+  },
+};
+
+function NfeSummarySection({
+  variant,
+  title,
+  icon: Icon,
+  invoices,
+  totalValue,
+}: {
+  variant: SummaryVariant;
+  title: string;
+  icon: LucideIcon;
+  invoices: NfeInvoice[];
+  totalValue: number;
+}) {
+  const s = VARIANT_STYLES[variant];
+  const count = invoices.length;
+  const average = count > 0 ? totalValue / count : 0;
+  const stats = [
+    { label: 'Total de Notas', value: String(count), icon: FileText },
+    { label: 'Valor Total', value: formatCurrency(totalValue), icon: Wallet },
+    { label: 'Valor Médio', value: formatCurrency(average), icon: TrendingUp },
+  ];
+
+  return (
+    <Card className={s.panel}>
+      <CardContent className="p-4 md:p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${s.headerIcon}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <h3 className="text-lg font-bold text-foreground">{title}</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {stats.map(stat => (
+            <Card key={stat.label} className="bg-card">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${s.iconCircle}`}>
+                  <stat.icon className={`h-5 w-5 ${s.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className="text-xl font-bold text-foreground truncate">{stat.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function NfeTab() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
