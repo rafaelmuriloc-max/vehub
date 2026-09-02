@@ -53,7 +53,7 @@ function fmtDuration(seconds?: number | null) {
   return `${h}h${(m % 60).toString().padStart(2, '0')}`;
 }
 
-/** Duração resolvida: campo gravado -> fechamento-abertura -> tempo em andamento */
+/** Duração resolvida: campo gravado -> fechamento-abertura -> tempo decorrido */
 function ticketDuration(t: { handle_seconds: number | null; opened_at: string; closed_at: string | null; status: string }, nowMs: number) {
   const openedMs = new Date(t.opened_at).getTime();
   if (t.closed_at) {
@@ -65,7 +65,7 @@ function ticketDuration(t: { handle_seconds: number | null; opened_at: string; c
   if (t.handle_seconds != null && t.handle_seconds >= 0) return fmtDuration(t.handle_seconds);
   const elapsed = Math.round((nowMs - openedMs) / 1000);
   if (!Number.isFinite(elapsed) || elapsed < 0) return '—';
-  return `${fmtDuration(elapsed)} (em andamento)`;
+  return fmtDuration(elapsed);
 }
 
 
