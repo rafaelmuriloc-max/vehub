@@ -45,7 +45,7 @@ function fmtDate(v?: string | null) {
 }
 
 function fmtDuration(seconds?: number | null) {
-  if (seconds == null) return '—';
+  if (seconds == null || seconds < 0) return '—';
   if (seconds < 60) return `${seconds}s`;
   const m = Math.floor(seconds / 60);
   if (m < 60) return `${m}min`;
