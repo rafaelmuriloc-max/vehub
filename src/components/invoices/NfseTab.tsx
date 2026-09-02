@@ -804,7 +804,10 @@ export default function NfseTab() {
                     return (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">{inv.invoice_number || '—'}</TableCell>
-                        <TableCell className="max-w-[150px] truncate">{getClientName(inv.client_id)}</TableCell>
+                        <TableCell className="max-w-[180px] truncate" title={getCounterpartyName(inv, listTab === 'prestados' ? 'prestado' : 'tomado')}>
+                          {getCounterpartyName(inv, listTab === 'prestados' ? 'prestado' : 'tomado')}
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate hidden lg:table-cell">{getClientName(inv.client_id)}</TableCell>
                         <TableCell>{formatDate(inv.issue_date)}</TableCell>
                         <TableCell className="max-w-[150px] truncate hidden lg:table-cell">{inv.service_description || '—'}</TableCell>
                         <TableCell className="text-right">{formatCurrency(inv.gross_value)}</TableCell>
