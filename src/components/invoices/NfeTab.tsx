@@ -479,19 +479,19 @@ export default function NfeTab() {
     }
   }
 
-  const baseInvoices = invoices;
-  const entradaCount = baseInvoices.filter(i => (i.direction ?? 'entrada') !== 'saida').length;
-  const saidaCount = baseInvoices.filter(i => i.direction === 'saida').length;
+  let baseFiltered = invoices;
+  if (filterClient !== 'all') baseFiltered = baseFiltered.filter(i => i.client_id === filterClient);
+  if (filterDateFrom) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
+  if (filterDateTo) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
-  let filteredInvoices = baseInvoices.filter(i =>
-    directionTab === 'saida'
-      ? i.direction === 'saida'
-      : (i.direction ?? 'entrada') !== 'saida'
-  );
-  if (filterClient !== 'all') filteredInvoices = filteredInvoices.filter(i => i.client_id === filterClient);
-  if (filterDateFrom) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
-  if (filterDateTo) filteredInvoices = filteredInvoices.filter(i => i.issue_date && i.issue_date <= filterDateTo);
+  const entradaInvoices = baseFiltered.filter(i => (i.direction ?? 'entrada') !== 'saida');
+  const saidaInvoices = baseFiltered.filter(i => i.direction === 'saida');
+  const entradaCount = entradaInvoices.length;
+  const saidaCount = saidaInvoices.length;
+  const filteredInvoices = directionTab === 'saida' ? saidaInvoices : entradaInvoices;
 
+  const entradaTotalValue = entradaInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
+  const saidaTotalValue = saidaInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
   const totalValue = filteredInvoices.reduce((s, i) => s + (i.total_value || 0), 0);
   const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
