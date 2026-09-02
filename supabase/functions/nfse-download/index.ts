@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import forge from "https://esm.sh/node-forge@1.3.1";
-import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
+import { createDanfsePdf } from "./danfse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -217,6 +217,7 @@ async function handlePdfDownload(
     }
   }
 
+  let usedFallback = false;
   if (!pdfBytes || pdfBytes.length === 0) {
     const detail = lastErr?.message ?? null;
     const d = detail ?? "";
@@ -234,7 +235,8 @@ async function handlePdfDownload(
     const officialXml = getInvoiceXml(invoice.raw_data);
     if (!forbidden && !notFound && officialXml) {
       try {
-        pdfBytes = await createNfseMirrorPdf(officialXml, accessKey);
+        pdfBytes = await createDanfsePdf(officialXml, accessKey);
+        usedFallback = true;
         console.warn(
           `[PDF] Portal indisponível; gerando espelho local para ${accessKey}`,
         );
@@ -289,20 +291,20 @@ async function handlePdfDownload(
     .from("invoices")
     // Só cacheia o DANFSe oficial. O espelho de contingência deve ser
     // substituído automaticamente assim que o Portal voltar a responder.
-    .update({ pdf_url: lastErr ? null : storagePath })
+    .update({ pdf_url: usedFallback ? null : storagePath })
     .eq("id", invoice.id);
 
   // Return signed URL
   const { data } = await adminClient.storage
     .from("documents")
     .createSignedUrl(storagePath, 300);
-  const isMirror = Boolean(lastErr);
+  const isMirror = usedFallback;
   return jsonResponse({
     signed_url: data?.signedUrl || null,
     cached: false,
     fallback: isMirror,
     warning: isMirror
-      ? "Portal Nacional indisponível. Foi gerado um PDF-espelho com os dados do XML oficial da NFS-e."
+      ? "Portal Nacional indisponível. O DANFSe foi gerado a partir do XML oficial da NFS-e."
       : null,
   });
 }
@@ -311,148 +313,6 @@ function getInvoiceXml(rawData: unknown): string | null {
   if (!rawData || typeof rawData !== "object") return null;
   const xml = (rawData as Record<string, unknown>).xml;
   return typeof xml === "string" && xml.trim().startsWith("<") ? xml : null;
-}
-
-function xmlValue(xml: string, names: string[]): string {
-  for (const name of names) {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = xml.match(
-      new RegExp(
-        `<(?:\\w+:)?${escaped}(?:\\s[^>]*)?>([^<]*)<\\/(?:\\w+:)?${escaped}>`,
-        "i",
-      ),
-    );
-    if (match?.[1]) return decodeXmlText(match[1].trim());
-  }
-  return "";
-}
-
-function decodeXmlText(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'");
-}
-
-function formatMoney(value: string): string {
-  const number = Number(value.replace(",", "."));
-  return Number.isFinite(number)
-    ? new Intl.NumberFormat("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      }).format(number)
-    : "—";
-}
-
-function wrapPdfText(text: string, maxChars = 92): string[] {
-  const words = text.replace(/\s+/g, " ").trim().split(" ");
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if (`${current} ${word}`.trim().length > maxChars && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = `${current} ${word}`.trim();
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length ? lines : ["—"];
-}
-
-async function createNfseMirrorPdf(
-  xml: string,
-  accessKey: string,
-): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  let page = doc.addPage([595.28, 841.89]);
-  let y = 798;
-  const left = 42;
-
-  const draw = (
-    text: string,
-    size = 10,
-    isBold = false,
-    color = rgb(0.12, 0.15, 0.2),
-  ) => {
-    if (y < 55) {
-      page = doc.addPage([595.28, 841.89]);
-      y = 798;
-    }
-    page.drawText(text.replace(/[^\x20-\xFF]/g, " "), {
-      x: left,
-      y,
-      size,
-      font: isBold ? bold : regular,
-      color,
-    });
-    y -= size + 6;
-  };
-  const field = (label: string, value: string) => {
-    draw(label.toUpperCase(), 7, true, rgb(0.42, 0.45, 0.5));
-    for (const line of wrapPdfText(value || "—")) draw(line, 10);
-    y -= 5;
-  };
-
-  draw("ESPELHO DA NFS-e", 18, true, rgb(0.91, 0.44, 0.04));
-  draw(
-    "Gerado a partir do XML oficial distribuído pelo Ambiente de Dados Nacional",
-    9,
-  );
-  draw(
-    "O DANFSe oficial do Portal Nacional estava temporariamente indisponível.",
-    8,
-    false,
-    rgb(0.55, 0.2, 0.08),
-  );
-  y -= 10;
-  field("Chave de acesso", accessKey);
-  field("Número da NFS-e", xmlValue(xml, ["nNFSe", "numero", "Numero"]));
-  field("Data de emissão", xmlValue(xml, ["dhEmi", "dEmi", "DataEmissao"]));
-  field("Emitente", xmlValue(xml, ["xNome", "RazaoSocial", "NomeRazaoSocial"]));
-  field("CNPJ do emitente", xmlValue(xml, ["CNPJ", "Cnpj"]));
-  field(
-    "Tomador",
-    xmlValue(xml, ["xNomeTomador", "RazaoSocialTomador", "NomeTomador"]),
-  );
-  field(
-    "Serviço",
-    xmlValue(xml, ["xDescServ", "Discriminacao", "discriminacao"]),
-  );
-  field(
-    "Valor dos serviços",
-    formatMoney(xmlValue(xml, ["vServ", "ValorServicos", "vLiq"])),
-  );
-  field(
-    "Valor líquido",
-    formatMoney(xmlValue(xml, ["vLiq", "ValorLiquidoNfse", "ValorLiquido"])),
-  );
-  field(
-    "Código de verificação",
-    xmlValue(xml, ["cVerif", "CodigoVerificacao"]),
-  );
-
-  page.drawLine({
-    start: { x: left, y: 38 },
-    end: { x: 553, y: 38 },
-    thickness: 0.5,
-    color: rgb(0.7, 0.72, 0.75),
-  });
-  page.drawText(
-    "Documento auxiliar de contingência — consulte a autenticidade pela chave de acesso.",
-    {
-      x: left,
-      y: 24,
-      size: 7,
-      font: regular,
-      color: rgb(0.42, 0.45, 0.5),
-    },
-  );
-  return await doc.save();
 }
 
 function jsonResponse(payload: unknown, status = 200): Response {
