@@ -240,6 +240,7 @@ export default function NfseTab() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [page, setPage] = useState(0);
+  const [cnpjNameMap, setCnpjNameMap] = useState<Record<string, string>>({});
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
