@@ -315,7 +315,6 @@ function getInvoiceXml(rawData: unknown): string | null {
   return typeof xml === "string" && xml.trim().startsWith("<") ? xml : null;
 }
 
-
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,

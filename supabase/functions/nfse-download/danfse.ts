@@ -1,6 +1,12 @@
 // Gerador do DANFSe v2.0 (Documento Auxiliar da NFS-e) a partir do XML oficial
 // do padrão nacional (http://www.sped.fazenda.gov.br/nfse).
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
+import {
+  PDFDocument,
+  PDFFont,
+  PDFPage,
+  StandardFonts,
+  rgb,
+} from "npm:pdf-lib@1.17.1";
 import QRCode from "npm:qrcode@1.5.4";
 
 // ---------- XML helpers ----------
@@ -11,10 +17,7 @@ export function node(xml: string, name: string): string | null {
   if (!m) return null;
   if (m[1]) return "";
   const startBody = m.index + m[0].length;
-  const scanner = new RegExp(
-    `<(/)?(?:\\w+:)?${name}(?:\\s[^>]*)?(/)?>`,
-    "gi",
-  );
+  const scanner = new RegExp(`<(/)?(?:\\w+:)?${name}(?:\\s[^>]*)?(/)?>`, "gi");
   scanner.lastIndex = startBody;
   let depth = 1;
   let hit: RegExpExecArray | null;
@@ -142,8 +145,10 @@ async function municipio(code: string): Promise<string> {
     if (!res.ok) return "";
     const data = await res.json();
     const name = typeof data?.nome === "string" ? data.nome : "";
-    const uf = data?.microrregiao?.mesorregiao?.UF?.sigla ??
-      data?.regiaoImediata?.regiaoIntermediaria?.UF?.sigla ?? "";
+    const uf =
+      data?.microrregiao?.mesorregiao?.UF?.sigla ??
+      data?.regiaoImediata?.regiaoIntermediaria?.UF?.sigla ??
+      "";
     const label = name ? (uf ? `${name} / ${uf}` : name) : "";
     if (label) municipioCache.set(digits, label);
     return label;
@@ -235,13 +240,7 @@ class Danfse {
     return lines;
   }
 
-  draw(
-    value: string,
-    x: number,
-    y: number,
-    size: number,
-    bold = false,
-  ) {
+  draw(value: string, x: number, y: number, size: number, bold = false) {
     this.page.drawText(this.sanitize(value), {
       x,
       y,
@@ -421,21 +420,22 @@ export async function createDanfsePdf(
   const totCIBS = node(ibsCbs, "totCIBS") ?? "";
   const ibsCbsDps = node(dps, "IBSCBS") ?? "";
 
-  const municipioEmi = text(infNFSe, ["xLocEmi"]) ||
-    (await municipio(text(enderEmit, ["cMun"])));
+  const municipioEmi =
+    text(infNFSe, ["xLocEmi"]) || (await municipio(text(enderEmit, ["cMun"])));
   const ufEmit = text(enderEmit, ["UF"]);
   const municipioEmitFull = municipioEmi.includes("/")
     ? municipioEmi
     : `${orDash(municipioEmi)}${ufEmit ? ` / ${ufEmit}` : ""}`;
 
   const cMunToma = text(enderTomaNac, ["cMun"]) || text(enderToma, ["cMun"]);
-  const municipioToma = (await municipio(cMunToma)) ||
-    text(enderToma, ["xMun"]);
+  const municipioToma =
+    (await municipio(cMunToma)) || text(enderToma, ["xMun"]);
 
-  const localPrestacao = text(infNFSe, ["xLocPrestacao"]) ||
+  const localPrestacao =
+    text(infNFSe, ["xLocPrestacao"]) ||
     (await municipio(text(serv, ["locPrest", "cLocPrestacao"])));
-  const localIncidencia = text(infNFSe, ["xLocIncid"]) ||
-    text(ibsCbs, ["xLocalidadeIncid"]);
+  const localIncidencia =
+    text(infNFSe, ["xLocIncid"]) || text(ibsCbs, ["xLocalidadeIncid"]);
 
   // ===== Cabeçalho =====
   const headerTop = d.y;
@@ -452,7 +452,12 @@ export async function createDanfsePdf(
   centerText("Documento Auxiliar da NFS-e", 8, 23);
 
   const rightX = MARGIN + CONTENT_W * 0.72;
-  d.draw(`Município: ${orDash(municipioEmitFull)}`, rightX, headerTop - 10, 6.5);
+  d.draw(
+    `Município: ${orDash(municipioEmitFull)}`,
+    rightX,
+    headerTop - 10,
+    6.5,
+  );
   d.draw(
     `Ambiente Gerador: ${orDash(text(infNFSe, ["ambGer"]))}`,
     rightX,
@@ -542,19 +547,21 @@ export async function createDanfsePdf(
   idRow([
     {
       label: "EMITENTE DA NFS-e",
-      value: text(dps, ["tpEmit"]) === "1"
-        ? "Prestador"
-        : text(dps, ["tpEmit"]) === "2"
-        ? "Tomador"
-        : text(dps, ["tpEmit"]) === "3"
-        ? "Intermediário"
-        : DASH,
+      value:
+        text(dps, ["tpEmit"]) === "1"
+          ? "Prestador"
+          : text(dps, ["tpEmit"]) === "2"
+            ? "Tomador"
+            : text(dps, ["tpEmit"]) === "3"
+              ? "Intermediário"
+              : DASH,
     },
     {
       label: "SITUAÇÃO DA NFS-e",
-      value: text(infNFSe, ["cStat"]) === "100"
-        ? "NFS-e Gerada"
-        : orDash(text(infNFSe, ["cStat"])),
+      value:
+        text(infNFSe, ["cStat"]) === "100"
+          ? "NFS-e Gerada"
+          : orDash(text(infNFSe, ["cStat"])),
     },
     {
       label: "FINALIDADE",
@@ -563,8 +570,8 @@ export async function createDanfsePdf(
         return fin === "0"
           ? "NFS-e Normal"
           : fin === "1"
-          ? "NFS-e de Substituição"
-          : orDash(fin);
+            ? "NFS-e de Substituição"
+            : orDash(fin);
       })(),
     },
   ]);
@@ -573,32 +580,44 @@ export async function createDanfsePdf(
 
   // ===== Prestador =====
   const opSimp = text(prest, ["regTrib", "opSimpNac"]);
-  const opSimpLabel = opSimp === "1"
-    ? "Não Optante"
-    : opSimp === "2"
-    ? "Optante - Microempreendedor Individual (MEI)"
-    : opSimp === "3"
-    ? "Optante - Microempresa ou Empresa de Pequeno Porte"
-    : DASH;
+  const opSimpLabel =
+    opSimp === "1"
+      ? "Não Optante"
+      : opSimp === "2"
+        ? "Optante - Microempreendedor Individual (MEI)"
+        : opSimp === "3"
+          ? "Optante - Microempresa ou Empresa de Pequeno Porte"
+          : DASH;
   const regApur = text(prest, ["regTrib", "regApTribSN"]);
-  const regApurLabel = regApur === "1"
-    ? "Regime de apuração dos tributos federais e municipal pelo Simples Nacional"
-    : regApur === "2"
-    ? "Regime de apuração dos tributos federais pelo SN e o ISSQN por fora do SN"
-    : regApur === "3"
-    ? "Regime de apuração dos tributos federais e municipal por fora do SN"
-    : opSimp === "3"
-    ? "Regime de apuração dos tributos federais e municipal pelo Simples Nacional"
-    : DASH;
+  const regApurLabel =
+    regApur === "1"
+      ? "Regime de apuração dos tributos federais e municipal pelo Simples Nacional"
+      : regApur === "2"
+        ? "Regime de apuração dos tributos federais pelo SN e o ISSQN por fora do SN"
+        : regApur === "3"
+          ? "Regime de apuração dos tributos federais e municipal por fora do SN"
+          : opSimp === "3"
+            ? "Regime de apuração dos tributos federais e municipal pelo Simples Nacional"
+            : DASH;
 
   d.row([
     { label: "PRESTADOR / FORNECEDOR", value: "" },
-    { label: "CNPJ / CPF / NIF", value: docNumber(text(emit, ["CNPJ"]) || text(emit, ["CPF"])) },
-    { label: "Indicador Municipal (Inscrição)", value: orDash(text(emit, ["IM"])) },
+    {
+      label: "CNPJ / CPF / NIF",
+      value: docNumber(text(emit, ["CNPJ"]) || text(emit, ["CPF"])),
+    },
+    {
+      label: "Indicador Municipal (Inscrição)",
+      value: orDash(text(emit, ["IM"])),
+    },
     { label: "Telefone", value: phone(text(emit, ["fone"])) },
   ]);
   d.row([
-    { label: "Nome / Nome Empresarial", value: orDash(text(emit, ["xNome"])), span: 2 },
+    {
+      label: "Nome / Nome Empresarial",
+      value: orDash(text(emit, ["xNome"])),
+      span: 2,
+    },
     { label: "Município / Sigla UF", value: orDash(municipioEmitFull) },
     {
       label: "Código IBGE / CEP",
@@ -614,7 +633,9 @@ export async function createDanfsePdf(
           text(enderEmit, ["nro"]),
           text(enderEmit, ["xCpl"]),
           text(enderEmit, ["xBairro"]),
-        ].filter(Boolean).join(", "),
+        ]
+          .filter(Boolean)
+          .join(", "),
       ),
       span: 2,
     },
@@ -622,18 +643,32 @@ export async function createDanfsePdf(
   ]);
   d.row([
     { label: "Simples Nacional na Data de Competência", value: opSimpLabel },
-    { label: "Regime de Apuração Tributária pelo SN", value: regApurLabel, span: 3 },
+    {
+      label: "Regime de Apuração Tributária pelo SN",
+      value: regApurLabel,
+      span: 3,
+    },
   ]);
 
   // ===== Tomador =====
   d.row([
     { label: "TOMADOR / ADQUIRENTE", value: "" },
-    { label: "CNPJ / CPF / NIF", value: docNumber(text(toma, ["CNPJ"]) || text(toma, ["CPF"])) },
-    { label: "Indicador Municipal (Inscrição)", value: orDash(text(toma, ["IM"])) },
+    {
+      label: "CNPJ / CPF / NIF",
+      value: docNumber(text(toma, ["CNPJ"]) || text(toma, ["CPF"])),
+    },
+    {
+      label: "Indicador Municipal (Inscrição)",
+      value: orDash(text(toma, ["IM"])),
+    },
     { label: "Telefone", value: phone(text(toma, ["fone"])) },
   ]);
   d.row([
-    { label: "Nome / Nome Empresarial", value: orDash(text(toma, ["xNome"])), span: 2 },
+    {
+      label: "Nome / Nome Empresarial",
+      value: orDash(text(toma, ["xNome"])),
+      span: 2,
+    },
     { label: "Município / Sigla UF", value: orDash(municipioToma) },
     {
       label: "Código IBGE / CEP",
@@ -649,7 +684,9 @@ export async function createDanfsePdf(
           text(enderToma, ["nro"]),
           text(enderToma, ["xCpl"]),
           text(enderToma, ["xBairro"]),
-        ].filter(Boolean).join(", "),
+        ]
+          .filter(Boolean)
+          .join(", "),
       ),
       span: 2,
     },
@@ -665,13 +702,15 @@ export async function createDanfsePdf(
 
   // ===== Serviço =====
   const cTribNac = text(cServ, ["cTribNac"]);
-  const cTribNacFmt = cTribNac.length === 6
-    ? `${cTribNac.slice(0, 2)}.${cTribNac.slice(2, 4)}.${cTribNac.slice(4)}`
-    : orDash(cTribNac);
+  const cTribNacFmt =
+    cTribNac.length === 6
+      ? `${cTribNac.slice(0, 2)}.${cTribNac.slice(2, 4)}.${cTribNac.slice(4)}`
+      : orDash(cTribNac);
   const cNBS = text(cServ, ["cNBS"]);
-  const cNBSFmt = cNBS.length === 9
-    ? `${cNBS.slice(0, 1)}.${cNBS.slice(1, 5)}.${cNBS.slice(5, 7)}.${cNBS.slice(7)}`
-    : orDash(cNBS);
+  const cNBSFmt =
+    cNBS.length === 9
+      ? `${cNBS.slice(0, 1)}.${cNBS.slice(1, 5)}.${cNBS.slice(5, 7)}.${cNBS.slice(7)}`
+      : orDash(cNBS);
 
   d.row([
     { label: "SERVIÇO PRESTADO", value: "" },
@@ -700,15 +739,16 @@ export async function createDanfsePdf(
     { label: "TRIBUTAÇÃO MUNICIPAL (ISSQN)", value: "" },
     {
       label: "Tipo de Tributação do ISSQN",
-      value: tribISSQN === "1"
-        ? "Operação Tributável"
-        : tribISSQN === "2"
-        ? "Exportação de serviço"
-        : tribISSQN === "3"
-        ? "Não Incidência"
-        : tribISSQN === "4"
-        ? "Imunidade"
-        : DASH,
+      value:
+        tribISSQN === "1"
+          ? "Operação Tributável"
+          : tribISSQN === "2"
+            ? "Exportação de serviço"
+            : tribISSQN === "3"
+              ? "Não Incidência"
+              : tribISSQN === "4"
+                ? "Imunidade"
+                : DASH,
     },
     {
       label: "Município / Sigla UF / País de Incidência do ISSQN",
@@ -720,11 +760,18 @@ export async function createDanfsePdf(
     { label: "BC ISSQN", value: money(text(valoresNfse, ["vBC"])) },
     {
       label: "Alíquota Aplicada",
-      value: percent(text(valoresNfse, ["pAliqAplic"]) || text(tribMun, ["pAliq"])),
+      value: percent(
+        text(valoresNfse, ["pAliqAplic"]) || text(tribMun, ["pAliq"]),
+      ),
     },
     {
       label: "Retenção do ISSQN",
-      value: tpRet === "2" ? "Retido pelo Tomador" : tpRet === "3" ? "Retido pelo Intermediário" : "Não Retido",
+      value:
+        tpRet === "2"
+          ? "Retido pelo Tomador"
+          : tpRet === "3"
+            ? "Retido pelo Intermediário"
+            : "Não Retido",
     },
     { label: "ISSQN Apurado", value: money(text(valoresNfse, ["vISSQN"])) },
   ]);
@@ -743,8 +790,14 @@ export async function createDanfsePdf(
     },
   ]);
   d.row([
-    { label: "PIS - Débito Apuração Própria", value: money(text(tribFed, ["vPIS"])) },
-    { label: "COFINS - Débito Apuração Própria", value: money(text(tribFed, ["vCOFINS"])) },
+    {
+      label: "PIS - Débito Apuração Própria",
+      value: money(text(tribFed, ["vPIS"])),
+    },
+    {
+      label: "COFINS - Débito Apuração Própria",
+      value: money(text(tribFed, ["vCOFINS"])),
+    },
     { label: "Descrição Contrib. Sociais - Retidas", value: DASH, span: 2 },
   ]);
 
@@ -771,7 +824,10 @@ export async function createDanfsePdf(
       label: "Base de Cálculo Após Exclusões e Reduções",
       value: money(text(ibsValores, ["vBC"])),
     },
-    { label: "Red. Alíquota IBS / Red. Alíquota CBS", value: `${DASH} / ${DASH}` },
+    {
+      label: "Red. Alíquota IBS / Red. Alíquota CBS",
+      value: `${DASH} / ${DASH}`,
+    },
     {
       label: "Alíquota - IBS UF / IBS Mun",
       value: `${percent(text(ibsValores, ["uf", "pIBSUF"]))} / ${percent(text(ibsValores, ["mun", "pIBSMun"]))}`,
@@ -800,7 +856,10 @@ export async function createDanfsePdf(
       label: "Valor Total Apurado - IBS",
       value: money(text(totCIBS, ["gIBS", "vIBSTot"])),
     },
-    { label: "Alíquota - CBS", value: percent(text(ibsValores, ["fed", "pCBS"])) },
+    {
+      label: "Alíquota - CBS",
+      value: percent(text(ibsValores, ["fed", "pCBS"])),
+    },
     {
       label: "Alíquota Efetiva - CBS",
       value: percent(text(ibsValores, ["fed", "pAliqEfetCBS"])),
