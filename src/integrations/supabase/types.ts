@@ -2474,6 +2474,100 @@ export type Database = {
           },
         ]
       }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          category: string | null
+          client_id: string | null
+          closed_at: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          conversation_id: string | null
+          created_at: string
+          department_id: string | null
+          first_response_at: string | null
+          handle_seconds: number | null
+          id: string
+          messages_count: number
+          opened_at: string
+          status: string
+          subject: string | null
+          summary: string | null
+          summary_status: string
+          ticket_number: number
+          updated_at: string
+          wait_seconds: number | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          category?: string | null
+          client_id?: string | null
+          closed_at?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          first_response_at?: string | null
+          handle_seconds?: number | null
+          id?: string
+          messages_count?: number
+          opened_at?: string
+          status?: string
+          subject?: string | null
+          summary?: string | null
+          summary_status?: string
+          ticket_number?: number
+          updated_at?: string
+          wait_seconds?: number | null
+        }
+        Update: {
+          assigned_to?: string | null
+          category?: string | null
+          client_id?: string | null
+          closed_at?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          first_response_at?: string | null
+          handle_seconds?: number | null
+          id?: string
+          messages_count?: number
+          opened_at?: string
+          status?: string
+          subject?: string | null
+          summary?: string | null
+          summary_status?: string
+          ticket_number?: number
+          updated_at?: string
+          wait_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_assignments: {
         Row: {
           assigned_at: string
