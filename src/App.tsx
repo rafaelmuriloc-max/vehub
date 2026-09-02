@@ -20,6 +20,7 @@ import ChatPopup from "./pages/ChatPopup";
 import Email from "./pages/Email";
 import Drive from "./pages/Drive";
 import Dashboard from "./pages/Dashboard";
+import Tickets from "./pages/Tickets";
 import ScheduledMessages from "./pages/ScheduledMessages";
 import NotFound from "./pages/NotFound";
 
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="/drive" element={<Drive />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/tickets" element={<Tickets />} />
               <Route path="/scheduled-messages" element={<ScheduledMessages />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/document-types" element={<DocumentTypes />} />

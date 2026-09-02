@@ -128,3 +128,6 @@ verify_jwt = false
 
 [functions.recurring-entries-runner]
 verify_jwt = false
+
+[functions.ticket-summarize]
+verify_jwt = false

@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { MetricCard } from './MetricCard';
-import { MessageCircle, Clock, UserX } from 'lucide-react';
+import { MessageCircle, Clock, UserX, List } from 'lucide-react';
+
 
 function formatWait(seconds: number) {
   if (seconds < 60) return `${seconds}s`;
@@ -15,6 +18,8 @@ function formatWait(seconds: number) {
 
 export function TicketsPanel() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+
 
   const { data } = useQuery({
     queryKey: ['dashboard-tickets'],
@@ -103,10 +108,16 @@ export function TicketsPanel() {
 
   return (
     <Card className="bg-card/40 border-border/40 p-5 flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <MessageCircle className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Chamados</h2>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold tracking-tight">Chamados</h2>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate('/tickets')}>
+          <List className="h-4 w-4 mr-2" /> Ver chamados
+        </Button>
       </div>
+
 
       <div className="grid grid-cols-3 gap-3">
         <MetricCard label="Abertos" value={data?.open ?? '—'} />
