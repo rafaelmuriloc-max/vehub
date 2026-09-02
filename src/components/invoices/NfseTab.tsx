@@ -787,7 +787,8 @@ export default function NfseTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
-                    <TableHead className="max-w-[150px]">Cliente</TableHead>
+                    <TableHead className="max-w-[180px]">{listTab === 'prestados' ? 'Destinatário' : 'Emitente'}</TableHead>
+                    <TableHead className="max-w-[150px] hidden lg:table-cell">Cliente</TableHead>
                     <TableHead>Data Emissão</TableHead>
                     <TableHead className="hidden lg:table-cell">Descrição</TableHead>
                     <TableHead className="text-right">Valor Bruto</TableHead>
