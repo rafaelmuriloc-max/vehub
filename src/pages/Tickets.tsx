@@ -310,7 +310,7 @@ export default function Tickets() {
                 </p>
               </div>
               {detail.conversation_id && (
-                <Button variant="outline" className="w-full" onClick={() => navigate(`/chat?conversation=${detail.conversation_id}`)}>
+                <Button variant="outline" className="w-full" onClick={() => navigate('/chat')}>
                   <MessageCircle className="h-4 w-4 mr-2" /> Abrir conversa no chat
                 </Button>
               )}
