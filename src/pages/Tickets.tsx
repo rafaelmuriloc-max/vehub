@@ -14,9 +14,11 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, MessageCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { ArrowLeft, FileDown, MessageCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatClientLabel } from '@/lib/utils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type TicketRow = {
   id: string;
@@ -87,6 +89,7 @@ export default function Tickets() {
   const [page, setPage] = useState(0);
   const [detail, setDetail] = useState<TicketRow | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const pageSize = 25;
 
   const sinceIso = useMemo(() => {
@@ -186,6 +189,129 @@ export default function Tickets() {
     }
   };
 
+  const generateReport = async () => {
+    setReporting(true);
+    try {
+      let q = supabase
+        .from('support_tickets')
+        .select('*')
+        .order('opened_at', { ascending: false })
+        .limit(2000);
+
+      if (sinceIso) q = q.gte('opened_at', sinceIso);
+      if (status !== 'all') q = q.eq('status', status);
+      if (agent !== 'all') q = q.eq('assigned_to', agent);
+      if (dept !== 'all') q = q.eq('department_id', dept);
+      if (search.trim()) {
+        const term = `%${search.trim()}%`;
+        q = q.or(`contact_name.ilike.${term},contact_phone.ilike.${term},subject.ilike.${term},summary.ilike.${term}`);
+      }
+
+      const { data: all, error } = await q;
+      if (error) throw error;
+      const list = (all ?? []) as TicketRow[];
+      if (list.length === 0) {
+        toast({ title: 'Nenhum chamado', description: 'Não há chamados no filtro atual.' });
+        return;
+      }
+
+      const now = Date.now();
+      const closed = list.filter(t => t.status === 'closed');
+      const durations = list
+        .map(t => {
+          const openedMs = new Date(t.opened_at).getTime();
+          if (t.handle_seconds != null && t.handle_seconds >= 0) return t.handle_seconds;
+          const end = t.closed_at ? new Date(t.closed_at).getTime() : now;
+          const d = Math.round((end - openedMs) / 1000);
+          return Number.isFinite(d) && d >= 0 ? d : null;
+        })
+        .filter((v): v is number => v != null);
+      const waits = list.map(t => t.wait_seconds).filter((v): v is number => v != null && v >= 0);
+      const avg = (arr: number[]) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null);
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+
+      doc.setFontSize(16);
+      doc.setTextColor(15, 23, 42);
+      doc.text('Relatório de Chamados', 14, 16);
+
+      doc.setFontSize(9);
+      doc.setTextColor(100);
+      doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, pageW - 14, 16, { align: 'right' });
+
+      const filtros = [
+        `Período: ${PERIODS.find(p => p.value === period)?.label ?? '—'}`,
+        `Situação: ${status === 'all' ? 'Todas' : status === 'open' ? 'Abertos' : 'Encerrados'}`,
+        `Responsável: ${agent === 'all' ? 'Todos' : profileMap[agent]?.name ?? '—'}`,
+        `Departamento: ${dept === 'all' ? 'Todos' : deptMap[dept] ?? '—'}`,
+      ];
+      if (search.trim()) filtros.push(`Busca: "${search.trim()}"`);
+      doc.text(filtros.join('  ·  '), 14, 22);
+
+      const resumo = [
+        `Total: ${list.length}`,
+        `Abertos: ${list.length - closed.length}`,
+        `Encerrados: ${closed.length}`,
+        `Duração média: ${fmtDuration(avg(durations))}`,
+        `Espera média: ${fmtDuration(avg(waits))}`,
+      ];
+      doc.setTextColor(15, 23, 42);
+      doc.text(resumo.join('  ·  '), 14, 28);
+
+      autoTable(doc, {
+        startY: 33,
+        head: [['#', 'Abertura', 'Fechamento', 'Duração', 'Contato', 'Empresa', 'Departamento', 'Responsável', 'Situação', 'Assunto']],
+        body: list.map(t => [
+          String(t.ticket_number),
+          fmtDate(t.opened_at),
+          fmtDate(t.closed_at),
+          ticketDuration(t, now),
+          t.contact_name || t.contact_phone || '—',
+          t.client_id ? clientMap[t.client_id] ?? '—' : 'Não cadastrado',
+          t.department_id ? deptMap[t.department_id] ?? '—' : '—',
+          t.assigned_to ? profileMap[t.assigned_to]?.name ?? '—' : '—',
+          t.status === 'open' ? 'Aberto' : 'Encerrado',
+          t.subject || '—',
+        ]),
+        styles: { fontSize: 7.5, cellPadding: 1.5, overflow: 'linebreak', textColor: [30, 41, 59] },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 7.5 },
+        alternateRowStyles: { fillColor: [245, 246, 248] },
+        columnStyles: {
+          0: { cellWidth: 12 },
+          1: { cellWidth: 26 },
+          2: { cellWidth: 26 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 36 },
+          5: { cellWidth: 46 },
+          6: { cellWidth: 28 },
+          7: { cellWidth: 28 },
+          8: { cellWidth: 20 },
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: () => {
+          const pageH = doc.internal.pageSize.getHeight();
+          doc.setFontSize(8);
+          doc.setTextColor(120);
+          doc.text(
+            `Página ${doc.getCurrentPageInfo().pageNumber}`,
+            pageW - 14,
+            pageH - 8,
+            { align: 'right' },
+          );
+        },
+      });
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      doc.save(`Chamados_${stamp}.pdf`);
+      toast({ title: 'Relatório gerado', description: `${list.length} chamado(s) no PDF.` });
+    } catch (e: any) {
+      toast({ title: 'Erro ao gerar relatório', description: e?.message, variant: 'destructive' });
+    } finally {
+      setReporting(false);
+    }
+  };
+
   const total = data?.count ?? 0;
   const rows = data?.rows ?? [];
 
@@ -204,6 +330,9 @@ export default function Tickets() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
+          </Button>
+          <Button variant="outline" size="sm" onClick={generateReport} disabled={reporting}>
+            <FileDown className="h-4 w-4 mr-2" /> {reporting ? 'Gerando...' : 'Relatório PDF'}
           </Button>
           <Button size="sm" onClick={generateToday} disabled={generating}>
             <Sparkles className="h-4 w-4 mr-2" /> {generating ? 'Gerando...' : 'Gerar chamados de hoje'}
