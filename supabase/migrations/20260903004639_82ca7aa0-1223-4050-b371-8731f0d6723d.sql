@@ -1,0 +1,1 @@
+ALTER TABLE public.nfe_sync_runs ADD COLUMN IF NOT EXISTS cursor_client_id text;
