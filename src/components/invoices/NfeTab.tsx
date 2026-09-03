@@ -182,24 +182,8 @@ export default function NfeTab() {
   const [bulkRunning, setBulkRunning] = useState<null | 'xml' | 'pdf'>(null);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
   const [directionTab, setDirectionTab] = useState<'entrada' | 'saida'>('entrada');
-  const [syncPeriod, setSyncPeriod] = useState<'last_90' | 'this_month' | 'last_month' | 'custom'>('last_90');
-  const [syncDateFrom, setSyncDateFrom] = useState('');
-  const [syncDateTo, setSyncDateTo] = useState('');
 
-  function computeSyncRange(period: typeof syncPeriod): { from: string; to: string } {
-    const now = new Date();
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    if (period === 'custom') return { from: syncDateFrom, to: syncDateTo };
-    if (period === 'this_month') {
-      return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0)) };
-    }
-    if (period === 'last_month') {
-      return { from: fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: fmt(new Date(now.getFullYear(), now.getMonth(), 0)) };
-    }
-    // last_90 (default)
-    const from = new Date(now); from.setDate(from.getDate() - 90);
-    return { from: fmt(from), to: fmt(now) };
-  }
+
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
