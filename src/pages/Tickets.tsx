@@ -331,6 +331,9 @@ export default function Tickets() {
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
           </Button>
+          <Button variant="outline" size="sm" onClick={generateReport} disabled={reporting}>
+            <FileDown className="h-4 w-4 mr-2" /> {reporting ? 'Gerando...' : 'Relatório PDF'}
+          </Button>
           <Button size="sm" onClick={generateToday} disabled={generating}>
             <Sparkles className="h-4 w-4 mr-2" /> {generating ? 'Gerando...' : 'Gerar chamados de hoje'}
           </Button>
