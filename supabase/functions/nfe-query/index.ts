@@ -146,6 +146,7 @@ Deno.serve(async (req) => {
     // When a period filter is requested, scan from NSU 0 to ensure full coverage within the date range.
     let lastNsu = periodFilter ? "0" : (client.last_nfe_nsu || "0");
     let totalSaved = 0;
+    let xmlCompletos = 0;
     let loops = 0;
     let keepGoing = true;
 
@@ -392,6 +393,10 @@ function buildSoapRequest(cnpj: string, ultNSU: string): string {
 </soap:Envelope>`;
 }
 
+function ensureXmlProlog(xml: string): string {
+  return /^\s*<\?xml/i.test(xml) ? xml : `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
+}
+
 function extractTagContent(xml: string, tagName: string): string | null {
   const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
   const match = xml.match(regex);
@@ -489,6 +494,7 @@ function parseNfeEntry(
 
   const xml = entry.xmlContent || "";
   const isResumo = /<resNFe[\s>]/i.test(xml);
+  const isFullXml = !entry.isEvent && /<nfeProc[\s>]/i.test(xml);
 
   // Fallback: derive invoice number from access key (positions 26..34, 9 digits)
   const invoiceNumberFromKey = entry.chAcesso.length === 44
@@ -547,6 +553,8 @@ function parseNfeEntry(
     nsu: entry.nsu,
     raw_xml: entry.xmlContent,
     direction,
+    __isEvent: entry.isEvent,
+    __isFullXml: isFullXml,
   };
 }
 
