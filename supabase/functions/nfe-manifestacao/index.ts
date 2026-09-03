@@ -19,6 +19,7 @@ const NFE_PROXY_URL = Deno.env.get("NFE_PROXY_URL") || "";
 const NFE_PROXY_TOKEN = Deno.env.get("NFE_PROXY_TOKEN") || "";
 
 const DEFAULT_TP_EVENTO = "210210";
+const MAX_LOTE = 20;
 const DESC_EVENTO_MAP: Record<string, string> = {
   "210200": "Confirmacao da Operacao",
   "210210": "Ciencia da Operacao",
@@ -42,28 +43,48 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const anonClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: userError } = await anonClient.auth.getUser();
-    if (userError || !user) return jsonResponse({ error: "Não autenticado" }, 401);
+    const isServiceCall = authHeader.replace(/^Bearer\s+/i, "") === supabaseServiceKey;
+    if (!isServiceCall) {
+      const anonClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: userError } = await anonClient.auth.getUser();
+      if (userError || !user) return jsonResponse({ error: "Não autenticado" }, 401);
+    }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
-    const nfe_invoice_id: string | undefined = body.nfe_invoice_id;
     const tpEvento: string = body.tpEvento || DEFAULT_TP_EVENTO;
-    if (!nfe_invoice_id) return jsonResponse({ error: "nfe_invoice_id é obrigatório" }, 400);
     if (!DESC_EVENTO_MAP[tpEvento]) return jsonResponse({ error: "tpEvento inválido" }, 400);
 
-    const { data: invoice, error: invError } = await adminClient
-      .from("nfe_invoices").select("*").eq("id", nfe_invoice_id).single();
-    if (invError || !invoice) return jsonResponse({ error: "NF-e não encontrada" }, 404);
-    if (!invoice.access_key) return jsonResponse({ error: "NF-e sem chave de acesso" }, 400);
+    const ids: string[] = Array.isArray(body.nfe_invoice_ids)
+      ? body.nfe_invoice_ids.filter((x: unknown) => typeof x === "string")
+      : body.nfe_invoice_id
+      ? [body.nfe_invoice_id]
+      : [];
+    if (ids.length === 0) return jsonResponse({ error: "nfe_invoice_ids é obrigatório" }, 400);
+    if (ids.length > MAX_LOTE) {
+      return jsonResponse({ error: `Máximo de ${MAX_LOTE} notas por lote` }, 400);
+    }
+
+    const { data: invoices, error: invError } = await adminClient
+      .from("nfe_invoices")
+      .select("id, access_key, client_id, status")
+      .in("id", ids);
+    if (invError) return jsonResponse({ error: invError.message }, 500);
+    if (!invoices || invoices.length === 0) return jsonResponse({ error: "NF-e não encontrada" }, 404);
+
+    const valid = invoices.filter((i) => !!i.access_key);
+    if (valid.length === 0) return jsonResponse({ error: "NF-e sem chave de acesso" }, 400);
+
+    const clientId: string = body.client_id || valid[0].client_id;
+    const mismatch = valid.find((i) => i.client_id !== clientId);
+    if (mismatch) return jsonResponse({ error: "Todas as notas do lote devem ser do mesmo cliente" }, 400);
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
       .select("id, document, digital_certificate_url, digital_certificate_password")
-      .eq("id", invoice.client_id).single();
+      .eq("id", clientId).single();
     if (clientError || !client) return jsonResponse({ error: "Cliente não encontrado" }, 404);
     if (!client.digital_certificate_url || !client.digital_certificate_password) {
       return jsonResponse({
@@ -80,74 +101,16 @@ Deno.serve(async (req) => {
     const parsed = parsePfx(pfxBytes, client.digital_certificate_password || "");
 
     const cnpj = (client.document || "").replace(/\D/g, "");
-    const chave = invoice.access_key as string;
-    const cOrgao = "91";
-    const tpAmb = "1";
-    const nSeqEvento = "1";
     const dhEvento = isoNowSP();
-    const verEvento = "1.00";
-    const descEvento = DESC_EVENTO_MAP[tpEvento];
-    const idEvento = `ID${tpEvento}${chave}${nSeqEvento.padStart(2, "0")}`;
 
-    const detEvento =
-      `<detEvento versao="${verEvento}">` +
-      `<descEvento>${descEvento}</descEvento>` +
-      `</detEvento>`;
-
-    const infEventoCanon =
-      `<infEvento Id="${idEvento}">` +
-      `<cOrgao>${cOrgao}</cOrgao>` +
-      `<tpAmb>${tpAmb}</tpAmb>` +
-      `<CNPJ>${cnpj}</CNPJ>` +
-      `<chNFe>${chave}</chNFe>` +
-      `<dhEvento>${dhEvento}</dhEvento>` +
-      `<tpEvento>${tpEvento}</tpEvento>` +
-      `<nSeqEvento>${nSeqEvento}</nSeqEvento>` +
-      `<verEvento>${verEvento}</verEvento>` +
-      detEvento +
-      `</infEvento>`;
-
-    // For digest, the referenced element gets the inherited default xmlns
-    const infEventoCanonForDigest = infEventoCanon.replace(
-      `<infEvento Id="${idEvento}">`,
-      `<infEvento xmlns="${NFE_NS}" Id="${idEvento}">`,
-    );
-
-    const digest = sha1Base64(infEventoCanonForDigest);
-
-    const signedInfoCanon =
-      `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
-      `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
-      `<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod>` +
-      `<Reference URI="#${idEvento}">` +
-      `<Transforms>` +
-      `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform>` +
-      `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></Transform>` +
-      `</Transforms>` +
-      `<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></DigestMethod>` +
-      `<DigestValue>${digest}</DigestValue>` +
-      `</Reference>` +
-      `</SignedInfo>`;
-
-    const signatureValue = rsaSha1SignBase64(signedInfoCanon, parsed.privateKey);
-    const certBase64 = pemToBase64(parsed.certPem);
-
-    const signature =
-      `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
-      signedInfoCanon +
-      `<SignatureValue>${signatureValue}</SignatureValue>` +
-      `<KeyInfo><X509Data><X509Certificate>${certBase64}</X509Certificate></X509Data></KeyInfo>` +
-      `</Signature>`;
-
-    const evento =
-      `<evento xmlns="${NFE_NS}" versao="${verEvento}">` +
-      infEventoCanon + signature +
-      `</evento>`;
+    const eventosXml = valid
+      .map((inv) => signEvento(inv.access_key as string, cnpj, tpEvento, dhEvento, parsed))
+      .join("");
 
     const envEvento =
-      `<envEvento xmlns="${NFE_NS}" versao="${verEvento}">` +
+      `<envEvento xmlns="${NFE_NS}" versao="1.00">` +
       `<idLote>${Date.now().toString().slice(-15)}</idLote>` +
-      evento +
+      eventosXml +
       `</envEvento>`;
 
     const soapBody =
@@ -158,7 +121,7 @@ Deno.serve(async (req) => {
       `</soap:Body>` +
       `</soap:Envelope>`;
 
-    console.log(`[nfe-manifestacao] chave=${chave} CNPJ=${cnpj} tpEvento=${tpEvento}`);
+    console.log(`[nfe-manifestacao] lote=${valid.length} CNPJ=${cnpj} tpEvento=${tpEvento}`);
 
     const response = await requestTextWithMTLS(new URL(AN_URL), {
       method: "POST",
@@ -172,31 +135,163 @@ Deno.serve(async (req) => {
     console.log(`[nfe-manifestacao] status=${response.status} bodyLen=${response.bodyText.length}`);
     console.log(`[nfe-manifestacao] body=${response.bodyText.slice(0, 1500)}`);
 
-    const cStatLote = extractTagContent(response.bodyText, "cStat");
-    const xMotivoLote = extractTagContent(response.bodyText, "xMotivo");
-    const retEventoBlock = extractTagContent(response.bodyText, "retEvento") || response.bodyText;
-    const cStatEvento = extractTagContent(retEventoBlock, "cStat") || cStatLote;
-    const xMotivoEvento = extractTagContent(retEventoBlock, "xMotivo") || xMotivoLote;
+    const retEnvBlock = extractTagContent(response.bodyText, "retEnvEvento") || response.bodyText;
+    const retEventoBlocks = extractAllTags(retEnvBlock, "retEvento");
+    // cStat of the batch is the first cStat outside the retEvento blocks
+    let loteXml = retEnvBlock;
+    for (const b of retEventoBlocks) loteXml = loteXml.replace(b, "");
+    const cStatLote = extractTagContent(loteXml, "cStat");
+    const xMotivoLote = extractTagContent(loteXml, "xMotivo");
+    const faultString = extractTagContent(response.bodyText, "faultstring");
 
-    const ok = ["135", "136", "573"].includes(cStatEvento || "");
-    if (!ok) {
-      const faultString = extractTagContent(response.bodyText, "faultstring");
+    const results: Array<{ access_key: string; cStat: string | null; id: string; ok: boolean; xMotivo: string | null }> = [];
+
+    const loteFailed = response.status >= 400 ||
+      retEventoBlocks.length === 0 ||
+      (cStatLote !== null && cStatLote !== "128");
+
+    if (loteFailed) {
+      const msg = cStatLote
+        ? `${cStatLote} - ${xMotivoLote || ""}`.trim()
+        : `HTTP ${response.status}: ${faultString || response.bodyText.slice(0, 300)}`;
+      for (const inv of valid) {
+        await markError(adminClient, inv.id as string, msg);
+        results.push({
+          access_key: inv.access_key as string,
+          cStat: cStatLote,
+          id: inv.id as string,
+          ok: false,
+          xMotivo: xMotivoLote || faultString,
+        });
+      }
       return jsonResponse({
-        error: cStatEvento
-          ? `AN: ${cStatEvento} - ${xMotivoEvento}`
-          : `AN HTTP ${response.status}: ${faultString || response.bodyText.slice(0, 500)}`,
-        cStat: cStatEvento,
-        httpStatus: response.status,
-        bodySnippet: response.bodyText.slice(0, 800),
+        enviadas: 0,
+        erros: results.length,
+        error: msg,
+        results,
+        success: false,
       }, 400);
     }
 
-    return jsonResponse({ success: true, cStat: cStatEvento, xMotivo: xMotivoEvento, tpEvento });
+    for (const inv of valid) {
+      const chave = inv.access_key as string;
+      const block = retEventoBlocks.find((b) => (extractTagContent(b, "chNFe") || "") === chave);
+      if (!block) {
+        const msg = "Sem retorno do AN para esta chave";
+        await markError(adminClient, inv.id as string, msg);
+        results.push({ access_key: chave, cStat: null, id: inv.id as string, ok: false, xMotivo: msg });
+        continue;
+      }
+      const cStat = extractTagContent(block, "cStat");
+      const xMotivo = extractTagContent(block, "xMotivo");
+      const ok = ["135", "136", "573"].includes(cStat || "");
+      if (ok) {
+        const update: Record<string, unknown> = {
+          manifest_error: null,
+          manifest_status: "enviada",
+          manifested_at: new Date().toISOString(),
+        };
+        if (inv.status !== "xml_baixado") update.status = "aguardando_ciencia";
+        await adminClient.from("nfe_invoices").update(update).eq("id", inv.id);
+      } else {
+        await markError(adminClient, inv.id as string, `${cStat || "?"} - ${xMotivo || ""}`.trim());
+      }
+      results.push({ access_key: chave, cStat, id: inv.id as string, ok, xMotivo });
+    }
+
+    const enviadas = results.filter((r) => r.ok).length;
+    return jsonResponse({
+      enviadas,
+      erros: results.length - enviadas,
+      results,
+      success: true,
+    });
   } catch (error) {
     console.error("[nfe-manifestacao] Error:", error);
     return jsonResponse({ error: error instanceof Error ? error.message : "Erro interno" }, 500);
   }
 });
+
+async function markError(adminClient: any, id: string, message: string): Promise<void> {
+  const { data: current } = await adminClient
+    .from("nfe_invoices").select("manifest_attempts").eq("id", id).single();
+  await adminClient.from("nfe_invoices").update({
+    manifest_attempts: (current?.manifest_attempts || 0) + 1,
+    manifest_error: message.slice(0, 500),
+    manifest_status: "erro",
+  }).eq("id", id);
+}
+
+function signEvento(
+  chave: string,
+  cnpj: string,
+  tpEvento: string,
+  dhEvento: string,
+  parsed: { certPem: string; privateKey: any },
+): string {
+  const cOrgao = "91";
+  const tpAmb = "1";
+  const nSeqEvento = "1";
+  const verEvento = "1.00";
+  const descEvento = DESC_EVENTO_MAP[tpEvento];
+  const idEvento = `ID${tpEvento}${chave}${nSeqEvento.padStart(2, "0")}`;
+
+  const detEvento =
+    `<detEvento versao="${verEvento}">` +
+    `<descEvento>${descEvento}</descEvento>` +
+    `</detEvento>`;
+
+  const infEventoCanon =
+    `<infEvento Id="${idEvento}">` +
+    `<cOrgao>${cOrgao}</cOrgao>` +
+    `<tpAmb>${tpAmb}</tpAmb>` +
+    `<CNPJ>${cnpj}</CNPJ>` +
+    `<chNFe>${chave}</chNFe>` +
+    `<dhEvento>${dhEvento}</dhEvento>` +
+    `<tpEvento>${tpEvento}</tpEvento>` +
+    `<nSeqEvento>${nSeqEvento}</nSeqEvento>` +
+    `<verEvento>${verEvento}</verEvento>` +
+    detEvento +
+    `</infEvento>`;
+
+  const infEventoCanonForDigest = infEventoCanon.replace(
+    `<infEvento Id="${idEvento}">`,
+    `<infEvento xmlns="${NFE_NS}" Id="${idEvento}">`,
+  );
+
+  const digest = sha1Base64(infEventoCanonForDigest);
+
+  const signedInfoCanon =
+    `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+    `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
+    `<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod>` +
+    `<Reference URI="#${idEvento}">` +
+    `<Transforms>` +
+    `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform>` +
+    `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></Transform>` +
+    `</Transforms>` +
+    `<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></DigestMethod>` +
+    `<DigestValue>${digest}</DigestValue>` +
+    `</Reference>` +
+    `</SignedInfo>`;
+
+  const signatureValue = rsaSha1SignBase64(signedInfoCanon, parsed.privateKey);
+  const certBase64 = pemToBase64(parsed.certPem);
+
+  const signature =
+    `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+    signedInfoCanon +
+    `<SignatureValue>${signatureValue}</SignatureValue>` +
+    `<KeyInfo><X509Data><X509Certificate>${certBase64}</X509Certificate></X509Data></KeyInfo>` +
+    `</Signature>`;
+
+  return `<evento xmlns="${NFE_NS}" versao="${verEvento}">` + infEventoCanon + signature + `</evento>`;
+}
+
+function extractAllTags(xml: string, tagName: string): string[] {
+  const regex = new RegExp(`<${tagName}[^>]*>[\\s\\S]*?<\\/${tagName}>`, "gi");
+  return xml.match(regex) || [];
+}
 
 function isoNowSP(): string {
   const d = new Date(Date.now() - 3 * 60 * 60 * 1000);
