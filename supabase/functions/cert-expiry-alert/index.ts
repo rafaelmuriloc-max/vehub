@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
       .from("clients")
       .select("company_name, digital_certificate_expiry")
       .eq("status", "active")
+      .is("end_date", null)
       .not("digital_certificate_expiry", "is", null);
 
     if (clientsErr) {

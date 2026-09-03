@@ -244,7 +244,7 @@ export default function Clients() {
     const byExpiry = (a: Client, b: Client) =>
       new Date(a.digital_certificate_expiry! + 'T00:00:00').getTime() - new Date(b.digital_certificate_expiry! + 'T00:00:00').getTime();
 
-    const withCert = clients.filter(c => !!c.digital_certificate_expiry);
+    const withCert = clients.filter(c => !!c.digital_certificate_expiry && c.status === 'active' && !c.end_date);
 
     // Todos os vencidos, de qualquer mês
     const expiredList = withCert
