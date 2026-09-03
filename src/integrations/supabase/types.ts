@@ -1612,6 +1612,7 @@ export type Database = {
           clients_processed: number
           clients_total: number
           created_at: string
+          cursor_client_id: string | null
           details: Json
           error_message: string | null
           finished_at: string | null
@@ -1632,6 +1633,7 @@ export type Database = {
           clients_processed?: number
           clients_total?: number
           created_at?: string
+          cursor_client_id?: string | null
           details?: Json
           error_message?: string | null
           finished_at?: string | null
@@ -1652,6 +1654,7 @@ export type Database = {
           clients_processed?: number
           clients_total?: number
           created_at?: string
+          cursor_client_id?: string | null
           details?: Json
           error_message?: string | null
           finished_at?: string | null

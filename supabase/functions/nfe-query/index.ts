@@ -270,7 +270,8 @@ Deno.serve(async (req) => {
           }
         }
 
-        const rowsToUpsert: Array<Record<string, unknown>> = [];
+        const fullRows: Array<Record<string, unknown>> = [];
+        const reducedRows: Array<Record<string, unknown>> = [];
         for (const inv of invoicesToSave) {
           const isFullXml = !!inv.__isFullXml;
           const accessKey = inv.access_key as string;
@@ -297,27 +298,51 @@ Deno.serve(async (req) => {
             } catch (e) {
               console.warn(`[NF-e] Erro ao salvar XML ${accessKey}:`, (e as Error).message);
             }
-          } else if (alreadyComplete.has(accessKey)) {
+          }
+
+          if (!isFullXml && alreadyComplete.has(accessKey)) {
             // Do not regress a complete XML back to the summary version.
             delete row.raw_xml;
             delete row.status;
             delete row.xml_url;
+            reducedRows.push(row);
+          } else {
+            // Keep the key set identical across every full row.
+            if (!("xml_url" in row)) row.xml_url = null;
+            fullRows.push(row);
           }
-
-          rowsToUpsert.push(row);
         }
 
         const batchSize = 20;
-        for (let i = 0; i < rowsToUpsert.length; i += batchSize) {
-          const batch = rowsToUpsert.slice(i, i + batchSize);
-          const { error: upsertError } = await adminClient
-            .from("nfe_invoices")
-            .upsert(batch, { onConflict: "access_key", ignoreDuplicates: false });
-          if (upsertError) {
-            console.error("[NF-e] Upsert error:", upsertError.message);
+        // PostgREST requires every row of a batch to share the exact same keys,
+        // so rows are grouped by their key signature before upserting.
+        const upsertRows = async (rows: Array<Record<string, unknown>>) => {
+          const groups = new Map<string, Array<Record<string, unknown>>>();
+          for (const row of rows) {
+            const signature = Object.keys(row).sort().join("|");
+            const group = groups.get(signature);
+            if (group) group.push(row);
+            else groups.set(signature, [row]);
           }
-        }
-        totalSaved += rowsToUpsert.length;
+          for (const group of groups.values()) {
+            for (let i = 0; i < group.length; i += batchSize) {
+              const { error: upsertError } = await adminClient
+                .from("nfe_invoices")
+                .upsert(group.slice(i, i + batchSize), {
+                  onConflict: "access_key",
+                  ignoreDuplicates: false,
+                });
+              if (upsertError) {
+                console.error("[NF-e] Upsert error:", upsertError.message);
+              }
+            }
+          }
+        };
+
+        await upsertRows(fullRows);
+        await upsertRows(reducedRows);
+        totalSaved += fullRows.length + reducedRows.length;
+
       }
 
       const newLastNsu = ultNSURet || lastNsu;
