@@ -1618,7 +1618,9 @@ export type Database = {
           id: string
           lease_expires_at: string
           nfe_errors: number
+          nfe_manifestadas: number
           nfe_success: number
+          nfe_xml_completos: number
           nfse_errors: number
           nfse_success: number
           reference_date: string
@@ -1636,7 +1638,9 @@ export type Database = {
           id?: string
           lease_expires_at?: string
           nfe_errors?: number
+          nfe_manifestadas?: number
           nfe_success?: number
+          nfe_xml_completos?: number
           nfse_errors?: number
           nfse_success?: number
           reference_date: string
@@ -1654,7 +1658,9 @@ export type Database = {
           id?: string
           lease_expires_at?: string
           nfe_errors?: number
+          nfe_manifestadas?: number
           nfe_success?: number
+          nfe_xml_completos?: number
           nfse_errors?: number
           nfse_success?: number
           reference_date?: string
