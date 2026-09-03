@@ -1538,6 +1538,10 @@ export type Database = {
           id: string
           invoice_number: string | null
           issue_date: string | null
+          manifest_attempts: number
+          manifest_error: string | null
+          manifest_status: string | null
+          manifested_at: string | null
           nsu: string | null
           pdf_url: string | null
           raw_xml: string | null
@@ -1557,6 +1561,10 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           issue_date?: string | null
+          manifest_attempts?: number
+          manifest_error?: string | null
+          manifest_status?: string | null
+          manifested_at?: string | null
           nsu?: string | null
           pdf_url?: string | null
           raw_xml?: string | null
@@ -1576,6 +1584,10 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           issue_date?: string | null
+          manifest_attempts?: number
+          manifest_error?: string | null
+          manifest_status?: string | null
+          manifested_at?: string | null
           nsu?: string | null
           pdf_url?: string | null
           raw_xml?: string | null
