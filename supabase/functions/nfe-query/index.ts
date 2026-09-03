@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
         break;
       }
 
-      const invoicesToSave = [];
+      const invoicesToSave: Array<Record<string, unknown>> = [];
       for (const entry of entries) {
         // Decompress docZip content
         if (entry.xmlContent?.startsWith("__BASE64__")) {
@@ -252,9 +252,63 @@ Deno.serve(async (req) => {
       }
 
       if (invoicesToSave.length > 0) {
+        // Notes we would regress: incoming only-summary rows for keys already holding the full XML.
+        const summaryKeys = invoicesToSave
+          .filter((inv) => !inv.__isFullXml && !inv.__isEvent)
+          .map((inv) => inv.access_key as string);
+        const alreadyComplete = new Set<string>();
+        if (summaryKeys.length > 0) {
+          for (let i = 0; i < summaryKeys.length; i += 200) {
+            const { data: existing } = await adminClient
+              .from("nfe_invoices")
+              .select("access_key, status")
+              .in("access_key", summaryKeys.slice(i, i + 200));
+            for (const row of existing || []) {
+              if (row.status === "xml_baixado") alreadyComplete.add(row.access_key as string);
+            }
+          }
+        }
+
+        const rowsToUpsert: Array<Record<string, unknown>> = [];
+        for (const inv of invoicesToSave) {
+          const isFullXml = !!inv.__isFullXml;
+          const accessKey = inv.access_key as string;
+          const row = { ...inv };
+          delete row.__isFullXml;
+          delete row.__isEvent;
+
+          if (isFullXml) {
+            // Store the complete NFe XML in storage and mark it as downloaded.
+            try {
+              const fullXml = ensureXmlProlog(String(inv.raw_xml || ""));
+              const storagePath = `nfe/${client_id}/${accessKey}.xml`;
+              const { error: upErr } = await adminClient.storage
+                .from("documents")
+                .upload(storagePath, new Blob([fullXml], { type: "application/xml" }), { upsert: true });
+              if (upErr) {
+                console.warn(`[NF-e] Falha ao salvar XML ${accessKey}: ${upErr.message}`);
+              } else {
+                row.xml_url = storagePath;
+                row.status = "xml_baixado";
+                row.raw_xml = fullXml;
+                xmlCompletos++;
+              }
+            } catch (e) {
+              console.warn(`[NF-e] Erro ao salvar XML ${accessKey}:`, (e as Error).message);
+            }
+          } else if (alreadyComplete.has(accessKey)) {
+            // Do not regress a complete XML back to the summary version.
+            delete row.raw_xml;
+            delete row.status;
+            delete row.xml_url;
+          }
+
+          rowsToUpsert.push(row);
+        }
+
         const batchSize = 20;
-        for (let i = 0; i < invoicesToSave.length; i += batchSize) {
-          const batch = invoicesToSave.slice(i, i + batchSize);
+        for (let i = 0; i < rowsToUpsert.length; i += batchSize) {
+          const batch = rowsToUpsert.slice(i, i + batchSize);
           const { error: upsertError } = await adminClient
             .from("nfe_invoices")
             .upsert(batch, { onConflict: "access_key", ignoreDuplicates: false });
@@ -262,7 +316,7 @@ Deno.serve(async (req) => {
             console.error("[NF-e] Upsert error:", upsertError.message);
           }
         }
-        totalSaved += invoicesToSave.length;
+        totalSaved += rowsToUpsert.length;
       }
 
       const newLastNsu = ultNSURet || lastNsu;
@@ -280,12 +334,31 @@ Deno.serve(async (req) => {
       keepGoing = !!(maxNSU && ultNSURet && ultNSURet < maxNSU);
     }
 
+    // Incoming notes that still have only the summary (resNFe) need Ciência da Operação.
+    let pendingCiencia: Array<{ access_key: string; id: string }> = [];
+    const { data: pendingRows } = await adminClient
+      .from("nfe_invoices")
+      .select("id, access_key")
+      .eq("client_id", client_id)
+      .eq("direction", "entrada")
+      .neq("status", "xml_baixado")
+      .is("xml_url", null)
+      .is("manifested_at", null)
+      .limit(200);
+    pendingCiencia = (pendingRows || []).map((r) => ({
+      access_key: r.access_key as string,
+      id: r.id as string,
+    }));
+
     return jsonResponse({
       success: true,
       invoices_saved: totalSaved,
       last_nsu: lastNsu,
       loops,
+      pending_ciencia: pendingCiencia,
+      xml_completos: xmlCompletos,
     });
+
   } catch (error) {
     const infrastructureError = getHandledInfrastructureError(error);
     if (infrastructureError) {
