@@ -13,7 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download, ArrowDownLeft, ArrowUpRight, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertTriangle, Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download, ArrowDownLeft, ArrowUpRight, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
 import { formatClientLabel } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
@@ -44,9 +45,15 @@ type NfeInvoice = {
   raw_xml?: string | null;
   created_at: string;
   direction?: string | null;
+  manifest_status?: string | null;
+  manifest_error?: string | null;
 };
 
 type NfeQueryResponse = {
+  capturadas?: number;
+  manifestadas?: number;
+  xml_completos?: number;
+  pendentes?: number;
   error?: string;
   infrastructure?: boolean;
   invoices_saved?: number;
@@ -64,6 +71,22 @@ function formatCurrency(value: number) {
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '—';
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+function NfeStatusBadge({ status }: { status: string | null }) {
+  if (status === 'xml_baixado') {
+    return <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">XML completo</Badge>;
+  }
+  if (status === 'aguardando_ciencia') {
+    return <Badge className="bg-amber-500 text-white hover:bg-amber-500">Aguardando XML</Badge>;
+  }
+  if (status === 'cancelada') {
+    return <Badge variant="destructive">Cancelada</Badge>;
+  }
+  if (status && status.startsWith('evento_')) {
+    return <Badge variant="outline">Evento</Badge>;
+  }
+  return <Badge variant="secondary">Resumo</Badge>;
 }
 
 type SummaryVariant = 'blue' | 'orange';
@@ -159,24 +182,8 @@ export default function NfeTab() {
   const [bulkRunning, setBulkRunning] = useState<null | 'xml' | 'pdf'>(null);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
   const [directionTab, setDirectionTab] = useState<'entrada' | 'saida'>('entrada');
-  const [syncPeriod, setSyncPeriod] = useState<'last_90' | 'this_month' | 'last_month' | 'custom'>('last_90');
-  const [syncDateFrom, setSyncDateFrom] = useState('');
-  const [syncDateTo, setSyncDateTo] = useState('');
 
-  function computeSyncRange(period: typeof syncPeriod): { from: string; to: string } {
-    const now = new Date();
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    if (period === 'custom') return { from: syncDateFrom, to: syncDateTo };
-    if (period === 'this_month') {
-      return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0)) };
-    }
-    if (period === 'last_month') {
-      return { from: fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: fmt(new Date(now.getFullYear(), now.getMonth(), 0)) };
-    }
-    // last_90 (default)
-    const from = new Date(now); from.setDate(from.getDate() - 90);
-    return { from: fmt(from), to: fmt(now) };
-  }
+
 
   function handleDatePeriodChange(period: typeof datePeriod) {
     setDatePeriod(period);
@@ -218,7 +225,7 @@ export default function NfeTab() {
       const build = (from: number, to: number) => {
         let q = supabase
           .from('nfe_invoices')
-          .select('id, client_id, access_key, invoice_number, issue_date, emitter_cnpj, emitter_name, recipient_cnpj, recipient_name, total_value, status, nsu, xml_url, created_at, direction')
+          .select('id, client_id, access_key, invoice_number, issue_date, emitter_cnpj, emitter_name, recipient_cnpj, recipient_name, total_value, status, nsu, xml_url, created_at, direction, manifest_status, manifest_error')
           .order('issue_date', { ascending: false })
           .range(from, to);
         if (filterClient !== 'all') q = q.eq('client_id', filterClient);
@@ -271,6 +278,7 @@ export default function NfeTab() {
     let successCount = 0;
     let errorCount = 0;
     let infrastructureMessage = '';
+    const totals = { capturadas: 0, manifestadas: 0, xmlCompletos: 0 };
 
     try {
       for (let i = 0; i < clientIds.length; i++) {
@@ -278,13 +286,8 @@ export default function NfeTab() {
         setSyncProgress(clientIds.length > 1 ? `Consultando ${i + 1}/${clientIds.length} — ${clientName}` : `Consultando ${clientName}`);
 
         try {
-          const range = computeSyncRange(syncPeriod);
-          const { data, error } = await supabase.functions.invoke('nfe-query', {
-            body: {
-              client_id: clientIds[i],
-              date_from: range.from || undefined,
-              date_to: range.to || undefined,
-            },
+          const { data, error } = await supabase.functions.invoke('nfe-auto-complete', {
+            body: { client_id: clientIds[i], wait_seconds: 10 },
           });
 
           const response = (data ?? null) as NfeQueryResponse | null;
@@ -296,6 +299,9 @@ export default function NfeTab() {
             }
           } else {
             successCount++;
+            totals.capturadas += Number(response?.capturadas || 0);
+            totals.manifestadas += Number(response?.manifestadas || 0);
+            totals.xmlCompletos += Number(response?.xml_completos || 0);
           }
         } catch (e) {
           errorCount++;
@@ -315,12 +321,17 @@ export default function NfeTab() {
         return;
       }
 
+      const totalsText = `${totals.capturadas} capturada(s), ${totals.manifestadas} manifestada(s), ${totals.xmlCompletos} XML completo(s)`;
       if (clientIds.length === 1) {
-        toast({ title: errorCount > 0 ? 'Erro na consulta' : 'Consulta realizada com sucesso', variant: errorCount > 0 ? 'destructive' : 'default' });
+        toast({
+          title: errorCount > 0 ? 'Erro na consulta' : 'Consulta realizada com sucesso',
+          description: errorCount > 0 ? undefined : totalsText,
+          variant: errorCount > 0 ? 'destructive' : 'default',
+        });
       } else {
         toast({
           title: 'Consulta em lote finalizada',
-          description: `${successCount} sucesso, ${errorCount} erro(s) de ${clientIds.length} clientes`,
+          description: `${successCount} sucesso, ${errorCount} erro(s) de ${clientIds.length} clientes — ${totalsText}`,
           variant: errorCount > 0 ? 'destructive' : 'default',
         });
       }
@@ -596,32 +607,6 @@ export default function NfeTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-[180px] space-y-2">
-                <Label>Período</Label>
-                <Select value={syncPeriod} onValueChange={(v) => setSyncPeriod(v as typeof syncPeriod)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="last_90">Últimos 90 dias</SelectItem>
-                    <SelectItem value="this_month">Este mês</SelectItem>
-                    <SelectItem value="last_month">Mês anterior</SelectItem>
-                    <SelectItem value="custom">Personalizado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {syncPeriod === 'custom' && (
-                <>
-                  <div className="space-y-2">
-                    <Label>De</Label>
-                    <Input type="date" value={syncDateFrom} onChange={e => setSyncDateFrom(e.target.value)} className="w-[160px]" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Até</Label>
-                    <Input type="date" value={syncDateTo} onChange={e => setSyncDateTo(e.target.value)} className="w-[160px]" />
-                  </div>
-                </>
-              )}
               <Button onClick={handleSync} disabled={syncing} className="ml-auto">
                 {syncing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
                 {syncing ? (syncProgress || 'Consultando...') : 'Buscar NF-e'}
@@ -781,9 +766,21 @@ export default function NfeTab() {
                         <TableCell>{formatDate(inv.issue_date)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(inv.total_value)}</TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          <Badge variant={inv.status === 'cancelada' ? 'destructive' : 'secondary'}>
-                            {inv.status || 'autorizada'}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <NfeStatusBadge status={inv.status} />
+                            {inv.manifest_status === 'erro' && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-[280px]">
+                                    {inv.manifest_error || 'Falha na manifestação'}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">

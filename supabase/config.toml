@@ -131,3 +131,12 @@ verify_jwt = false
 
 [functions.ticket-summarize]
 verify_jwt = false
+
+[functions.nfe-auto-complete]
+verify_jwt = false
+
+[functions.nfe-manifestacao]
+verify_jwt = false
+
+[functions.nfe-nfse-daily-sync]
+verify_jwt = false

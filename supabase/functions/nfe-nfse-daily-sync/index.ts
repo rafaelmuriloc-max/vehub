@@ -107,18 +107,24 @@ Deno.serve(async (req) => {
   const details: any[] = [];
   let processed = 0;
   let nfeOk = 0, nfeErr = 0, nfseOk = 0, nfseErr = 0;
+  let nfeManifestadas = 0, nfeXmlCompletos = 0;
 
   for (const c of eligible) {
     const entry: any = { client_id: c.id, company: c.company_name };
 
     try {
-      await callFunction("nfe-query", {
+      const auto = await callFunction("nfe-auto-complete", {
         client_id: c.id,
-        date_from: referenceDate,
-        date_to: referenceDate,
+        wait_seconds: 5,
       });
       nfeOk++;
       entry.nfe = "ok";
+      entry.capturadas = auto?.capturadas ?? 0;
+      entry.manifestadas = auto?.manifestadas ?? 0;
+      entry.xml_completos = auto?.xml_completos ?? 0;
+      entry.pendentes = auto?.pendentes ?? 0;
+      nfeManifestadas += Number(auto?.manifestadas || 0);
+      nfeXmlCompletos += Number(auto?.xml_completos || 0);
     } catch (e) {
       nfeErr++;
       entry.nfe = `erro: ${(e as Error).message}`.slice(0, 300);
@@ -145,6 +151,7 @@ Deno.serve(async (req) => {
         clients_processed: processed,
         nfe_success: nfeOk, nfe_errors: nfeErr,
         nfse_success: nfseOk, nfse_errors: nfseErr,
+        nfe_manifestadas: nfeManifestadas, nfe_xml_completos: nfeXmlCompletos,
         lease_expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       }).eq("id", run.id);
     }
@@ -158,6 +165,7 @@ Deno.serve(async (req) => {
     clients_processed: processed,
     nfe_success: nfeOk, nfe_errors: nfeErr,
     nfse_success: nfseOk, nfse_errors: nfseErr,
+    nfe_manifestadas: nfeManifestadas, nfe_xml_completos: nfeXmlCompletos,
     details,
   }).eq("id", run.id);
 
@@ -166,7 +174,7 @@ Deno.serve(async (req) => {
     run_id: run.id,
     reference_date: referenceDate,
     clients: processed,
-    nfe: { ok: nfeOk, errors: nfeErr },
+    nfe: { ok: nfeOk, errors: nfeErr, manifestadas: nfeManifestadas, xml_completos: nfeXmlCompletos },
     nfse: { ok: nfseOk, errors: nfseErr },
   });
 });
