@@ -89,6 +89,7 @@ export default function Tickets() {
   const [page, setPage] = useState(0);
   const [detail, setDetail] = useState<TicketRow | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const pageSize = 25;
 
   const sinceIso = useMemo(() => {
