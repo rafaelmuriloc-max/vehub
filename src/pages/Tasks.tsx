@@ -610,7 +610,7 @@ export default function Tasks() {
                 </h3>
                 <div className="space-y-2 min-h-[200px]">
                   {filteredTasks.filter(t => t.status === col).map(task => (
-                    <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(task)}>
+                    <Card key={task.id} className={`cursor-pointer hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
