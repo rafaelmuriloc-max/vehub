@@ -327,6 +327,11 @@ export default function Tasks() {
   const formatTaskNumber = (n: number | null | undefined) => n ? `#${String(n).padStart(6, '0')}` : '#------';
   const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const getDeptName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
+  const isCompletedOnTime = (task: Task) => {
+    if (task.status !== 'done' || !task.due_date || !task.completed_at) return false;
+    const completedDate = task.completed_at.split('T')[0];
+    return completedDate <= task.due_date;
+  };
 
   function openNewTemplate() {
     setEditingTemplate(null);
