@@ -327,6 +327,11 @@ export default function Tasks() {
   const formatTaskNumber = (n: number | null | undefined) => n ? `#${String(n).padStart(6, '0')}` : '#------';
   const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const getDeptName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
+  const isCompletedOnTime = (task: Task) => {
+    if (task.status !== 'done' || !task.due_date || !task.completed_at) return false;
+    const completedDate = task.completed_at.split('T')[0];
+    return completedDate <= task.due_date;
+  };
 
   function openNewTemplate() {
     setEditingTemplate(null);
@@ -605,7 +610,7 @@ export default function Tasks() {
                 </h3>
                 <div className="space-y-2 min-h-[200px]">
                   {filteredTasks.filter(t => t.status === col).map(task => (
-                    <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(task)}>
+                    <Card key={task.id} className={`cursor-pointer hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
