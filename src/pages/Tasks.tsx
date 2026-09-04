@@ -25,7 +25,7 @@ type Task = {
   priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
   created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
   notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null;
-  notify_email_subject?: string | null; notify_sent_at?: string | null;
+  notify_email_subject?: string | null; notify_sent_at?: string | null; completed_at?: string | null;
 };
 type Profile = { user_id: string; full_name: string | null; tag_color?: string | null };
 
@@ -623,6 +623,11 @@ export default function Tasks() {
                           Solicitado em {formatDateTime(task.created_at)}
                           {task.created_by && <> por <span className="font-medium">{getProfileName(task.created_by)}</span></>}
                         </p>
+                        {task.status === 'done' && task.completed_at && (
+                          <p className="text-[11px] text-emerald-600">
+                            Concluído em {formatDateTime(task.completed_at)}
+                          </p>
+                        )}
                         {assignments[task.id]?.length > 0 && (
                           <div className="flex gap-1 flex-wrap items-center">
                             <span className="text-[11px] text-muted-foreground">Atribuído:</span>
