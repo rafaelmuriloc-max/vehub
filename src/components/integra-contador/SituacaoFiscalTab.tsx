@@ -718,24 +718,7 @@ export default function SituacaoFiscalTab() {
             <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
             <div className="flex flex-col sm:flex-row gap-2">
             <Button
-              variant="outline"
-              onClick={handleReclassificar}
-              disabled={reclassifying || zipping || batchRunning || !!consultingId}
-              className="gap-2"
-            >
-              {reclassifying ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {reclassProgress.current}/{reclassProgress.total}
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4" />
-                  Reclassificar relatórios
-                </>
-              )}
-            </Button>
-            <Button
+
               variant="outline"
               onClick={handleDownloadLote}
               disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
