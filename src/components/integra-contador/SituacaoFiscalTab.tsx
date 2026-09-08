@@ -69,7 +69,7 @@ export default function SituacaoFiscalTab() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRegime, setFilterRegime] = useState('all');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<20 | 50 | 100 | 'all'>(20);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50 | 100 | 'all'>(20);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [consultingId, setConsultingId] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
@@ -969,7 +969,7 @@ export default function SituacaoFiscalTab() {
               <Select
                 value={String(pageSize)}
                 onValueChange={v => {
-                  const next = v === 'all' ? 'all' : (Number(v) as 20 | 50 | 100);
+                  const next = v === 'all' ? 'all' : (Number(v) as 10 | 20 | 50 | 100);
                   setPageSize(next);
                   setPage(1);
                 }}
@@ -978,6 +978,7 @@ export default function SituacaoFiscalTab() {
                   <SelectValue placeholder="Itens" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="10">10 / pág.</SelectItem>
                   <SelectItem value="20">20 / pág.</SelectItem>
                   <SelectItem value="50">50 / pág.</SelectItem>
                   <SelectItem value="100">100 / pág.</SelectItem>
