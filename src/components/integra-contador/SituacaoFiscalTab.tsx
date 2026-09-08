@@ -69,7 +69,7 @@ export default function SituacaoFiscalTab() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRegime, setFilterRegime] = useState('all');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<20 | 50 | 100 | 'all'>(20);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50 | 100 | 'all'>(20);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [consultingId, setConsultingId] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
