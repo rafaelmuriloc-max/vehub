@@ -978,6 +978,7 @@ export default function SituacaoFiscalTab() {
                   <SelectValue placeholder="Itens" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="10">10 / pág.</SelectItem>
                   <SelectItem value="20">20 / pág.</SelectItem>
                   <SelectItem value="50">50 / pág.</SelectItem>
                   <SelectItem value="100">100 / pág.</SelectItem>
