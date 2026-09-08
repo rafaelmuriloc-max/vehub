@@ -969,7 +969,7 @@ export default function SituacaoFiscalTab() {
               <Select
                 value={String(pageSize)}
                 onValueChange={v => {
-                  const next = v === 'all' ? 'all' : (Number(v) as 20 | 50 | 100);
+                  const next = v === 'all' ? 'all' : (Number(v) as 10 | 20 | 50 | 100);
                   setPageSize(next);
                   setPage(1);
                 }}
