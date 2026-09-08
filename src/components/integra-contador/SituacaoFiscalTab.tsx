@@ -53,6 +53,7 @@ type ClientWithSitfis = {
   sci_code?: string | null;
   company_name: string;
   document: string | null;
+  tax_regime: string | null;
   sitfis_status: string | null;
   consulted_at: string | null;
   pdf_base64: string | null;
@@ -66,6 +67,7 @@ export default function SituacaoFiscalTab() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterRegime, setFilterRegime] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [consultingId, setConsultingId] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
