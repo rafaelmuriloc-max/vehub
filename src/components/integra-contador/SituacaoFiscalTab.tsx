@@ -852,7 +852,7 @@ export default function SituacaoFiscalTab() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       Nenhum cliente encontrado
                     </TableCell>
                   </TableRow>
@@ -870,9 +870,12 @@ export default function SituacaoFiscalTab() {
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                         {c.document || '—'}
                       </TableCell>
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                        {(c.tax_regime || '').trim() || '—'}
+                      </TableCell>
                       <TableCell>
                         {consultingId === c.id ? (
-                          <Badge variant="outline" className="gap-1">
+                          <Badge variant="outline" className="gap-1 rounded-full">
                             <Loader2 className="h-3 w-3 animate-spin" /> Consultando
                           </Badge>
                         ) : (
@@ -887,40 +890,49 @@ export default function SituacaoFiscalTab() {
                           </p>
                         )}
                       </TableCell>
+                      <TableCell className="hidden md:table-cell text-center">
+                        {c.sitfis_status === 'irregular' ? (
+                          <span className="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold dark:bg-red-950 dark:text-red-300">
+                            {(c.pendency_types || []).length}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {c.consulted_at
                           ? new Date(c.consulted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
                           : '—'}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Consultar"
-                            onClick={() => handleConsultarIndividual(c.id)}
-                            disabled={!!consultingId || batchRunning}
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Visualizar PDF"
-                            onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
-                            disabled={!c.pdf_base64}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Baixar PDF"
-                            onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
-                            disabled={!c.pdf_base64}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+                        <div className="flex items-center justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" title="Ações">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => handleConsultarIndividual(c.id)}
+                                disabled={!!consultingId || batchRunning}
+                              >
+                                <RefreshCw className="h-4 w-4 mr-2" /> Consultar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
+                                disabled={!c.pdf_base64}
+                              >
+                                <Eye className="h-4 w-4 mr-2" /> Visualizar PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
+                                disabled={!c.pdf_base64}
+                              >
+                                <Download className="h-4 w-4 mr-2" /> Baixar PDF
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
