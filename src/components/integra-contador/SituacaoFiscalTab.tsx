@@ -548,10 +548,7 @@ export default function SituacaoFiscalTab() {
     all: baseFiltered.length,
     irregular: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'irregular').length,
     regular: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'regular').length,
-    pending: baseFiltered.filter(c => {
-      const k = resolveStatusKey(c.sitfis_status);
-      return k !== 'irregular' && k !== 'regular';
-    }).length,
+    pending: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'pending').length,
   };
 
   const filtered = baseFiltered.filter(c =>
@@ -608,22 +605,23 @@ export default function SituacaoFiscalTab() {
   }, [pendencyKey]);
 
   function statusBadge(status: string | null) {
+    const pill = 'rounded-full px-3 py-0.5 text-xs font-medium gap-1 border-0';
     if (!status || status === 'pending') {
-      return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
+      return <Badge variant="secondary" className={pill}><Clock className="h-3 w-3" /> Pendente</Badge>;
     }
     if (status === 'regular') {
-      return <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-700"><CheckCircle2 className="h-3 w-3" /> Regular</Badge>;
+      return <Badge className={`${pill} bg-emerald-600 text-white hover:bg-emerald-600`}><CheckCircle2 className="h-3 w-3" /> Regular</Badge>;
     }
     if (status === 'irregular') {
-      return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Irregular</Badge>;
+      return <Badge className={`${pill} bg-red-600 text-white hover:bg-red-600`}><XCircle className="h-3 w-3" /> Com pendência</Badge>;
     }
     if (status === 'error') {
-      return <Badge variant="secondary" className="gap-1 text-orange-600"><AlertCircle className="h-3 w-3" /> Erro</Badge>;
+      return <Badge className={`${pill} bg-orange-500 text-white hover:bg-orange-500`}><AlertCircle className="h-3 w-3" /> Erro</Badge>;
     }
     if (status === 'sem_procuracao') {
-      return <Badge variant="secondary" className="gap-1 text-amber-600"><AlertCircle className="h-3 w-3" /> Sem procuração</Badge>;
+      return <Badge className={`${pill} bg-amber-500 text-white hover:bg-amber-500`}><AlertCircle className="h-3 w-3" /> Sem procuração</Badge>;
     }
-    return <Badge variant="outline">{status}</Badge>;
+    return <Badge variant="outline" className={pill}>{status}</Badge>;
   }
 
   if (loading && clients.length === 0) {
