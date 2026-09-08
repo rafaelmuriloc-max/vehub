@@ -68,6 +68,8 @@ export default function SituacaoFiscalTab() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRegime, setFilterRegime] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<20 | 50 | 100 | 'all'>(20);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [consultingId, setConsultingId] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
@@ -589,6 +591,14 @@ export default function SituacaoFiscalTab() {
     return matchSearch && matchStatus && matchRegime;
   });
 
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterRegime]);
+
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedClients = pageSize === 'all'
+    ? filtered
+    : filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const downloadScope = selected.size > 0 ? filtered.filter(c => selected.has(c.id)) : filtered;
   const availablePdfCount = downloadScope.filter(c => !!c.pdf_base64).length;
 
@@ -872,7 +882,7 @@ export default function SituacaoFiscalTab() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map(c => (
+                  paginatedClients.map(c => (
                     <TableRow key={c.id}>
                       <TableCell>
                         <Checkbox
@@ -944,14 +954,59 @@ export default function SituacaoFiscalTab() {
             </Table>
           </div>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>{filtered.length} cliente(s)</span>
-            <span className="text-emerald-600">
-              {clients.filter(c => c.sitfis_status === 'regular').length} regular
-            </span>
-            <span className="text-destructive">
-              {clients.filter(c => c.sitfis_status === 'irregular').length} irregular
-            </span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span>{filtered.length} cliente(s)</span>
+              <span className="text-emerald-600">
+                {clients.filter(c => c.sitfis_status === 'regular').length} regular
+              </span>
+              <span className="text-destructive">
+                {clients.filter(c => c.sitfis_status === 'irregular').length} irregular
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Select
+                value={String(pageSize)}
+                onValueChange={v => {
+                  const next = v === 'all' ? 'all' : (Number(v) as 20 | 50 | 100);
+                  setPageSize(next);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-28 h-8 text-xs">
+                  <SelectValue placeholder="Itens" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20 / pág.</SelectItem>
+                  <SelectItem value="50">50 / pág.</SelectItem>
+                  <SelectItem value="100">100 / pág.</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1 || pageSize === 'all'}
+                >
+                  Anterior
+                </Button>
+                <span className="text-sm text-muted-foreground px-2 min-w-[5.5rem] text-center">
+                  Página {safePage} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages || pageSize === 'all'}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
