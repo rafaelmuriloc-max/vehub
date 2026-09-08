@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
+import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import JSZip from 'jszip';
 import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS, resolveStatusKey } from './SitfisOverviewPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -533,17 +534,37 @@ export default function SituacaoFiscalTab() {
     new Set(clients.map(c => (c.tax_regime || '').trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-  const filtered = clients.filter(c => {
+  const baseFiltered = clients.filter(c => {
     const matchSearch = !search ||
       c.company_name.toLowerCase().includes(search.toLowerCase()) ||
       (c.sci_code || '').toLowerCase().includes(search.toLowerCase()) ||
       (c.document || '').includes(search);
-    const matchStatus = filterStatus === 'all' ||
-      resolveStatusKey(c.sitfis_status) === filterStatus;
     const matchRegime = filterRegime === 'all' ||
       (filterRegime === 'none' ? !(c.tax_regime || '').trim() : (c.tax_regime || '').trim() === filterRegime);
-    return matchSearch && matchStatus && matchRegime;
+    return matchSearch && matchRegime;
   });
+
+  const tabCounts = {
+    all: baseFiltered.length,
+    irregular: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'irregular').length,
+    regular: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'regular').length,
+    pending: baseFiltered.filter(c => {
+      const k = resolveStatusKey(c.sitfis_status);
+      return k !== 'irregular' && k !== 'regular';
+    }).length,
+  };
+
+  const filtered = baseFiltered.filter(c =>
+    filterStatus === 'all' || resolveStatusKey(c.sitfis_status) === filterStatus
+  );
+
+  const statusTabs: { key: string; label: string; count: number }[] = [
+    { key: 'all', label: 'Todos', count: tabCounts.all },
+    { key: 'irregular', label: 'Com pendência', count: tabCounts.irregular },
+    { key: 'regular', label: 'Regulares', count: tabCounts.regular },
+    { key: 'pending', label: 'Sem consulta', count: tabCounts.pending },
+  ];
+  const activeTab = statusTabs.some(t => t.key === filterStatus) ? filterStatus : 'all';
 
   useEffect(() => { setPage(1); }, [search, filterStatus, filterRegime]);
 
