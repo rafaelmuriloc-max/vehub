@@ -591,6 +591,14 @@ export default function SituacaoFiscalTab() {
     return matchSearch && matchStatus && matchRegime;
   });
 
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterRegime]);
+
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedClients = pageSize === 'all'
+    ? filtered
+    : filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const downloadScope = selected.size > 0 ? filtered.filter(c => selected.has(c.id)) : filtered;
   const availablePdfCount = downloadScope.filter(c => !!c.pdf_base64).length;
 
