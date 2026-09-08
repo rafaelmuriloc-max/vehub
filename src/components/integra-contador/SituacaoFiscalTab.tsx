@@ -820,8 +820,9 @@ export default function SituacaoFiscalTab() {
                   </TableRow>
                 ) : (
                   paginatedClients.map(c => (
-                    <TableRow key={c.id}>
+                    <TableRow key={c.id} className="[&_td]:py-2">
                       <TableCell>
+
                         <Checkbox
                           checked={selected.has(c.id)}
                           onCheckedChange={() => toggleSelect(c.id)}
