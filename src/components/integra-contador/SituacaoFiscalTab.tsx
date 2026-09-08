@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive, MoreHorizontal } from 'lucide-react';
+import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, SquareCheck, SquareX, Clock, AlertCircle, FileArchive, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import JSZip from 'jszip';
 import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS, resolveStatusKey } from './SitfisOverviewPanel';
@@ -610,10 +610,10 @@ export default function SituacaoFiscalTab() {
       return <Badge variant="secondary" className={pill}><Clock className="h-3 w-3" /> Pendente</Badge>;
     }
     if (status === 'regular') {
-      return <Badge className={`${pill} bg-emerald-600 text-white hover:bg-emerald-600`}><CheckCircle2 className="h-3 w-3" /> Regular</Badge>;
+      return <Badge className={`${pill} bg-emerald-600 text-white hover:bg-emerald-600`}><SquareCheck className="h-4 w-4" strokeWidth={2.5} /> Regular</Badge>;
     }
     if (status === 'irregular') {
-      return <Badge className={`${pill} bg-red-600 text-white hover:bg-red-600`}><XCircle className="h-3 w-3" /> Com pendência</Badge>;
+      return <Badge className={`${pill} bg-red-600 text-white hover:bg-red-600`}><SquareX className="h-4 w-4" strokeWidth={2.5} /> Com pendência</Badge>;
     }
     if (status === 'error') {
       return <Badge className={`${pill} bg-orange-500 text-white hover:bg-orange-500`}><AlertCircle className="h-3 w-3" /> Erro</Badge>;
