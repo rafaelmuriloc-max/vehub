@@ -610,10 +610,10 @@ export default function SituacaoFiscalTab() {
       return <Badge variant="secondary" className={pill}><Clock className="h-3 w-3" /> Pendente</Badge>;
     }
     if (status === 'regular') {
-      return <Badge title="Regular" className={`${pill} bg-emerald-600 text-white hover:bg-emerald-600`}><SquareCheck className="h-4 w-4" strokeWidth={2.5} /></Badge>;
+      return <Badge title="Regular" className={`${pill} bg-transparent text-emerald-600 hover:bg-transparent`}><SquareCheck className="h-4 w-4" strokeWidth={2.5} /></Badge>;
     }
     if (status === 'irregular') {
-      return <Badge title="Com pendência" className={`${pill} bg-red-600 text-white hover:bg-red-600`}><SquareX className="h-4 w-4" strokeWidth={2.5} /></Badge>;
+      return <Badge title="Com pendência" className={`${pill} bg-transparent text-red-600 hover:bg-transparent`}><SquareX className="h-4 w-4" strokeWidth={2.5} /></Badge>;
     }
     if (status === 'error') {
       return <Badge className={`${pill} bg-orange-500 text-white hover:bg-orange-500`}><AlertCircle className="h-3 w-3" /> Erro</Badge>;
