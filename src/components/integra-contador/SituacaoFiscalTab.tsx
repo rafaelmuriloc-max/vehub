@@ -843,7 +843,7 @@ export default function SituacaoFiscalTab() {
                   <TableHead>Cliente</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ/CPF</TableHead>
                   <TableHead className="hidden lg:table-cell">Regime</TableHead>
-                  <TableHead className="w-36">Status</TableHead>
+                  <TableHead className="w-16 text-center">Status</TableHead>
                   <TableHead className="hidden md:table-cell w-24 text-center">Pendências</TableHead>
                   <TableHead className="hidden lg:table-cell w-44">Última Verificação</TableHead>
                   <TableHead className="w-16 text-right">Ações</TableHead>
