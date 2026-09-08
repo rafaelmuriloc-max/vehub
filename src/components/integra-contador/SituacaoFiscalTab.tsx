@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive } from 'lucide-react';
+import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, Clock, AlertCircle, FileArchive, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import JSZip from 'jszip';
 import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS, resolveStatusKey } from './SitfisOverviewPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -533,17 +534,34 @@ export default function SituacaoFiscalTab() {
     new Set(clients.map(c => (c.tax_regime || '').trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-  const filtered = clients.filter(c => {
+  const baseFiltered = clients.filter(c => {
     const matchSearch = !search ||
       c.company_name.toLowerCase().includes(search.toLowerCase()) ||
       (c.sci_code || '').toLowerCase().includes(search.toLowerCase()) ||
       (c.document || '').includes(search);
-    const matchStatus = filterStatus === 'all' ||
-      resolveStatusKey(c.sitfis_status) === filterStatus;
     const matchRegime = filterRegime === 'all' ||
       (filterRegime === 'none' ? !(c.tax_regime || '').trim() : (c.tax_regime || '').trim() === filterRegime);
-    return matchSearch && matchStatus && matchRegime;
+    return matchSearch && matchRegime;
   });
+
+  const tabCounts = {
+    all: baseFiltered.length,
+    irregular: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'irregular').length,
+    regular: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'regular').length,
+    pending: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'pending').length,
+  };
+
+  const filtered = baseFiltered.filter(c =>
+    filterStatus === 'all' || resolveStatusKey(c.sitfis_status) === filterStatus
+  );
+
+  const statusTabs: { key: string; label: string; count: number }[] = [
+    { key: 'all', label: 'Todos', count: tabCounts.all },
+    { key: 'irregular', label: 'Com pendência', count: tabCounts.irregular },
+    { key: 'regular', label: 'Regulares', count: tabCounts.regular },
+    { key: 'pending', label: 'Sem consulta', count: tabCounts.pending },
+  ];
+  const activeTab = statusTabs.some(t => t.key === filterStatus) ? filterStatus : 'all';
 
   useEffect(() => { setPage(1); }, [search, filterStatus, filterRegime]);
 
@@ -587,22 +605,23 @@ export default function SituacaoFiscalTab() {
   }, [pendencyKey]);
 
   function statusBadge(status: string | null) {
+    const pill = 'rounded-full px-3 py-0.5 text-xs font-medium gap-1 border-0';
     if (!status || status === 'pending') {
-      return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
+      return <Badge variant="secondary" className={pill}><Clock className="h-3 w-3" /> Pendente</Badge>;
     }
     if (status === 'regular') {
-      return <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-700"><CheckCircle2 className="h-3 w-3" /> Regular</Badge>;
+      return <Badge className={`${pill} bg-emerald-600 text-white hover:bg-emerald-600`}><CheckCircle2 className="h-3 w-3" /> Regular</Badge>;
     }
     if (status === 'irregular') {
-      return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Irregular</Badge>;
+      return <Badge className={`${pill} bg-red-600 text-white hover:bg-red-600`}><XCircle className="h-3 w-3" /> Com pendência</Badge>;
     }
     if (status === 'error') {
-      return <Badge variant="secondary" className="gap-1 text-orange-600"><AlertCircle className="h-3 w-3" /> Erro</Badge>;
+      return <Badge className={`${pill} bg-orange-500 text-white hover:bg-orange-500`}><AlertCircle className="h-3 w-3" /> Erro</Badge>;
     }
     if (status === 'sem_procuracao') {
-      return <Badge variant="secondary" className="gap-1 text-amber-600"><AlertCircle className="h-3 w-3" /> Sem procuração</Badge>;
+      return <Badge className={`${pill} bg-amber-500 text-white hover:bg-amber-500`}><AlertCircle className="h-3 w-3" /> Sem procuração</Badge>;
     }
-    return <Badge variant="outline">{status}</Badge>;
+    return <Badge variant="outline" className={pill}>{status}</Badge>;
   }
 
   if (loading && clients.length === 0) {
@@ -761,20 +780,20 @@ export default function SituacaoFiscalTab() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou CNPJ..."
+                placeholder="Buscar por cliente ou CNPJ..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9"
               />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="Filtrar situação" />
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Todos os status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="all">Todos os status</SelectItem>
                 <SelectItem value="regular">Regular</SelectItem>
-                <SelectItem value="irregular">Irregular</SelectItem>
+                <SelectItem value="irregular">Com pendência</SelectItem>
                 <SelectItem value="error">Erro</SelectItem>
                 <SelectItem value="sem_procuracao">Sem procuração</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
@@ -782,7 +801,7 @@ export default function SituacaoFiscalTab() {
             </Select>
             <Select value={filterRegime} onValueChange={setFilterRegime}>
               <SelectTrigger className="w-full sm:w-52">
-                <SelectValue placeholder="Regime tributário" />
+                <SelectValue placeholder="Todos os regimes" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os regimes</SelectItem>
@@ -792,6 +811,23 @@ export default function SituacaoFiscalTab() {
                 <SelectItem value="none">Não informado</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center gap-1 border-b border-border overflow-x-auto">
+            {statusTabs.map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setFilterStatus(tab.key)}
+                className={`whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label} <span className="text-muted-foreground">({tab.count})</span>
+              </button>
+            ))}
           </div>
 
           <div className="border rounded-lg overflow-hidden">
@@ -804,17 +840,19 @@ export default function SituacaoFiscalTab() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead>Razão Social</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ/CPF</TableHead>
-                  <TableHead className="w-32">Situação</TableHead>
-                  <TableHead className="hidden lg:table-cell w-44">Última Consulta</TableHead>
-                  <TableHead className="w-32 text-right">Ações</TableHead>
+                  <TableHead className="hidden lg:table-cell">Regime</TableHead>
+                  <TableHead className="w-36">Situação Fiscal</TableHead>
+                  <TableHead className="hidden md:table-cell w-24 text-center">Pendências</TableHead>
+                  <TableHead className="hidden lg:table-cell w-44">Última Verificação</TableHead>
+                  <TableHead className="w-16 text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       Nenhum cliente encontrado
                     </TableCell>
                   </TableRow>
@@ -832,9 +870,12 @@ export default function SituacaoFiscalTab() {
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                         {c.document || '—'}
                       </TableCell>
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                        {(c.tax_regime || '').trim() || '—'}
+                      </TableCell>
                       <TableCell>
                         {consultingId === c.id ? (
-                          <Badge variant="outline" className="gap-1">
+                          <Badge variant="outline" className="gap-1 rounded-full">
                             <Loader2 className="h-3 w-3 animate-spin" /> Consultando
                           </Badge>
                         ) : (
@@ -849,40 +890,49 @@ export default function SituacaoFiscalTab() {
                           </p>
                         )}
                       </TableCell>
+                      <TableCell className="hidden md:table-cell text-center">
+                        {c.sitfis_status === 'irregular' ? (
+                          <span className="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold dark:bg-red-950 dark:text-red-300">
+                            {(c.pendency_types || []).length}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {c.consulted_at
                           ? new Date(c.consulted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
                           : '—'}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Consultar"
-                            onClick={() => handleConsultarIndividual(c.id)}
-                            disabled={!!consultingId || batchRunning}
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Visualizar PDF"
-                            onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
-                            disabled={!c.pdf_base64}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Baixar PDF"
-                            onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
-                            disabled={!c.pdf_base64}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+                        <div className="flex items-center justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" title="Ações">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => handleConsultarIndividual(c.id)}
+                                disabled={!!consultingId || batchRunning}
+                              >
+                                <RefreshCw className="h-4 w-4 mr-2" /> Consultar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
+                                disabled={!c.pdf_base64}
+                              >
+                                <Eye className="h-4 w-4 mr-2" /> Visualizar PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
+                                disabled={!c.pdf_base64}
+                              >
+                                <Download className="h-4 w-4 mr-2" /> Baixar PDF
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
