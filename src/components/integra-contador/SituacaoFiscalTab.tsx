@@ -780,20 +780,20 @@ export default function SituacaoFiscalTab() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou CNPJ..."
+                placeholder="Buscar por cliente ou CNPJ..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9"
               />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="Filtrar situação" />
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Todos os status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="all">Todos os status</SelectItem>
                 <SelectItem value="regular">Regular</SelectItem>
-                <SelectItem value="irregular">Irregular</SelectItem>
+                <SelectItem value="irregular">Com pendência</SelectItem>
                 <SelectItem value="error">Erro</SelectItem>
                 <SelectItem value="sem_procuracao">Sem procuração</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
@@ -801,7 +801,7 @@ export default function SituacaoFiscalTab() {
             </Select>
             <Select value={filterRegime} onValueChange={setFilterRegime}>
               <SelectTrigger className="w-full sm:w-52">
-                <SelectValue placeholder="Regime tributário" />
+                <SelectValue placeholder="Todos os regimes" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os regimes</SelectItem>
@@ -811,6 +811,23 @@ export default function SituacaoFiscalTab() {
                 <SelectItem value="none">Não informado</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center gap-1 border-b border-border overflow-x-auto">
+            {statusTabs.map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setFilterStatus(tab.key)}
+                className={`whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label} <span className="text-muted-foreground">({tab.count})</span>
+              </button>
+            ))}
           </div>
 
           <div className="border rounded-lg overflow-hidden">
@@ -823,11 +840,13 @@ export default function SituacaoFiscalTab() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead>Razão Social</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ/CPF</TableHead>
-                  <TableHead className="w-32">Situação</TableHead>
-                  <TableHead className="hidden lg:table-cell w-44">Última Consulta</TableHead>
-                  <TableHead className="w-32 text-right">Ações</TableHead>
+                  <TableHead className="hidden lg:table-cell">Regime</TableHead>
+                  <TableHead className="w-36">Situação Fiscal</TableHead>
+                  <TableHead className="hidden md:table-cell w-24 text-center">Pendências</TableHead>
+                  <TableHead className="hidden lg:table-cell w-44">Última Verificação</TableHead>
+                  <TableHead className="w-16 text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
