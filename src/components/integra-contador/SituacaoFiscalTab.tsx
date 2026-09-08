@@ -873,7 +873,7 @@ export default function SituacaoFiscalTab() {
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {(c.tax_regime || '').trim() || '—'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {consultingId === c.id ? (
                           <Badge variant="outline" className="gap-1 rounded-full">
                             <Loader2 className="h-3 w-3 animate-spin" /> Consultando
