@@ -132,8 +132,9 @@ export default function SituacaoFiscalTab() {
   const busyRef = useRef(false);
   useEffect(() => { clientsRef.current = clients; }, [clients]);
   useEffect(() => {
-    busyRef.current = !!consultingId || batchRunning || zipping || reclassifying;
-  }, [consultingId, batchRunning, zipping, reclassifying]);
+    busyRef.current = !!consultingId || batchRunning || zipping;
+  }, [consultingId, batchRunning, zipping]);
+
 
   // Reprocessa automaticamente, em segundo plano, os clientes com status "error"
   // e, uma vez por sessão, os "sem_procuracao" (agora o backend tenta o certificado próprio)
