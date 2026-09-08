@@ -833,6 +833,18 @@ export default function SituacaoFiscalTab() {
                 <SelectItem value="pending">Pendente</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filterRegime} onValueChange={setFilterRegime}>
+              <SelectTrigger className="w-full sm:w-52">
+                <SelectValue placeholder="Regime tributário" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os regimes</SelectItem>
+                {regimeOptions.map(r => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
+                <SelectItem value="none">Não informado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="border rounded-lg overflow-hidden">
