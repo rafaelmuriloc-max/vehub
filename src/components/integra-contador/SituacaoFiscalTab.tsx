@@ -77,9 +77,8 @@ export default function SituacaoFiscalTab() {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
   const [pendencyKey, setPendencyKey] = useState<string | null>(null);
-  const [reclassifying, setReclassifying] = useState(false);
-  const [reclassProgress, setReclassProgress] = useState({ current: 0, total: 0 });
   const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
+
   const [excerptsLoading, setExcerptsLoading] = useState(false);
   const [certMode, setCertMode] = useState<Set<string>>(new Set());
   const textCache = useRef<Map<string, string>>(new Map());
