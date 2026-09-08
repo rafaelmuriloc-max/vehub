@@ -53,6 +53,7 @@ type ClientWithSitfis = {
   sci_code?: string | null;
   company_name: string;
   document: string | null;
+  tax_regime: string | null;
   sitfis_status: string | null;
   consulted_at: string | null;
   pdf_base64: string | null;
@@ -66,6 +67,7 @@ export default function SituacaoFiscalTab() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterRegime, setFilterRegime] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [consultingId, setConsultingId] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
@@ -86,7 +88,7 @@ export default function SituacaoFiscalTab() {
     try {
       const { data: clientsData } = await supabase
         .from('clients')
-        .select('id, sci_code, company_name, document, digital_certificate_url')
+        .select('id, sci_code, company_name, document, digital_certificate_url, tax_regime')
         .not('digital_certificate_url', 'is', null)
         .eq('status', 'active')
         .order('company_name');
@@ -107,6 +109,7 @@ export default function SituacaoFiscalTab() {
           sci_code: c.sci_code,
           company_name: c.company_name,
           document: c.document,
+          tax_regime: c.tax_regime || null,
           sitfis_status: s?.status || null,
           consulted_at: s?.consulted_at || null,
           pdf_base64: s?.pdf_base64 || null,
@@ -570,6 +573,10 @@ export default function SituacaoFiscalTab() {
     }
   }
 
+  const regimeOptions = Array.from(
+    new Set(clients.map(c => (c.tax_regime || '').trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
   const filtered = clients.filter(c => {
     const matchSearch = !search ||
       c.company_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -577,7 +584,9 @@ export default function SituacaoFiscalTab() {
       (c.document || '').includes(search);
     const matchStatus = filterStatus === 'all' ||
       resolveStatusKey(c.sitfis_status) === filterStatus;
-    return matchSearch && matchStatus;
+    const matchRegime = filterRegime === 'all' ||
+      (filterRegime === 'none' ? !(c.tax_regime || '').trim() : (c.tax_regime || '').trim() === filterRegime);
+    return matchSearch && matchStatus && matchRegime;
   });
 
   const downloadScope = selected.size > 0 ? filtered.filter(c => selected.has(c.id)) : filtered;
@@ -822,6 +831,18 @@ export default function SituacaoFiscalTab() {
                 <SelectItem value="error">Erro</SelectItem>
                 <SelectItem value="sem_procuracao">Sem procuração</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterRegime} onValueChange={setFilterRegime}>
+              <SelectTrigger className="w-full sm:w-52">
+                <SelectValue placeholder="Regime tributário" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os regimes</SelectItem>
+                {regimeOptions.map(r => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
+                <SelectItem value="none">Não informado</SelectItem>
               </SelectContent>
             </Select>
           </div>
