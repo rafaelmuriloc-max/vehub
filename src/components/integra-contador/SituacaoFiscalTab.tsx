@@ -181,54 +181,8 @@ export default function SituacaoFiscalTab() {
   }, []);
 
 
-
-  // Reclassifica os relatórios já armazenados usando a análise por itens
-  async function handleReclassificar() {
-    const targets = clients.filter(c => !!c.pdf_base64);
-    if (targets.length === 0) {
-      toast({ title: 'Nada a reclassificar', description: 'Nenhum relatório armazenado.' });
-      return;
-    }
-    setReclassifying(true);
-    setReclassProgress({ current: 0, total: targets.length });
-    const updates: { id: string; status: string; types: string[] }[] = [];
-    for (let i = 0; i < targets.length; i++) {
-      const c = targets[i];
-      const cached = textCache.current.get(c.id);
-      let text = cached ?? '';
-      let numPages = pagesCache.current.get(c.id);
-      if (cached === undefined || numPages === undefined) {
-        const info = await extractPdfInfoFromBase64(c.pdf_base64 as string);
-        text = info.text;
-        numPages = info.numPages;
-        textCache.current.set(c.id, text);
-        pagesCache.current.set(c.id, numPages);
-      }
-      if (!text.trim()) { setReclassProgress({ current: i + 1, total: targets.length }); continue; }
-      const analysis = analyzeSitfisReport(text, { numPages });
-      if (analysis.status !== c.sitfis_status || (c.pendency_types || []).join(',') !== analysis.types.join(',')) {
-        await supabase
-          .from('sitfis_results' as any)
-          .update({ status: analysis.status, pendency_types: analysis.types, error_message: null } as any)
-          .eq('client_id', c.id);
-        updates.push({ id: c.id, status: analysis.status, types: analysis.types });
-      }
-      setReclassProgress({ current: i + 1, total: targets.length });
-    }
-    setClients(prev =>
-      prev.map(p => {
-        const u = updates.find(x => x.id === p.id);
-        return u ? { ...p, sitfis_status: u.status, pendency_types: u.types, error_message: null } : p;
-      })
-    );
-    setReclassifying(false);
-    toast({
-      title: 'Reclassificação concluída',
-      description: `${updates.length} de ${targets.length} relatório(s) atualizados.`,
-    });
-  }
-
   async function consultarSitfis(clientId: string): Promise<boolean> {
+
     // Erro que indica protocolo caduco: SERPRO pede nova solicitação em /Apoiar
     const isProtocolExpired = (msg: string) =>
       /er05|inicie uma nova solicita/i.test(msg || '');
