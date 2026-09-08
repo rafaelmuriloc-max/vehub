@@ -717,9 +717,9 @@ export default function SituacaoFiscalTab() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
             <div className="flex flex-col sm:flex-row gap-2">
-            <Button
+              <Button
+                variant="outline"
 
-              variant="outline"
               onClick={handleDownloadLote}
               disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
               className="gap-2"
