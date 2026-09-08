@@ -77,9 +77,8 @@ export default function SituacaoFiscalTab() {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
   const [pendencyKey, setPendencyKey] = useState<string | null>(null);
-  const [reclassifying, setReclassifying] = useState(false);
-  const [reclassProgress, setReclassProgress] = useState({ current: 0, total: 0 });
   const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
+
   const [excerptsLoading, setExcerptsLoading] = useState(false);
   const [certMode, setCertMode] = useState<Set<string>>(new Set());
   const textCache = useRef<Map<string, string>>(new Map());
@@ -133,8 +132,9 @@ export default function SituacaoFiscalTab() {
   const busyRef = useRef(false);
   useEffect(() => { clientsRef.current = clients; }, [clients]);
   useEffect(() => {
-    busyRef.current = !!consultingId || batchRunning || zipping || reclassifying;
-  }, [consultingId, batchRunning, zipping, reclassifying]);
+    busyRef.current = !!consultingId || batchRunning || zipping;
+  }, [consultingId, batchRunning, zipping]);
+
 
   // Reprocessa automaticamente, em segundo plano, os clientes com status "error"
   // e, uma vez por sessão, os "sem_procuracao" (agora o backend tenta o certificado próprio)
@@ -181,54 +181,8 @@ export default function SituacaoFiscalTab() {
   }, []);
 
 
-
-  // Reclassifica os relatórios já armazenados usando a análise por itens
-  async function handleReclassificar() {
-    const targets = clients.filter(c => !!c.pdf_base64);
-    if (targets.length === 0) {
-      toast({ title: 'Nada a reclassificar', description: 'Nenhum relatório armazenado.' });
-      return;
-    }
-    setReclassifying(true);
-    setReclassProgress({ current: 0, total: targets.length });
-    const updates: { id: string; status: string; types: string[] }[] = [];
-    for (let i = 0; i < targets.length; i++) {
-      const c = targets[i];
-      const cached = textCache.current.get(c.id);
-      let text = cached ?? '';
-      let numPages = pagesCache.current.get(c.id);
-      if (cached === undefined || numPages === undefined) {
-        const info = await extractPdfInfoFromBase64(c.pdf_base64 as string);
-        text = info.text;
-        numPages = info.numPages;
-        textCache.current.set(c.id, text);
-        pagesCache.current.set(c.id, numPages);
-      }
-      if (!text.trim()) { setReclassProgress({ current: i + 1, total: targets.length }); continue; }
-      const analysis = analyzeSitfisReport(text, { numPages });
-      if (analysis.status !== c.sitfis_status || (c.pendency_types || []).join(',') !== analysis.types.join(',')) {
-        await supabase
-          .from('sitfis_results' as any)
-          .update({ status: analysis.status, pendency_types: analysis.types, error_message: null } as any)
-          .eq('client_id', c.id);
-        updates.push({ id: c.id, status: analysis.status, types: analysis.types });
-      }
-      setReclassProgress({ current: i + 1, total: targets.length });
-    }
-    setClients(prev =>
-      prev.map(p => {
-        const u = updates.find(x => x.id === p.id);
-        return u ? { ...p, sitfis_status: u.status, pendency_types: u.types, error_message: null } : p;
-      })
-    );
-    setReclassifying(false);
-    toast({
-      title: 'Reclassificação concluída',
-      description: `${updates.length} de ${targets.length} relatório(s) atualizados.`,
-    });
-  }
-
   async function consultarSitfis(clientId: string): Promise<boolean> {
+
     // Erro que indica protocolo caduco: SERPRO pede nova solicitação em /Apoiar
     const isProtocolExpired = (msg: string) =>
       /er05|inicie uma nova solicita/i.test(msg || '');
@@ -763,60 +717,43 @@ export default function SituacaoFiscalTab() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
             <div className="flex flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={handleReclassificar}
-              disabled={reclassifying || zipping || batchRunning || !!consultingId}
-              className="gap-2"
-            >
-              {reclassifying ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {reclassProgress.current}/{reclassProgress.total}
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4" />
-                  Reclassificar relatórios
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleDownloadLote}
-              disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
-              className="gap-2"
-            >
-              {zipping ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {zipProgress.current}/{zipProgress.total}
-                </>
-              ) : (
-                <>
-                  <FileArchive className="h-4 w-4" />
-                  Baixar PDFs ({availablePdfCount})
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={handleConsultarLote}
-              disabled={batchRunning || !!consultingId || zipping}
-              className="gap-2"
-            >
-              {batchRunning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {batchProgress.current}/{batchProgress.total}
-                </>
-              ) : (
-                <>
-                  <PlayCircle className="h-4 w-4" />
-                  Consultar em Lote {selected.size > 0 ? `(${selected.size})` : `(${clients.length})`}
-                </>
-              )}
-            </Button>
+              <Button
+                variant="outline"
+                onClick={handleDownloadLote}
+                disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
+                className="gap-2"
+              >
+                {zipping ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {zipProgress.current}/{zipProgress.total}
+                  </>
+                ) : (
+                  <>
+                    <FileArchive className="h-4 w-4" />
+                    Baixar PDFs ({availablePdfCount})
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleConsultarLote}
+                disabled={batchRunning || !!consultingId || zipping}
+                className="gap-2"
+              >
+                {batchRunning ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {batchProgress.current}/{batchProgress.total}
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="h-4 w-4" />
+                    Consultar em Lote {selected.size > 0 ? `(${selected.size})` : `(${clients.length})`}
+                  </>
+                )}
+              </Button>
             </div>
+
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
