@@ -882,7 +882,7 @@ export default function SituacaoFiscalTab() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map(c => (
+                  paginatedClients.map(c => (
                     <TableRow key={c.id}>
                       <TableCell>
                         <Checkbox
