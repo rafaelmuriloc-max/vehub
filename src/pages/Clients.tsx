@@ -1167,7 +1167,7 @@ export default function Clients() {
         const allSegments = new Set<string>();
         const cellData: Record<string, Record<string, { count: number; mrr: number; paying: number }>> = {};
         clients.filter(c => c.status === 'active' && !(c as any).without_monthly_fee).forEach(c => {
-          const regime = taxRegimeLabels[c.tax_regime || ''] || c.tax_regime || 'Não informado';
+          const regime = TAX_REGIME_LABELS[normalizeTaxRegime(c.tax_regime) || ''] || normalizeTaxRegime(c.tax_regime) || 'Não informado';
           const seg = c.business_classification || 'Não informado';
           allSegments.add(seg);
           if (!crossData[regime]) crossData[regime] = {};
