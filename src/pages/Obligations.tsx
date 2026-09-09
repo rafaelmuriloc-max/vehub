@@ -40,13 +40,15 @@ const activityTypeLabels: Record<string, string> = {
   document: 'Documento', checklist: 'Checklist', whatsapp: 'WhatsApp', email: 'E-mail',
 };
 
+import { TAX_REGIME } from '@/lib/utils';
+
 const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 const taxRegimeOptions = [
-  { value: 'simples_nacional', label: 'Simples Nacional' },
-  { value: 'lucro_presumido', label: 'Lucro Presumido' },
-  { value: 'lucro_real', label: 'Lucro Real' },
-  { value: 'mei', label: 'MEI' },
+  { value: TAX_REGIME.SIMPLES_NACIONAL, label: 'Simples Nacional' },
+  { value: TAX_REGIME.LUCRO_PRESUMIDO, label: 'Lucro Presumido' },
+  { value: TAX_REGIME.LUCRO_REAL, label: 'Lucro Real' },
+  { value: TAX_REGIME.MEI, label: 'MEI' },
 ];
 
 export default function Obligations() {

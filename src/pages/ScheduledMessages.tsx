@@ -17,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Pencil, Trash2, Pause, Play, Send, Search, Paperclip, History, X } from 'lucide-react';
-import { formatClientLabel } from '@/lib/utils';
+import { formatClientLabel, TAX_REGIME } from '@/lib/utils';
 
 type Department = { id: string; name: string };
 type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
@@ -26,10 +26,10 @@ type ScheduledMsg = any;
 const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const weekdayNames = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const taxRegimeOptions = [
-  { value: 'simples_nacional', label: 'Simples Nacional' },
-  { value: 'lucro_presumido', label: 'Lucro Presumido' },
-  { value: 'lucro_real', label: 'Lucro Real' },
-  { value: 'mei', label: 'MEI' },
+  { value: TAX_REGIME.SIMPLES_NACIONAL, label: 'Simples Nacional' },
+  { value: TAX_REGIME.LUCRO_PRESUMIDO, label: 'Lucro Presumido' },
+  { value: TAX_REGIME.LUCRO_REAL, label: 'Lucro Real' },
+  { value: TAX_REGIME.MEI, label: 'MEI' },
 ];
 
 const emptyForm = {
