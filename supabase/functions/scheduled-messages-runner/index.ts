@@ -190,11 +190,18 @@ async function resolveClients(supabase: any, sched: any): Promise<any[]> {
   }
   if (sched.assignment_mode === "segment") {
     const f = sched.segment_filters || {};
-    let q = supabase.from("clients").select("id, company_name, contact_phone, tax_regime, payroll_type, address").eq("status", "active");
-    if (Array.isArray(f.tax_regimes) && f.tax_regimes.length) q = q.in("tax_regime", f.tax_regimes);
-    if (f.payroll_type) q = q.eq("payroll_type", f.payroll_type);
-    const { data } = await q;
-    let list = data || [];
+    const { data } = await supabase.from("clients")
+      .select("id, company_name, contact_phone, tax_regime, payroll_type, address")
+      .eq("status", "active");
+    let list = (data || []) as any[];
+    if (Array.isArray(f.tax_regimes) && f.tax_regimes.length) {
+      const wanted = f.tax_regimes.map((r: string) => String(r).toLowerCase().replace(/_/g, ' '));
+      list = list.filter((c: any) => {
+        const regime = String(c.tax_regime || '').toLowerCase().replace(/_/g, ' ');
+        return wanted.some((w: string) => regime.includes(w));
+      });
+    }
+    if (f.payroll_type) list = list.filter((c: any) => c.payroll_type === f.payroll_type);
     if (f.city) {
       const city = String(f.city).toLowerCase();
       list = list.filter((c: any) => (c.address || "").toLowerCase().includes(city));
