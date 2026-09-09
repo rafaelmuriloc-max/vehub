@@ -38,3 +38,37 @@ export function formatClientLabel(
   if (!name) return fallback;
   return sci ? `${sci} - ${name}` : name;
 }
+
+/**
+ * Valores oficiais do regime tributário armazenados em clients.tax_regime.
+ */
+export const TAX_REGIME = {
+  SIMPLES_NACIONAL: 'Simples Nacional',
+  LUCRO_PRESUMIDO: 'Lucro Presumido',
+  LUCRO_REAL: 'Lucro Real',
+  MEI: 'MEI',
+} as const;
+
+export type TaxRegime = (typeof TAX_REGIME)[keyof typeof TAX_REGIME];
+
+/**
+ * Converte variações antigas (snake_case, minúsculas) para o valor oficial.
+ * Útil em imports, edge functions e filtros que podem receber dados legados.
+ */
+export function normalizeTaxRegime(value: string | null | undefined): TaxRegime | string | null {
+  const v = (value || '').trim().toLowerCase().replace(/_/g, ' ');
+  if (!v) return null;
+  if (v.includes('simples')) return TAX_REGIME.SIMPLES_NACIONAL;
+  if (v.includes('presumido')) return TAX_REGIME.LUCRO_PRESUMIDO;
+  if (v.includes('real')) return TAX_REGIME.LUCRO_REAL;
+  if (v === 'mei') return TAX_REGIME.MEI;
+  return value;
+}
+
+/**
+ * Verifica se um regime tributário é Simples Nacional, aceitando variações.
+ */
+export function isSimplesNacional(value: string | null | undefined): boolean {
+  const v = (value || '').toLowerCase();
+  return v.includes('simples');
+}
