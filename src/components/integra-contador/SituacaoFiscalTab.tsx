@@ -14,7 +14,7 @@ import JSZip from 'jszip';
 import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS, resolveStatusKey } from './SitfisOverviewPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import * as pdfjsLib from 'pdfjs-dist';
-import { formatClientLabel } from '@/lib/utils';
+import { formatClientLabel, normalizeTaxRegime } from '@/lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -531,7 +531,7 @@ export default function SituacaoFiscalTab() {
   }
 
   const regimeOptions = Array.from(
-    new Set(clients.map(c => (c.tax_regime || '').trim()).filter(Boolean))
+    new Set(clients.map(c => normalizeTaxRegime(c.tax_regime)).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   const baseFiltered = clients.filter(c => {
@@ -539,8 +539,9 @@ export default function SituacaoFiscalTab() {
       c.company_name.toLowerCase().includes(search.toLowerCase()) ||
       (c.sci_code || '').toLowerCase().includes(search.toLowerCase()) ||
       (c.document || '').includes(search);
+    const normalizedRegime = normalizeTaxRegime(c.tax_regime);
     const matchRegime = filterRegime === 'all' ||
-      (filterRegime === 'none' ? !(c.tax_regime || '').trim() : (c.tax_regime || '').trim() === filterRegime);
+      (filterRegime === 'none' ? !normalizedRegime : normalizedRegime === filterRegime);
     return matchSearch && matchRegime;
   });
 
@@ -871,7 +872,7 @@ export default function SituacaoFiscalTab() {
                         {c.document || '—'}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {(c.tax_regime || '').trim() || '—'}
+                        {normalizeTaxRegime(c.tax_regime) || '—'}
                       </TableCell>
                       <TableCell className="text-center">
                         {consultingId === c.id ? (

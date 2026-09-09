@@ -102,11 +102,13 @@ async function classifyAnexoByAI(mainCnae: string): Promise<string> {
   }
 }
 
+import { TAX_REGIME, isSimplesNacional, normalizeTaxRegime } from '@/lib/utils';
+
 const TAX_REGIME_LABELS: Record<string, string> = {
-  simples_nacional: 'Simples Nacional',
-  lucro_presumido: 'Lucro Presumido',
-  lucro_real: 'Lucro Real',
-  mei: 'MEI',
+  [TAX_REGIME.SIMPLES_NACIONAL]: 'Simples Nacional',
+  [TAX_REGIME.LUCRO_PRESUMIDO]: 'Lucro Presumido',
+  [TAX_REGIME.LUCRO_REAL]: 'Lucro Real',
+  [TAX_REGIME.MEI]: 'MEI',
 };
 
 type Client = {
@@ -404,7 +406,7 @@ export default function Clients() {
 
       const isSimples = data.opcao_pelo_simples === true;
       const isMei = data.opcao_pelo_mei === true;
-      const taxRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
+      const taxRegime = isMei ? TAX_REGIME.MEI : isSimples ? TAX_REGIME.SIMPLES_NACIONAL : TAX_REGIME.LUCRO_PRESUMIDO;
 
       setForm(prev => ({
         ...prev,
@@ -578,7 +580,7 @@ export default function Clients() {
 
         const isSimples = data.opcao_pelo_simples === true;
         const isMei = data.opcao_pelo_mei === true;
-        const taxRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
+        const taxRegime = isMei ? TAX_REGIME.MEI : isSimples ? TAX_REGIME.SIMPLES_NACIONAL : TAX_REGIME.LUCRO_PRESUMIDO;
 
         let classification = client.business_classification || '';
         if (!classification && (cnaePrincipal || secondaryCnaes)) {
@@ -825,7 +827,7 @@ export default function Clients() {
       destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
       business_classification: form.business_classification || null,
       trade_name: form.trade_name || null,
-      simples_anexo: form.tax_regime === 'simples_nacional' ? (form.simples_anexo || null) : null,
+      simples_anexo: isSimplesNacional(form.tax_regime) ? (form.simples_anexo || null) : null,
       services_suspended: !!form.services_suspended,
       services_suspended_at: form.services_suspended
         ? ((editing as any)?.services_suspended_at || new Date().toISOString())
@@ -1088,16 +1090,10 @@ export default function Clients() {
           'hsl(280, 40%, 55%)',
           'hsl(45, 70%, 55%)',
         ];
-        const taxRegimeLabels: Record<string, string> = {
-          simples_nacional: 'Simples Nacional',
-          lucro_presumido: 'Lucro Presumido',
-          lucro_real: 'Lucro Real',
-          mei: 'MEI',
-        };
         const taxData = Object.entries(
           payingClients.filter(c => c.status === 'active').reduce((acc, c) => {
-            const key = c.tax_regime || 'Não informado';
-            const label = taxRegimeLabels[key] || key;
+            const key = normalizeTaxRegime(c.tax_regime) || 'Não informado';
+            const label = TAX_REGIME_LABELS[key] || key;
             acc[label] = (acc[label] || 0) + 1;
             return acc;
           }, {} as Record<string, number>)
@@ -1171,7 +1167,7 @@ export default function Clients() {
         const allSegments = new Set<string>();
         const cellData: Record<string, Record<string, { count: number; mrr: number; paying: number }>> = {};
         clients.filter(c => c.status === 'active' && !(c as any).without_monthly_fee).forEach(c => {
-          const regime = taxRegimeLabels[c.tax_regime || ''] || c.tax_regime || 'Não informado';
+          const regime = TAX_REGIME_LABELS[normalizeTaxRegime(c.tax_regime) || ''] || normalizeTaxRegime(c.tax_regime) || 'Não informado';
           const seg = c.business_classification || 'Não informado';
           allSegments.add(seg);
           if (!crossData[regime]) crossData[regime] = {};
@@ -1831,7 +1827,7 @@ export default function Clients() {
                     <Label>Regime Tributário</Label>
                     <Select value={form.tax_regime} onValueChange={v => {
                       setForm({ ...form, tax_regime: v });
-                      if (v === 'simples_nacional' && form.main_activity && !form.simples_anexo) {
+                      if (isSimplesNacional(v) && form.main_activity && !form.simples_anexo) {
                         setClassifyingAnexo(true);
                         classifyAnexoByAI(form.main_activity).then(a => {
                           setForm(prev => ({ ...prev, simples_anexo: a }));
@@ -1841,14 +1837,14 @@ export default function Clients() {
                     }} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="mei">MEI</SelectItem>
-                        <SelectItem value="simples_nacional">Simples Nacional</SelectItem>
-                        <SelectItem value="lucro_presumido">Lucro Presumido</SelectItem>
-                        <SelectItem value="lucro_real">Lucro Real</SelectItem>
+                        <SelectItem value={TAX_REGIME.MEI}>MEI</SelectItem>
+                        <SelectItem value={TAX_REGIME.SIMPLES_NACIONAL}>Simples Nacional</SelectItem>
+                        <SelectItem value={TAX_REGIME.LUCRO_PRESUMIDO}>Lucro Presumido</SelectItem>
+                        <SelectItem value={TAX_REGIME.LUCRO_REAL}>Lucro Real</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  {form.tax_regime === 'simples_nacional' && (
+                  {isSimplesNacional(form.tax_regime) && (
                     <div className="col-span-2 space-y-2">
                       <Label className="flex items-center gap-2">
                         Anexo do Simples Nacional
@@ -1890,7 +1886,7 @@ export default function Clients() {
                         setForm(prev => ({ ...prev, business_classification: c }));
                         setClassifyingSegment(false);
                       });
-                      if (form.tax_regime === 'simples_nacional') {
+                      if (isSimplesNacional(form.tax_regime)) {
                         setClassifyingAnexo(true);
                         classifyAnexoByAI(v).then(a => {
                           setForm(prev => ({ ...prev, simples_anexo: a }));
