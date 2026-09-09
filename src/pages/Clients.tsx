@@ -1090,16 +1090,10 @@ export default function Clients() {
           'hsl(280, 40%, 55%)',
           'hsl(45, 70%, 55%)',
         ];
-        const taxRegimeLabels: Record<string, string> = {
-          simples_nacional: 'Simples Nacional',
-          lucro_presumido: 'Lucro Presumido',
-          lucro_real: 'Lucro Real',
-          mei: 'MEI',
-        };
         const taxData = Object.entries(
           payingClients.filter(c => c.status === 'active').reduce((acc, c) => {
-            const key = c.tax_regime || 'Não informado';
-            const label = taxRegimeLabels[key] || key;
+            const key = normalizeTaxRegime(c.tax_regime) || 'Não informado';
+            const label = TAX_REGIME_LABELS[key] || key;
             acc[label] = (acc[label] || 0) + 1;
             return acc;
           }, {} as Record<string, number>)
@@ -1833,7 +1827,7 @@ export default function Clients() {
                     <Label>Regime Tributário</Label>
                     <Select value={form.tax_regime} onValueChange={v => {
                       setForm({ ...form, tax_regime: v });
-                      if (v === 'simples_nacional' && form.main_activity && !form.simples_anexo) {
+                      if (isSimplesNacional(v) && form.main_activity && !form.simples_anexo) {
                         setClassifyingAnexo(true);
                         classifyAnexoByAI(form.main_activity).then(a => {
                           setForm(prev => ({ ...prev, simples_anexo: a }));
@@ -1843,14 +1837,14 @@ export default function Clients() {
                     }} disabled={viewOnly}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="mei">MEI</SelectItem>
-                        <SelectItem value="simples_nacional">Simples Nacional</SelectItem>
-                        <SelectItem value="lucro_presumido">Lucro Presumido</SelectItem>
-                        <SelectItem value="lucro_real">Lucro Real</SelectItem>
+                        <SelectItem value={TAX_REGIME.MEI}>MEI</SelectItem>
+                        <SelectItem value={TAX_REGIME.SIMPLES_NACIONAL}>Simples Nacional</SelectItem>
+                        <SelectItem value={TAX_REGIME.LUCRO_PRESUMIDO}>Lucro Presumido</SelectItem>
+                        <SelectItem value={TAX_REGIME.LUCRO_REAL}>Lucro Real</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  {form.tax_regime === 'simples_nacional' && (
+                  {isSimplesNacional(form.tax_regime) && (
                     <div className="col-span-2 space-y-2">
                       <Label className="flex items-center gap-2">
                         Anexo do Simples Nacional
@@ -1892,7 +1886,7 @@ export default function Clients() {
                         setForm(prev => ({ ...prev, business_classification: c }));
                         setClassifyingSegment(false);
                       });
-                      if (form.tax_regime === 'simples_nacional') {
+                      if (isSimplesNacional(form.tax_regime)) {
                         setClassifyingAnexo(true);
                         classifyAnexoByAI(v).then(a => {
                           setForm(prev => ({ ...prev, simples_anexo: a }));
