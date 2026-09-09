@@ -118,7 +118,6 @@ export default function SimplesNacionalTab() {
   async function loadData() {
     setLoading(true);
     const [clientsRes, compsRes] = await Promise.all([
-import { TAX_REGIME } from '@/lib/utils';
       supabase.from('clients')
         .select('id, sci_code, company_name, document')
         .eq('tax_regime', TAX_REGIME.SIMPLES_NACIONAL)
