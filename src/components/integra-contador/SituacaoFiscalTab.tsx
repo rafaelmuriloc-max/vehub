@@ -635,42 +635,50 @@ export default function SituacaoFiscalTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
-        <Button
-          variant="outline"
-          onClick={handleDownloadLote}
-          disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
-          className="gap-2"
-        >
-          {zipping ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {zipProgress.current}/{zipProgress.total}
-            </>
-          ) : (
-            <>
-              <FileArchive className="h-4 w-4" />
-              Baixar PDFs ({availablePdfCount})
-            </>
-          )}
-        </Button>
-        <Button
-          onClick={handleConsultarLote}
-          disabled={batchRunning || !!consultingId || zipping}
-          className="gap-2"
-        >
-          {batchRunning ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {batchProgress.current}/{batchProgress.total}
-            </>
-          ) : (
-            <>
-              <PlayCircle className="h-4 w-4" />
-              Consultar em Lote {selected.size > 0 ? `(${selected.size})` : `(${clients.length})`}
-            </>
-          )}
-        </Button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Fiscal</h1>
+          <p className="text-muted-foreground mt-1">
+            Situação fiscal dos clientes junto à Receita Federal
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownloadLote}
+            disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
+            className="gap-2"
+          >
+            {zipping ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {zipProgress.current}/{zipProgress.total}
+              </>
+            ) : (
+              <>
+                <FileArchive className="h-4 w-4" />
+                Baixar PDFs ({availablePdfCount})
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleConsultarLote}
+            disabled={batchRunning || !!consultingId || zipping}
+            className="gap-2"
+          >
+            {batchRunning ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {batchProgress.current}/{batchProgress.total}
+              </>
+            ) : (
+              <>
+                <PlayCircle className="h-4 w-4" />
+                Consultar em Lote {selected.size > 0 ? `(${selected.size})` : `(${clients.length})`}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <SitfisOverviewPanel
