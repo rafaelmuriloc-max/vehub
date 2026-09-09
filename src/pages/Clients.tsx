@@ -406,7 +406,7 @@ export default function Clients() {
 
       const isSimples = data.opcao_pelo_simples === true;
       const isMei = data.opcao_pelo_mei === true;
-      const taxRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
+      const taxRegime = isMei ? TAX_REGIME.MEI : isSimples ? TAX_REGIME.SIMPLES_NACIONAL : TAX_REGIME.LUCRO_PRESUMIDO;
 
       setForm(prev => ({
         ...prev,
@@ -580,7 +580,7 @@ export default function Clients() {
 
         const isSimples = data.opcao_pelo_simples === true;
         const isMei = data.opcao_pelo_mei === true;
-        const taxRegime = isMei ? 'mei' : isSimples ? 'simples_nacional' : 'lucro_presumido';
+        const taxRegime = isMei ? TAX_REGIME.MEI : isSimples ? TAX_REGIME.SIMPLES_NACIONAL : TAX_REGIME.LUCRO_PRESUMIDO;
 
         let classification = client.business_classification || '';
         if (!classification && (cnaePrincipal || secondaryCnaes)) {
@@ -827,7 +827,7 @@ export default function Clients() {
       destination_office_name: form.destination_office_name || null, exit_reason_notes: form.exit_reason_notes || null,
       business_classification: form.business_classification || null,
       trade_name: form.trade_name || null,
-      simples_anexo: form.tax_regime === 'simples_nacional' ? (form.simples_anexo || null) : null,
+      simples_anexo: isSimplesNacional(form.tax_regime) ? (form.simples_anexo || null) : null,
       services_suspended: !!form.services_suspended,
       services_suspended_at: form.services_suspended
         ? ((editing as any)?.services_suspended_at || new Date().toISOString())
