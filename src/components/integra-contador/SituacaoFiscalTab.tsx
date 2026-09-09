@@ -635,6 +635,44 @@ export default function SituacaoFiscalTab() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={handleDownloadLote}
+          disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
+          className="gap-2"
+        >
+          {zipping ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {zipProgress.current}/{zipProgress.total}
+            </>
+          ) : (
+            <>
+              <FileArchive className="h-4 w-4" />
+              Baixar PDFs ({availablePdfCount})
+            </>
+          )}
+        </Button>
+        <Button
+          onClick={handleConsultarLote}
+          disabled={batchRunning || !!consultingId || zipping}
+          className="gap-2"
+        >
+          {batchRunning ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {batchProgress.current}/{batchProgress.total}
+            </>
+          ) : (
+            <>
+              <PlayCircle className="h-4 w-4" />
+              Consultar em Lote {selected.size > 0 ? `(${selected.size})` : `(${clients.length})`}
+            </>
+          )}
+        </Button>
+      </div>
+
       <SitfisOverviewPanel
         items={filtered.map(c => ({ sitfis_status: c.sitfis_status, pendency_types: c.pendency_types || [] }))}
         loading={loading && clients.length === 0}
@@ -734,47 +772,7 @@ export default function SituacaoFiscalTab() {
       </Dialog>
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="outline"
-                onClick={handleDownloadLote}
-                disabled={zipping || batchRunning || !!consultingId || availablePdfCount === 0}
-                className="gap-2"
-              >
-                {zipping ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {zipProgress.current}/{zipProgress.total}
-                  </>
-                ) : (
-                  <>
-                    <FileArchive className="h-4 w-4" />
-                    Baixar PDFs ({availablePdfCount})
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleConsultarLote}
-                disabled={batchRunning || !!consultingId || zipping}
-                className="gap-2"
-              >
-                {batchRunning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {batchProgress.current}/{batchProgress.total}
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="h-4 w-4" />
-                    Consultar em Lote {selected.size > 0 ? `(${selected.size})` : `(${clients.length})`}
-                  </>
-                )}
-              </Button>
-            </div>
-
-          </div>
+          <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
