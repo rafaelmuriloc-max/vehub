@@ -102,11 +102,13 @@ async function classifyAnexoByAI(mainCnae: string): Promise<string> {
   }
 }
 
+import { TAX_REGIME, isSimplesNacional, normalizeTaxRegime, type TaxRegime } from '@/lib/utils';
+
 const TAX_REGIME_LABELS: Record<string, string> = {
-  simples_nacional: 'Simples Nacional',
-  lucro_presumido: 'Lucro Presumido',
-  lucro_real: 'Lucro Real',
-  mei: 'MEI',
+  [TAX_REGIME.SIMPLES_NACIONAL]: 'Simples Nacional',
+  [TAX_REGIME.LUCRO_PRESUMIDO]: 'Lucro Presumido',
+  [TAX_REGIME.LUCRO_REAL]: 'Lucro Real',
+  [TAX_REGIME.MEI]: 'MEI',
 };
 
 type Client = {
