@@ -102,7 +102,7 @@ async function classifyAnexoByAI(mainCnae: string): Promise<string> {
   }
 }
 
-import { TAX_REGIME, isSimplesNacional, normalizeTaxRegime, type TaxRegime } from '@/lib/utils';
+import { TAX_REGIME, isSimplesNacional, normalizeTaxRegime } from '@/lib/utils';
 
 const TAX_REGIME_LABELS: Record<string, string> = {
   [TAX_REGIME.SIMPLES_NACIONAL]: 'Simples Nacional',
