@@ -13,7 +13,7 @@ import { FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import PgdasdDeclaracaoForm from '@/components/integra-contador/PgdasdDeclaracaoForm';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { formatClientLabel } from '@/lib/utils';
+import { formatClientLabel, TAX_REGIME } from '@/lib/utils';
 
 type Client = {
   id: string;
