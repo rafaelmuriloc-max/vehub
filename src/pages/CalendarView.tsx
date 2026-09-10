@@ -1335,6 +1335,7 @@ function CalendarMain() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
+                                    <TimeTracker instanceId={ev.instanceId} />
                                     <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
                                       {typeConfig[ev.type].label}
                                     </Badge>
@@ -1632,11 +1633,12 @@ function CalendarMain() {
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
-                                  {typeConfig[ev.type].label}
-                                </Badge>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
+                               <div className="flex items-center gap-1 shrink-0">
+                                 <TimeTracker instanceId={ev.instanceId} />
+                                 <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                                   {typeConfig[ev.type].label}
+                                 </Badge>
+                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
                                   <Check className="h-3.5 w-3.5" />
                                 </Button>
                                 {isDasSn && (
@@ -1730,8 +1732,9 @@ function CalendarMain() {
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className="bg-red-600 text-white border-0 text-[10px]">
+                               <div className="flex items-center gap-1 shrink-0">
+                                 <TimeTracker instanceId={ev.instanceId} />
+                                 <Badge className="bg-red-600 text-white border-0 text-[10px]">
                                   {overdueDays ? `${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'} de atraso` : 'Atrasada'}
                                 </Badge>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-emerald-600" title="Concluir obrigação" onClick={e => { e.stopPropagation(); quickCompleteInstance(ev.instanceId, ev.obligationId); }}>
@@ -1826,11 +1829,12 @@ function CalendarMain() {
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
-                                  {typeConfig[ev.type].label}
-                                </Badge>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
+                               <div className="flex items-center gap-1 shrink-0">
+                                 <TimeTracker instanceId={ev.instanceId} />
+                                 <Badge className={`${typeConfig[ev.type].color} text-white border-0 text-[10px]`}>
+                                   {typeConfig[ev.type].label}
+                                 </Badge>
+                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
@@ -1921,8 +1925,9 @@ function CalendarMain() {
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className="bg-orange-500 text-white border-0 text-[10px]">
+                               <div className="flex items-center gap-1 shrink-0">
+                                 <TimeTracker instanceId={ev.instanceId} />
+                                 <Badge className="bg-orange-500 text-white border-0 text-[10px]">
                                   Fora do prazo
                                 </Badge>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteInstanceId(ev.instanceId); }}>
@@ -1988,8 +1993,9 @@ function CalendarMain() {
                                   <Building2 className="h-3 w-3 inline mr-1" />{ev.clientName}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-[10px]">Aguardando</Badge>
+                               <div className="flex items-center gap-1 shrink-0">
+                                 <TimeTracker instanceId={ev.instanceId} />
+                                 <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-[10px]">Aguardando</Badge>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-amber-600" title="Editar motivo" onClick={e => { e.stopPropagation(); setHoldReason(inst?.hold_reason || ''); setHoldTarget([ev.instanceId]); }}>
                                   <PauseCircle className="h-3.5 w-3.5" />
                                 </Button>
