@@ -154,7 +154,7 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const clamped = Math.max(0, Math.min(100, value));
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
-    <div className="flex min-w-[240px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
+    <div className="flex min-w-[240px] flex-1 flex-col items-center rounded-md border border-border bg-card px-3 py-3">
       <div className="relative h-[120px] w-[220px]" role="img" aria-label={`${name}: ${clamped}%`}>
         <GaugeArc
           value={clamped}
@@ -169,8 +169,8 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
           radius={105}
         />
       </div>
-      <p className="mt-1 max-w-[180px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
-      <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
+      <p className="mt-0.5 max-w-[190px] truncate text-center font-calendarHeading text-sm font-bold text-calendar-navy">{name}</p>
+      <p className={`mt-3 text-[11px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
     </div>
@@ -1286,7 +1286,7 @@ function CalendarMain() {
                 <SelectContent>{Array.from({ length: 12 }, (_, index) => <SelectItem key={index} value={`${year}-${index}`}>{monthNames[index]} {year}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="flex overflow-x-auto px-2 py-2 gap-1">
+            <div className="flex overflow-x-auto px-3 py-3 gap-3">
               {departmentPerformance.length > 0 ? departmentPerformance.map(department => <DepartmentGauge key={department.id} name={department.name} value={department.value} change={department.change} />) : <p className="w-full py-8 text-center text-sm text-muted-foreground">Nenhum departamento encontrado.</p>}
             </div>
           </CardContent>
