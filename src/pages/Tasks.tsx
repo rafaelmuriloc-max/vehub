@@ -18,6 +18,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 import { TasksRankingTab } from '@/components/tasks/TasksRankingTab';
+import { ClientCostReport } from '@/components/tasks/ClientCostReport';
+import { TimeTracker } from '@/components/time-tracking/TimeTracker';
 import { formatClientLabel } from '@/lib/utils';
 
 type Task = {
@@ -597,6 +599,7 @@ export default function Tasks() {
           <TabsTrigger value="kanban">Kanban</TabsTrigger>
           <TabsTrigger value="list">Lista</TabsTrigger>
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
+          {isAdmin && <TabsTrigger value="costs">Custo por Cliente</TabsTrigger>}
           <TabsTrigger value="catalog">Cadastro</TabsTrigger>
         </TabsList>
 
@@ -656,7 +659,8 @@ export default function Tasks() {
                           </div>
                         )}
                         <div className="flex items-center justify-between gap-2 pt-1 border-t mt-1">
-                          <div className="flex gap-1 text-xs text-muted-foreground">
+                          <div className="flex gap-1 text-xs text-muted-foreground items-center">
+                            <TimeTracker taskId={task.id} />
                             {(attachmentCounts[task.id]?.input || 0) > 0 && (
                               <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{attachmentCounts[task.id].input}</span>
                             )}
@@ -698,7 +702,8 @@ export default function Tasks() {
                       {task.client_id && <span className="text-sm text-muted-foreground">{getClientName(task.client_id)}</span>}
                     </div>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 items-center">
+                    <TimeTracker taskId={task.id} />
                     {assignments[task.id]?.map(uid => (
                       <AssigneeBadge key={uid} name={getProfileName(uid)} color={getProfileColor(uid)} />
                     ))}
@@ -722,6 +727,12 @@ export default function Tasks() {
             templates={templates}
           />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="costs" className="space-y-4">
+            <ClientCostReport />
+          </TabsContent>
+        )}
 
         <TabsContent value="catalog" className="space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">

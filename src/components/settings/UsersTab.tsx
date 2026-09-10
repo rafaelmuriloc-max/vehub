@@ -18,6 +18,7 @@ import { Pencil, Trash2, UserPlus, ChevronDown } from 'lucide-react';
 interface UserRow {
   id: string; user_id: string; full_name: string | null; job_title: string | null;
   department_id: string | null; department_ids: string[]; role: string; tag_color: string | null;
+  hourly_rate: number | null;
 }
 interface Dept { id: string; name: string; }
 
@@ -111,7 +112,7 @@ export function UsersTab() {
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
-  const [editForm, setEditForm] = useState({ full_name: '', job_title: '', role: 'employee', department_ids: [] as string[], tag_color: '' });
+  const [editForm, setEditForm] = useState({ full_name: '', job_title: '', role: 'employee', department_ids: [] as string[], tag_color: '', hourly_rate: '' });
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -141,6 +142,7 @@ export function UsersTab() {
         department_id: p.department_id, role: roleMap.get(p.user_id) || 'employee',
         department_ids: linkMap.get(p.user_id) || [],
         tag_color: p.tag_color ?? null,
+        hourly_rate: p.hourly_rate ?? null,
       })));
     }
   };
@@ -150,7 +152,7 @@ export function UsersTab() {
   // --- EDIT ---
   const openEdit = (u: UserRow) => {
     setEditing(u);
-    setEditForm({ full_name: u.full_name || '', job_title: u.job_title || '', role: u.role, department_ids: u.department_ids, tag_color: u.tag_color || '' });
+    setEditForm({ full_name: u.full_name || '', job_title: u.job_title || '', role: u.role, department_ids: u.department_ids, tag_color: u.tag_color || '', hourly_rate: u.hourly_rate != null ? String(u.hourly_rate).replace('.', ',') : '' });
     setEditOpen(true);
   };
 
@@ -166,6 +168,7 @@ export function UsersTab() {
           department_ids: editForm.department_ids,
           role: editForm.role,
           tag_color: editForm.tag_color || null,
+          hourly_rate: editForm.hourly_rate.trim() ? Number(editForm.hourly_rate.replace(',', '.')) : null,
         },
       });
       if (res.error || res.data?.error) {
@@ -334,6 +337,16 @@ export function UsersTab() {
             <div>
               <Label>Cor da tag (chat)</Label>
               <ColorPickerField value={editForm.tag_color} onChange={v => setEditForm({ ...editForm, tag_color: v })} />
+            </div>
+            <div>
+              <Label>Valor/hora (R$)</Label>
+              <Input
+                inputMode="decimal"
+                placeholder="Ex.: 45,00"
+                value={editForm.hourly_rate}
+                onChange={e => setEditForm({ ...editForm, hourly_rate: e.target.value.replace(/[^\d,.]/g, '') })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Usado no relatório de custo por cliente. Em branco = sem custo calculado.</p>
             </div>
           </div>
           <DialogFooter><Button onClick={handleSave}>Salvar</Button></DialogFooter>

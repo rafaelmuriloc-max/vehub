@@ -2093,6 +2093,7 @@ export type Database = {
           created_at: string
           department_id: string | null
           full_name: string | null
+          hourly_rate: number | null
           id: string
           job_title: string | null
           tag_color: string | null
@@ -2104,6 +2105,7 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           full_name?: string | null
+          hourly_rate?: number | null
           id?: string
           job_title?: string | null
           tag_color?: string | null
@@ -2115,6 +2117,7 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           full_name?: string | null
+          hourly_rate?: number | null
           id?: string
           job_title?: string | null
           tag_color?: string | null
@@ -2834,6 +2837,60 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_entries: {
+        Row: {
+          created_at: string
+          duration_seconds: number
+          ended_at: string | null
+          id: string
+          instance_id: string | null
+          notes: string | null
+          started_at: string
+          task_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number
+          ended_at?: string | null
+          id?: string
+          instance_id?: string | null
+          notes?: string | null
+          started_at?: string
+          task_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number
+          ended_at?: string | null
+          id?: string
+          instance_id?: string | null
+          notes?: string | null
+          started_at?: string
+          task_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "obligation_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
