@@ -107,11 +107,11 @@ function GaugeArc({
   const innerRadius = radius - strokeWidth / 2;
   const angleRad = Math.PI - (clamped * 1.8 * Math.PI) / 180;
   const pivotY = cy - valueFontSize * 1.05;
-  const needleLen = innerRadius * 0.45;
+  const needleLen = innerRadius * 0.5;
   const tipX = cx + needleLen * Math.cos(angleRad);
   const tipY = pivotY - needleLen * Math.sin(angleRad);
-  const hubRadius = strokeWidth / 2.4;
-  const baseHalf = strokeWidth / 4.5;
+  const hubRadius = strokeWidth / 2.8;
+  const baseHalf = strokeWidth / 5;
   const ux = Math.cos(angleRad);
   const uy = -Math.sin(angleRad);
   const px = -uy * baseHalf;
