@@ -173,27 +173,32 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const clamped = Math.max(0, Math.min(100, value));
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
-    <div className="flex min-w-[300px] flex-1 flex-col items-center rounded-md border border-border bg-card px-3 py-3">
-      <div className="relative h-[120px] w-[280px]" role="img" aria-label={`${name}: ${clamped}%`}>
+    <div className="flex min-w-[300px] flex-1 flex-col items-center gap-1 rounded-md border border-border bg-card px-4 py-3 shadow-sm">
+      <div className="flex items-start gap-2.5 self-start">
+        <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
+        <p className="max-w-[230px] truncate font-calendarHeading text-lg font-bold text-calendar-navy">{name}</p>
+      </div>
+      <div className="relative h-[130px] w-[290px]" role="img" aria-label={`${name}: ${clamped}%`}>
         <GaugeArc
           value={clamped}
           gradientId={gradientId}
-          strokeWidth={22}
+          strokeWidth={26}
           showValue
-          valueFontSize={34}
-          viewBoxWidth={300}
-          viewBoxHeight={130}
-          cx={150}
-          cy={125}
-          radius={115}
+          valueFontSize={40}
+          changeFontSize={13}
+          change={change}
+          viewBoxWidth={310}
+          viewBoxHeight={150}
+          cx={155}
+          cy={144}
+          radius={128}
+          pivotOffset={48}
+          needleScale={0.42}
         />
       </div>
-      <p className="mt-0.5 max-w-[250px] truncate text-center font-calendarHeading text-sm font-bold text-calendar-navy">{name}</p>
-      <p className={`mt-3 text-[11px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
-        {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
-      </p>
     </div>
   );
+
 }
 
 function OfficeGauge({ value, change }: { value: number; change: number }) {
