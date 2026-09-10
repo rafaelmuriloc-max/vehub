@@ -1230,6 +1230,25 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
               <CheckSquare className="h-4 w-4" />
               <span>Tarefas</span>
             </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={exportCalendarReport}
+              className="h-8 w-8 rounded-sm"
+              aria-label="Exportar relatório"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            {isAdmin && (
+              <Button
+                size="icon"
+                onClick={() => navigate('/obligations')}
+                className="h-8 w-8 rounded-sm bg-calendar-orange hover:bg-calendar-orange/90 text-white"
+                aria-label="Nova obrigação"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Notificações">
