@@ -679,6 +679,18 @@ export default function NfeTab() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={filterRegime} onValueChange={setFilterRegime}>
+            <SelectTrigger className="w-full md:w-[220px]">
+              <SelectValue placeholder="Regime tributário" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os regimes</SelectItem>
+              <SelectItem value="none">Não informado</SelectItem>
+              {regimeOptions.map(r => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             size="sm"
