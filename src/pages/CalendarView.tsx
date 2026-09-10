@@ -1202,20 +1202,34 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     <div className="space-y-5 font-calendarBody">
       <section className="space-y-3">
         <div className="hidden h-11 items-center justify-between border-b border-border pb-2 lg:flex">
-          <div className="relative w-[430px]">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={headerSearch}
-              onChange={event => setHeaderSearch(event.target.value)}
-              onKeyDown={event => { if (event.key === 'Enter') submitHeaderSearch(); }}
-              placeholder="Buscar cliente, CNPJ ou obrigação..."
-              className="h-8 rounded-sm bg-card pl-9 pr-9 text-xs"
-            />
-            {headerSearch && (
-              <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-8 w-8" onClick={() => setHeaderSearch('')} aria-label="Limpar busca">
-                <X className="h-3 w-3" />
-              </Button>
-            )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={view === 'calendar' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewChange('calendar')}
+              className="h-8 gap-2 rounded-sm"
+            >
+              <CalendarDays className="h-4 w-4" />
+              <span>Calendário</span>
+            </Button>
+            <Button
+              variant={view === 'documents' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewChange('documents')}
+              className="h-8 gap-2 rounded-sm"
+            >
+              <FileText className="h-4 w-4" />
+              <span>Documentos</span>
+            </Button>
+            <Button
+              variant={view === 'tasks' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewChange('tasks')}
+              className="h-8 gap-2 rounded-sm"
+            >
+              <CheckSquare className="h-4 w-4" />
+              <span>Tarefas</span>
+            </Button>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Notificações">
