@@ -1139,10 +1139,10 @@ function CalendarMain() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft', bar: 'bg-calendar-blue' },
-            { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: `${dashboardStats.current.overdue} crítica${dashboardStats.current.overdue === 1 ? '' : 's'} • ${dashboardStats.current.overdue} vencida${dashboardStats.current.overdue === 1 ? '' : 's'}`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.overdue / dashboardStats.current.total) * 100) : 0, icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft', bar: 'bg-calendar-red' },
-            { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft', bar: 'bg-calendar-green' },
-            { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted', bar: 'bg-muted-foreground/50' },
+            { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft', bar: 'bg-calendar-blue', progressTone: '[&>div]:bg-calendar-blue' },
+            { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: `${dashboardStats.current.overdue} crítica${dashboardStats.current.overdue === 1 ? '' : 's'} • ${dashboardStats.current.overdue} vencida${dashboardStats.current.overdue === 1 ? '' : 's'}`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.overdue / dashboardStats.current.total) * 100) : 0, icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft', bar: 'bg-calendar-red', progressTone: '[&>div]:bg-calendar-red' },
+            { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft', bar: 'bg-calendar-green', progressTone: '[&>div]:bg-calendar-green' },
+            { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted', bar: 'bg-muted-foreground/50', progressTone: '[&>div]:bg-muted-foreground/50' },
           ].map(item => (
             <Card key={item.label} className={`rounded-sm border-border shadow-none ${item.surface}`}>
               <CardContent className="p-4">
@@ -1155,7 +1155,7 @@ function CalendarMain() {
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
-                  <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm bg-card/80 [&>div]:${item.bar}`} />
+                  <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm bg-card/80 ${item.progressTone}`} />
                   <span className={`w-8 text-right text-[10px] font-semibold ${item.tone}`}>{item.progress}%</span>
                 </div>
               </CardContent>
