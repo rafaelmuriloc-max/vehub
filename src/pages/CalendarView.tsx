@@ -1286,7 +1286,7 @@ function CalendarMain() {
                 <SelectContent>{Array.from({ length: 12 }, (_, index) => <SelectItem key={index} value={`${year}-${index}`}>{monthNames[index]} {year}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="flex overflow-x-auto px-2 py-2">
+            <div className="flex overflow-x-auto px-2 py-2 gap-1">
               {departmentPerformance.length > 0 ? departmentPerformance.map(department => <DepartmentGauge key={department.id} name={department.name} value={department.value} change={department.change} />) : <p className="w-full py-8 text-center text-sm text-muted-foreground">Nenhum departamento encontrado.</p>}
             </div>
           </CardContent>
