@@ -11,10 +11,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle, Plus, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle, Plus, BarChart3, Search, Bell, CircleHelp, SlidersHorizontal } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
@@ -78,6 +79,31 @@ const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const ITEMS_PER_PAGE = 10;
 const DAY_ITEMS_PER_PAGE = 5;
+
+function DepartmentGauge({ name, value, change }: { name: string; value: number; change: number }) {
+  const angle = Math.max(0, Math.min(100, value)) * 1.8 - 90;
+  return (
+    <div className="flex min-w-[150px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
+      <div className="relative h-[80px] w-[138px]" role="img" aria-label={`${name}: ${value}%`}>
+        <svg viewBox="0 0 160 94" className="h-full w-full" aria-hidden="true">
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" className="stroke-muted" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="30 70" className="stroke-calendar-red" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="butt" strokeDasharray="31 69" strokeDashoffset="-34" className="stroke-calendar-orange" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="32 68" strokeDashoffset="-68" className="stroke-calendar-green" />
+          <g transform={`rotate(${angle} 80 78)`}>
+            <path d="M 80 78 L 80 35" className="stroke-calendar-navy" strokeWidth="2.5" strokeLinecap="round" />
+          </g>
+          <circle cx="80" cy="78" r="4.5" className="fill-calendar-navy" />
+        </svg>
+        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-xl font-bold text-calendar-navy">{value}%</span>
+      </div>
+      <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
+      <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
+        {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
+      </p>
+    </div>
+  );
+}
 
 function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEMS_PER_PAGE }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void; perPage?: number }) {
   if (totalPages <= 1) return null;
@@ -169,6 +195,7 @@ function CalendarMain() {
   const [dayOverduePage, setDayOverduePage] = useState(1);
   const [monthOverduePage, setMonthOverduePage] = useState(1);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
+  const [headerSearch, setHeaderSearch] = useState('');
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
@@ -977,6 +1004,62 @@ function CalendarMain() {
     return { current, previous, change: current.performance - previous.performance };
   }, [instances, completions, activities, oblMap, filterDept, filterClient, filterObligation, filterLateDeliveries, year, month]);
 
+  const departmentPerformance = useMemo(() => {
+    const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
+      const prefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+      let completed = 0;
+      let total = 0;
+      for (const inst of instances) {
+        if (!inst.reference_month.startsWith(prefix) && !inst.due_date?.startsWith(prefix)) continue;
+        const obligation = oblMap.get(inst.obligation_id);
+        if (!obligation || obligation.department_id !== departmentId) continue;
+        if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
+        if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+        if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
+        total++;
+        if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
+      }
+      return total > 0 ? Math.round((completed / total) * 100) : 0;
+    };
+    const previousDate = new Date(year, month - 1, 1);
+    const departmentOrder = ['fiscal', 'contabil', 'pessoal', 'financeiro', 'sucesso'];
+    const visibleDepartments = departments
+      .filter(department => filterDept === 'all' || department.id === filterDept)
+      .filter(department => departmentOrder.some(term => department.name.toLocaleLowerCase('pt-BR').includes(term)))
+      .sort((a, b) => {
+        const aIndex = departmentOrder.findIndex(term => a.name.toLocaleLowerCase('pt-BR').includes(term));
+        const bIndex = departmentOrder.findIndex(term => b.name.toLocaleLowerCase('pt-BR').includes(term));
+        return aIndex - bIndex;
+      })
+      .slice(0, 5);
+    return visibleDepartments.map(department => {
+      const value = calculateForDepartment(department.id, year, month);
+      const previous = calculateForDepartment(department.id, previousDate.getFullYear(), previousDate.getMonth());
+      const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
+      return { ...department, name: displayName, value, change: value - previous };
+    });
+  }, [departments, filterDept, filterClient, filterObligation, filterLateDeliveries, instances, oblMap, completions, activities, year, month]);
+
+  const activeFilters = [filterDept, filterClient, filterObligation].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
+
+  function submitHeaderSearch() {
+    const term = headerSearch.trim().toLocaleLowerCase('pt-BR');
+    if (!term) return;
+    const client = clients.find(item => formatClientLabel(item).toLocaleLowerCase('pt-BR').includes(term));
+    if (client) {
+      setFilterClient(client.id);
+      setSelectedDay(null);
+      return;
+    }
+    const obligation = obligations.find(item => item.name.toLocaleLowerCase('pt-BR').includes(term));
+    if (obligation) {
+      setFilterObligation(obligation.id);
+      setSelectedDay(null);
+      return;
+    }
+    toast({ title: 'Nenhum resultado encontrado', description: 'Busque pelo nome da empresa ou obrigação.' });
+  }
+
   function exportCalendarReport() {
     const stats = dashboardStats.current;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -1012,121 +1095,102 @@ function CalendarMain() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Operational dashboard header */}
-      <section className="space-y-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium capitalize text-muted-foreground">
-              {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date())}
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">
-              Olá, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}
-            </h1>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <Button variant="outline" onClick={exportCalendarReport} className="gap-2 rounded-sm">
-              <Download className="h-4 w-4" />
-              Exportar
-            </Button>
-            {isAdmin && (
-              <Button onClick={() => navigate('/obligations')} className="gap-2 rounded-sm">
-                <Plus className="h-4 w-4" />
-                Nova obrigação
+    <div className="space-y-5 font-calendarBody">
+      <section className="space-y-3">
+        <div className="hidden h-11 items-center justify-between border-b border-border pb-2 lg:flex">
+          <div className="relative w-[430px]">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={headerSearch}
+              onChange={event => setHeaderSearch(event.target.value)}
+              onKeyDown={event => { if (event.key === 'Enter') submitHeaderSearch(); }}
+              placeholder="Buscar cliente, CNPJ ou obrigação..."
+              className="h-8 rounded-sm bg-card pl-9 pr-9 text-xs"
+            />
+            {headerSearch && (
+              <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-8 w-8" onClick={() => setHeaderSearch('')} aria-label="Limpar busca">
+                <X className="h-3 w-3" />
               </Button>
             )}
           </div>
-        </div>
-
-        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(340px,0.75fr)]">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', icon: ListChecks, tone: 'text-primary', surface: 'bg-primary/10' },
-              { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: dashboardStats.current.overdue > 0 ? 'Requer atenção' : 'Tudo em dia', icon: AlertTriangle, tone: 'text-destructive', surface: 'bg-destructive/10' },
-              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} dentro do prazo`, icon: CheckSquare, tone: 'text-secondary dark:text-secondary-foreground', surface: 'bg-secondary/10' },
-              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Concluídas com atraso', icon: Clock, tone: 'text-primary', surface: 'bg-primary/10' },
-            ].map(item => (
-              <Card key={item.label} className="h-full rounded-sm shadow-none">
-                <CardContent className="flex min-h-[154px] flex-col justify-between p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold text-muted-foreground">{item.label}</p>
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm ${item.surface} ${item.tone}`}>
-                      <item.icon className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold tabular-nums text-foreground">{item.value}</p>
-                    <p className={`mt-1 text-xs font-medium ${item.tone}`}>{item.detail}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <Card className="h-full rounded-sm shadow-none">
-            <CardContent className="flex min-h-[154px] h-full items-center justify-between gap-5 p-5">
-              <div className="self-stretch flex min-w-0 flex-col justify-between py-0.5">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 shrink-0 text-primary" />
-                    <h2 className="text-sm font-semibold text-foreground">Desempenho geral da operação</h2>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Obrigações concluídas no mês</p>
-                </div>
-                <p className={`text-xs font-semibold ${dashboardStats.change >= 0 ? 'text-secondary dark:text-secondary-foreground' : 'text-destructive'}`}>
-                  {dashboardStats.change >= 0 ? '+' : ''}{dashboardStats.change} p.p. vs. mês anterior
-                </p>
-              </div>
-              <div className="relative h-[120px] w-[190px] shrink-0" role="img" aria-label={`Desempenho geral de ${dashboardStats.current.performance}%`}>
-                <svg viewBox="0 0 190 120" className="h-full w-full" aria-hidden="true">
-                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" className="stroke-muted" />
-                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="30 70" className="stroke-destructive" />
-                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="butt" strokeDasharray="31 69" strokeDashoffset="-34" className="stroke-primary" />
-                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="32 68" strokeDashoffset="-68" className="stroke-secondary" />
-                  <g transform={`rotate(${dashboardStats.current.performance * 1.8 - 90} 95 96)`}>
-                    <path d="M 95 96 L 95 42" className="stroke-foreground" strokeWidth="2.5" strokeLinecap="round" />
-                  </g>
-                  <circle cx="95" cy="96" r="5" className="fill-foreground" />
-                </svg>
-                <div className="absolute inset-x-0 bottom-0 text-center">
-                  <span className="text-2xl font-bold tabular-nums text-foreground">{dashboardStats.current.performance}%</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* Filters */}
-      {(() => {
-        const activeFilters = [filterDept, filterClient, filterObligation].filter(v => v !== 'all').length + (filterLateDeliveries ? 1 : 0);
-        return (
-          <div className="bg-card rounded-sm border p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">Filtros do calendário</h2>
-                  <p className="hidden text-xs text-muted-foreground md:block">Refine os indicadores, datas e listas abaixo</p>
-                </div>
-              </div>
-              {activeFilters > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground gap-1.5"
-                  onClick={() => { setFilterDept('all'); setFilterClient('all'); setFilterObligation('all'); setFilterLateDeliveries(false); setSelectedDay(null); }}
-                >
-                  <X className="h-3.5 w-3.5" />
-                  Limpar filtros
-                  <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0">{activeFilters}</Badge>
-                </Button>
-              )}
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Notificações">
+              <Bell className="h-4 w-4" />
+              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-calendar-red" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Ajuda"><CircleHelp className="h-4 w-4" /></Button>
+            <div className="h-6 w-px bg-border" />
+            <Avatar className="h-8 w-8">
+              {profile?.avatar_url && <AvatarImage src={profile.avatar_url} alt={profile.full_name} />}
+              <AvatarFallback className="bg-calendar-orange-soft text-xs font-semibold text-calendar-orange">{profile?.full_name?.slice(0, 2).toUpperCase() || 'VH'}</AvatarFallback>
+            </Avatar>
+            <div className="leading-tight">
+              <p className="max-w-[150px] truncate text-xs font-semibold text-calendar-navy">{profile?.full_name || 'Equipe Vehub'}</p>
+              <p className="text-[10px] text-muted-foreground">{profile?.job_title || (isAdmin ? 'Administrador' : 'Colaborador')}</p>
             </div>
+            <ChevronRight className="h-3.5 w-3.5 rotate-90 text-muted-foreground" />
+          </div>
+        </div>
 
-            <div className="border-t pt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-medium capitalize text-muted-foreground">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</p>
+            <h1 className="mt-0.5 font-calendarHeading text-2xl font-bold text-calendar-navy">Bom dia, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}!</h1>
+            <p className="text-xs text-muted-foreground">Aqui está o panorama das suas obrigações e prazos.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={exportCalendarReport} className="h-9 gap-2 rounded-sm"><Download className="h-3.5 w-3.5" />Exportar</Button>
+            {isAdmin && <Button size="sm" onClick={() => navigate('/obligations')} className="h-9 gap-2 rounded-sm bg-calendar-orange hover:bg-calendar-orange/90"><Plus className="h-3.5 w-3.5" />Nova obrigação</Button>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft', bar: 'bg-calendar-blue', progressTone: '[&>div]:bg-calendar-blue' },
+            { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: `${dashboardStats.current.overdue} crítica${dashboardStats.current.overdue === 1 ? '' : 's'} • ${dashboardStats.current.overdue} vencida${dashboardStats.current.overdue === 1 ? '' : 's'}`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.overdue / dashboardStats.current.total) * 100) : 0, icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft', bar: 'bg-calendar-red', progressTone: '[&>div]:bg-calendar-red' },
+            { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft', bar: 'bg-calendar-green', progressTone: '[&>div]:bg-calendar-green' },
+            { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted', bar: 'bg-muted-foreground/50', progressTone: '[&>div]:bg-muted-foreground/50' },
+          ].map(item => (
+            <Card key={item.label} className={`rounded-sm border-border shadow-none ${item.surface}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-sm ${item.bar} text-primary-foreground`}><item.icon className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-xs font-semibold ${item.tone}`}>{item.label}</p>
+                    <p className="font-calendarHeading text-2xl font-bold leading-6 text-calendar-navy">{item.value}</p>
+                    <p className="mt-1 truncate text-[10px] text-muted-foreground">{item.detail}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm bg-card/80 ${item.progressTone}`} />
+                  <span className={`w-8 text-right text-[10px] font-semibold ${item.tone}`}>{item.progress}%</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="rounded-sm shadow-none">
+          <CardContent className="p-0">
+            <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex gap-2.5">
+                <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
+                <div><h2 className="font-calendarHeading text-base font-bold text-calendar-navy">Desempenho geral dos departamentos</h2><p className="text-[11px] text-muted-foreground">Acompanhe o desempenho de cada departamento no cumprimento das obrigações.</p></div>
+              </div>
+              <Select value={`${year}-${month}`} onValueChange={value => { const [nextYear, nextMonth] = value.split('-').map(Number); setCurrentDate(new Date(nextYear, nextMonth, 1)); setSelectedDay(null); }}>
+                <SelectTrigger className="h-8 w-[160px] rounded-sm text-xs"><CalendarDays className="mr-2 h-3.5 w-3.5" /><SelectValue /></SelectTrigger>
+                <SelectContent>{Array.from({ length: 12 }, (_, index) => <SelectItem key={index} value={`${year}-${index}`}>{monthNames[index]} {year}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="flex overflow-x-auto px-2 py-2">
+              {departmentPerformance.length > 0 ? departmentPerformance.map(department => <DepartmentGauge key={department.id} name={department.name} value={department.value} change={department.change} />) : <p className="w-full py-8 text-center text-sm text-muted-foreground">Nenhum departamento encontrado.</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-2 rounded-sm border bg-card p-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
                 <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Departamento" /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Departamento" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os departamentos</SelectItem>
                     {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
@@ -1139,7 +1203,7 @@ function CalendarMain() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={clientOpen}
-                      className="w-full justify-between font-normal"
+                      className="h-9 w-full justify-between rounded-sm text-xs font-normal"
                     >
                       <span className="truncate">
                         {filterClient === 'all' ? 'Todas as empresas' : formatClientLabel(clients.find(c => c.id === filterClient), 'Empresa')}
@@ -1177,7 +1241,7 @@ function CalendarMain() {
                 </Popover>
 
                 <Select value={filterObligation} onValueChange={v => { setFilterObligation(v); setSelectedDay(null); }}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Obrigação" /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Obrigação" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas as obrigações</SelectItem>
                     {obligations
@@ -1185,20 +1249,15 @@ function CalendarMain() {
                       .map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-
-                <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors">
-                  <span className="text-sm font-medium">Fora do prazo</span>
-                  <Switch
-                    checked={filterLateDeliveries}
-                    onCheckedChange={v => { setFilterLateDeliveries(v); setSelectedDay(null); }}
-                    aria-label="Mostrar apenas obrigações entregues fora do prazo"
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+                <Select value={`${year}-${month}`} onValueChange={value => { const [nextYear, nextMonth] = value.split('-').map(Number); setCurrentDate(new Date(nextYear, nextMonth, 1)); setSelectedDay(null); }}>
+                  <SelectTrigger className="h-9 w-full rounded-sm text-xs"><CalendarDays className="mr-2 h-3.5 w-3.5" /><SelectValue /></SelectTrigger>
+                  <SelectContent>{Array.from({ length: 12 }, (_, index) => <SelectItem key={index} value={`${year}-${index}`}>{monthNames[index]} {year}</SelectItem>)}</SelectContent>
+                </Select>
+                <Button variant="outline" className={`h-9 rounded-sm text-xs ${filterLateDeliveries ? 'border-calendar-orange text-calendar-orange' : ''}`} onClick={() => { setFilterLateDeliveries(value => !value); setSelectedDay(null); }}>
+                  <SlidersHorizontal className="h-3.5 w-3.5" />Filtros{activeFilters > 0 && <Badge variant="secondary" className="ml-1 rounded-sm px-1.5 py-0 text-[10px]">{activeFilters}</Badge>}
+                </Button>
+        </div>
+      </section>
 
       {/* Calendar + Day list side by side */}
       <div className="flex flex-col lg:flex-row gap-6">
