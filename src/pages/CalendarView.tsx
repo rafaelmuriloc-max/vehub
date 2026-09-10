@@ -1264,7 +1264,7 @@ function CalendarMain() {
               <div className="flex items-start gap-2 self-start">
                 <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
                 <div>
-                  <p className="font-calendarHeading text-lg font-bold text-calendar-navy">Desempenho geral da operação</p>
+                  <p className="font-calendarHeading text-2xl font-bold text-calendar-navy">Desempenho geral da operação</p>
                   <p className="text-[11px] text-muted-foreground">Visão consolidada de todos os departamentos</p>
                 </div>
               </div>
