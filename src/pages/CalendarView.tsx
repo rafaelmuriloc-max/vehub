@@ -1230,6 +1230,25 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
               <CheckSquare className="h-4 w-4" />
               <span>Tarefas</span>
             </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={exportCalendarReport}
+              className="h-8 w-8 rounded-sm"
+              aria-label="Exportar relatório"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            {isAdmin && (
+              <Button
+                size="icon"
+                onClick={() => navigate('/obligations')}
+                className="h-8 w-8 rounded-sm bg-calendar-orange hover:bg-calendar-orange/90 text-white"
+                aria-label="Nova obrigação"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Notificações">
@@ -1255,10 +1274,6 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
             <p className="text-xs font-medium capitalize text-muted-foreground">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</p>
             <h1 className="mt-0.5 font-calendarHeading text-2xl font-bold text-calendar-navy">Bom dia, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}!</h1>
             <p className="text-xs text-muted-foreground">Aqui está o panorama das suas obrigações e prazos.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportCalendarReport} className="h-9 gap-2 rounded-sm"><Download className="h-3.5 w-3.5" />Exportar</Button>
-            {isAdmin && <Button size="sm" onClick={() => navigate('/obligations')} className="h-9 gap-2 rounded-sm bg-calendar-orange hover:bg-calendar-orange/90"><Plus className="h-3.5 w-3.5" />Nova obrigação</Button>}
           </div>
         </div>
 
@@ -1287,6 +1302,25 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
             <CheckSquare className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Tarefas</span>
           </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={exportCalendarReport}
+            className="h-8 w-8 rounded-sm"
+            aria-label="Exportar relatório"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+          {isAdmin && (
+            <Button
+              size="icon"
+              onClick={() => navigate('/obligations')}
+              className="h-8 w-8 rounded-sm bg-calendar-orange hover:bg-calendar-orange/90 text-white"
+              aria-label="Nova obrigação"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-3">
