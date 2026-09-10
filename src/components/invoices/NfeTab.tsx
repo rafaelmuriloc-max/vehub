@@ -169,6 +169,7 @@ export default function NfeTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
+  const [filterRegime, setFilterRegime] = useState('all');
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('this_month');
   const [filterDateFrom, setFilterDateFrom] = useState(() => {
     const now = new Date();

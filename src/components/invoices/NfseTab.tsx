@@ -324,6 +324,7 @@ export default function NfseTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState("");
   const [filterClient, setFilterClient] = useState("all");
+  const [filterRegime, setFilterRegime] = useState("all");
   const [listTab, setListTab] = useState<"prestados" | "tomados">("prestados");
   const [datePeriod, setDatePeriod] = useState<
     "all" | "this_month" | "last_month" | "this_year" | "last_year" | "custom"
