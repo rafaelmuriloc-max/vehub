@@ -80,17 +80,28 @@ const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const ITEMS_PER_PAGE = 10;
 const DAY_ITEMS_PER_PAGE = 5;
 
-function GaugeArc({ value, gradientId, strokeWidth = 14 }: { value: number; gradientId: string; strokeWidth?: number }) {
+function GaugeArc({ value, gradientId, strokeWidth = 16, showValue = false, valueFontSize = 24 }: { value: number; gradientId: string; strokeWidth?: number; showValue?: boolean; valueFontSize?: number }) {
   const clamped = Math.max(0, Math.min(100, value));
-  const angle = clamped * 1.8 - 90;
-  const radius = 62;
+  const cx = 110;
+  const cy = 105;
+  const radius = 90;
   const innerRadius = radius - strokeWidth / 2;
-  const needleLen = innerRadius - 1;
-  const hubRadius = strokeWidth / 2.6;
-  const baseY = 78 - hubRadius;
-  const halfBase = hubRadius * 0.9;
+  const angleRad = Math.PI - (clamped * 1.8 * Math.PI) / 180;
+  const needleLen = innerRadius * 0.55;
+  const tipX = cx + needleLen * Math.cos(angleRad);
+  const tipY = cy - needleLen * Math.sin(angleRad);
+  const hubRadius = strokeWidth / 2.2;
+  const baseHalf = strokeWidth / 4;
+  const ux = Math.cos(angleRad);
+  const uy = -Math.sin(angleRad);
+  const px = -uy * baseHalf;
+  const py = ux * baseHalf;
+  const base1X = cx + px;
+  const base1Y = cy + py;
+  const base2X = cx - px;
+  const base2Y = cy - py;
   return (
-    <svg viewBox="0 0 160 100" className="h-full w-full" aria-hidden="true">
+    <svg viewBox="0 0 220 110" className="h-full w-full" aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#E23B2E" />
@@ -100,18 +111,21 @@ function GaugeArc({ value, gradientId, strokeWidth = 14 }: { value: number; grad
           <stop offset="100%" stopColor="#4CAF50" />
         </linearGradient>
       </defs>
-      <path d="M 18 78 A 62 62 0 0 1 142 78" fill="none" strokeWidth={strokeWidth} strokeLinecap="round" className="stroke-muted" />
-      <path d="M 18 78 A 62 62 0 0 1 142 78" fill="none" strokeWidth={strokeWidth} strokeLinecap="round" stroke={`url(#${gradientId})`} />
-      <g transform={`rotate(${angle} 80 78)`}>
-        <path
-          d={`M 80 ${78 - needleLen} L ${80 + halfBase} ${baseY} L ${80 - halfBase} ${baseY} Z`}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          strokeWidth={strokeWidth / 6}
-          className="fill-foreground stroke-foreground"
-        />
-      </g>
-      <circle cx="80" cy="78" r={hubRadius} className="fill-foreground" />
+      <path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} fill="none" strokeWidth={strokeWidth} strokeLinecap="round" className="stroke-muted" />
+      <path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} fill="none" strokeWidth={strokeWidth} strokeLinecap="round" stroke={`url(#${gradientId})`} />
+      <path
+        d={`M ${base1X} ${base1Y} L ${tipX} ${tipY} L ${base2X} ${base2Y} Z`}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        strokeWidth={strokeWidth / 8}
+        className="fill-foreground stroke-foreground"
+      />
+      <circle cx={cx} cy={cy} r={hubRadius} className="fill-foreground" />
+      {showValue && (
+        <text x={cx} y={cy - innerRadius * 0.35} textAnchor="middle" dominantBaseline="middle" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
+          {clamped}%
+        </text>
+      )}
     </svg>
   );
 }
@@ -121,11 +135,8 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <div className="flex min-w-[150px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
-      <div className="flex flex-col items-center">
-        <div className="relative h-[70px] w-[130px]" role="img" aria-label={`${name}: ${clamped}%`}>
-          <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={14} />
-        </div>
-        <span className="mt-1 text-center font-calendarHeading text-xl font-bold text-calendar-navy">{clamped}%</span>
+      <div className="relative h-[70px] w-[130px]" role="img" aria-label={`${name}: ${clamped}%`}>
+        <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={16} showValue valueFontSize={22} />
       </div>
       <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
       <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
@@ -139,10 +150,9 @@ function OfficeGauge({ value, change }: { value: number; change: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
     <div className="flex flex-col items-center">
-      <div className="relative h-[110px] w-[210px] md:h-[130px] md:w-[250px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
-        <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={15} />
+      <div className="relative h-[120px] w-[240px] md:h-[140px] md:w-[280px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
+        <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={20} showValue valueFontSize={34} />
       </div>
-      <span className="mt-1 text-center font-calendarHeading text-3xl md:text-4xl font-bold text-calendar-navy">{clamped}%</span>
       <p className={`mt-1.5 text-xs font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
