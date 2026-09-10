@@ -121,9 +121,9 @@ function GaugeArc({ value, gradientId, strokeWidth = 16, showValue = false, valu
         strokeWidth={strokeWidth / 8}
         className="fill-foreground stroke-foreground"
       />
-      <circle cx={cx} cy={cy} r={hubRadius} className="fill-foreground" />
+      <circle cx={cx} cy={pivotY} r={hubRadius} className="fill-foreground" />
       {showValue && (
-        <text x={cx} y={cy - innerRadius * 0.35} textAnchor="middle" dominantBaseline="middle" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="auto" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
           {clamped}%
         </text>
       )}
