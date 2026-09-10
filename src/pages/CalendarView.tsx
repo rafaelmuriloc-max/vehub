@@ -97,9 +97,15 @@ function GaugeArc({ value, gradientId, strokeWidth = 14 }: { value: number; grad
       <path d="M 18 78 A 62 62 0 0 1 142 78" fill="none" strokeWidth={strokeWidth} strokeLinecap="round" className="stroke-muted" />
       <path d="M 18 78 A 62 62 0 0 1 142 78" fill="none" strokeWidth={strokeWidth} strokeLinecap="round" stroke={`url(#${gradientId})`} />
       <g transform={`rotate(${angle} 80 78)`}>
-        <polygon points="80,30 84.5,76 75.5,76" className="fill-foreground" />
+        <path
+          d={`M 80 ${78 - 62 + strokeWidth * 1.05} L ${80 + strokeWidth / 2.4} 78 L ${80 - strokeWidth / 2.4} 78 Z`}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          strokeWidth={strokeWidth / 6}
+          className="fill-foreground stroke-foreground"
+        />
       </g>
-      <circle cx="80" cy="78" r={strokeWidth / 2.6} className="fill-foreground" />
+      <circle cx="80" cy="78" r={strokeWidth / 1.8} className="fill-foreground" />
     </svg>
   );
 }
