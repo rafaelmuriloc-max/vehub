@@ -154,22 +154,22 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const clamped = Math.max(0, Math.min(100, value));
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
-    <div className="flex min-w-[240px] flex-1 flex-col items-center rounded-md border border-border bg-card px-3 py-3">
-      <div className="relative h-[120px] w-[220px]" role="img" aria-label={`${name}: ${clamped}%`}>
+    <div className="flex min-w-[300px] flex-1 flex-col items-center rounded-md border border-border bg-card px-3 py-3">
+      <div className="relative h-[120px] w-[280px]" role="img" aria-label={`${name}: ${clamped}%`}>
         <GaugeArc
           value={clamped}
           gradientId={gradientId}
           strokeWidth={22}
           showValue
-          valueFontSize={32}
-          viewBoxWidth={260}
+          valueFontSize={34}
+          viewBoxWidth={300}
           viewBoxHeight={130}
-          cx={130}
+          cx={150}
           cy={125}
-          radius={105}
+          radius={115}
         />
       </div>
-      <p className="mt-0.5 max-w-[190px] truncate text-center font-calendarHeading text-sm font-bold text-calendar-navy">{name}</p>
+      <p className="mt-0.5 max-w-[250px] truncate text-center font-calendarHeading text-sm font-bold text-calendar-navy">{name}</p>
       <p className={`mt-3 text-[11px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
@@ -181,8 +181,8 @@ function OfficeGauge({ value, change }: { value: number; change: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
     <div className="flex flex-col items-center">
-      <div className="relative h-[120px] w-[240px] md:h-[140px] md:w-[280px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
-        <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={20} showValue valueFontSize={34} />
+      <div className="relative h-[120px] w-[320px] md:h-[140px] md:w-[380px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
+        <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={22} showValue valueFontSize={38} viewBoxWidth={300} viewBoxHeight={130} cx={150} cy={125} radius={115} />
       </div>
       <p className={`mt-1.5 text-xs font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
