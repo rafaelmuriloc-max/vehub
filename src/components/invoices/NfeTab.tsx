@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DANFe } from 'node-sped-pdf';
 import JSZip from 'jszip';
@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download, ArrowDownLeft, ArrowUpRight, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
-import { formatClientLabel } from '@/lib/utils';
+import { formatClientLabel, TAX_REGIME, normalizeTaxRegime } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
@@ -26,6 +26,7 @@ type Client = {
   document: string | null;
   digital_certificate_url: string | null;
   digital_certificate_expiry: string | null;
+  tax_regime: string | null;
 };
 
 type NfeInvoice = {
@@ -168,6 +169,7 @@ export default function NfeTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
   const [filterClient, setFilterClient] = useState('all');
+  const [filterRegime, setFilterRegime] = useState('all');
   const [datePeriod, setDatePeriod] = useState<'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('this_month');
   const [filterDateFrom, setFilterDateFrom] = useState(() => {
     const now = new Date();
@@ -208,7 +210,7 @@ export default function NfeTab() {
     queryFn: async () => {
       const { data } = await supabase
         .from('clients')
-        .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry')
+        .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry, tax_regime')
         .eq('status', 'active')
         .order('company_name');
       return (data || []) as Client[];
@@ -249,6 +251,15 @@ export default function NfeTab() {
   }, [invoicesData]);
 
   const loading = isFetching && invoices.length === 0;
+
+  const regimeOptions = useMemo(() => {
+    const regimes = new Set<string>();
+    clients.forEach((c) => {
+      const normalized = normalizeTaxRegime(c.tax_regime);
+      if (normalized) regimes.add(normalized);
+    });
+    return Array.from(regimes).sort();
+  }, [clients]);
 
   async function loadInvoices() {
     await queryClient.invalidateQueries({ queryKey: ['nfe-invoices'] });
@@ -561,6 +572,18 @@ export default function NfeTab() {
 
   let baseFiltered = invoices;
   if (filterClient !== 'all') baseFiltered = baseFiltered.filter(i => i.client_id === filterClient);
+  if (filterRegime !== 'all') {
+    const clientIds = new Set(
+      clients
+        .filter(c =>
+          filterRegime === 'none'
+            ? !c.tax_regime
+            : normalizeTaxRegime(c.tax_regime) === filterRegime,
+        )
+        .map(c => c.id),
+    );
+    baseFiltered = baseFiltered.filter(i => clientIds.has(i.client_id));
+  }
   if (filterDateFrom) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date >= filterDateFrom);
   if (filterDateTo) baseFiltered = baseFiltered.filter(i => i.issue_date && i.issue_date <= filterDateTo);
 
@@ -576,7 +599,7 @@ export default function NfeTab() {
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [filterClient, datePeriod, filterDateFrom, filterDateTo, directionTab]);
+  useEffect(() => { setPage(0); }, [filterClient, filterRegime, datePeriod, filterDateFrom, filterDateTo, directionTab]);
 
   return (
     <div className="space-y-6 pt-6">
@@ -653,6 +676,18 @@ export default function NfeTab() {
               <SelectItem value="all">Todos os clientes</SelectItem>
               {clients.map(c => (
                 <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterRegime} onValueChange={setFilterRegime}>
+            <SelectTrigger className="w-full md:w-[220px]">
+              <SelectValue placeholder="Regime tributário" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os regimes</SelectItem>
+              <SelectItem value="none">Não informado</SelectItem>
+              {regimeOptions.map(r => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
               ))}
             </SelectContent>
           </Select>

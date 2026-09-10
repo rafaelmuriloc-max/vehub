@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchInChunks } from "@/lib/fetchInChunks";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,7 +51,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatClientLabel } from "@/lib/utils";
+import { formatClientLabel, TAX_REGIME, normalizeTaxRegime } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 
@@ -62,6 +62,7 @@ type Client = {
   document: string | null;
   digital_certificate_url: string | null;
   digital_certificate_expiry: string | null;
+  tax_regime: string | null;
 };
 type ServiceTaker = { document: string; company_name: string };
 type Invoice = {
@@ -323,6 +324,7 @@ export default function NfseTab() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState("");
   const [filterClient, setFilterClient] = useState("all");
+  const [filterRegime, setFilterRegime] = useState("all");
   const [listTab, setListTab] = useState<"prestados" | "tomados">("prestados");
   const [datePeriod, setDatePeriod] = useState<
     "all" | "this_month" | "last_month" | "this_year" | "last_year" | "custom"
@@ -390,7 +392,7 @@ export default function NfseTab() {
       const { data } = await supabase
         .from("clients")
         .select(
-          "id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry",
+          "id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry, tax_regime",
         )
         .eq("status", "active")
         .order("company_name");
@@ -463,6 +465,15 @@ export default function NfseTab() {
   }, [invoicesData]);
 
   const loading = isFetching && invoices.length === 0;
+
+  const regimeOptions = useMemo(() => {
+    const regimes = new Set<string>();
+    clients.forEach((c) => {
+      const normalized = normalizeTaxRegime(c.tax_regime);
+      if (normalized) regimes.add(normalized);
+    });
+    return Array.from(regimes).sort();
+  }, [clients]);
 
   async function loadInvoices() {
     await queryClient.invalidateQueries({ queryKey: ["nfse-invoices"] });
@@ -806,6 +817,18 @@ export default function NfseTab() {
   let baseFiltered = invoices;
   if (filterClient !== "all")
     baseFiltered = baseFiltered.filter((i) => i.client_id === filterClient);
+  if (filterRegime !== "all") {
+    const clientIds = new Set(
+      clients
+        .filter((c) =>
+          filterRegime === "none"
+            ? !c.tax_regime
+            : normalizeTaxRegime(c.tax_regime) === filterRegime,
+        )
+        .map((c) => c.id),
+    );
+    baseFiltered = baseFiltered.filter((i) => clientIds.has(i.client_id));
+  }
   if (filterDateFrom)
     baseFiltered = baseFiltered.filter(
       (i) => i.issue_date && i.issue_date >= filterDateFrom,
@@ -992,6 +1015,20 @@ export default function NfseTab() {
               {clients.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {formatClientLabel(c)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterRegime} onValueChange={setFilterRegime}>
+            <SelectTrigger className="w-full md:w-[220px]">
+              <SelectValue placeholder="Regime tributário" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os regimes</SelectItem>
+              <SelectItem value="none">Não informado</SelectItem>
+              {regimeOptions.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
                 </SelectItem>
               ))}
             </SelectContent>
