@@ -1022,13 +1022,21 @@ function CalendarMain() {
       return total > 0 ? Math.round((completed / total) * 100) : 0;
     };
     const previousDate = new Date(year, month - 1, 1);
+    const departmentOrder = ['fiscal', 'contabil', 'pessoal', 'financeiro', 'sucesso'];
     const visibleDepartments = departments
       .filter(department => filterDept === 'all' || department.id === filterDept)
+      .filter(department => departmentOrder.some(term => department.name.toLocaleLowerCase('pt-BR').includes(term)))
+      .sort((a, b) => {
+        const aIndex = departmentOrder.findIndex(term => a.name.toLocaleLowerCase('pt-BR').includes(term));
+        const bIndex = departmentOrder.findIndex(term => b.name.toLocaleLowerCase('pt-BR').includes(term));
+        return aIndex - bIndex;
+      })
       .slice(0, 5);
     return visibleDepartments.map(department => {
       const value = calculateForDepartment(department.id, year, month);
       const previous = calculateForDepartment(department.id, previousDate.getFullYear(), previousDate.getMonth());
-      return { ...department, value, change: value - previous };
+      const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
+      return { ...department, name: displayName, value, change: value - previous };
     });
   }, [departments, filterDept, filterClient, filterObligation, filterLateDeliveries, instances, oblMap, completions, activities, year, month]);
 
