@@ -2124,6 +2124,8 @@ function CalendarMain() {
             )}
           </DialogHeader>
 
+          {detailInstance && <TimeTracker instanceId={detailInstance.id} compact={false} />}
+
           {detailInstance && (
             detailInstance.on_hold ? (
               <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-2">
