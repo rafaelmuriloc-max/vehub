@@ -599,7 +599,7 @@ export default function NfeTab() {
   const paginatedInvoices = filteredInvoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [filterClient, datePeriod, filterDateFrom, filterDateTo, directionTab]);
+  useEffect(() => { setPage(0); }, [filterClient, filterRegime, datePeriod, filterDateFrom, filterDateTo, directionTab]);
 
   return (
     <div className="space-y-6 pt-6">
