@@ -62,6 +62,7 @@ type Client = {
   document: string | null;
   digital_certificate_url: string | null;
   digital_certificate_expiry: string | null;
+  tax_regime: string | null;
 };
 type ServiceTaker = { document: string; company_name: string };
 type Invoice = {
