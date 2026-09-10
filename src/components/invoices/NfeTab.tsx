@@ -209,7 +209,7 @@ export default function NfeTab() {
     queryFn: async () => {
       const { data } = await supabase
         .from('clients')
-        .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry')
+        .select('id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry, tax_regime')
         .eq('status', 'active')
         .order('company_name');
       return (data || []) as Client[];

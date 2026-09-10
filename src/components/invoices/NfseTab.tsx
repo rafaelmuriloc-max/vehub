@@ -391,7 +391,7 @@ export default function NfseTab() {
       const { data } = await supabase
         .from("clients")
         .select(
-          "id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry",
+          "id, sci_code, company_name, document, digital_certificate_url, digital_certificate_expiry, tax_regime",
         )
         .eq("status", "active")
         .order("company_name");
