@@ -269,7 +269,7 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
   );
 }
 
-function CalendarMain() {
+function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' | 'tasks'; onViewChange: (v: 'calendar' | 'documents' | 'tasks') => void }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { profile, isAdmin } = useAuth();
