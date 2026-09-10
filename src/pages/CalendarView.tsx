@@ -1195,7 +1195,7 @@ function CalendarMain() {
           </div>
 
           <Card className="rounded-sm border-border shadow-none">
-            <CardContent className="flex h-full flex-col items-center justify-center gap-1 p-3">
+            <CardContent className="flex h-full min-h-[180px] flex-col items-center justify-center gap-2 p-4">
               <div className="flex items-center gap-1.5 self-start">
                 <BarChart3 className="h-4 w-4 text-calendar-orange" />
                 <p className="font-calendarHeading text-xs font-bold text-calendar-navy">Desempenho geral do escritório</p>
