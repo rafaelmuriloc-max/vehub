@@ -1163,23 +1163,6 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const activeFilters = [filterDept, filterClient, filterObligation].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 
-  function submitHeaderSearch() {
-    const term = headerSearch.trim().toLocaleLowerCase('pt-BR');
-    if (!term) return;
-    const client = clients.find(item => formatClientLabel(item).toLocaleLowerCase('pt-BR').includes(term));
-    if (client) {
-      setFilterClient(client.id);
-      setSelectedDay(null);
-      return;
-    }
-    const obligation = obligations.find(item => item.name.toLocaleLowerCase('pt-BR').includes(term));
-    if (obligation) {
-      setFilterObligation(obligation.id);
-      setSelectedDay(null);
-      return;
-    }
-    toast({ title: 'Nenhum resultado encontrado', description: 'Busque pelo nome da empresa ou obrigação.' });
-  }
 
   function exportCalendarReport() {
     const stats = dashboardStats.current;
