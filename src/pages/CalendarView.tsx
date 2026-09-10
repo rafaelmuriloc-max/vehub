@@ -87,19 +87,20 @@ function GaugeArc({ value, gradientId, strokeWidth = 16, showValue = false, valu
   const radius = 90;
   const innerRadius = radius - strokeWidth / 2;
   const angleRad = Math.PI - (clamped * 1.8 * Math.PI) / 180;
-  const needleLen = innerRadius * 0.55;
+  const pivotY = cy - valueFontSize * 1.05;
+  const needleLen = innerRadius * 0.45;
   const tipX = cx + needleLen * Math.cos(angleRad);
-  const tipY = cy - needleLen * Math.sin(angleRad);
-  const hubRadius = strokeWidth / 2.2;
-  const baseHalf = strokeWidth / 4;
+  const tipY = pivotY - needleLen * Math.sin(angleRad);
+  const hubRadius = strokeWidth / 2.4;
+  const baseHalf = strokeWidth / 4.5;
   const ux = Math.cos(angleRad);
   const uy = -Math.sin(angleRad);
   const px = -uy * baseHalf;
   const py = ux * baseHalf;
   const base1X = cx + px;
-  const base1Y = cy + py;
+  const base1Y = pivotY + py;
   const base2X = cx - px;
-  const base2Y = cy - py;
+  const base2Y = pivotY - py;
   return (
     <svg viewBox="0 0 220 110" className="h-full w-full" aria-hidden="true">
       <defs>
@@ -120,9 +121,9 @@ function GaugeArc({ value, gradientId, strokeWidth = 16, showValue = false, valu
         strokeWidth={strokeWidth / 8}
         className="fill-foreground stroke-foreground"
       />
-      <circle cx={cx} cy={cy} r={hubRadius} className="fill-foreground" />
+      <circle cx={cx} cy={pivotY} r={hubRadius} className="fill-foreground" />
       {showValue && (
-        <text x={cx} y={cy - innerRadius * 0.35} textAnchor="middle" dominantBaseline="middle" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="auto" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
           {clamped}%
         </text>
       )}
