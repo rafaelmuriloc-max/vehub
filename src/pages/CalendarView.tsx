@@ -1178,8 +1178,47 @@ function CalendarMain() {
 
         <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-2 xl:mt-4 xl:grid-cols-4">
+            {[
+              { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft', progressTone: '[&>div]:bg-calendar-blue' },
+              { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: `Crítico • ${dashboardStats.current.overdue} vencida${dashboardStats.current.overdue === 1 ? '' : 's'}`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.overdue / dashboardStats.current.total) * 100) : 0, icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft', progressTone: '[&>div]:bg-calendar-red' },
+              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `de ${dashboardStats.current.total} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft', progressTone: '[&>div]:bg-calendar-green' },
+              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted', progressTone: '[&>div]:bg-muted-foreground/50' },
+            ].map(item => (
+              <Card key={item.label} className={`rounded-sm border-border shadow-none ${item.surface}`}>
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-background ${item.tone}`}>
+                      <item.icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`truncate font-calendarHeading text-xs font-bold ${item.tone}`}>{item.label}</p>
+                      <p className="font-calendarHeading text-2xl font-bold leading-tight text-calendar-navy">{item.value}</p>
+                    </div>
+                  </div>
+                  <p className="mt-1 truncate text-[10px] text-muted-foreground">{item.detail}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm ${item.progressTone}`} />
+                    <span className={`w-8 text-right text-[10px] font-semibold ${item.tone}`}>{item.progress}%</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
+          <Card className="rounded-sm border-border shadow-none">
+            <CardContent className="flex h-full min-h-[230px] flex-col items-center justify-center gap-2 p-4">
+              <div className="flex items-start gap-2 self-start">
+                <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
+                <div>
+                  <p className="font-calendarHeading text-sm font-bold text-calendar-navy">Desempenho geral da operação</p>
+                  <p className="text-[11px] text-muted-foreground">Visão consolidada de todos os departamentos</p>
+                </div>
+              </div>
+              <OfficeGauge value={dashboardStats.current.performance} change={dashboardStats.change} />
+            </CardContent>
+          </Card>
         </div>
+
 
         <Card className="rounded-sm shadow-none">
           <CardContent className="p-0">
