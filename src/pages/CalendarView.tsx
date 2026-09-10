@@ -1265,6 +1265,33 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </div>
         </div>
 
+        <div className="flex justify-end gap-2">
+          <Button
+            variant={view === 'calendar' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewChange('calendar')}
+          >
+            <CalendarDays className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Calendário</span>
+          </Button>
+          <Button
+            variant={view === 'documents' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewChange('documents')}
+          >
+            <FileText className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Documentos</span>
+          </Button>
+          <Button
+            variant={view === 'tasks' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewChange('tasks')}
+          >
+            <CheckSquare className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Tarefas</span>
+          </Button>
+        </div>
+
         <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
             {[
