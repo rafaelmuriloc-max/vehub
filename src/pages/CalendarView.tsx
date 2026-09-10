@@ -80,22 +80,38 @@ const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const ITEMS_PER_PAGE = 10;
 const DAY_ITEMS_PER_PAGE = 5;
 
+function GaugeArc({ value, gradientId, strokeWidth = 14 }: { value: number; gradientId: string; strokeWidth?: number }) {
+  const clamped = Math.max(0, Math.min(100, value));
+  const angle = clamped * 1.8 - 90;
+  return (
+    <svg viewBox="0 0 160 94" className="h-full w-full" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#E23B2E" />
+          <stop offset="22%" stopColor="#F0722A" />
+          <stop offset="45%" stopColor="#F5C518" />
+          <stop offset="70%" stopColor="#B9D336" />
+          <stop offset="100%" stopColor="#4CAF50" />
+        </linearGradient>
+      </defs>
+      <path d="M 18 78 A 62 62 0 0 1 142 78" fill="none" strokeWidth={strokeWidth} strokeLinecap="round" className="stroke-muted" />
+      <path d="M 18 78 A 62 62 0 0 1 142 78" fill="none" strokeWidth={strokeWidth} strokeLinecap="round" stroke={`url(#${gradientId})`} />
+      <g transform={`rotate(${angle} 80 78)`}>
+        <polygon points="80,30 84.5,76 75.5,76" className="fill-foreground" />
+      </g>
+      <circle cx="80" cy="78" r={strokeWidth / 2.6} className="fill-foreground" />
+    </svg>
+  );
+}
+
 function DepartmentGauge({ name, value, change }: { name: string; value: number; change: number }) {
-  const angle = Math.max(0, Math.min(100, value)) * 1.8 - 90;
+  const clamped = Math.max(0, Math.min(100, value));
+  const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <div className="flex min-w-[150px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
-      <div className="relative h-[80px] w-[138px]" role="img" aria-label={`${name}: ${value}%`}>
-        <svg viewBox="0 0 160 94" className="h-full w-full" aria-hidden="true">
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" className="stroke-muted" />
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="30 70" className="stroke-calendar-red" />
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="butt" strokeDasharray="31 69" strokeDashoffset="-34" className="stroke-calendar-orange" />
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="32 68" strokeDashoffset="-68" className="stroke-calendar-green" />
-          <g transform={`rotate(${angle} 80 78)`}>
-            <path d="M 80 78 L 80 35" className="stroke-calendar-navy" strokeWidth="2.5" strokeLinecap="round" />
-          </g>
-          <circle cx="80" cy="78" r="4.5" className="fill-calendar-navy" />
-        </svg>
-        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-xl font-bold text-calendar-navy">{value}%</span>
+      <div className="relative h-[80px] w-[138px]" role="img" aria-label={`${name}: ${clamped}%`}>
+        <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={14} />
+        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-xl font-bold text-calendar-navy">{clamped}%</span>
       </div>
       <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
       <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
@@ -107,25 +123,18 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
 
 function OfficeGauge({ value, change }: { value: number; change: number }) {
   const clamped = Math.max(0, Math.min(100, value));
-  const angle = clamped * 1.8 - 90;
   return (
     <div className="flex flex-col items-center">
-      <div className="relative h-[90px] w-[170px] md:h-[110px] md:w-[190px]" role="img" aria-label={`Desempenho geral do escritório: ${clamped}%`}>
-        <svg viewBox="0 0 160 94" className="h-full w-full" aria-hidden="true">
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="16" strokeLinecap="round" className="stroke-muted" />
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="16" strokeLinecap="round" strokeDasharray={`${clamped} 100`} className="stroke-calendar-orange" />
-          <g transform={`rotate(${angle} 80 78)`}>
-            <path d="M 80 78 L 80 34" className="stroke-calendar-navy" strokeWidth="3" strokeLinecap="round" />
-          </g>
-          <circle cx="80" cy="78" r="5" className="fill-calendar-navy" />
-        </svg>
-        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-xl md:text-2xl font-bold text-calendar-navy">{clamped}%</span>
+      <div className="relative h-[130px] w-[210px] md:h-[150px] md:w-[250px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
+        <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={15} />
+        <span className="absolute inset-x-0 bottom-1 text-center font-calendarHeading text-3xl md:text-4xl font-bold text-calendar-navy">{clamped}%</span>
       </div>
-      <p className={`mt-1.5 text-[11px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
-        {change >= 0 ? '▲ +' : '▼ '}{change} p.p. <span className="font-normal text-muted-foreground">vs. mês anterior</span>
+      <p className={`mt-1.5 text-xs font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
+        {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
     </div>
   );
+
 }
 
 function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEMS_PER_PAGE }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void; perPage?: number }) {
@@ -1167,26 +1176,28 @@ function CalendarMain() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-2 xl:mt-4 xl:grid-cols-4">
             {[
-              { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft', bar: 'bg-calendar-blue', progressTone: '[&>div]:bg-calendar-blue' },
-              { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: `${dashboardStats.current.overdue} crítica${dashboardStats.current.overdue === 1 ? '' : 's'} • ${dashboardStats.current.overdue} vencida${dashboardStats.current.overdue === 1 ? '' : 's'}`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.overdue / dashboardStats.current.total) * 100) : 0, icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft', bar: 'bg-calendar-red', progressTone: '[&>div]:bg-calendar-red' },
-              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft', bar: 'bg-calendar-green', progressTone: '[&>div]:bg-calendar-green' },
-              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted', bar: 'bg-muted-foreground/50', progressTone: '[&>div]:bg-muted-foreground/50' },
+              { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft', progressTone: '[&>div]:bg-calendar-blue' },
+              { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: `Crítico • ${dashboardStats.current.overdue} vencida${dashboardStats.current.overdue === 1 ? '' : 's'}`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.overdue / dashboardStats.current.total) * 100) : 0, icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft', progressTone: '[&>div]:bg-calendar-red' },
+              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `de ${dashboardStats.current.total} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft', progressTone: '[&>div]:bg-calendar-green' },
+              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted', progressTone: '[&>div]:bg-muted-foreground/50' },
             ].map(item => (
               <Card key={item.label} className={`rounded-sm border-border shadow-none ${item.surface}`}>
                 <CardContent className="p-3">
-                  <div className="flex items-start gap-2.5">
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm ${item.bar} text-primary-foreground`}><item.icon className="h-4 w-4" /></div>
-                    <div className="min-w-0 flex-1">
-                      <p className={`truncate text-[11px] font-semibold ${item.tone}`}>{item.label}</p>
-                      <p className="font-calendarHeading text-xl font-bold leading-6 text-calendar-navy">{item.value}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{item.detail}</p>
+                  <div className="flex items-center gap-2">
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-background ${item.tone}`}>
+                      <item.icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`truncate font-calendarHeading text-xs font-bold ${item.tone}`}>{item.label}</p>
+                      <p className="font-calendarHeading text-2xl font-bold leading-tight text-calendar-navy">{item.value}</p>
                     </div>
                   </div>
+                  <p className="mt-1 truncate text-[10px] text-muted-foreground">{item.detail}</p>
                   <div className="mt-2 flex items-center gap-2">
-                    <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm bg-card/80 ${item.progressTone}`} />
+                    <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm ${item.progressTone}`} />
                     <span className={`w-8 text-right text-[10px] font-semibold ${item.tone}`}>{item.progress}%</span>
                   </div>
                 </CardContent>
@@ -1195,15 +1206,19 @@ function CalendarMain() {
           </div>
 
           <Card className="rounded-sm border-border shadow-none">
-            <CardContent className="flex h-full min-h-[180px] flex-col items-center justify-center gap-2 p-4">
-              <div className="flex items-center gap-1.5 self-start">
-                <BarChart3 className="h-4 w-4 text-calendar-orange" />
-                <p className="font-calendarHeading text-xs font-bold text-calendar-navy">Desempenho geral do escritório</p>
+            <CardContent className="flex h-full min-h-[230px] flex-col items-center justify-center gap-2 p-4">
+              <div className="flex items-start gap-2 self-start">
+                <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
+                <div>
+                  <p className="font-calendarHeading text-sm font-bold text-calendar-navy">Desempenho geral da operação</p>
+                  <p className="text-[11px] text-muted-foreground">Visão consolidada de todos os departamentos</p>
+                </div>
               </div>
               <OfficeGauge value={dashboardStats.current.performance} change={dashboardStats.change} />
             </CardContent>
           </Card>
         </div>
+
 
         <Card className="rounded-sm shadow-none">
           <CardContent className="p-0">
