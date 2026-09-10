@@ -938,6 +938,7 @@ function CalendarMain() {
         if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
         if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+        if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
 
         const isQuarterly = obl.recurrence === 'trimestral';
         const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
@@ -974,7 +975,7 @@ function CalendarMain() {
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [instances, completions, activities, oblMap, filterDept, filterClient, filterObligation, year, month]);
+  }, [instances, completions, activities, oblMap, filterDept, filterClient, filterObligation, filterLateDeliveries, year, month]);
 
   function exportCalendarReport() {
     const stats = dashboardStats.current;
