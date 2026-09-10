@@ -83,8 +83,14 @@ const DAY_ITEMS_PER_PAGE = 5;
 function GaugeArc({ value, gradientId, strokeWidth = 14 }: { value: number; gradientId: string; strokeWidth?: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   const angle = clamped * 1.8 - 90;
+  const radius = 62;
+  const innerRadius = radius - strokeWidth / 2;
+  const needleLen = innerRadius - 1;
+  const hubRadius = strokeWidth / 2.6;
+  const baseY = 78 - hubRadius;
+  const halfBase = hubRadius * 0.9;
   return (
-    <svg viewBox="0 0 160 94" className="h-full w-full" aria-hidden="true">
+    <svg viewBox="0 0 160 100" className="h-full w-full" aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#E23B2E" />
@@ -98,14 +104,14 @@ function GaugeArc({ value, gradientId, strokeWidth = 14 }: { value: number; grad
       <path d="M 18 78 A 62 62 0 0 1 142 78" fill="none" strokeWidth={strokeWidth} strokeLinecap="round" stroke={`url(#${gradientId})`} />
       <g transform={`rotate(${angle} 80 78)`}>
         <path
-          d={`M 80 ${78 - 62 + strokeWidth * 1.05} L ${80 + strokeWidth / 2.4} 78 L ${80 - strokeWidth / 2.4} 78 Z`}
+          d={`M 80 ${78 - needleLen} L ${80 + halfBase} ${baseY} L ${80 - halfBase} ${baseY} Z`}
           strokeLinejoin="round"
           strokeLinecap="round"
           strokeWidth={strokeWidth / 6}
           className="fill-foreground stroke-foreground"
         />
       </g>
-      <circle cx="80" cy="78" r={strokeWidth / 1.8} className="fill-foreground" />
+      <circle cx="80" cy="78" r={hubRadius} className="fill-foreground" />
     </svg>
   );
 }
@@ -115,9 +121,11 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <div className="flex min-w-[150px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
-      <div className="relative h-[80px] w-[138px]" role="img" aria-label={`${name}: ${clamped}%`}>
-        <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={14} />
-        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-xl font-bold text-calendar-navy">{clamped}%</span>
+      <div className="flex flex-col items-center">
+        <div className="relative h-[70px] w-[130px]" role="img" aria-label={`${name}: ${clamped}%`}>
+          <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={14} />
+        </div>
+        <span className="mt-1 text-center font-calendarHeading text-xl font-bold text-calendar-navy">{clamped}%</span>
       </div>
       <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
       <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
@@ -131,16 +139,15 @@ function OfficeGauge({ value, change }: { value: number; change: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
     <div className="flex flex-col items-center">
-      <div className="relative h-[130px] w-[210px] md:h-[150px] md:w-[250px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
+      <div className="relative h-[110px] w-[210px] md:h-[130px] md:w-[250px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
         <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={15} />
-        <span className="absolute inset-x-0 bottom-1 text-center font-calendarHeading text-3xl md:text-4xl font-bold text-calendar-navy">{clamped}%</span>
       </div>
+      <span className="mt-1 text-center font-calendarHeading text-3xl md:text-4xl font-bold text-calendar-navy">{clamped}%</span>
       <p className={`mt-1.5 text-xs font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
     </div>
   );
-
 }
 
 function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEMS_PER_PAGE }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void; perPage?: number }) {
