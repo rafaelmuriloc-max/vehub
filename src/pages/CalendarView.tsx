@@ -135,9 +135,9 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const clamped = Math.max(0, Math.min(100, value));
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
-    <div className="flex min-w-[150px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
-      <div className="relative h-[70px] w-[130px]" role="img" aria-label={`${name}: ${clamped}%`}>
-        <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={16} showValue valueFontSize={22} />
+    <div className="flex min-w-[200px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
+      <div className="relative h-[95px] w-[180px]" role="img" aria-label={`${name}: ${clamped}%`}>
+        <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={18} showValue valueFontSize={28} />
       </div>
       <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
       <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
