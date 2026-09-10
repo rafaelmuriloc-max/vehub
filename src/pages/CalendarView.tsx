@@ -1290,15 +1290,16 @@ function CalendarMain() {
 
           </div>
 
-          <Card className="flex h-full min-h-[130px] flex-col rounded-sm border-border shadow-none">
-            <CardContent className="flex h-full flex-col items-center justify-center gap-1 p-4">
-              <div className="flex items-start gap-2 self-start">
-                <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
+          <Card className="flex h-full flex-col rounded-md border-border bg-card shadow-sm">
+            <CardContent className="flex h-full flex-col items-center gap-1 px-5 py-4">
+              <div className="flex items-start gap-2.5 self-start">
+                <BarChart3 className="mt-1 h-6 w-6 text-calendar-orange" />
                 <div>
                   <p className="font-calendarHeading text-2xl font-bold text-calendar-navy">Desempenho geral da operação</p>
-                  <p className="text-[11px] text-muted-foreground">Visão consolidada de todos os departamentos</p>
+                  <p className="text-xs text-muted-foreground">Visão consolidada de todos os departamentos</p>
                 </div>
               </div>
+
               <OfficeGauge value={dashboardStats.current.performance} change={dashboardStats.change} />
             </CardContent>
           </Card>
