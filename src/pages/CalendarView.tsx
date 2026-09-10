@@ -1014,86 +1014,87 @@ function CalendarMain() {
   return (
     <div className="space-y-6">
       {/* Operational dashboard header */}
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.7fr)]">
-        <div className="min-w-0 space-y-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-sm font-medium capitalize text-muted-foreground">
-                {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date())}
-              </p>
-              <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">
-                Olá, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">Acompanhe o desempenho das obrigações deste mês.</p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <Button variant="outline" onClick={exportCalendarReport} className="gap-2">
-                <Download className="h-4 w-4" />
-                Exportar
-              </Button>
-              {isAdmin && (
-                <Button onClick={() => navigate('/obligations')} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Nova obrigação
-                </Button>
-              )}
-            </div>
+      <section className="space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium capitalize text-muted-foreground">
+              {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date())}
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">
+              Olá, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}
+            </h1>
           </div>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="outline" onClick={exportCalendarReport} className="gap-2 rounded-sm">
+              <Download className="h-4 w-4" />
+              Exportar
+            </Button>
+            {isAdmin && (
+              <Button onClick={() => navigate('/obligations')} className="gap-2 rounded-sm">
+                <Plus className="h-4 w-4" />
+                Nova obrigação
+              </Button>
+            )}
+          </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(340px,0.75fr)]">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', icon: ListChecks, tone: 'text-primary', surface: 'bg-primary/10' },
               { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: dashboardStats.current.overdue > 0 ? 'Requer atenção' : 'Tudo em dia', icon: AlertTriangle, tone: 'text-destructive', surface: 'bg-destructive/10' },
-              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} dentro do prazo`, icon: CheckSquare, tone: 'text-green-700 dark:text-green-400', surface: 'bg-green-500/10' },
-              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Concluídas com atraso', icon: Clock, tone: 'text-orange-700 dark:text-orange-400', surface: 'bg-orange-500/10' },
+              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} dentro do prazo`, icon: CheckSquare, tone: 'text-secondary dark:text-secondary-foreground', surface: 'bg-secondary/10' },
+              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Concluídas com atraso', icon: Clock, tone: 'text-primary', surface: 'bg-primary/10' },
             ].map(item => (
-              <Card key={item.label} className="rounded-sm shadow-none">
-                <CardContent className="flex min-h-[112px] items-center gap-3 p-4">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-sm ${item.surface} ${item.tone}`}>
-                    <item.icon className="h-5 w-5" />
+              <Card key={item.label} className="h-full rounded-sm shadow-none">
+                <CardContent className="flex min-h-[154px] flex-col justify-between p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-semibold text-muted-foreground">{item.label}</p>
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm ${item.surface} ${item.tone}`}>
+                      <item.icon className="h-4 w-4" />
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-muted-foreground">{item.label}</p>
-                    <p className="text-2xl font-bold tabular-nums text-foreground">{item.value}</p>
-                    <p className={`truncate text-[11px] font-medium ${item.tone}`}>{item.detail}</p>
+                  <div>
+                    <p className="text-3xl font-bold tabular-nums text-foreground">{item.value}</p>
+                    <p className={`mt-1 text-xs font-medium ${item.tone}`}>{item.detail}</p>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        </div>
 
-        <Card className="rounded-sm shadow-none">
-          <CardHeader className="pb-0">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Desempenho geral da operação</CardTitle>
-                <CardDescription className="mt-1">Obrigações concluídas no mês</CardDescription>
+          <Card className="h-full rounded-sm shadow-none">
+            <CardContent className="flex min-h-[154px] h-full items-center justify-between gap-5 p-5">
+              <div className="self-stretch flex min-w-0 flex-col justify-between py-0.5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 shrink-0 text-primary" />
+                    <h2 className="text-sm font-semibold text-foreground">Desempenho geral da operação</h2>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Obrigações concluídas no mês</p>
+                </div>
+                <p className={`text-xs font-semibold ${dashboardStats.change >= 0 ? 'text-secondary dark:text-secondary-foreground' : 'text-destructive'}`}>
+                  {dashboardStats.change >= 0 ? '+' : ''}{dashboardStats.change} p.p. vs. mês anterior
+                </p>
               </div>
-              <TrendingUp className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center pb-4 pt-2">
-            <div className="relative h-[105px] w-[210px]" role="img" aria-label={`Desempenho geral de ${dashboardStats.current.performance}%`}>
-              <svg viewBox="0 0 180 105" className="h-full w-full" aria-hidden="true">
-                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="round" className="stroke-muted" />
-                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="butt" strokeDasharray="31 69" className="stroke-destructive" />
-                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="butt" strokeDasharray="31 69" strokeDashoffset="-34" className="stroke-orange-500" />
-                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="round" strokeDasharray="32 68" strokeDashoffset="-68" className="stroke-green-600" />
-                <g transform={`rotate(${dashboardStats.current.performance * 1.8 - 90} 90 88)`}>
-                  <path d="M 90 88 L 90 33" className="stroke-foreground" strokeWidth="3" strokeLinecap="round" />
-                </g>
-                <circle cx="90" cy="88" r="6" className="fill-foreground" />
-              </svg>
-              <div className="absolute inset-x-0 bottom-0 text-center">
-                <span className="text-2xl font-bold tabular-nums text-foreground">{dashboardStats.current.performance}%</span>
+              <div className="relative h-[120px] w-[190px] shrink-0" role="img" aria-label={`Desempenho geral de ${dashboardStats.current.performance}%`}>
+                <svg viewBox="0 0 190 120" className="h-full w-full" aria-hidden="true">
+                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" className="stroke-muted" />
+                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="30 70" className="stroke-destructive" />
+                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="butt" strokeDasharray="31 69" strokeDashoffset="-34" className="stroke-primary" />
+                  <path d="M 20 96 A 75 75 0 0 1 170 96" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="32 68" strokeDashoffset="-68" className="stroke-secondary" />
+                  <g transform={`rotate(${dashboardStats.current.performance * 1.8 - 90} 95 96)`}>
+                    <path d="M 95 96 L 95 42" className="stroke-foreground" strokeWidth="2.5" strokeLinecap="round" />
+                  </g>
+                  <circle cx="95" cy="96" r="5" className="fill-foreground" />
+                </svg>
+                <div className="absolute inset-x-0 bottom-0 text-center">
+                  <span className="text-2xl font-bold tabular-nums text-foreground">{dashboardStats.current.performance}%</span>
+                </div>
               </div>
-            </div>
-            <p className={`mt-1 text-xs font-semibold ${dashboardStats.change >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
-              {dashboardStats.change >= 0 ? '+' : ''}{dashboardStats.change} p.p. em relação ao mês anterior
-            </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       {/* Filters */}
