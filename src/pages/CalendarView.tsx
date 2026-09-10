@@ -110,18 +110,18 @@ function OfficeGauge({ value, change }: { value: number; change: number }) {
   const angle = clamped * 1.8 - 90;
   return (
     <div className="flex flex-col items-center">
-      <div className="relative h-[74px] w-[132px]" role="img" aria-label={`Desempenho geral do escritório: ${clamped}%`}>
+      <div className="relative h-[90px] w-[170px] md:h-[110px] md:w-[190px]" role="img" aria-label={`Desempenho geral do escritório: ${clamped}%`}>
         <svg viewBox="0 0 160 94" className="h-full w-full" aria-hidden="true">
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" className="stroke-muted" />
-          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray={`${clamped} 100`} className="stroke-calendar-orange" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="16" strokeLinecap="round" className="stroke-muted" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="16" strokeLinecap="round" strokeDasharray={`${clamped} 100`} className="stroke-calendar-orange" />
           <g transform={`rotate(${angle} 80 78)`}>
-            <path d="M 80 78 L 80 38" className="stroke-calendar-navy" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M 80 78 L 80 34" className="stroke-calendar-navy" strokeWidth="3" strokeLinecap="round" />
           </g>
-          <circle cx="80" cy="78" r="4.5" className="fill-calendar-navy" />
+          <circle cx="80" cy="78" r="5" className="fill-calendar-navy" />
         </svg>
-        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-lg font-bold text-calendar-navy">{clamped}%</span>
+        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-xl md:text-2xl font-bold text-calendar-navy">{clamped}%</span>
       </div>
-      <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
+      <p className={`mt-1.5 text-[11px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change} p.p. <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
     </div>
