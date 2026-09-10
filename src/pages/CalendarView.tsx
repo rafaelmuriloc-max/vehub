@@ -1279,7 +1279,7 @@ function CalendarMain() {
             <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex gap-2.5">
                 <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
-                <div><h2 className="font-calendarHeading text-base font-bold text-calendar-navy">Desempenho geral dos departamentos</h2><p className="text-[11px] text-muted-foreground">Acompanhe o desempenho de cada departamento no cumprimento das obrigações.</p></div>
+                <div><h2 className="font-calendarHeading text-xl font-bold text-calendar-navy">Desempenho geral dos departamentos</h2><p className="text-[11px] text-muted-foreground">Acompanhe o desempenho de cada departamento no cumprimento das obrigações.</p></div>
               </div>
               <Select value={`${year}-${month}`} onValueChange={value => { const [nextYear, nextMonth] = value.split('-').map(Number); setCurrentDate(new Date(nextYear, nextMonth, 1)); setSelectedDay(null); }}>
                 <SelectTrigger className="h-8 w-[160px] rounded-sm text-xs"><CalendarDays className="mr-2 h-3.5 w-3.5" /><SelectValue /></SelectTrigger>
