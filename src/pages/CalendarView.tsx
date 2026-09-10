@@ -181,7 +181,7 @@ function OfficeGauge({ value, change }: { value: number; change: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
     <div className="flex flex-col items-center">
-      <div className="relative h-[120px] w-[320px] md:h-[140px] md:w-[380px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
+      <div className="relative h-[100px] w-[280px] md:h-[120px] md:w-[340px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
         <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={22} showValue valueFontSize={38} viewBoxWidth={300} viewBoxHeight={130} cx={150} cy={125} radius={115} />
       </div>
       <p className={`mt-1.5 text-xs font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
@@ -1260,8 +1260,8 @@ function CalendarMain() {
 
           </div>
 
-          <Card className="flex h-full min-h-[160px] flex-col rounded-sm border-border shadow-none">
-            <CardContent className="flex h-full flex-col items-center justify-center gap-2 p-4">
+          <Card className="flex h-full min-h-[130px] flex-col rounded-sm border-border shadow-none">
+            <CardContent className="flex h-full flex-col items-center justify-center gap-1 p-4">
               <div className="flex items-start gap-2 self-start">
                 <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
                 <div>
