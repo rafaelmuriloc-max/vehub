@@ -1078,7 +1078,7 @@ function CalendarMain() {
       return total > 0 ? Math.round((completed / total) * 100) : 0;
     };
     const previousDate = new Date(year, month - 1, 1);
-    const departmentOrder = ['fiscal', 'contabil', 'pessoal', 'financeiro', 'sucesso'];
+    const departmentOrder = ['fiscal', 'contabil', 'pessoal'];
     const visibleDepartments = departments
       .filter(department => filterDept === 'all' || department.id === filterDept)
       .filter(department => departmentOrder.some(term => department.name.toLocaleLowerCase('pt-BR').includes(term)))
