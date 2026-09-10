@@ -80,11 +80,30 @@ const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const ITEMS_PER_PAGE = 10;
 const DAY_ITEMS_PER_PAGE = 5;
 
-function GaugeArc({ value, gradientId, strokeWidth = 16, showValue = false, valueFontSize = 24 }: { value: number; gradientId: string; strokeWidth?: number; showValue?: boolean; valueFontSize?: number }) {
+function GaugeArc({
+  value,
+  gradientId,
+  strokeWidth = 16,
+  showValue = false,
+  valueFontSize = 24,
+  viewBoxWidth = 220,
+  viewBoxHeight = 110,
+  cx = 110,
+  cy = 105,
+  radius = 90,
+}: {
+  value: number;
+  gradientId: string;
+  strokeWidth?: number;
+  showValue?: boolean;
+  valueFontSize?: number;
+  viewBoxWidth?: number;
+  viewBoxHeight?: number;
+  cx?: number;
+  cy?: number;
+  radius?: number;
+}) {
   const clamped = Math.max(0, Math.min(100, value));
-  const cx = 110;
-  const cy = 105;
-  const radius = 90;
   const innerRadius = radius - strokeWidth / 2;
   const angleRad = Math.PI - (clamped * 1.8 * Math.PI) / 180;
   const pivotY = cy - valueFontSize * 1.05;
@@ -102,7 +121,7 @@ function GaugeArc({ value, gradientId, strokeWidth = 16, showValue = false, valu
   const base2X = cx - px;
   const base2Y = pivotY - py;
   return (
-    <svg viewBox="0 0 220 110" className="h-full w-full" aria-hidden="true">
+    <svg viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`} className="h-full w-full" aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#E23B2E" />
@@ -135,11 +154,22 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const clamped = Math.max(0, Math.min(100, value));
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
-    <div className="flex min-w-[200px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
-      <div className="relative h-[95px] w-[180px]" role="img" aria-label={`${name}: ${clamped}%`}>
-        <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={18} showValue valueFontSize={28} />
+    <div className="flex min-w-[240px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
+      <div className="relative h-[120px] w-[220px]" role="img" aria-label={`${name}: ${clamped}%`}>
+        <GaugeArc
+          value={clamped}
+          gradientId={gradientId}
+          strokeWidth={22}
+          showValue
+          valueFontSize={32}
+          viewBoxWidth={260}
+          viewBoxHeight={130}
+          cx={130}
+          cy={125}
+          radius={105}
+        />
       </div>
-      <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
+      <p className="mt-1 max-w-[180px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
       <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
@@ -1256,7 +1286,7 @@ function CalendarMain() {
                 <SelectContent>{Array.from({ length: 12 }, (_, index) => <SelectItem key={index} value={`${year}-${index}`}>{monthNames[index]} {year}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="flex overflow-x-auto px-2 py-2">
+            <div className="flex overflow-x-auto px-2 py-2 gap-1">
               {departmentPerformance.length > 0 ? departmentPerformance.map(department => <DepartmentGauge key={department.id} name={department.name} value={department.value} change={department.change} />) : <p className="w-full py-8 text-center text-sm text-muted-foreground">Nenhum departamento encontrado.</p>}
             </div>
           </CardContent>
