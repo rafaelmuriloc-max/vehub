@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -243,8 +243,8 @@ export function ClientCostReport() {
                 const margin = r.fee != null && r.fee > 0 ? (result! / r.fee) * 100 : null;
                 const isOpen = !!expanded[r.clientId];
                 return (
-                  <>
-                    <TableRow key={r.clientId} className="cursor-pointer" onClick={() => setExpanded(prev => ({ ...prev, [r.clientId]: !prev[r.clientId] }))}>
+                  <Fragment key={r.clientId}>
+                    <TableRow className="cursor-pointer" onClick={() => setExpanded(prev => ({ ...prev, [r.clientId]: !prev[r.clientId] }))}>
                       <TableCell>{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</TableCell>
                       <TableCell className="font-medium">
                         {r.label}
@@ -267,7 +267,7 @@ export function ClientCostReport() {
                       </TableCell>
                     </TableRow>
                     {isOpen && (
-                      <TableRow key={`${r.clientId}-detail`}>
+                      <TableRow>
                         <TableCell colSpan={9} className="bg-muted/40 p-0">
                           <div className="px-8 py-3">
                             <Table>
@@ -294,7 +294,7 @@ export function ClientCostReport() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
               {rows.length === 0 && (
