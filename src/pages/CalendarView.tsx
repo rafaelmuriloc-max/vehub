@@ -1200,7 +1200,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   return (
     <div className="space-y-5 font-calendarBody">
-      <section className="space-y-3">
+      <section className="space-y-2">
         <div className="hidden h-11 items-center justify-between border-b border-border pb-2 lg:flex">
           <div className="flex items-center gap-2">
             <Button
@@ -1269,7 +1269,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-medium capitalize text-muted-foreground">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</p>
             <h1 className="mt-0.5 font-calendarHeading text-2xl font-bold text-calendar-navy">Bom dia, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}!</h1>
@@ -1323,7 +1323,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           )}
         </div>
 
-        <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-3">
+        <div className="mt-1 grid grid-cols-1 items-center gap-3 xl:grid-cols-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
             {[
               { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft border-calendar-blue/20', iconBg: 'bg-calendar-blue', progressTone: '[&>div]:bg-calendar-blue', showPercent: true },
