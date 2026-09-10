@@ -1259,7 +1259,7 @@ function CalendarMain() {
             ))}
           </div>
 
-          <Card className="flex h-full min-h-[230px] flex-col rounded-sm border-border shadow-none">
+          <Card className="flex h-full min-h-[190px] flex-col rounded-sm border-border shadow-none">
             <CardContent className="flex h-full flex-col items-center justify-center gap-2 p-4">
               <div className="flex items-start gap-2 self-start">
                 <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
