@@ -51,7 +51,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatClientLabel } from "@/lib/utils";
+import { formatClientLabel, TAX_REGIME, normalizeTaxRegime } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 

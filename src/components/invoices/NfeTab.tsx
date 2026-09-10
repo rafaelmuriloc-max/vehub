@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, Search, RefreshCw, FileCode, FileText, Loader2, ChevronLeft, ChevronRight, Download, ArrowDownLeft, ArrowUpRight, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
-import { formatClientLabel } from '@/lib/utils';
+import { formatClientLabel, TAX_REGIME, normalizeTaxRegime } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
