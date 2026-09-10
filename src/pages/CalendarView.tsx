@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle, Plus, TrendingUp } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
@@ -25,6 +26,8 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName, formatClientLabel } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 import { TimeTracker } from '@/components/time-tracking/TimeTracker';
+import { useAuth } from '@/hooks/useAuth';
+import jsPDF from 'jspdf';
 
 const tabListClass =
   "w-full justify-start gap-1 sm:gap-4 bg-transparent p-0 h-auto border-b border-border rounded-none overflow-x-auto flex-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
@@ -121,6 +124,8 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
 
 function CalendarMain() {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { profile, isAdmin } = useAuth();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [deletedInstances, setDeletedInstances] = useState<Instance[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
@@ -204,7 +209,8 @@ function CalendarMain() {
   const loadData = useCallback(async () => {
     const y = currentDate.getFullYear();
     const m = currentDate.getMonth();
-    const monthStart = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    const previousMonthDate = new Date(y, m - 1, 1);
+    const monthStart = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
     const nextMonth = m + 1 > 11 ? 0 : m + 1;
     const nextYear = m + 1 > 11 ? y + 1 : y;
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
@@ -905,21 +911,201 @@ function CalendarMain() {
     ? getInstanceProgress(detailInstance.id, detailInstance.obligation_id)
     : { completed: 0, total: 0, percent: 0 };
 
+  const dashboardStats = useMemo(() => {
+    const calculate = (targetYear: number, targetMonth: number) => {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const monthPrefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+      const hols = getHolidays(targetYear);
+      let todo = 0;
+      let afterAlert = 0;
+      let afterTarget = 0;
+      let overdue = 0;
+      let doneOnTime = 0;
+      let doneLate = 0;
+      let dueToday = 0;
+
+      const makeDate = (day: number | null, refMonth: string) => {
+        if (!day) return null;
+        const rd = new Date(refMonth + 'T00:00:00');
+        const raw = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        return previousBusinessDay(raw, hols);
+      };
+
+      for (const inst of instances) {
+        if (!inst.reference_month.startsWith(monthPrefix) && !inst.due_date?.startsWith(monthPrefix)) continue;
+        const obl = oblMap.get(inst.obligation_id);
+        if (!obl) continue;
+        if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
+        if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
+        if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
+        if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
+
+        const isQuarterly = obl.recurrence === 'trimestral';
+        const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
+        const targetDate = isQuarterly ? null : makeDate(obl.target_day, inst.reference_month);
+        const dueDate = inst.due_date ?? makeDate(obl.due_day, inst.reference_month);
+        const completed = isInstanceCompleted(inst.id, inst.obligation_id);
+
+        if (completed) {
+          if (isInstanceLateDelivery(inst.id, inst.obligation_id)) doneLate++;
+          else doneOnTime++;
+        } else if (dueDate && todayStr > dueDate) overdue++;
+        else if (dueDate && todayStr === dueDate) dueToday++;
+        else if (targetDate && todayStr >= targetDate) afterTarget++;
+        else if (alertDate && todayStr >= alertDate) afterAlert++;
+        else todo++;
+      }
+
+      const completed = doneOnTime + doneLate;
+      const toDo = todo + afterAlert + afterTarget + dueToday;
+      const total = toDo + overdue + completed;
+      return {
+        toDo,
+        overdue,
+        completed,
+        doneOnTime,
+        doneLate,
+        dueToday,
+        total,
+        performance: total > 0 ? Math.round((completed / total) * 100) : 0,
+      };
+    };
+
+    const current = calculate(year, month);
+    const previousDate = new Date(year, month - 1, 1);
+    const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
+    return { current, previous, change: current.performance - previous.performance };
+  }, [instances, completions, activities, oblMap, filterDept, filterClient, filterObligation, filterLateDeliveries, year, month]);
+
+  function exportCalendarReport() {
+    const stats = dashboardStats.current;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Relatório de obrigações', 14, 18);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Período: ${monthNames[month]} de ${year}`, 14, 26);
+    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 32);
+    doc.setDrawColor(220);
+    doc.line(14, 38, 283, 38);
+    const items = [
+      ['A fazer', stats.toDo],
+      ['Atrasadas', stats.overdue],
+      ['Concluídas', stats.completed],
+      ['Fora do prazo', stats.doneLate],
+      ['Desempenho geral', `${stats.performance}%`],
+    ];
+    items.forEach(([label, value], index) => {
+      const x = 14 + index * 53.5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(String(label), x, 50);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(22);
+      doc.text(String(value), x, 62);
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Os totais respeitam os filtros selecionados na tela.', 14, 78);
+    doc.save(`Obrigacoes_${year}-${String(month + 1).padStart(2, '0')}.pdf`);
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header + Filters unified */}
+      {/* Operational dashboard header */}
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.7fr)]">
+        <div className="min-w-0 space-y-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-medium capitalize text-muted-foreground">
+                {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date())}
+              </p>
+              <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">
+                Olá, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">Acompanhe o desempenho das obrigações deste mês.</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="outline" onClick={exportCalendarReport} className="gap-2">
+                <Download className="h-4 w-4" />
+                Exportar
+              </Button>
+              {isAdmin && (
+                <Button onClick={() => navigate('/obligations')} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Nova obrigação
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', icon: ListChecks, tone: 'text-primary', surface: 'bg-primary/10' },
+              { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: dashboardStats.current.overdue > 0 ? 'Requer atenção' : 'Tudo em dia', icon: AlertTriangle, tone: 'text-destructive', surface: 'bg-destructive/10' },
+              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `${dashboardStats.current.doneOnTime} dentro do prazo`, icon: CheckSquare, tone: 'text-green-700 dark:text-green-400', surface: 'bg-green-500/10' },
+              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Concluídas com atraso', icon: Clock, tone: 'text-orange-700 dark:text-orange-400', surface: 'bg-orange-500/10' },
+            ].map(item => (
+              <Card key={item.label} className="rounded-sm shadow-none">
+                <CardContent className="flex min-h-[112px] items-center gap-3 p-4">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-sm ${item.surface} ${item.tone}`}>
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-muted-foreground">{item.label}</p>
+                    <p className="text-2xl font-bold tabular-nums text-foreground">{item.value}</p>
+                    <p className={`truncate text-[11px] font-medium ${item.tone}`}>{item.detail}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        <Card className="rounded-sm shadow-none">
+          <CardHeader className="pb-0">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Desempenho geral da operação</CardTitle>
+                <CardDescription className="mt-1">Obrigações concluídas no mês</CardDescription>
+              </div>
+              <TrendingUp className="h-5 w-5 text-primary" />
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center pb-4 pt-2">
+            <div className="relative h-[105px] w-[210px]" role="img" aria-label={`Desempenho geral de ${dashboardStats.current.performance}%`}>
+              <svg viewBox="0 0 180 105" className="h-full w-full" aria-hidden="true">
+                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="round" className="stroke-muted" />
+                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="butt" strokeDasharray="31 69" className="stroke-destructive" />
+                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="butt" strokeDasharray="31 69" strokeDashoffset="-34" className="stroke-orange-500" />
+                <path d="M 18 88 A 72 72 0 0 1 162 88" pathLength="100" fill="none" strokeWidth="15" strokeLinecap="round" strokeDasharray="32 68" strokeDashoffset="-68" className="stroke-green-600" />
+                <g transform={`rotate(${dashboardStats.current.performance * 1.8 - 90} 90 88)`}>
+                  <path d="M 90 88 L 90 33" className="stroke-foreground" strokeWidth="3" strokeLinecap="round" />
+                </g>
+                <circle cx="90" cy="88" r="6" className="fill-foreground" />
+              </svg>
+              <div className="absolute inset-x-0 bottom-0 text-center">
+                <span className="text-2xl font-bold tabular-nums text-foreground">{dashboardStats.current.performance}%</span>
+              </div>
+            </div>
+            <p className={`mt-1 text-xs font-semibold ${dashboardStats.change >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
+              {dashboardStats.change >= 0 ? '+' : ''}{dashboardStats.change} p.p. em relação ao mês anterior
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Filters */}
       {(() => {
         const activeFilters = [filterDept, filterClient, filterObligation].filter(v => v !== 'all').length + (filterLateDeliveries ? 1 : 0);
         return (
-          <div className="bg-card rounded-xl border p-6 space-y-5">
+          <div className="bg-card rounded-sm border p-4 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5">
-                  <CalendarDays className="h-6 w-6 text-primary" />
-                </div>
                 <div>
-              <h1 className="text-xl md:text-2xl font-bold text-foreground">Calendário</h1>
-                  <p className="hidden md:block text-sm text-muted-foreground">Acompanhe prazos e obrigações dos seus clientes</p>
+                  <h2 className="text-sm font-semibold text-foreground">Filtros do calendário</h2>
+                  <p className="hidden text-xs text-muted-foreground md:block">Refine os indicadores, datas e listas abaixo</p>
                 </div>
               </div>
               {activeFilters > 0 && (
@@ -936,7 +1122,7 @@ function CalendarMain() {
               )}
             </div>
 
-            <div className="border-t pt-5">
+            <div className="border-t pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Departamento" /></SelectTrigger>
@@ -1009,106 +1195,6 @@ function CalendarMain() {
                 </label>
               </div>
             </div>
-          </div>
-        );
-      })()}
-
-      {/* Metric Cards */}
-      {(() => {
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const y = currentDate.getFullYear();
-        const m = currentDate.getMonth();
-        const hols = getHolidays(y);
-
-        const makeDate = (day: number | null, refMonth: string) => {
-          if (!day) return null;
-          const rd = new Date(refMonth + 'T00:00:00');
-          const raw = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          return previousBusinessDay(raw, hols);
-        };
-
-        let todo = 0, afterAlert = 0, afterTarget = 0, overdue = 0, doneOnTime = 0, doneLate = 0, dueToday = 0;
-
-        // Filter instances for current month view
-        const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
-        const monthInstances = instances.filter(inst =>
-          inst.reference_month.startsWith(monthPrefix) ||
-          (inst.due_date ? inst.due_date.startsWith(monthPrefix) : false)
-        );
-
-        for (const inst of monthInstances) {
-          const obl = oblMap.get(inst.obligation_id);
-          if (!obl) continue;
-          if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
-          if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
-          if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
-
-          const isQuarterly = obl.recurrence === 'trimestral';
-          const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
-          const targetDate = isQuarterly ? null : makeDate(obl.target_day, inst.reference_month);
-          const dueDate = inst.due_date ?? makeDate(obl.due_day, inst.reference_month);
-
-          const completed = isInstanceCompleted(inst.id, inst.obligation_id);
-
-          if (completed) {
-            if (isInstanceLateDelivery(inst.id, inst.obligation_id)) {
-              doneLate++;
-            } else {
-              doneOnTime++;
-            }
-          } else {
-            if (dueDate && todayStr > dueDate) {
-              overdue++;
-            } else if (dueDate && todayStr === dueDate) {
-              dueToday++;
-            } else if (targetDate && todayStr >= targetDate) {
-              afterTarget++;
-            } else if (alertDate && todayStr >= alertDate) {
-              afterAlert++;
-            } else {
-              todo++;
-            }
-          }
-        }
-
-        const doneTotal = doneOnTime + doneLate;
-        const toDoTotal = todo + afterAlert + afterTarget + dueToday;
-        const grandTotal = toDoTotal + overdue + doneTotal;
-        const pct = (v: number) => grandTotal > 0 ? Math.round((v / grandTotal) * 100) : 0;
-        const cards = [
-          { label: 'A Fazer', value: toDoTotal, icon: ListChecks, sub: toDoTotal === 0 ? 'Nenhuma pendência' : (dueToday > 0 ? `${dueToday} vencem hoje` : 'Aguardando conclusão'), pct: pct(toDoTotal),
-            bg: 'bg-blue-50/60 dark:bg-blue-950/20', border: 'border-blue-100 dark:border-blue-900/40',
-            iconBg: 'bg-blue-600', labelText: 'text-blue-700 dark:text-blue-300', valueText: 'text-blue-900 dark:text-blue-100',
-            subText: 'text-blue-600/70 dark:text-blue-300/60', track: 'bg-blue-200/50 dark:bg-blue-900/40', bar: 'bg-blue-600' },
-          { label: 'Atrasadas', value: overdue, icon: AlertTriangle, sub: overdue === 0 ? (dueToday > 0 ? `${dueToday} vencem hoje` : 'Tudo em dia') : (dueToday > 0 ? `Crítico • ${dueToday} vencem hoje` : 'Crítico'), pct: pct(overdue),
-            bg: 'bg-red-50/60 dark:bg-red-950/20', border: 'border-red-100 dark:border-red-900/40',
-            iconBg: 'bg-red-600', labelText: 'text-red-700 dark:text-red-300', valueText: 'text-red-900 dark:text-red-100',
-            subText: 'text-red-600/70 dark:text-red-300/60', track: 'bg-red-200/50 dark:bg-red-900/40', bar: 'bg-red-600' },
-          { label: 'Concluídas', value: doneTotal, icon: CheckSquare, sub: `${doneOnTime} no prazo • ${doneLate} fora`, pct: pct(doneTotal),
-            bg: 'bg-emerald-50/60 dark:bg-emerald-950/20', border: 'border-emerald-100 dark:border-emerald-900/40',
-            iconBg: 'bg-emerald-600', labelText: 'text-emerald-700 dark:text-emerald-300', valueText: 'text-emerald-900 dark:text-emerald-100',
-            subText: 'text-emerald-600/70 dark:text-emerald-300/60', track: 'bg-emerald-200/50 dark:bg-emerald-900/40', bar: 'bg-emerald-600' },
-        ];
-
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {cards.map(c => (
-              <div key={c.label} className={`relative rounded-2xl border p-5 flex flex-col transition-all hover:shadow-lg hover:-translate-y-0.5 ${c.bg} ${c.border}`}>
-                <div className="flex items-start gap-3 mb-3">
-                  <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center text-white shadow-md ${c.iconBg}`}>
-                    <c.icon className="h-6 w-6" />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className={`font-semibold text-xs sm:text-sm tracking-wide ${c.labelText}`}>{c.label}</span>
-                    <span className={`text-2xl sm:text-3xl font-bold leading-tight ${c.valueText}`}>{c.value}</span>
-                  </div>
-                </div>
-                <p className={`text-[11px] font-medium mb-3 mt-auto truncate ${c.subText}`}>{c.sub}</p>
-                <div className={`w-full h-1.5 rounded-full overflow-hidden ${c.track}`}>
-                  <div className={`${c.bar} h-full rounded-full transition-all`} style={{ width: `${c.pct}%` }} />
-                </div>
-              </div>
-            ))}
           </div>
         );
       })()}
