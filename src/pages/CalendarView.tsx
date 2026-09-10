@@ -91,6 +91,10 @@ function GaugeArc({
   cx = 110,
   cy = 105,
   radius = 90,
+  change,
+  changeFontSize = 13,
+  pivotOffset,
+  needleScale = 0.5,
 }: {
   value: number;
   gradientId: string;
@@ -102,12 +106,19 @@ function GaugeArc({
   cx?: number;
   cy?: number;
   radius?: number;
+  change?: number;
+  changeFontSize?: number;
+  pivotOffset?: number;
+  needleScale?: number;
 }) {
   const clamped = Math.max(0, Math.min(100, value));
   const innerRadius = radius - strokeWidth / 2;
   const angleRad = Math.PI - (clamped * 1.8 * Math.PI) / 180;
-  const pivotY = cy - valueFontSize * 1.05;
-  const needleLen = innerRadius * 0.5;
+  const hasChange = typeof change === 'number';
+  const changeGap = hasChange ? changeFontSize * 1.5 : 0;
+  const valueBaseline = cy - changeGap;
+  const pivotY = valueBaseline - (pivotOffset ?? valueFontSize * 1.05);
+  const needleLen = innerRadius * needleScale;
   const tipX = cx + needleLen * Math.cos(angleRad);
   const tipY = pivotY - needleLen * Math.sin(angleRad);
   const hubRadius = strokeWidth / 2.8;
@@ -142,8 +153,16 @@ function GaugeArc({
       />
       <circle cx={cx} cy={pivotY} r={hubRadius} className="fill-foreground" />
       {showValue && (
-        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="auto" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
+        <text x={cx} y={valueBaseline} textAnchor="middle" dominantBaseline="auto" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
           {clamped}%
+        </text>
+      )}
+      {hasChange && (
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="auto" style={{ fontSize: changeFontSize }} className="font-semibold">
+          <tspan className={change >= 0 ? 'fill-calendar-green' : 'fill-calendar-red'}>
+            {change >= 0 ? `▲ +${change}%` : `▼ ${change}%`}
+          </tspan>
+          <tspan className="fill-muted-foreground font-normal" dx="6">vs. mês anterior</tspan>
         </text>
       )}
     </svg>
@@ -180,16 +199,27 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
 function OfficeGauge({ value, change }: { value: number; change: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative h-[100px] w-[280px] md:h-[120px] md:w-[340px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
-        <GaugeArc value={clamped} gradientId="gauge-office" strokeWidth={22} showValue valueFontSize={38} viewBoxWidth={300} viewBoxHeight={130} cx={150} cy={125} radius={115} />
-      </div>
-      <p className={`mt-1.5 text-xs font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
-        {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
-      </p>
+    <div className="relative h-[130px] w-[300px] md:h-[150px] md:w-[360px]" role="img" aria-label={`Desempenho geral da operação: ${clamped}%`}>
+      <GaugeArc
+        value={clamped}
+        gradientId="gauge-office"
+        strokeWidth={28}
+        showValue
+        valueFontSize={46}
+        changeFontSize={15}
+        change={change}
+        viewBoxWidth={340}
+        viewBoxHeight={165}
+        cx={170}
+        cy={158}
+        radius={140}
+        pivotOffset={54}
+        needleScale={0.42}
+      />
     </div>
   );
 }
+
 
 function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEMS_PER_PAGE }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void; perPage?: number }) {
   if (totalPages <= 1) return null;
@@ -1260,15 +1290,16 @@ function CalendarMain() {
 
           </div>
 
-          <Card className="flex h-full min-h-[130px] flex-col rounded-sm border-border shadow-none">
-            <CardContent className="flex h-full flex-col items-center justify-center gap-1 p-4">
-              <div className="flex items-start gap-2 self-start">
-                <BarChart3 className="mt-0.5 h-5 w-5 text-calendar-orange" />
+          <Card className="flex h-full flex-col rounded-md border-border bg-card shadow-sm">
+            <CardContent className="flex h-full flex-col items-center gap-1 px-5 py-4">
+              <div className="flex items-start gap-2.5 self-start">
+                <BarChart3 className="mt-1 h-6 w-6 text-calendar-orange" />
                 <div>
                   <p className="font-calendarHeading text-2xl font-bold text-calendar-navy">Desempenho geral da operação</p>
-                  <p className="text-[11px] text-muted-foreground">Visão consolidada de todos os departamentos</p>
+                  <p className="text-xs text-muted-foreground">Visão consolidada de todos os departamentos</p>
                 </div>
               </div>
+
               <OfficeGauge value={dashboardStats.current.performance} change={dashboardStats.change} />
             </CardContent>
           </Card>
