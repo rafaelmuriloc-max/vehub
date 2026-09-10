@@ -1245,14 +1245,14 @@ function CalendarMain() {
                       <item.icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className={`truncate font-calendarHeading text-xs font-bold ${item.tone}`}>{item.label}</p>
+                      <p className={`truncate font-calendarHeading text-sm font-bold ${item.tone}`}>{item.label}</p>
                       <p className="font-calendarHeading text-2xl font-bold leading-tight text-calendar-navy">{item.value}</p>
                     </div>
                   </div>
-                  <p className="mt-1 truncate text-[10px] text-muted-foreground">{item.detail}</p>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{item.detail}</p>
                   <div className="mt-2 flex items-center gap-2">
                     <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm ${item.progressTone}`} />
-                    <span className={`w-8 text-right text-[10px] font-semibold ${item.tone}`}>{item.progress}%</span>
+                    <span className={`w-8 text-right text-xs font-semibold ${item.tone}`}>{item.progress}%</span>
                   </div>
                 </CardContent>
               </Card>
