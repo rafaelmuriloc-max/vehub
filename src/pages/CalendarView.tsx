@@ -1176,7 +1176,7 @@ function CalendarMain() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-3">
+        <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
             {[
               { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft', progressTone: '[&>div]:bg-calendar-blue' },
@@ -1184,7 +1184,7 @@ function CalendarMain() {
               { label: 'Concluídas', value: dashboardStats.current.completed, detail: `de ${dashboardStats.current.total} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft', progressTone: '[&>div]:bg-calendar-green' },
               { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted', progressTone: '[&>div]:bg-muted-foreground/50' },
             ].map(item => (
-              <Card key={item.label} className={`flex h-full flex-col justify-center rounded-sm border-border shadow-none ${item.surface}`}>
+              <Card key={item.label} className={`rounded-sm border-border shadow-none ${item.surface}`}>
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-background ${item.tone}`}>
