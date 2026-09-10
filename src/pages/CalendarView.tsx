@@ -12,10 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle, Plus, BarChart3, Search, Bell, CircleHelp, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle, Plus, BarChart3, Bell, CircleHelp, SlidersHorizontal } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
@@ -316,7 +316,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const [dayOverduePage, setDayOverduePage] = useState(1);
   const [monthOverduePage, setMonthOverduePage] = useState(1);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
-  const [headerSearch, setHeaderSearch] = useState('');
+  
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {
@@ -1163,23 +1163,6 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const activeFilters = [filterDept, filterClient, filterObligation].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 
-  function submitHeaderSearch() {
-    const term = headerSearch.trim().toLocaleLowerCase('pt-BR');
-    if (!term) return;
-    const client = clients.find(item => formatClientLabel(item).toLocaleLowerCase('pt-BR').includes(term));
-    if (client) {
-      setFilterClient(client.id);
-      setSelectedDay(null);
-      return;
-    }
-    const obligation = obligations.find(item => item.name.toLocaleLowerCase('pt-BR').includes(term));
-    if (obligation) {
-      setFilterObligation(obligation.id);
-      setSelectedDay(null);
-      return;
-    }
-    toast({ title: 'Nenhum resultado encontrado', description: 'Busque pelo nome da empresa ou obrigação.' });
-  }
 
   function exportCalendarReport() {
     const stats = dashboardStats.current;
@@ -1219,20 +1202,34 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     <div className="space-y-5 font-calendarBody">
       <section className="space-y-3">
         <div className="hidden h-11 items-center justify-between border-b border-border pb-2 lg:flex">
-          <div className="relative w-[430px]">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={headerSearch}
-              onChange={event => setHeaderSearch(event.target.value)}
-              onKeyDown={event => { if (event.key === 'Enter') submitHeaderSearch(); }}
-              placeholder="Buscar cliente, CNPJ ou obrigação..."
-              className="h-8 rounded-sm bg-card pl-9 pr-9 text-xs"
-            />
-            {headerSearch && (
-              <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-8 w-8" onClick={() => setHeaderSearch('')} aria-label="Limpar busca">
-                <X className="h-3 w-3" />
-              </Button>
-            )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={view === 'calendar' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewChange('calendar')}
+              className="h-8 gap-2 rounded-sm"
+            >
+              <CalendarDays className="h-4 w-4" />
+              <span>Calendário</span>
+            </Button>
+            <Button
+              variant={view === 'documents' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewChange('documents')}
+              className="h-8 gap-2 rounded-sm"
+            >
+              <FileText className="h-4 w-4" />
+              <span>Documentos</span>
+            </Button>
+            <Button
+              variant={view === 'tasks' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewChange('tasks')}
+              className="h-8 gap-2 rounded-sm"
+            >
+              <CheckSquare className="h-4 w-4" />
+              <span>Tarefas</span>
+            </Button>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Notificações">
@@ -1265,7 +1262,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 lg:hidden">
           <Button
             variant={view === 'calendar' ? 'default' : 'outline'}
             size="sm"
