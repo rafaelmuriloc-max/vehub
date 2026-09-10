@@ -1155,7 +1155,7 @@ function CalendarMain() {
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-sm bg-card/80"><div className={`h-full rounded-sm ${item.bar}`} style={{ width: `${item.progress}%` }} /></div>
+                  <Progress value={item.progress} className={`h-1.5 flex-1 rounded-sm bg-card/80 [&>div]:${item.bar}`} />
                   <span className={`w-8 text-right text-[10px] font-semibold ${item.tone}`}>{item.progress}%</span>
                 </div>
               </CardContent>
