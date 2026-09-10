@@ -1275,10 +1275,6 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
             <h1 className="mt-0.5 font-calendarHeading text-2xl font-bold text-calendar-navy">Bom dia, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}!</h1>
             <p className="text-xs text-muted-foreground">Aqui está o panorama das suas obrigações e prazos.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportCalendarReport} className="h-9 gap-2 rounded-sm"><Download className="h-3.5 w-3.5" />Exportar</Button>
-            {isAdmin && <Button size="sm" onClick={() => navigate('/obligations')} className="h-9 gap-2 rounded-sm bg-calendar-orange hover:bg-calendar-orange/90"><Plus className="h-3.5 w-3.5" />Nova obrigação</Button>}
-          </div>
         </div>
 
         <div className="flex justify-end gap-2 lg:hidden">
