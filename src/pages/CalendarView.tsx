@@ -1262,7 +1262,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 lg:hidden">
           <Button
             variant={view === 'calendar' ? 'default' : 'outline'}
             size="sm"
