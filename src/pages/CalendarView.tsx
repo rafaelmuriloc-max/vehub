@@ -13,8 +13,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from '@/components/ui/pagination';
-import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle, Plus, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, CheckSquare, MessageCircle, Mail, Upload, Download, CalendarDays, Building2, ListChecks, Filter, Clock, Trash2, Check, ChevronsUpDown, X, AlertTriangle, Undo2, FileX, Loader2, PauseCircle, PlayCircle, Plus, BarChart3, Search, Bell, CircleHelp, SlidersHorizontal } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
@@ -78,6 +80,31 @@ const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const ITEMS_PER_PAGE = 10;
 const DAY_ITEMS_PER_PAGE = 5;
+
+function DepartmentGauge({ name, value, change }: { name: string; value: number; change: number }) {
+  const angle = Math.max(0, Math.min(100, value)) * 1.8 - 90;
+  return (
+    <div className="flex min-w-[150px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
+      <div className="relative h-[80px] w-[138px]" role="img" aria-label={`${name}: ${value}%`}>
+        <svg viewBox="0 0 160 94" className="h-full w-full" aria-hidden="true">
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" className="stroke-muted" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="30 70" className="stroke-calendar-red" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="butt" strokeDasharray="31 69" strokeDashoffset="-34" className="stroke-calendar-orange" />
+          <path d="M 18 78 A 62 62 0 0 1 142 78" pathLength="100" fill="none" strokeWidth="14" strokeLinecap="round" strokeDasharray="32 68" strokeDashoffset="-68" className="stroke-calendar-green" />
+          <g transform={`rotate(${angle} 80 78)`}>
+            <path d="M 80 78 L 80 35" className="stroke-calendar-navy" strokeWidth="2.5" strokeLinecap="round" />
+          </g>
+          <circle cx="80" cy="78" r="4.5" className="fill-calendar-navy" />
+        </svg>
+        <span className="absolute inset-x-0 bottom-0 text-center font-calendarHeading text-xl font-bold text-calendar-navy">{value}%</span>
+      </div>
+      <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
+      <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
+        {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
+      </p>
+    </div>
+  );
+}
 
 function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEMS_PER_PAGE }: { page: number; totalPages: number; total: number; onPageChange: (p: number) => void; perPage?: number }) {
   if (totalPages <= 1) return null;
@@ -169,6 +196,7 @@ function CalendarMain() {
   const [dayOverduePage, setDayOverduePage] = useState(1);
   const [monthOverduePage, setMonthOverduePage] = useState(1);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
+  const [headerSearch, setHeaderSearch] = useState('');
 
   const toggleSelection = (id: string) => {
     setSelectedInstanceIds(prev => {

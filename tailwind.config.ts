@@ -47,6 +47,17 @@ export default {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
   			},
+			calendar: {
+				blue: 'hsl(var(--calendar-blue))',
+				'blue-soft': 'hsl(var(--calendar-blue-soft))',
+				green: 'hsl(var(--calendar-green))',
+				'green-soft': 'hsl(var(--calendar-green-soft))',
+				orange: 'hsl(var(--calendar-orange))',
+				'orange-soft': 'hsl(var(--calendar-orange-soft))',
+				red: 'hsl(var(--calendar-red))',
+				'red-soft': 'hsl(var(--calendar-red-soft))',
+				navy: 'hsl(var(--calendar-navy))',
+			},
   			sidebar: {
   				DEFAULT: 'hsl(var(--sidebar-background))',
   				foreground: 'hsl(var(--sidebar-foreground))',
@@ -86,6 +97,8 @@ export default {
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
   		fontFamily: {
+			calendarHeading: ['Outfit', 'ui-sans-serif', 'system-ui'],
+			calendarBody: ['Figtree', 'ui-sans-serif', 'system-ui'],
   			sans: [
   				'Inter',
   				'ui-sans-serif',
