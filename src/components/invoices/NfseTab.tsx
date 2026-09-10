@@ -808,6 +808,18 @@ export default function NfseTab() {
   let baseFiltered = invoices;
   if (filterClient !== "all")
     baseFiltered = baseFiltered.filter((i) => i.client_id === filterClient);
+  if (filterRegime !== "all") {
+    const clientIds = new Set(
+      clients
+        .filter((c) =>
+          filterRegime === "none"
+            ? !c.tax_regime
+            : normalizeTaxRegime(c.tax_regime) === filterRegime,
+        )
+        .map((c) => c.id),
+    );
+    baseFiltered = baseFiltered.filter((i) => clientIds.has(i.client_id));
+  }
   if (filterDateFrom)
     baseFiltered = baseFiltered.filter(
       (i) => i.issue_date && i.issue_date >= filterDateFrom,
