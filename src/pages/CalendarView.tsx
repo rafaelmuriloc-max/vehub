@@ -269,7 +269,7 @@ function PaginationBlock({ page, totalPages, total, onPageChange, perPage = ITEM
   );
 }
 
-function CalendarMain() {
+function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' | 'tasks'; onViewChange: (v: 'calendar' | 'documents' | 'tasks') => void }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { profile, isAdmin } = useAuth();
@@ -1263,6 +1263,33 @@ function CalendarMain() {
             <Button variant="outline" size="sm" onClick={exportCalendarReport} className="h-9 gap-2 rounded-sm"><Download className="h-3.5 w-3.5" />Exportar</Button>
             {isAdmin && <Button size="sm" onClick={() => navigate('/obligations')} className="h-9 gap-2 rounded-sm bg-calendar-orange hover:bg-calendar-orange/90"><Plus className="h-3.5 w-3.5" />Nova obrigação</Button>}
           </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant={view === 'calendar' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewChange('calendar')}
+          >
+            <CalendarDays className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Calendário</span>
+          </Button>
+          <Button
+            variant={view === 'documents' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewChange('documents')}
+          >
+            <FileText className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Documentos</span>
+          </Button>
+          <Button
+            variant={view === 'tasks' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewChange('tasks')}
+          >
+            <CheckSquare className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Tarefas</span>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-3">
@@ -2734,43 +2761,14 @@ function CalendarMain() {
   );
 }
 
-import { useState as _useState } from 'react';
 import Documents from './Documents';
 import Tasks from './Tasks';
-import { FileText as _FileTextIcon, CheckSquare as _CheckSquareIcon, CalendarDays as _CalendarDaysIcon } from 'lucide-react';
-import { Button as _ToggleButton } from '@/components/ui/button';
 
 export default function CalendarView() {
-  const [view, setView] = _useState<'calendar' | 'documents' | 'tasks'>('calendar');
+  const [view, setView] = useState<'calendar' | 'documents' | 'tasks'>('calendar');
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        <_ToggleButton
-          variant={view === 'calendar' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setView('calendar')}
-        >
-          <_CalendarDaysIcon className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Calendário</span>
-        </_ToggleButton>
-        <_ToggleButton
-          variant={view === 'documents' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setView('documents')}
-        >
-          <_FileTextIcon className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Documentos</span>
-        </_ToggleButton>
-        <_ToggleButton
-          variant={view === 'tasks' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setView('tasks')}
-        >
-          <_CheckSquareIcon className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Tarefas</span>
-        </_ToggleButton>
-      </div>
-      {view === 'calendar' && <CalendarMain />}
+      {view === 'calendar' && <CalendarMain view={view} onViewChange={setView} />}
       {view === 'documents' && <Documents />}
       {view === 'tasks' && <Tasks />}
     </div>
