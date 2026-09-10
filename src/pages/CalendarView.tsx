@@ -24,6 +24,7 @@ import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
 import { sanitizeStorageName, formatClientLabel } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
+import { TimeTracker } from '@/components/time-tracking/TimeTracker';
 
 const tabListClass =
   "w-full justify-start gap-1 sm:gap-4 bg-transparent p-0 h-auto border-b border-border rounded-none overflow-x-auto flex-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";

@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "update") {
-      const { user_id, full_name, job_title, department_id, department_ids, role, tag_color } = body;
+      const { user_id, full_name, job_title, department_id, department_ids, role, tag_color, hourly_rate } = body;
       if (!user_id) {
         return new Response(JSON.stringify({ error: "user_id is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -97,6 +97,10 @@ Deno.serve(async (req) => {
       if (full_name !== undefined) profileUpdate.full_name = full_name || null;
       if (job_title !== undefined) profileUpdate.job_title = job_title || null;
       if (tag_color !== undefined) profileUpdate.tag_color = tag_color || null;
+      if (hourly_rate !== undefined) {
+        const rate = typeof hourly_rate === "number" && Number.isFinite(hourly_rate) && hourly_rate >= 0 ? hourly_rate : null;
+        profileUpdate.hourly_rate = rate;
+      }
 
       let deptList: string[] | null = null;
       if (Array.isArray(department_ids)) {
