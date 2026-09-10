@@ -154,11 +154,22 @@ function DepartmentGauge({ name, value, change }: { name: string; value: number;
   const clamped = Math.max(0, Math.min(100, value));
   const gradientId = `gauge-dep-${name.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
-    <div className="flex min-w-[200px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
-      <div className="relative h-[95px] w-[180px]" role="img" aria-label={`${name}: ${clamped}%`}>
-        <GaugeArc value={clamped} gradientId={gradientId} strokeWidth={18} showValue valueFontSize={28} />
+    <div className="flex min-w-[240px] flex-1 flex-col items-center border-border px-3 py-2 lg:border-l first:border-l-0">
+      <div className="relative h-[120px] w-[220px]" role="img" aria-label={`${name}: ${clamped}%`}>
+        <GaugeArc
+          value={clamped}
+          gradientId={gradientId}
+          strokeWidth={22}
+          showValue
+          valueFontSize={32}
+          viewBoxWidth={260}
+          viewBoxHeight={130}
+          cx={130}
+          cy={125}
+          radius={105}
+        />
       </div>
-      <p className="mt-1 max-w-[145px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
+      <p className="mt-1 max-w-[180px] truncate text-center font-calendarHeading text-sm font-semibold text-calendar-navy">{name}</p>
       <p className={`mt-1 text-[10px] font-semibold ${change >= 0 ? 'text-calendar-green' : 'text-calendar-red'}`}>
         {change >= 0 ? '▲ +' : '▼ '}{change}% <span className="font-normal text-muted-foreground">vs. mês anterior</span>
       </p>
