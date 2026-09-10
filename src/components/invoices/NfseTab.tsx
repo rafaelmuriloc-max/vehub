@@ -466,6 +466,15 @@ export default function NfseTab() {
 
   const loading = isFetching && invoices.length === 0;
 
+  const regimeOptions = useMemo(() => {
+    const regimes = new Set<string>();
+    clients.forEach((c) => {
+      const normalized = normalizeTaxRegime(c.tax_regime);
+      if (normalized) regimes.add(normalized);
+    });
+    return Array.from(regimes).sort();
+  }, [clients]);
+
   async function loadInvoices() {
     await queryClient.invalidateQueries({ queryKey: ["nfse-invoices"] });
   }
