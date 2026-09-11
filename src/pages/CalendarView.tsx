@@ -1412,7 +1412,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 gap-2 rounded-sm border bg-card p-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+        <div className="grid grid-cols-1 gap-2 rounded-sm border bg-card p-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
                 <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
                   <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Departamento" /></SelectTrigger>
                   <SelectContent>
@@ -1463,6 +1463,15 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
                     </Command>
                   </PopoverContent>
                 </Popover>
+
+                <Select value={filterRegime} onValueChange={v => { setFilterRegime(v); setSelectedDay(null); }}>
+                  <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Regime tributário" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os regimes</SelectItem>
+                    {regimeOptions.hasNone && <SelectItem value="none">Não informado</SelectItem>}
+                    {regimeOptions.list.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
 
                 <Select value={filterObligation} onValueChange={v => { setFilterObligation(v); setSelectedDay(null); }}>
                   <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Obrigação" /></SelectTrigger>
