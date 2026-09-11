@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon, BarChart3, Wallet, ClipboardList, User, Building2, FileText, Users, Tag, Filter, MoreHorizontal, Clock, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
@@ -493,14 +493,17 @@ export default function Tasks() {
   };
 
   const filterBar = (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-xl border-border/60 shadow-sm">
       <CardContent className="p-4 space-y-3">
         <div className="flex flex-wrap gap-3">
           <Popover open={clientPickerOpen} onOpenChange={setClientPickerOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" role="combobox" className="w-full sm:w-64 justify-between font-normal">
-                <span className="truncate">
-                  {filterClient === 'all' ? 'Todos os clientes' : getClientName(filterClient)}
+                <span className="flex min-w-0 items-center gap-2">
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    {filterClient === 'all' ? 'Todos os clientes' : getClientName(filterClient)}
+                  </span>
                 </span>
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
@@ -532,7 +535,10 @@ export default function Tasks() {
           </Popover>
 
           <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-            <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Departamento" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-52">
+              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <SelectValue placeholder="Departamento" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os departamentos</SelectItem>
               {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
@@ -540,7 +546,10 @@ export default function Tasks() {
           </Select>
 
           <Select value={filterTemplate} onValueChange={setFilterTemplate}>
-            <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Tarefa" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-52">
+              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <SelectValue placeholder="Tarefa" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as tarefas</SelectItem>
               {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
@@ -548,7 +557,10 @@ export default function Tasks() {
           </Select>
 
           <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-            <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Responsável" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-52">
+              <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os responsáveis</SelectItem>
               <SelectItem value="none">Sem responsável</SelectItem>
@@ -557,7 +569,10 @@ export default function Tasks() {
           </Select>
 
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-40">
+              <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
               {statusColumns.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
@@ -565,7 +580,10 @@ export default function Tasks() {
           </Select>
 
           <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-40">
+              <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as prioridades</SelectItem>
               <SelectItem value="low">Baixa</SelectItem>
@@ -596,18 +614,33 @@ export default function Tasks() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">Tarefas</h1>
-        <Button onClick={openNew}><Plus className="mr-2 h-4 w-4" />Nova Tarefa</Button>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Tarefas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Organize e acompanhe todas as tarefas da sua equipe.</p>
+        </div>
+        <Button onClick={openNew} size="lg" className="rounded-lg self-start sm:self-auto">
+          <Plus className="mr-2 h-5 w-5" />Nova Tarefa
+        </Button>
       </div>
 
       <Tabs defaultValue="kanban">
-        <TabsList>
-          <TabsTrigger value="kanban">Kanban</TabsTrigger>
-          <TabsTrigger value="list">Lista</TabsTrigger>
-          <TabsTrigger value="ranking">Ranking</TabsTrigger>
-          {isAdmin && <TabsTrigger value="costs">Custo por Cliente</TabsTrigger>}
-          <TabsTrigger value="catalog">Cadastro</TabsTrigger>
+        <TabsList className="h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-b bg-transparent p-0">
+          {[
+            { value: 'kanban', label: 'Kanban', Icon: LayoutGrid, show: true },
+            { value: 'list', label: 'Lista', Icon: ListIcon, show: true },
+            { value: 'ranking', label: 'Ranking', Icon: BarChart3, show: true },
+            { value: 'costs', label: 'Custo por Cliente', Icon: Wallet, show: isAdmin },
+            { value: 'catalog', label: 'Cadastro', Icon: ClipboardList, show: true },
+          ].filter(t => t.show).map(({ value, label, Icon }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="gap-2 whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 pt-2 text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+            >
+              <Icon className="h-4 w-4" />{label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         <TabsContent value="kanban">
@@ -625,11 +658,23 @@ export default function Tasks() {
               const totalPages = Math.max(1, Math.ceil(colTasks.length / KANBAN_PAGE_SIZE));
               const page = Math.min(kanbanPage[col] ?? 1, totalPages);
               const pageTasks = colTasks.slice((page - 1) * KANBAN_PAGE_SIZE, page * KANBAN_PAGE_SIZE);
+              const meta = COLUMN_META[col];
+              const ColIcon = meta.Icon;
               return (
-              <div key={col} className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{statusLabels[col]}
-                  <Badge variant="secondary" className="ml-2">{colTasks.length}</Badge>
-                </h3>
+              <div key={col} className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${meta.iconClass}`}>
+                    <ColIcon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold uppercase tracking-wide text-foreground">{statusLabels[col]}</h3>
+                      <Badge className="bg-foreground text-background hover:bg-foreground">{colTasks.length}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{meta.subtitle}</p>
+                  </div>
+                  <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
                 <div className="space-y-2 min-h-[200px]">
                   {pageTasks.map(task => (
                     <Card key={task.id} className={`cursor-pointer hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
@@ -646,12 +691,16 @@ export default function Tasks() {
                             {task.department_id && <span>{getDepartmentName(task.department_id)}</span>}
                           </p>
                         )}
-                        <p className="text-[11px] text-muted-foreground">
-                          Solicitado em {formatDateTime(task.created_at)}
-                          {task.created_by && <> por <span className="font-medium">{getProfileName(task.created_by)}</span></>}
+                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <CalendarDays className="h-3 w-3 shrink-0" />
+                          <span>
+                            Solicitado em {formatDateTime(task.created_at)}
+                            {task.created_by && <> por <span className="font-medium">{getProfileName(task.created_by)}</span></>}
+                          </span>
                         </p>
                         {task.status === 'done' && task.completed_at && (
-                          <p className="text-[11px] text-emerald-600">
+                          <p className="flex items-center gap-1 text-[11px] text-emerald-600">
+                            <CheckCircle2 className="h-3 w-3 shrink-0" />
                             Concluído em {formatDateTime(task.completed_at)}
                           </p>
                         )}
@@ -664,7 +713,8 @@ export default function Tasks() {
                           </div>
                         )}
                         {task.due_date && (
-                          <p className={`text-xs ${getDueDateColor(task.due_date)}`}>
+                          <p className={`flex items-center gap-1 text-xs font-medium ${getDueDateColor(task.due_date)}`}>
+                            <CalendarDays className="h-3 w-3 shrink-0" />
                             Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </p>
                         )}
@@ -700,6 +750,15 @@ export default function Tasks() {
                       </CardContent>
                     </Card>
                   ))}
+                  {pageTasks.length === 0 && (
+                    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                        <Clock className="h-7 w-7 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">{meta.emptyTitle}</p>
+                      <p className="max-w-[230px] text-xs text-muted-foreground">{meta.emptyHint}</p>
+                    </div>
+                  )}
                 </div>
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between gap-2 pt-1">
