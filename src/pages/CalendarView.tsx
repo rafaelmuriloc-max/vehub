@@ -392,15 +392,11 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const monthEnd = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
 
     const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, completion_kind, on_hold, hold_reason, hold_at, hold_by';
-    const [instByRefRes, instByDueRes, oblRes, cliRes, deptRes, actRes, taskRes] = await Promise.all([
+    const [instByRefRes, instByDueRes, taskRes] = await Promise.all([
       supabase.from('obligation_instances').select(instCols)
         .gte('reference_month', monthStart).lt('reference_month', monthEnd),
       supabase.from('obligation_instances').select(instCols)
         .gte('due_date', monthStart).lt('due_date', monthEnd),
-      supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule, system_code, recurrence'),
-      supabase.from('clients').select('id, sci_code, company_name, services_suspended, tax_regime'),
-      supabase.from('departments').select('id, name'),
-      supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
         .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
@@ -412,10 +408,6 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const monthDeleted = allMonthInstances.filter(i => !!i.deleted_at);
     setInstances(monthInstances);
     setDeletedInstances(monthDeleted);
-    setObligations((oblRes.data as Obligation[]) || []);
-    setClients((cliRes.data as Client[]) || []);
-    setDepartments((deptRes.data as Department[]) || []);
-    setActivities((actRes.data as Activity[]) || []);
     setTasks((taskRes.data as TaskRow[]) || []);
     const holdUserIds = Array.from(new Set(allMonthInstances.map(i => i.hold_by).filter(Boolean))) as string[];
     if (holdUserIds.length > 0) {
@@ -424,20 +416,22 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       (profs || []).forEach((p: any) => { if (p.full_name) map[p.user_id] = p.full_name; });
       setProfilesMap(map);
     }
-    // Fetch completions only for the visible-month instances, in chunks to avoid the 1000-row cap
+    // Fetch completions only for the visible-month instances, in parallel chunks (1000-row cap per request)
     const ids = allMonthInstances.map(i => i.id);
-    const allComps: Completion[] = [];
     const CHUNK = 200;
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const slice = ids.slice(i, i + CHUNK);
-      if (slice.length === 0) continue;
-      const { data } = await supabase
-        .from('obligation_activity_completions')
-        .select('id, instance_id, activity_id, completed, file_url, notes, completed_at')
-        .in('instance_id', slice);
-      if (data) allComps.push(...(data as Completion[]));
-    }
+    const slices: string[][] = [];
+    for (let i = 0; i < ids.length; i += CHUNK) slices.push(ids.slice(i, i + CHUNK));
+    const compResults = await Promise.all(
+      slices.map(slice =>
+        supabase
+          .from('obligation_activity_completions')
+          .select('id, instance_id, activity_id, completed, file_url, notes, completed_at')
+          .in('instance_id', slice)
+      )
+    );
+    const allComps: Completion[] = compResults.flatMap(r => (r.data as Completion[]) || []);
     setCompletions(allComps);
+
   }, [currentDate]);
 
   useEffect(() => { loadData(); }, [loadData]);
