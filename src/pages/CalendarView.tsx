@@ -625,6 +625,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
       if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
+      if (!matchesRegime(client)) continue;
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const compDate = obl.competence_rule === 'previous'
         ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
@@ -642,10 +643,10 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       });
     }
     return result.sort((a, b) => a.date.localeCompare(b.date));
-  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, isInstanceLateDelivery]);
+  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, isInstanceLateDelivery]);
 
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
-  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient, filterLateDeliveries]);
+  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient, filterRegime, filterLateDeliveries]);
 
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
@@ -1109,6 +1110,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
+        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
 
         const isQuarterly = obl.recurrence === 'trimestral';
         const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
@@ -1145,7 +1147,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [instances, completions, activities, oblMap, filterDept, filterClient, filterObligation, filterLateDeliveries, year, month]);
+  }, [instances, completions, activities, oblMap, clientMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
@@ -1159,6 +1161,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
+        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
@@ -1181,9 +1184,9 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
       return { ...department, name: displayName, value, change: value - previous };
     });
-  }, [departments, filterDept, filterClient, filterObligation, filterLateDeliveries, instances, oblMap, completions, activities, year, month]);
+  }, [departments, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, instances, oblMap, clientMap, completions, activities, year, month]);
 
-  const activeFilters = [filterDept, filterClient, filterObligation].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
+  const activeFilters = [filterDept, filterClient, filterObligation, filterRegime].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 
 
   function exportCalendarReport() {
