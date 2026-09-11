@@ -3041,6 +3041,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      dashboard_client_counts: {
+        Args: { p_end: string; p_start: string }
+        Returns: {
+          active: number
+          churn: number
+          inactive: number
+          novos: number
+          suspended: number
+        }[]
+      }
+      dashboard_task_counts: {
+        Args: {
+          p_end: string
+          p_start: string
+          p_today: string
+          p_today_end: string
+          p_today_start: string
+        }
+        Returns: {
+          done: number
+          done_today: number
+          in_progress: number
+          overdue: number
+          pending: number
+          pending_no_date: number
+        }[]
+      }
       delete_conversation_cascade: {
         Args: { p_id: string }
         Returns: undefined

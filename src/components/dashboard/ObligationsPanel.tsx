@@ -16,7 +16,9 @@ function monthRange() {
 export function ObligationsPanel() {
   const { data } = useQuery({
     queryKey: ['dashboard-obligations'],
-    refetchInterval: 30000,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
+
     queryFn: async () => {
       const today = new Date();
       const todayISO = today.toISOString().slice(0, 10);

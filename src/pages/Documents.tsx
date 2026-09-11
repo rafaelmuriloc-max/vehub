@@ -437,19 +437,33 @@ export default function Documents() {
       .replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 
-  async function isInstanceFullyCompleted(instanceId: string, obligationId: string): Promise<boolean> {
-    const { data: acts } = await supabase
-      .from('obligation_activities')
-      .select('id')
-      .eq('obligation_id', obligationId);
-    if (!acts || acts.length === 0) return false;
-    const { data: completions } = await supabase
-      .from('obligation_activity_completions')
-      .select('id')
-      .eq('instance_id', instanceId)
-      .eq('completed', true);
-    return (completions?.length || 0) >= acts.length;
+  // Batch version: 2 queries for every instance instead of 2 per instance.
+  async function fullyCompletedInstanceIds(
+    instances: { id: string; obligation_id: string }[]
+  ): Promise<Set<string>> {
+    const result = new Set<string>();
+    if (instances.length === 0) return result;
+    const obligationIds = Array.from(new Set(instances.map(i => i.obligation_id)));
+    const instanceIds = instances.map(i => i.id);
+
+    const [actsRes, compsRes] = await Promise.all([
+      supabase.from('obligation_activities').select('id, obligation_id').in('obligation_id', obligationIds),
+      supabase.from('obligation_activity_completions').select('instance_id').in('instance_id', instanceIds).eq('completed', true),
+    ]);
+
+    const actCount = new Map<string, number>();
+    (actsRes.data ?? []).forEach((a: any) => actCount.set(a.obligation_id, (actCount.get(a.obligation_id) ?? 0) + 1));
+    const compCount = new Map<string, number>();
+    (compsRes.data ?? []).forEach((c: any) => compCount.set(c.instance_id, (compCount.get(c.instance_id) ?? 0) + 1));
+
+    for (const inst of instances) {
+      const total = actCount.get(inst.obligation_id) ?? 0;
+      if (total === 0) continue;
+      if ((compCount.get(inst.id) ?? 0) >= total) result.add(inst.id);
+    }
+    return result;
   }
+
 
   async function importDocument(file: File, clientId: string, docTypeId: string, refMonth: string, presetObligationId?: string) {
     const path = `${clientId}/${refMonth}/${docTypeId}/${sanitizeFileName(file.name)}`;
@@ -526,8 +540,10 @@ export default function Documents() {
         if (data) allInstances.push(...data);
       }
 
+      const fullyDone = await fullyCompletedInstanceIds(allInstances);
       for (const inst of allInstances) {
-        if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;
+        if (fullyDone.has(inst.id)) continue;
+
         if (!linkedObligationId) linkedObligationId = inst.obligation_id;
         const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
         for (const act of relatedActivities) {
@@ -717,8 +733,9 @@ export default function Documents() {
         if (allInstances.length === 0) continue;
 
         let linkedObligationId: string | null = null;
+        const fullyDone = await fullyCompletedInstanceIds(allInstances);
         for (const inst of allInstances) {
-          if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;
+          if (fullyDone.has(inst.id)) continue;
           if (!linkedObligationId) linkedObligationId = inst.obligation_id;
           const relatedActs = matchingActs.filter(a => a.obligation_id === inst.obligation_id);
           for (const act of relatedActs) {
