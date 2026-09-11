@@ -65,6 +65,7 @@ type TaskAttachment = { id: string; file_name: string; file_url: string; file_ty
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
+const KANBAN_PAGE_SIZE = 10;
 const priorityColors: Record<string, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-blue-100 text-blue-800', high: 'bg-orange-100 text-orange-800', urgent: 'bg-red-100 text-red-800' };
 const priorityLabels: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
 
