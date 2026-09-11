@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.get_calendar_month_completions(date, date) FROM anon, PUBLIC;
