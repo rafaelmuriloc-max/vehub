@@ -453,6 +453,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
       if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
+      if (!matchesRegime(client)) continue;
 
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const y = refDate.getFullYear();
@@ -491,7 +492,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       }
     }
     return Array.from(deduped.values());
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, holidays, isInstanceLateDelivery]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, holidays, isInstanceLateDelivery]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -515,6 +516,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       if (t.due_date !== dateStr) return false;
       if (filterDept !== 'all' && t.department_id !== filterDept) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      if (!matchesRegime(t.client_id ? clientMap.get(t.client_id) : null)) return false;
       return true;
     });
   }
@@ -535,8 +537,9 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       .filter(t => isTaskOverdue(t))
       .filter(t => filterDept === 'all' || t.department_id === filterDept)
       .filter(t => filterClient === 'all' || t.client_id === filterClient)
+      .filter(t => matchesRegime(t.client_id ? clientMap.get(t.client_id) : null))
       .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')),
-    [tasks, filterDept, filterClient, today]
+    [tasks, filterDept, filterClient, filterRegime, clientMap, today]
   );
 
   const [selectedOverdueTasks, setSelectedOverdueTasks] = useState<string[]>([]);
