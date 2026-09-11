@@ -1,0 +1,3 @@
+CREATE INDEX IF NOT EXISTS idx_obligation_instances_due_active ON public.obligation_instances (due_date) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_obligation_instances_status_ref_active ON public.obligation_instances (status, reference_month) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_obligation_instances_client_ref ON public.obligation_instances (client_id, reference_month);
