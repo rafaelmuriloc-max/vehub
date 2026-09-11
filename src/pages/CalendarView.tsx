@@ -416,21 +416,12 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       (profs || []).forEach((p: any) => { if (p.full_name) map[p.user_id] = p.full_name; });
       setProfilesMap(map);
     }
-    // Fetch completions only for the visible-month instances, in parallel chunks (1000-row cap per request)
-    const ids = allMonthInstances.map(i => i.id);
-    const CHUNK = 200;
-    const slices: string[][] = [];
-    for (let i = 0; i < ids.length; i += CHUNK) slices.push(ids.slice(i, i + CHUNK));
-    const compResults = await Promise.all(
-      slices.map(slice =>
-        supabase
-          .from('obligation_activity_completions')
-          .select('id, instance_id, activity_id, completed, file_url, notes, completed_at')
-          .in('instance_id', slice)
-      )
-    );
-    const allComps: Completion[] = compResults.flatMap(r => (r.data as Completion[]) || []);
-    setCompletions(allComps);
+    // One compact database call replaces several requests with hundreds of IDs in the URL.
+    const { data: monthCompletions } = await supabase.rpc('get_calendar_month_completions', {
+      p_start: monthStart,
+      p_end: monthEnd,
+    });
+    setCompletions((monthCompletions as Completion[]) || []);
 
   }, [currentDate]);
 
