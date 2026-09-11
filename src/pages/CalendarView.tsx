@@ -281,6 +281,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const { toast } = useToast();
   const navigate = useNavigate();
   const { profile, isAdmin } = useAuth();
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [deletedInstances, setDeletedInstances] = useState<Instance[]>([]);
   const { data: staticData, refetch: refetchStatic } = useQuery({
@@ -383,6 +384,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   }
 
   const loadData = useCallback(async () => {
+    setLoadError(null);
     const y = currentDate.getFullYear();
     const m = currentDate.getMonth();
     const previousMonthDate = new Date(y, m - 1, 1);
@@ -400,6 +402,12 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
         .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
+    const firstErr = instByRefRes.error || instByDueRes.error || taskRes.error;
+    if (firstErr) {
+      setLoadError(firstErr.message);
+      toast({ title: 'Não foi possível carregar as obrigações', description: firstErr.message, variant: 'destructive' });
+      return;
+    }
     const byId = new Map<string, Instance>();
     for (const row of ((instByRefRes.data as Instance[]) || [])) byId.set(row.id, row);
     for (const row of ((instByDueRes.data as Instance[]) || [])) byId.set(row.id, row);
@@ -417,13 +425,18 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       setProfilesMap(map);
     }
     // One compact database call replaces several requests with hundreds of IDs in the URL.
-    const { data: monthCompletions } = await supabase.rpc('get_calendar_month_completions', {
+    const { data: monthCompletions, error: complErr } = await supabase.rpc('get_calendar_month_completions', {
       p_start: monthStart,
       p_end: monthEnd,
     });
+    if (complErr) {
+      setLoadError(complErr.message);
+      toast({ title: 'Não foi possível carregar as obrigações', description: complErr.message, variant: 'destructive' });
+      return;
+    }
     setCompletions((monthCompletions as Completion[]) || []);
 
-  }, [currentDate]);
+  }, [currentDate, toast]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -1237,6 +1250,14 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   return (
     <div className="space-y-5 font-calendarBody">
+      {loadError && (
+        <div className="flex flex-col gap-2 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-destructive">Não foi possível carregar as obrigações. {loadError}</span>
+          <Button size="sm" variant="outline" className="rounded-sm" onClick={() => loadData()}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
       <section className="space-y-2">
         <div className="hidden h-11 items-center justify-between border-b border-border pb-2 lg:flex">
           <div className="flex items-center gap-2">
