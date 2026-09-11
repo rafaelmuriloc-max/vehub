@@ -694,8 +694,32 @@ export default function Tasks() {
                     </Card>
                   ))}
                 </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={page <= 1}
+                      onClick={() => setKanbanPage(p => ({ ...p, [col]: page - 1 }))}
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                    </Button>
+                    <span className="text-xs text-muted-foreground">Página {page} de {totalPages}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={page >= totalPages}
+                      onClick={() => setKanbanPage(p => ({ ...p, [col]: page + 1 }))}
+                    >
+                      Próxima <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </TabsContent>
 
