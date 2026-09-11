@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
@@ -65,6 +65,7 @@ type TaskAttachment = { id: string; file_name: string; file_url: string; file_ty
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
+const KANBAN_PAGE_SIZE = 10;
 const priorityColors: Record<string, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-blue-100 text-blue-800', high: 'bg-orange-100 text-orange-800', urgent: 'bg-red-100 text-red-800' };
 const priorityLabels: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
 
@@ -83,6 +84,7 @@ export default function Tasks() {
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterTemplate, setFilterTemplate] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
+  const [kanbanPage, setKanbanPage] = useState<Record<string, number>>({});
   const [search, setSearch] = useState('');
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const { isAdmin, user } = useAuth();
@@ -476,6 +478,11 @@ export default function Tasks() {
     return true;
   });
 
+  useEffect(() => {
+    setKanbanPage({});
+  }, [filterStatus, filterPriority, filterClient, filterDepartment, filterTemplate, filterAssignee, search]);
+
+
   const filtersActive =
     filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all' ||
     filterDepartment !== 'all' || filterTemplate !== 'all' || filterAssignee !== 'all' || search.trim() !== '';
@@ -606,13 +613,18 @@ export default function Tasks() {
         <TabsContent value="kanban">
           {filterBar}
           <div className="grid gap-4 md:grid-cols-3">
-            {statusColumns.map(col => (
+            {statusColumns.map(col => {
+              const colTasks = filteredTasks.filter(t => t.status === col);
+              const totalPages = Math.max(1, Math.ceil(colTasks.length / KANBAN_PAGE_SIZE));
+              const page = Math.min(kanbanPage[col] ?? 1, totalPages);
+              const pageTasks = colTasks.slice((page - 1) * KANBAN_PAGE_SIZE, page * KANBAN_PAGE_SIZE);
+              return (
               <div key={col} className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{statusLabels[col]}
-                  <Badge variant="secondary" className="ml-2">{filteredTasks.filter(t => t.status === col).length}</Badge>
+                  <Badge variant="secondary" className="ml-2">{colTasks.length}</Badge>
                 </h3>
                 <div className="space-y-2 min-h-[200px]">
-                  {filteredTasks.filter(t => t.status === col).map(task => (
+                  {pageTasks.map(task => (
                     <Card key={task.id} className={`cursor-pointer hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
@@ -682,8 +694,32 @@ export default function Tasks() {
                     </Card>
                   ))}
                 </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={page <= 1}
+                      onClick={() => setKanbanPage(p => ({ ...p, [col]: page - 1 }))}
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                    </Button>
+                    <span className="text-xs text-muted-foreground">Página {page} de {totalPages}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={page >= totalPages}
+                      onClick={() => setKanbanPage(p => ({ ...p, [col]: page + 1 }))}
+                    >
+                      Próxima <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </TabsContent>
 
