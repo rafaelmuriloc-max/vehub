@@ -30,6 +30,7 @@ import { sanitizeStorageName, formatClientLabel, normalizeTaxRegime } from '@/li
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 import { TimeTracker } from '@/components/time-tracking/TimeTracker';
 import { useAuth } from '@/hooks/useAuth';
+import { DepartmentGauge, OfficeGauge } from '@/components/performance/gauges';
 import jsPDF from 'jspdf';
 
 const EMPTY_OBLIGATIONS: Obligation[] = [];
