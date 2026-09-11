@@ -41,20 +41,31 @@ function getReadableTextColor(hex: string): string {
   return yiq >= 160 ? '#0f172a' : '#ffffff';
 }
 
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
 function AssigneeBadge({ name, color }: { name: string; color?: string | null }) {
   const hasColor = !!color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color);
-  if (!hasColor) {
-    return <Badge variant="outline">{name}</Badge>;
-  }
+  const text = hasColor ? getReadableTextColor(color!) : undefined;
   return (
-    <Badge
-      variant="secondary"
-      style={{ backgroundColor: color!, color: getReadableTextColor(color!) }}
+    <span
+      className={`inline-flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-2 text-[11px] font-medium ${hasColor ? '' : 'border border-border bg-muted text-muted-foreground'}`}
+      style={hasColor ? { backgroundColor: color!, color: text } : undefined}
     >
+      <span
+        className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
+        style={hasColor ? { backgroundColor: 'rgba(0,0,0,0.18)', color: text } : undefined}
+      >
+        {getInitials(name)}
+      </span>
       {name}
-    </Badge>
+    </span>
   );
 }
+
 type Client = { id: string; sci_code?: string | null; company_name: string };
 type Department = { id: string; name: string };
 type TaskTemplate = {
