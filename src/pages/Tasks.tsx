@@ -476,6 +476,11 @@ export default function Tasks() {
     return true;
   });
 
+  useEffect(() => {
+    setKanbanPage({});
+  }, [filterStatus, filterPriority, filterClient, filterDepartment, filterTemplate, filterAssignee, search]);
+
+
   const filtersActive =
     filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all' ||
     filterDepartment !== 'all' || filterTemplate !== 'all' || filterAssignee !== 'all' || search.trim() !== '';
