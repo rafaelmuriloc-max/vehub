@@ -1250,6 +1250,14 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   return (
     <div className="space-y-5 font-calendarBody">
+      {loadError && (
+        <div className="flex flex-col gap-2 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-destructive">Não foi possível carregar as obrigações. {loadError}</span>
+          <Button size="sm" variant="outline" className="rounded-sm" onClick={() => loadData()}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
       <section className="space-y-2">
         <div className="hidden h-11 items-center justify-between border-b border-border pb-2 lg:flex">
           <div className="flex items-center gap-2">
