@@ -613,13 +613,18 @@ export default function Tasks() {
         <TabsContent value="kanban">
           {filterBar}
           <div className="grid gap-4 md:grid-cols-3">
-            {statusColumns.map(col => (
+            {statusColumns.map(col => {
+              const colTasks = filteredTasks.filter(t => t.status === col);
+              const totalPages = Math.max(1, Math.ceil(colTasks.length / KANBAN_PAGE_SIZE));
+              const page = Math.min(kanbanPage[col] ?? 1, totalPages);
+              const pageTasks = colTasks.slice((page - 1) * KANBAN_PAGE_SIZE, page * KANBAN_PAGE_SIZE);
+              return (
               <div key={col} className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{statusLabels[col]}
-                  <Badge variant="secondary" className="ml-2">{filteredTasks.filter(t => t.status === col).length}</Badge>
+                  <Badge variant="secondary" className="ml-2">{colTasks.length}</Badge>
                 </h3>
                 <div className="space-y-2 min-h-[200px]">
-                  {filteredTasks.filter(t => t.status === col).map(task => (
+                  {pageTasks.map(task => (
                     <Card key={task.id} className={`cursor-pointer hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
