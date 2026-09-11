@@ -102,25 +102,23 @@ export function TasksPanel() {
 
   const { data } = useQuery({
     queryKey: ['dashboard-tasks', period, customRange.from?.toISOString(), customRange.to?.toISOString()],
-    refetchInterval: 30000,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
-      const [pending, pendingNoDate, inProgress, done, overdue, doneToday, doneTodayIds] = await Promise.all([
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .gte('due_date', range.start).lt('due_date', range.end).eq('status', 'todo'),
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .is('due_date', null).eq('status', 'todo'),
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .gte('due_date', range.start).lt('due_date', range.end).in('status', ['in_progress', 'in_review']),
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .gte('due_date', range.start).lt('due_date', range.end).eq('status', 'done'),
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .gte('due_date', range.start).lt('due_date', todayStr).neq('status', 'done'),
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .eq('status', 'done').gte('updated_at', td.start).lt('updated_at', td.end),
+      const [countsRes, doneTodayIds] = await Promise.all([
+        supabase.rpc('dashboard_task_counts', {
+          p_start: range.start,
+          p_end: range.end,
+          p_today: todayStr,
+          p_today_start: td.start,
+          p_today_end: td.end,
+        }),
         supabase.from('tasks').select('id')
           .eq('status', 'done').gte('updated_at', td.start).lt('updated_at', td.end)
           .limit(500),
       ]);
+      const c: any = Array.isArray(countsRes.data) ? countsRes.data[0] : countsRes.data;
+
 
       const taskIds = (doneTodayIds.data ?? []).map((t: any) => t.id);
       let assignments: { user_id: string }[] = [];
