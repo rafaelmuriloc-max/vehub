@@ -3,6 +3,7 @@ import { ClientsPanel } from '@/components/dashboard/ClientsPanel';
 import { TasksPanel } from '@/components/dashboard/TasksPanel';
 import { ObligationsPanel } from '@/components/dashboard/ObligationsPanel';
 import { TicketsPanel } from '@/components/dashboard/TicketsPanel';
+import { OperationPerformance } from '@/components/performance/OperationPerformance';
 
 export default function Dashboard() {
   const [now, setNow] = useState(new Date());
@@ -36,6 +37,8 @@ export default function Dashboard() {
       </header>
 
       <div className="p-6 space-y-5">
+        <OperationPerformance />
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <ClientsPanel />
           <TicketsPanel />
