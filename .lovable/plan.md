@@ -160,6 +160,7 @@ Correções ao texto recebido:
 3. Consolidar as contagens do painel de Obrigações em uma única RPC agregada, como já feito para clientes e tarefas.
 4. Não trazer `pdf_base64` na listagem de Situação Fiscal.
 5. Adicionar índices secundários em `tasks` (`due_date`, `status`) e reavaliar os índices ociosos de `obligation_instances`.
+6. Higiene de espaço, em janela combinada: recuperar os 1,6 GB de bloat de `cron.job_run_details` e `net._http_response` (exige `VACUUM FULL`, que bloqueia a tabela — apagar linhas não resolve, elas já não existem) e revisar a necessidade dos 4 jobs de cron que rodam a cada minuto.
 
 ## Limitações desta análise
 
