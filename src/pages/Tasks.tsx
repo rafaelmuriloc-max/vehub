@@ -711,25 +711,24 @@ export default function Tasks() {
                 </div>
                 <div className="space-y-2 min-h-[200px]">
                   {pageTasks.map(task => (
-                    <Card key={task.id} className={`cursor-pointer hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
-                      <CardContent className="p-3 space-y-2">
+                    <Card key={task.id} className={`cursor-pointer rounded-lg border-border/70 shadow-sm hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
+                      <CardContent className="p-3 space-y-1">
                         <div className="flex items-start justify-between gap-2">
                           <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
-                          <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority]}</Badge>
+                          <Badge className={`rounded-full px-2 py-0 text-[10px] font-medium ${priorityColors[task.priority]}`} variant="secondary">{priorityLabels[task.priority]}</Badge>
                         </div>
-                        <p className="font-medium text-sm leading-snug">{task.title}</p>
-                        {(task.client_id || task.department_id) && (
-                          <p className="text-xs text-muted-foreground">
-                            {task.client_id && <span>{getClientName(task.client_id)}</span>}
-                            {task.client_id && task.department_id && <span> · </span>}
-                            {task.department_id && <span>{getDepartmentName(task.department_id)}</span>}
-                          </p>
+                        <p className="text-sm font-bold leading-snug text-foreground">{task.title}</p>
+                        {task.client_id && (
+                          <p className="text-xs text-muted-foreground">{getClientName(task.client_id)}</p>
                         )}
-                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        {task.department_id && (
+                          <p className="text-xs text-muted-foreground">{getDepartmentName(task.department_id)}</p>
+                        )}
+                        <p className="flex items-center gap-1 pt-0.5 text-[11px] text-muted-foreground">
                           <CalendarDays className="h-3 w-3 shrink-0" />
                           <span>
                             Solicitado em {formatDateTime(task.created_at)}
-                            {task.created_by && <> por <span className="font-medium">{getProfileName(task.created_by)}</span></>}
+                            {task.created_by && <> por {getProfileName(task.created_by)}</>}
                           </span>
                         </p>
                         {task.status === 'done' && task.completed_at && (
@@ -739,30 +738,20 @@ export default function Tasks() {
                           </p>
                         )}
                         {assignments[task.id]?.length > 0 && (
-                          <div className="flex gap-1 flex-wrap items-center">
-                            <span className="text-[11px] text-muted-foreground">Atribuído:</span>
+                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
                             {assignments[task.id].map(uid => (
                               <AssigneeBadge key={uid} name={getProfileName(uid)} color={getProfileColor(uid)} />
                             ))}
                           </div>
                         )}
                         {task.due_date && (
-                          <p className={`flex items-center gap-1 text-xs font-medium ${getDueDateColor(task.due_date)}`}>
+                          <p className={`flex items-center gap-1 pt-0.5 text-[11px] font-medium ${getDueDateColor(task.due_date)}`}>
                             <CalendarDays className="h-3 w-3 shrink-0" />
                             Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </p>
                         )}
-                        {col !== 'done' && (
-                          <div className="flex gap-1 pt-1">
-                            {statusColumns.filter(s => s !== col).slice(0, 2).map(s => (
-                              <Button key={s} variant="ghost" size="sm" className="text-xs h-6 px-2" onClick={(e) => { e.stopPropagation(); moveTask(task.id, s as Task['status']); }}>
-                                → {statusLabels[s]}
-                              </Button>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between gap-2 pt-1 border-t mt-1">
-                          <div className="flex gap-1 text-xs text-muted-foreground items-center">
+                        <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <TimeTracker taskId={task.id} />
                             {(attachmentCounts[task.id]?.input || 0) > 0 && (
                               <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{attachmentCounts[task.id].input}</span>
@@ -772,16 +761,17 @@ export default function Tasks() {
                             )}
                           </div>
                           <div className="flex items-center gap-1">
-                            <label className="cursor-pointer text-xs flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+                            <label className="cursor-pointer text-[11px] flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                               <Upload className="h-3 w-3" />Para o cliente
                               <input type="file" multiple className="hidden" onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
                             </label>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </div>
                       </CardContent>
+
                     </Card>
                   ))}
                   {pageTasks.length === 0 && (
