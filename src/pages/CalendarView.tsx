@@ -32,6 +32,12 @@ import { TimeTracker } from '@/components/time-tracking/TimeTracker';
 import { useAuth } from '@/hooks/useAuth';
 import jsPDF from 'jspdf';
 
+const EMPTY_OBLIGATIONS: Obligation[] = [];
+const EMPTY_CLIENTS: Client[] = [];
+const EMPTY_DEPARTMENTS: Department[] = [];
+const EMPTY_ACTIVITIES: Activity[] = [];
+
+
 const tabListClass =
   "w-full justify-start gap-1 sm:gap-4 bg-transparent p-0 h-auto border-b border-border rounded-none overflow-x-auto flex-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
 
