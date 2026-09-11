@@ -248,11 +248,12 @@ export default function Chat() {
   }, [user, loadWaitingCount, loadMineCount]);
 
   const handleTabChange = (tab: ChatTab) => {
+    if (tab === activeTab) return;
+    setLoadingConversations(true);
     setActiveTab(tab);
     setActiveConvId(null);
     setActiveConvName(null);
     setMessages([]);
-    loadConversations(tab);
   };
 
   // Load messages for active conversation (does NOT depend on `conversations`)
