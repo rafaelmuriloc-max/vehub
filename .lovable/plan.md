@@ -150,7 +150,8 @@ Correções ao texto recebido:
 1. **Mais provável** — o custo dominante é volume de chamadas somado ao custo por linha da RLS de `obligation_instances`/`obligation_activity_completions`, não falta de índice. Sustentação: tabelas minúsculas, índices novos ociosos, 115 mil execuções da mesma contagem com média de 123 ms.
 2. **Provável** — `whatsapp-webhook` e rotinas de chat multiplicam consultas por evento (5 M leituras unitárias, 131 mil leituras integrais de contatos), consumindo conexões do pooler e atrasando as telas.
 3. **Plausível** — `sitfis_results` traz `pdf_base64` em lote (média 201 ms, 20 MB de tabela), pesando na tela Situação Fiscal.
-4. **Não confirmada** — picos de 6–7 s: sem `stats_reset` e sem amostragem temporal não é possível atribuí-los a saturação do pooler, a concorrência ou a qualquer outra causa. Não afirmo que sejam "banco acordando".
+4. **Plausível** — o bloat de 1,6 GB em `cron.job_run_details` e `net._http_response` pesa no disco e na rotina de manutenção do banco (autovacuum nunca rodou em `cron.job_run_details`), mas, como essas tabelas quase não são lidas pelo app, ele não é a causa direta das telas lentas. Tratá-lo é higiene, não solução.
+5. **Não confirmada** — picos de 6–7 s: sem `stats_reset` e sem amostragem temporal não é possível atribuí-los a saturação do pooler, a concorrência ou a qualquer outra causa. Não afirmo que sejam "banco acordando".
 
 ## Prioridades sugeridas de correção (não implementadas)
 
