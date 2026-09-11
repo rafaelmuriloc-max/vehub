@@ -24,7 +24,7 @@ import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
-import { sanitizeStorageName, formatClientLabel } from '@/lib/utils';
+import { sanitizeStorageName, formatClientLabel, normalizeTaxRegime } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 import { TimeTracker } from '@/components/time-tracking/TimeTracker';
 import { useAuth } from '@/hooks/useAuth';
@@ -49,7 +49,7 @@ function ObligationTab({ value, label, count }: { value: string; label: string; 
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; completion_kind?: string | null; on_hold?: boolean | null; hold_reason?: string | null; hold_at?: string | null; hold_by?: string | null };
 type Obligation = { id: string; name: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; competence_rule: string; system_code: string | null; recurrence?: string | null };
-type Client = { id: string; sci_code?: string | null; company_name: string; services_suspended?: boolean };
+type Client = { id: string; sci_code?: string | null; company_name: string; services_suspended?: boolean; tax_regime?: string | null };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null; completed_at: string | null };
@@ -285,6 +285,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
   const [filterObligation, setFilterObligation] = useState('all');
+  const [filterRegime, setFilterRegime] = useState('all');
   const [filterLateDeliveries, setFilterLateDeliveries] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
@@ -370,7 +371,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       supabase.from('obligation_instances').select(instCols)
         .gte('due_date', monthStart).lt('due_date', monthEnd),
       supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule, system_code, recurrence'),
-      supabase.from('clients').select('id, sci_code, company_name, services_suspended'),
+      supabase.from('clients').select('id, sci_code, company_name, services_suspended, tax_regime'),
       supabase.from('departments').select('id, name'),
       supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
@@ -416,6 +417,24 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const oblMap = useMemo(() => new Map(obligations.map(o => [o.id, o])), [obligations]);
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+
+  const regimeOptions = useMemo(() => {
+    const set = new Set<string>();
+    let hasNone = false;
+    for (const c of clients) {
+      const regime = normalizeTaxRegime(c.tax_regime);
+      if (regime) set.add(String(regime));
+      else hasNone = true;
+    }
+    return { list: Array.from(set).sort(), hasNone };
+  }, [clients]);
+
+  const matchesRegime = (client?: Client | null) => {
+    if (filterRegime === 'all') return true;
+    const regime = client ? normalizeTaxRegime(client.tax_regime) : null;
+    if (filterRegime === 'none') return !regime;
+    return regime === filterRegime;
+  };
   const deptMap = useMemo(() => new Map(departments.map(d => [d.id, d])), [departments]);
 
   const holidays = useMemo(() => getHolidays(currentDate.getFullYear()), [currentDate]);
@@ -434,6 +453,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
       if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
+      if (!matchesRegime(client)) continue;
 
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const y = refDate.getFullYear();
@@ -472,7 +492,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       }
     }
     return Array.from(deduped.values());
-  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, holidays, isInstanceLateDelivery]);
+  }, [instances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, holidays, isInstanceLateDelivery]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -496,6 +516,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       if (t.due_date !== dateStr) return false;
       if (filterDept !== 'all' && t.department_id !== filterDept) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      if (!matchesRegime(t.client_id ? clientMap.get(t.client_id) : null)) return false;
       return true;
     });
   }
@@ -516,8 +537,9 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       .filter(t => isTaskOverdue(t))
       .filter(t => filterDept === 'all' || t.department_id === filterDept)
       .filter(t => filterClient === 'all' || t.client_id === filterClient)
+      .filter(t => matchesRegime(t.client_id ? clientMap.get(t.client_id) : null))
       .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')),
-    [tasks, filterDept, filterClient, today]
+    [tasks, filterDept, filterClient, filterRegime, clientMap, today]
   );
 
   const [selectedOverdueTasks, setSelectedOverdueTasks] = useState<string[]>([]);
@@ -603,6 +625,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
       if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
       if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, obl.id)) continue;
+      if (!matchesRegime(client)) continue;
       const refDate = new Date(inst.reference_month + 'T00:00:00');
       const compDate = obl.competence_rule === 'previous'
         ? new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1)
@@ -620,10 +643,10 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       });
     }
     return result.sort((a, b) => a.date.localeCompare(b.date));
-  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterLateDeliveries, isInstanceLateDelivery]);
+  }, [deletedInstances, oblMap, clientMap, deptMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, isInstanceLateDelivery]);
 
   useEffect(() => { setDayPendingPage(1); setDayCompletedPage(1); clearSelection(); }, [selectedDay]);
-  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient, filterLateDeliveries]);
+  useEffect(() => { setMonthPendingPage(1); setMonthCompletedPage(1); clearSelection(); }, [year, month, filterDept, filterClient, filterRegime, filterLateDeliveries]);
 
   const detailInstance = instances.find(i => i.id === detailInstanceId);
   const detailObligation = detailInstance ? oblMap.get(detailInstance.obligation_id) : null;
@@ -1087,6 +1110,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
+        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
 
         const isQuarterly = obl.recurrence === 'trimestral';
         const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
@@ -1123,7 +1147,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [instances, completions, activities, oblMap, filterDept, filterClient, filterObligation, filterLateDeliveries, year, month]);
+  }, [instances, completions, activities, oblMap, clientMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
@@ -1137,6 +1161,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
+        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
@@ -1159,9 +1184,9 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
       return { ...department, name: displayName, value, change: value - previous };
     });
-  }, [departments, filterDept, filterClient, filterObligation, filterLateDeliveries, instances, oblMap, completions, activities, year, month]);
+  }, [departments, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, instances, oblMap, clientMap, completions, activities, year, month]);
 
-  const activeFilters = [filterDept, filterClient, filterObligation].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
+  const activeFilters = [filterDept, filterClient, filterObligation, filterRegime].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 
 
   function exportCalendarReport() {
@@ -1387,7 +1412,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 gap-2 rounded-sm border bg-card p-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+        <div className="grid grid-cols-1 gap-2 rounded-sm border bg-card p-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
                 <Select value={filterDept} onValueChange={v => { setFilterDept(v); setFilterObligation('all'); setSelectedDay(null); }}>
                   <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Departamento" /></SelectTrigger>
                   <SelectContent>
@@ -1438,6 +1463,15 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
                     </Command>
                   </PopoverContent>
                 </Popover>
+
+                <Select value={filterRegime} onValueChange={v => { setFilterRegime(v); setSelectedDay(null); }}>
+                  <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Regime tributário" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os regimes</SelectItem>
+                    {regimeOptions.hasNone && <SelectItem value="none">Não informado</SelectItem>}
+                    {regimeOptions.list.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
 
                 <Select value={filterObligation} onValueChange={v => { setFilterObligation(v); setSelectedDay(null); }}>
                   <SelectTrigger className="h-9 w-full rounded-sm text-xs"><SelectValue placeholder="Obrigação" /></SelectTrigger>
