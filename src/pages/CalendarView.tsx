@@ -417,6 +417,24 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const oblMap = useMemo(() => new Map(obligations.map(o => [o.id, o])), [obligations]);
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+
+  const regimeOptions = useMemo(() => {
+    const set = new Set<string>();
+    let hasNone = false;
+    for (const c of clients) {
+      const regime = normalizeTaxRegime(c.tax_regime);
+      if (regime) set.add(String(regime));
+      else hasNone = true;
+    }
+    return { list: Array.from(set).sort(), hasNone };
+  }, [clients]);
+
+  const matchesRegime = (client?: Client | null) => {
+    if (filterRegime === 'all') return true;
+    const regime = client ? normalizeTaxRegime(client.tax_regime) : null;
+    if (filterRegime === 'none') return !regime;
+    return regime === filterRegime;
+  };
   const deptMap = useMemo(() => new Map(departments.map(d => [d.id, d])), [departments]);
 
   const holidays = useMemo(() => getHolidays(currentDate.getFullYear()), [currentDate]);
