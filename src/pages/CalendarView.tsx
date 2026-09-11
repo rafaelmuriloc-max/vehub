@@ -402,6 +402,12 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
         .gte('due_date', monthStart).lt('due_date', monthEnd),
     ]);
+    const firstErr = instByRefRes.error || instByDueRes.error || taskRes.error;
+    if (firstErr) {
+      setLoadError(firstErr.message);
+      toast({ title: 'Não foi possível carregar as obrigações', description: firstErr.message, variant: 'destructive' });
+      return;
+    }
     const byId = new Map<string, Instance>();
     for (const row of ((instByRefRes.data as Instance[]) || [])) byId.set(row.id, row);
     for (const row of ((instByDueRes.data as Instance[]) || [])) byId.set(row.id, row);
@@ -419,13 +425,18 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       setProfilesMap(map);
     }
     // One compact database call replaces several requests with hundreds of IDs in the URL.
-    const { data: monthCompletions } = await supabase.rpc('get_calendar_month_completions', {
+    const { data: monthCompletions, error: complErr } = await supabase.rpc('get_calendar_month_completions', {
       p_start: monthStart,
       p_end: monthEnd,
     });
+    if (complErr) {
+      setLoadError(complErr.message);
+      toast({ title: 'Não foi possível carregar as obrigações', description: complErr.message, variant: 'destructive' });
+      return;
+    }
     setCompletions((monthCompletions as Completion[]) || []);
 
-  }, [currentDate]);
+  }, [currentDate, toast]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
