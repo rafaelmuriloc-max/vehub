@@ -23,7 +23,9 @@ export function TicketsPanel() {
 
   const { data } = useQuery({
     queryKey: ['dashboard-tickets'],
-    refetchInterval: 15000,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
+
     queryFn: async () => {
       const [open, byAgent, awaiting, unassigned] = await Promise.all([
         supabase.from('chat_conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
