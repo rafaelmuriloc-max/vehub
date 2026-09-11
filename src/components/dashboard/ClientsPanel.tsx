@@ -14,25 +14,25 @@ function monthRange() {
 export function ClientsPanel() {
   const { data } = useQuery({
     queryKey: ['dashboard-clients'],
-    refetchInterval: 30000,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { start, end } = monthRange();
-      const [active, inactive, novos, churn, suspended] = await Promise.all([
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('without_monthly_fee', false),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'inactive').eq('without_monthly_fee', false),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).gte('start_date', start).lt('start_date', end).eq('without_monthly_fee', false),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).gte('end_date', start).lt('end_date', end).eq('without_monthly_fee', false),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('services_suspended', true),
-      ]);
+      const { data: rows } = await supabase.rpc('dashboard_client_counts', {
+        p_start: start,
+        p_end: end,
+      });
+      const r: any = Array.isArray(rows) ? rows[0] : rows;
       return {
-        active: active.count ?? 0,
-        inactive: inactive.count ?? 0,
-        novos: novos.count ?? 0,
-        churn: churn.count ?? 0,
-        suspended: suspended.count ?? 0,
+        active: Number(r?.active ?? 0),
+        inactive: Number(r?.inactive ?? 0),
+        novos: Number(r?.novos ?? 0),
+        churn: Number(r?.churn ?? 0),
+        suspended: Number(r?.suspended ?? 0),
       };
     },
   });
+
 
   const net = (data?.novos ?? 0) - (data?.churn ?? 0);
 
