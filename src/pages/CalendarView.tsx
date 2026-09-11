@@ -2812,7 +2812,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         open={editingTaskId !== null}
         onOpenChange={(v) => { if (!v) setEditingTaskId(null); }}
         taskId={editingTaskId}
-        onSaved={() => loadData()}
+        onSaved={() => { refetchStatic(); loadData(); }}
       />
 
       <Dialog open={holdTarget !== null} onOpenChange={(v) => { if (!v) { setHoldTarget(null); setHoldReason(''); } }}>
