@@ -64,6 +64,29 @@ type TaskTemplate = {
 type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null; direction?: 'input' | 'output' };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
+const COLUMN_META: Record<string, { Icon: typeof LayoutGrid; iconClass: string; subtitle: string; emptyTitle: string; emptyHint: string }> = {
+  todo: {
+    Icon: LayoutGrid,
+    iconClass: 'bg-primary text-primary-foreground',
+    subtitle: 'Tarefas pendentes para execução',
+    emptyTitle: 'Nenhuma tarefa a fazer',
+    emptyHint: 'Quando uma tarefa for criada, ela aparecerá aqui.',
+  },
+  in_progress: {
+    Icon: Clock,
+    iconClass: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
+    subtitle: 'Tarefas em espera, aguardando retorno',
+    emptyTitle: 'Nenhuma tarefa aguardando',
+    emptyHint: 'Quando uma tarefa estiver em espera, ela aparecerá aqui.',
+  },
+  done: {
+    Icon: CheckCircle2,
+    iconClass: 'bg-emerald-500 text-white',
+    subtitle: 'Tarefas finalizadas',
+    emptyTitle: 'Nenhuma tarefa concluída',
+    emptyHint: 'As tarefas finalizadas aparecerão aqui.',
+  },
+};
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
 const KANBAN_PAGE_SIZE = 10;
 const priorityColors: Record<string, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-blue-100 text-blue-800', high: 'bg-orange-100 text-orange-800', urgent: 'bg-red-100 text-red-800' };
