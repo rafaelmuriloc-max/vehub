@@ -540,8 +540,10 @@ export default function Documents() {
         if (data) allInstances.push(...data);
       }
 
+      const fullyDone = await fullyCompletedInstanceIds(allInstances);
       for (const inst of allInstances) {
-        if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;
+        if (fullyDone.has(inst.id)) continue;
+
         if (!linkedObligationId) linkedObligationId = inst.obligation_id;
         const relatedActivities = matchingActivities.filter(a => a.obligation_id === inst.obligation_id);
         for (const act of relatedActivities) {
@@ -731,8 +733,9 @@ export default function Documents() {
         if (allInstances.length === 0) continue;
 
         let linkedObligationId: string | null = null;
+        const fullyDone = await fullyCompletedInstanceIds(allInstances);
         for (const inst of allInstances) {
-          if (await isInstanceFullyCompleted(inst.id, inst.obligation_id)) continue;
+          if (fullyDone.has(inst.id)) continue;
           if (!linkedObligationId) linkedObligationId = inst.obligation_id;
           const relatedActs = matchingActs.filter(a => a.obligation_id === inst.obligation_id);
           for (const act of relatedActs) {
