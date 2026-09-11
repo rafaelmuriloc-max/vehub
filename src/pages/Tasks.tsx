@@ -84,6 +84,7 @@ export default function Tasks() {
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterTemplate, setFilterTemplate] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
+  const [kanbanPage, setKanbanPage] = useState<Record<string, number>>({});
   const [search, setSearch] = useState('');
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const { isAdmin, user } = useAuth();
