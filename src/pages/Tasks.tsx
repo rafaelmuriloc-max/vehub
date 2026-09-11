@@ -614,7 +614,14 @@ export default function Tasks() {
           {filterBar}
           <div className="grid gap-4 md:grid-cols-3">
             {statusColumns.map(col => {
-              const colTasks = filteredTasks.filter(t => t.status === col);
+              const colTasks = filteredTasks
+                .filter(t => t.status === col)
+                .sort((a, b) => {
+                  if (col !== 'todo') return 0;
+                  const da = a.due_date ? new Date(a.due_date + 'T00:00:00').getTime() : Infinity;
+                  const db = b.due_date ? new Date(b.due_date + 'T00:00:00').getTime() : Infinity;
+                  return da - db;
+                });
               const totalPages = Math.max(1, Math.ceil(colTasks.length / KANBAN_PAGE_SIZE));
               const page = Math.min(kanbanPage[col] ?? 1, totalPages);
               const pageTasks = colTasks.slice((page - 1) * KANBAN_PAGE_SIZE, page * KANBAN_PAGE_SIZE);
