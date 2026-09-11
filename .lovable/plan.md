@@ -116,12 +116,42 @@ Como administrador o plano é barato e usa o índice novo. Mas `pg_stat_user_ind
 - Timers de 1 s existem em `TimeTracker`, `ConversationList`, `Dashboard`, `Auth`, `ChatInput` — são apenas relógios locais, sem chamada de rede.
 - O item nº 10 do ranking (5,03 **milhões** de leituras de uma única linha de `chat_conversations`) e os itens 9 e 14 batem com o webhook do WhatsApp: `supabase/functions/whatsapp-webhook/index.ts` referencia `chat_conversations` 12 vezes e há 18 arquivos tocando `client_department_contacts` sem filtro. Esse é o maior gerador de chamadas do sistema.
 
+## 8. Verificação do diagnóstico externo enviado (cron/pg_net)
+
+Confirmei os tamanhos, mas **a conclusão do texto está parcialmente errada** e as ações sugeridas não resolveriam o problema.
+
+Tamanhos reais (agora):
+
+| tabela | tamanho total | heap | índices |
+|---|---|---|---|
+| cron.job_run_details | 1.028 MB | 1.010 MB | 17 MB |
+| net._http_response | 573 MB | 562 MB | 11 MB |
+| public.email_messages | 93 MB | — | — |
+| public.invoices | 82 MB | — | — |
+
+O que os contadores mostram:
+
+| tabela | linhas vivas | inserções | exclusões | dead tuples | último autovacuum | seq scans |
+|---|---|---|---|---|---|---|
+| cron.job_run_details | 0 | 0 | 357.231 | 0 | nunca | 11 |
+| net._http_response | 1.342 | 441.379 | 440.000 | 5 | 05/08/2026 | 9 |
+| net.http_request_queue | 25 | 650.835 | 441.379 | 29 | — | 824.956 |
+
+Correções ao texto recebido:
+- **As duas tabelas já estão praticamente vazias.** `cron.job_run_details` tem 0 linhas vivas e 357 mil exclusões acumuladas; `net._http_response` tem 1.342 linhas. O 1,6 GB é **bloat** (espaço morto não devolvido), não histórico acumulado.
+- Portanto `DELETE ... WHERE end_time < ...` e `TRUNCATE net._http_response` **não liberariam ~1,6 GB**: não há o que apagar. Só `VACUUM FULL` (ou recriação da tabela) devolve esse espaço — e `VACUUM FULL` bloqueia a tabela, exigindo janela combinada.
+- Ambas quase não são lidas (9 e 11 varreduras sequenciais), então o bloat **não explica** a lentidão das telas. A tabela com leitura pesada é `net.http_request_queue`: 824.956 varreduras sequenciais e 650 mil inserções.
+- Não consegui contar linhas de `cron.job_run_details` diretamente: a consulta estourou o tempo limite do conector — o que é, em si, evidência do peso da varredura nesses 1.010 MB inchados.
+- Há 11 jobs de cron ativos, sendo 4 a cada minuto (`chat-waiting-alert`, `chat-inactivity-monitor`, `scheduled-messages-runner` e mais) e 1 a cada 2 minutos (`gmail-sync`). Isso gera o volume de `net.http_post` observado.
+- Não pude verificar os números de "I/O 90%", "Realtime 85,8% de erros", "login 13,7 s" ou "48/60 conexões" citados no texto — essas métricas vêm do painel do Supabase, não das consultas disponíveis aqui. A amostra de `pg_stat_activity` que colhi mostrou 32 conexões e nenhum bloqueio.
+
 ## Hipóteses (separadas dos fatos)
 
 1. **Mais provável** — o custo dominante é volume de chamadas somado ao custo por linha da RLS de `obligation_instances`/`obligation_activity_completions`, não falta de índice. Sustentação: tabelas minúsculas, índices novos ociosos, 115 mil execuções da mesma contagem com média de 123 ms.
 2. **Provável** — `whatsapp-webhook` e rotinas de chat multiplicam consultas por evento (5 M leituras unitárias, 131 mil leituras integrais de contatos), consumindo conexões do pooler e atrasando as telas.
 3. **Plausível** — `sitfis_results` traz `pdf_base64` em lote (média 201 ms, 20 MB de tabela), pesando na tela Situação Fiscal.
-4. **Não confirmada** — picos de 6–7 s: sem `stats_reset` e sem amostragem temporal não é possível atribuí-los a saturação do pooler, a concorrência ou a qualquer outra causa. Não afirmo que sejam "banco acordando".
+4. **Plausível** — o bloat de 1,6 GB em `cron.job_run_details` e `net._http_response` pesa no disco e na rotina de manutenção do banco (autovacuum nunca rodou em `cron.job_run_details`), mas, como essas tabelas quase não são lidas pelo app, ele não é a causa direta das telas lentas. Tratá-lo é higiene, não solução.
+5. **Não confirmada** — picos de 6–7 s: sem `stats_reset` e sem amostragem temporal não é possível atribuí-los a saturação do pooler, a concorrência ou a qualquer outra causa. Não afirmo que sejam "banco acordando".
 
 ## Prioridades sugeridas de correção (não implementadas)
 
@@ -130,6 +160,7 @@ Como administrador o plano é barato e usa o índice novo. Mas `pg_stat_user_ind
 3. Consolidar as contagens do painel de Obrigações em uma única RPC agregada, como já feito para clientes e tarefas.
 4. Não trazer `pdf_base64` na listagem de Situação Fiscal.
 5. Adicionar índices secundários em `tasks` (`due_date`, `status`) e reavaliar os índices ociosos de `obligation_instances`.
+6. Higiene de espaço, em janela combinada: recuperar os 1,6 GB de bloat de `cron.job_run_details` e `net._http_response` (exige `VACUUM FULL`, que bloqueia a tabela — apagar linhas não resolve, elas já não existem) e revisar a necessidade dos 4 jobs de cron que rodam a cada minuto.
 
 ## Limitações desta análise
 
