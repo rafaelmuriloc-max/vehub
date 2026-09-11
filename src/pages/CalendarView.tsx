@@ -277,10 +277,29 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const { profile, isAdmin } = useAuth();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [deletedInstances, setDeletedInstances] = useState<Instance[]>([]);
-  const [obligations, setObligations] = useState<Obligation[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const { data: staticData, refetch: refetchStatic } = useQuery({
+    queryKey: ['calendar-static'],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const [oblRes, cliRes, deptRes, actRes] = await Promise.all([
+        supabase.from('obligations').select('id, name, department_id, alert_day, target_day, due_day, competence_rule, system_code, recurrence'),
+        supabase.from('clients').select('id, sci_code, company_name, services_suspended, tax_regime'),
+        supabase.from('departments').select('id, name'),
+        supabase.from('obligation_activities').select('id, obligation_id, title, type, description, document_type_id, order, auto_start, email_department_id, email_subject, email_body, whatsapp_template_name, whatsapp_message_body, whatsapp_button_url, whatsapp_has_document_header'),
+      ]);
+      return {
+        obligations: (oblRes.data as Obligation[]) || [],
+        clients: (cliRes.data as Client[]) || [],
+        departments: (deptRes.data as Department[]) || [],
+        activities: (actRes.data as Activity[]) || [],
+      };
+    },
+  });
+  const obligations = staticData?.obligations ?? EMPTY_OBLIGATIONS;
+  const clients = staticData?.clients ?? EMPTY_CLIENTS;
+  const departments = staticData?.departments ?? EMPTY_DEPARTMENTS;
+  const activities = staticData?.activities ?? EMPTY_ACTIVITIES;
+
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
