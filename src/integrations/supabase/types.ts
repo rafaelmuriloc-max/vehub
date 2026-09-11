@@ -3072,6 +3072,18 @@ export type Database = {
         Args: { p_id: string }
         Returns: undefined
       }
+      get_calendar_month_completions: {
+        Args: { p_end: string; p_start: string }
+        Returns: {
+          activity_id: string
+          completed: boolean
+          completed_at: string
+          file_url: string
+          id: string
+          instance_id: string
+          notes: string
+        }[]
+      }
       get_chat_inbox: {
         Args: { p_tab: string; p_user: string }
         Returns: {

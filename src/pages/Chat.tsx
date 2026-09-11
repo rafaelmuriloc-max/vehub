@@ -248,11 +248,12 @@ export default function Chat() {
   }, [user, loadWaitingCount, loadMineCount]);
 
   const handleTabChange = (tab: ChatTab) => {
+    if (tab === activeTab) return;
+    setLoadingConversations(true);
     setActiveTab(tab);
     setActiveConvId(null);
     setActiveConvName(null);
     setMessages([]);
-    loadConversations(tab);
   };
 
   // Load messages for active conversation (does NOT depend on `conversations`)
@@ -350,7 +351,27 @@ export default function Chat() {
             }
           }
 
-          debouncedReloadConversations();
+          setConversations(prev => {
+            const index = prev.findIndex(conv => conv.id === newMsg.conversation_id);
+            if (index < 0) {
+              debouncedReloadConversations();
+              return prev;
+            }
+
+            const updated = [...prev];
+            const current = updated[index];
+            updated[index] = {
+              ...current,
+              lastMessage: newMsg.deleted_at ? '🚫 Mensagem apagada' : (newMsg.content || ''),
+              lastMessageAt: newMsg.created_at,
+              lastMessageType: newMsg.message_type || null,
+              unreadCount: newMsg.conversation_id === activeConvId || newMsg.sender_id === user.id
+                ? current.unreadCount
+                : current.unreadCount + 1,
+            };
+            updated.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+            return updated;
+          });
         }
       )
       .on(
