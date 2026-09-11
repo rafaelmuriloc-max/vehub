@@ -281,6 +281,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const { toast } = useToast();
   const navigate = useNavigate();
   const { profile, isAdmin } = useAuth();
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [deletedInstances, setDeletedInstances] = useState<Instance[]>([]);
   const { data: staticData, refetch: refetchStatic } = useQuery({
@@ -383,6 +384,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   }
 
   const loadData = useCallback(async () => {
+    setLoadError(null);
     const y = currentDate.getFullYear();
     const m = currentDate.getMonth();
     const previousMonthDate = new Date(y, m - 1, 1);
