@@ -153,11 +153,12 @@ export function TasksPanel() {
       const ranking = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 5);
 
       return {
-        pending: (pending.count ?? 0) + (pendingNoDate.count ?? 0),
-        inProgress: inProgress.count ?? 0,
-        done: done.count ?? 0,
-        overdue: overdue.count ?? 0,
-        doneToday: doneToday.count ?? 0,
+        pending: Number(c?.pending ?? 0) + Number(c?.pending_no_date ?? 0),
+        inProgress: Number(c?.in_progress ?? 0),
+        done: Number(c?.done ?? 0),
+        overdue: Number(c?.overdue ?? 0),
+        doneToday: Number(c?.done_today ?? 0),
+
         ranking,
       };
     },
