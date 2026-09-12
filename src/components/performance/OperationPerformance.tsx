@@ -73,7 +73,7 @@ export function OperationPerformance() {
     };
     if (!data) return empty;
 
-    const { obligations, departments, activities, instances, completions } = data;
+    const { obligations, departments, activities, instances, completions, suspendedClients } = data;
     const oblMap = new Map(obligations.map(o => [o.id, o]));
 
     const activitiesByObligation = new Map<string, string[]>();
@@ -117,27 +117,39 @@ export function OperationPerformance() {
       return done.split('T')[0] > due;
     };
 
+    // Mesma regra das listas do calendário: a obrigação pertence ao mês quando
+    // alguma das datas exibidas (alerta, meta ou vencimento, já antecipadas para
+    // dia útil) cai nesse mês.
+    const monthDates = (inst: Instance, targetYear: number, targetMonth: number, hols: ReturnType<typeof getHolidays>) => {
+      const prefix = monthKey(targetYear, targetMonth);
+      const obl = oblMap.get(inst.obligation_id);
+      if (!obl) return null;
+      const rd = new Date(inst.reference_month + 'T00:00:00');
+      const makeDate = (day: number | null) => {
+        if (!day) return null;
+        return previousBusinessDay(dayKey(rd.getFullYear(), rd.getMonth(), day), hols);
+      };
+      const isQuarterly = obl.recurrence === 'trimestral';
+      const alertDate = isQuarterly ? null : makeDate(obl.alert_day);
+      const targetDate = isQuarterly ? null : makeDate(obl.target_day);
+      const dueDate = inst.due_date ?? makeDate(obl.due_day);
+      const all = [alertDate, targetDate, dueDate].filter((d): d is string => !!d);
+      const inMonth = all.filter(d => d.startsWith(prefix));
+      if (inMonth.length === 0) return null;
+      const firstDate = inMonth.reduce((min, d) => (d < min ? d : min), inMonth[0]);
+      return { obl, alertDate, targetDate, dueDate, firstDate };
+    };
+
     const calculate = (targetYear: number, targetMonth: number) => {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const prefix = monthKey(targetYear, targetMonth);
       const hols = getHolidays(targetYear);
       let todo = 0, afterAlert = 0, afterTarget = 0, overdue = 0, doneOnTime = 0, doneLate = 0, dueToday = 0;
 
-      const makeDate = (day: number | null, refMonth: string) => {
-        if (!day) return null;
-        const rd = new Date(refMonth + 'T00:00:00');
-        return previousBusinessDay(dayKey(rd.getFullYear(), rd.getMonth(), day), hols);
-      };
-
       for (const inst of instances) {
-        if (!inst.reference_month.startsWith(prefix) && !inst.due_date?.startsWith(prefix)) continue;
-        const obl = oblMap.get(inst.obligation_id);
-        if (!obl) continue;
-
-        const isQuarterly = obl.recurrence === 'trimestral';
-        const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
-        const targetDate = isQuarterly ? null : makeDate(obl.target_day, inst.reference_month);
-        const dueDate = inst.due_date ?? makeDate(obl.due_day, inst.reference_month);
+        const info = monthDates(inst, targetYear, targetMonth, hols);
+        if (!info) continue;
+        if (suspendedClients.has(inst.client_id) && todayStr >= info.firstDate) continue;
+        const { alertDate, targetDate, dueDate } = info;
         const completed = isCompleted(inst);
 
         if (completed) {
@@ -160,18 +172,17 @@ export function OperationPerformance() {
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
 
     const performanceFor = (departmentId: string, targetYear: number, targetMonth: number) => {
-      const prefix = monthKey(targetYear, targetMonth);
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const hols = getHolidays(targetYear);
       let completed = 0;
       let total = 0;
       for (const inst of instances) {
-        if (!inst.reference_month.startsWith(prefix) && !inst.due_date?.startsWith(prefix)) continue;
-        const obl = oblMap.get(inst.obligation_id);
-        if (!obl || obl.department_id !== departmentId) continue;
+        const info = monthDates(inst, targetYear, targetMonth, hols);
+        if (!info || info.obl.department_id !== departmentId) continue;
+        if (suspendedClients.has(inst.client_id) && todayStr >= info.firstDate) continue;
         total++;
         if (isCompleted(inst)) completed++;
       }
-      void hols;
       return total > 0 ? Math.round((completed / total) * 100) : 0;
     };
 
