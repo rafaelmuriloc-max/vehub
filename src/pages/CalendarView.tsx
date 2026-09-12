@@ -299,6 +299,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const oblMap = useMemo(() => new Map(obligations.map(o => [o.id, o])), [obligations]);
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+  const instMap = useMemo(() => new Map(instances.map(i => [i.id, i])), [instances]);
 
   const regimeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -461,31 +462,36 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const selectedEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
-  const monthEvents = useMemo(() => {
-    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-    const monthFiltered = events.filter(e => e.date.startsWith(prefix));
-    const byInstance = new Map<string, CalendarEvent>();
+  // Conjunto único de obrigações de um mês: mesma regra usada nas listas
+  // (uma linha por obrigação, priorizando vencimento > meta > alerta).
+  const monthInstanceEvents = useCallback((targetYear: number, targetMonth: number) => {
+    const prefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
     const prio: Record<string, number> = { due: 3, target: 2, alert: 1 };
-    for (const ev of monthFiltered) {
+    const byInstance = new Map<string, { ev: CalendarEvent; firstDate: string }>();
+    for (const ev of events) {
+      if (!ev.date.startsWith(prefix)) continue;
       const existing = byInstance.get(ev.instanceId);
-      if (!existing || (prio[ev.type] ?? 0) > (prio[existing.type] ?? 0)) {
-        byInstance.set(ev.instanceId, ev);
+      if (!existing) {
+        byInstance.set(ev.instanceId, { ev, firstDate: ev.date });
+        continue;
       }
+      if ((prio[ev.type] ?? 0) > (prio[existing.ev.type] ?? 0)) existing.ev = ev;
+      if (ev.date < existing.firstDate) existing.firstDate = ev.date;
     }
-    return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [events, year, month]);
+    return Array.from(byInstance.values());
+  }, [events]);
+
+  const monthEvents = useMemo(
+    () => monthInstanceEvents(year, month).map(entry => entry.ev).sort((a, b) => a.date.localeCompare(b.date)),
+    [monthInstanceEvents, year, month],
+  );
 
   // Earliest date per instance (alert > target > due) used as the obligation's "initial day"
   const instanceInitialDate = useMemo(() => {
-    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-    const monthFiltered = events.filter(e => e.date.startsWith(prefix));
     const map = new Map<string, string>();
-    for (const ev of monthFiltered) {
-      const existing = map.get(ev.instanceId);
-      if (!existing || ev.date < existing) map.set(ev.instanceId, ev.date);
-    }
+    for (const entry of monthInstanceEvents(year, month)) map.set(entry.ev.instanceId, entry.firstDate);
     return map;
-  }, [events, year, month]);
+  }, [monthInstanceEvents, year, month]);
 
   const isSuspendedEvent = useCallback((ev: CalendarEvent) => {
     const cli = clientMap.get(ev.clientId);
@@ -967,7 +973,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const dashboardStats = useMemo(() => {
     const calculate = (targetYear: number, targetMonth: number) => {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const monthPrefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+      
       const hols = getHolidays(targetYear);
       let todo = 0;
       let afterAlert = 0;
@@ -984,17 +990,14 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         return previousBusinessDay(raw, hols);
       };
 
-      for (const inst of instances) {
-        if (!inst.reference_month.startsWith(monthPrefix) && !inst.due_date?.startsWith(monthPrefix)) continue;
+      for (const entry of monthInstanceEvents(targetYear, targetMonth)) {
+        const inst = instMap.get(entry.ev.instanceId);
+        if (!inst) continue;
         const obl = oblMap.get(inst.obligation_id);
         if (!obl) continue;
-        if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
-        if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
-        if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
-        if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
-        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
         if (onHoldIds.has(inst.id)) continue;
-        if (clientMap.get(inst.client_id)?.services_suspended) continue;
+        const cli = clientMap.get(inst.client_id);
+        if (cli?.services_suspended && todayStr >= entry.firstDate) continue;
 
         const isQuarterly = obl.recurrence === 'trimestral';
         const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
@@ -1031,23 +1034,21 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [instances, completions, activities, oblMap, clientMap, onHoldIds, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
+  }, [monthInstanceEvents, instMap, completions, activities, oblMap, clientMap, onHoldIds, year, month]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
-      const prefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       let completed = 0;
       let total = 0;
-      for (const inst of instances) {
-        if (!inst.reference_month.startsWith(prefix) && !inst.due_date?.startsWith(prefix)) continue;
+      for (const entry of monthInstanceEvents(targetYear, targetMonth)) {
+        const inst = instMap.get(entry.ev.instanceId);
+        if (!inst) continue;
         const obligation = oblMap.get(inst.obligation_id);
         if (!obligation || obligation.department_id !== departmentId) continue;
-        if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
-        if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
-        if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
-        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
         if (onHoldIds.has(inst.id)) continue;
-        if (clientMap.get(inst.client_id)?.services_suspended) continue;
+        const cli = clientMap.get(inst.client_id);
+        if (cli?.services_suspended && todayStr >= entry.firstDate) continue;
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
@@ -1070,7 +1071,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
       return { ...department, name: displayName, value, change: value - previous };
     });
-  }, [departments, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, instances, oblMap, clientMap, onHoldIds, completions, activities, year, month]);
+  }, [departments, filterDept, monthInstanceEvents, instMap, oblMap, clientMap, onHoldIds, completions, activities, year, month]);
 
   const activeFilters = [filterDept, filterClient, filterObligation, filterRegime].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 
