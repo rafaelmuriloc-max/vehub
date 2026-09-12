@@ -993,6 +993,8 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
         if (!matchesRegime(clientMap.get(inst.client_id))) continue;
+        if (onHoldIds.has(inst.id)) continue;
+        if (clientMap.get(inst.client_id)?.services_suspended) continue;
 
         const isQuarterly = obl.recurrence === 'trimestral';
         const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
@@ -1029,7 +1031,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [instances, completions, activities, oblMap, clientMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
+  }, [instances, completions, activities, oblMap, clientMap, onHoldIds, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
@@ -1044,6 +1046,8 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
         if (!matchesRegime(clientMap.get(inst.client_id))) continue;
+        if (onHoldIds.has(inst.id)) continue;
+        if (clientMap.get(inst.client_id)?.services_suspended) continue;
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
@@ -1066,7 +1070,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
       return { ...department, name: displayName, value, change: value - previous };
     });
-  }, [departments, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, instances, oblMap, clientMap, completions, activities, year, month]);
+  }, [departments, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, instances, oblMap, clientMap, onHoldIds, completions, activities, year, month]);
 
   const activeFilters = [filterDept, filterClient, filterObligation, filterRegime].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 

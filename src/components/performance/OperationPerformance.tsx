@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import { getHolidays, previousBusinessDay } from '@/lib/holidays';
 import { DepartmentGauge, OfficeGauge } from './gauges';
 
-type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null };
+type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; on_hold?: boolean | null };
 type Obligation = { id: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; recurrence?: string | null };
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string };
@@ -32,27 +32,34 @@ export function OperationPerformance() {
     queryKey: ['operation-performance', rangeStart, rangeEnd],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status';
-      const [oblRes, deptRes, actRes, byRefRes, byDueRes, complRes] = await Promise.all([
+      const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, on_hold';
+      const [oblRes, deptRes, actRes, byRefRes, byDueRes, complRes, cliRes] = await Promise.all([
         supabase.from('obligations').select('id, department_id, alert_day, target_day, due_day, recurrence'),
         supabase.from('departments').select('id, name'),
         supabase.from('obligation_activities').select('id, obligation_id'),
         supabase.from('obligation_instances').select(instCols).gte('reference_month', rangeStart).lt('reference_month', rangeEnd),
         supabase.from('obligation_instances').select(instCols).gte('due_date', rangeStart).lt('due_date', rangeEnd),
         supabase.rpc('get_calendar_month_completions', { p_start: rangeStart, p_end: rangeEnd }),
+        supabase.from('clients').select('id, services_suspended'),
       ]);
-      const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error;
+      const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error || cliRes.error;
       if (firstErr) throw new Error(firstErr.message);
 
       const byId = new Map<string, Instance>();
       for (const row of ((byRefRes.data as Instance[]) || [])) byId.set(row.id, row);
       for (const row of ((byDueRes.data as Instance[]) || [])) byId.set(row.id, row);
 
+      const suspendedClients = new Set(
+        ((cliRes.data as { id: string; services_suspended: boolean | null }[]) || [])
+          .filter(c => c.services_suspended)
+          .map(c => c.id),
+      );
+
       return {
         obligations: (oblRes.data as Obligation[]) || [],
         departments: (deptRes.data as Department[]) || [],
         activities: (actRes.data as Activity[]) || [],
-        instances: Array.from(byId.values()).filter(i => !i.deleted_at),
+        instances: Array.from(byId.values()).filter(i => !i.deleted_at && !i.on_hold && !suspendedClients.has(i.client_id)),
         completions: (complRes.data as Completion[]) || [],
       };
     },
