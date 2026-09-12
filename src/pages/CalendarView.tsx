@@ -993,6 +993,8 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
         if (!matchesRegime(clientMap.get(inst.client_id))) continue;
+        if (onHoldIds.has(inst.id)) continue;
+        if (clientMap.get(inst.client_id)?.services_suspended) continue;
 
         const isQuarterly = obl.recurrence === 'trimestral';
         const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
@@ -1044,6 +1046,8 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
         if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
         if (!matchesRegime(clientMap.get(inst.client_id))) continue;
+        if (onHoldIds.has(inst.id)) continue;
+        if (clientMap.get(inst.client_id)?.services_suspended) continue;
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
