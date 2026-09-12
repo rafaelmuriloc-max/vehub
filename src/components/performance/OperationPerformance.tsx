@@ -59,7 +59,8 @@ export function OperationPerformance() {
         obligations: (oblRes.data as Obligation[]) || [],
         departments: (deptRes.data as Department[]) || [],
         activities: (actRes.data as Activity[]) || [],
-        instances: Array.from(byId.values()).filter(i => !i.deleted_at && !i.on_hold && !suspendedClients.has(i.client_id)),
+        instances: Array.from(byId.values()).filter(i => !i.deleted_at && !i.on_hold),
+        suspendedClients,
         completions: (complRes.data as Completion[]) || [],
       };
     },
