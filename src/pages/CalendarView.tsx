@@ -973,7 +973,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const dashboardStats = useMemo(() => {
     const calculate = (targetYear: number, targetMonth: number) => {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
-      const monthPrefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+      
       const hols = getHolidays(targetYear);
       let todo = 0;
       let afterAlert = 0;
@@ -1034,23 +1034,21 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [instances, completions, activities, oblMap, clientMap, onHoldIds, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
+  }, [monthInstanceEvents, instMap, completions, activities, oblMap, clientMap, onHoldIds, year, month]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
-      const prefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       let completed = 0;
       let total = 0;
-      for (const inst of instances) {
-        if (!inst.reference_month.startsWith(prefix) && !inst.due_date?.startsWith(prefix)) continue;
+      for (const entry of monthInstanceEvents(targetYear, targetMonth)) {
+        const inst = instMap.get(entry.ev.instanceId);
+        if (!inst) continue;
         const obligation = oblMap.get(inst.obligation_id);
         if (!obligation || obligation.department_id !== departmentId) continue;
-        if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
-        if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
-        if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
-        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
         if (onHoldIds.has(inst.id)) continue;
-        if (clientMap.get(inst.client_id)?.services_suspended) continue;
+        const cli = clientMap.get(inst.client_id);
+        if (cli?.services_suspended && todayStr >= entry.firstDate) continue;
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
