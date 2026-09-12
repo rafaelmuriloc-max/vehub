@@ -1031,7 +1031,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [instances, completions, activities, oblMap, clientMap, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
+  }, [instances, completions, activities, oblMap, clientMap, onHoldIds, filterDept, filterClient, filterObligation, filterRegime, filterLateDeliveries, year, month]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
