@@ -990,17 +990,14 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         return previousBusinessDay(raw, hols);
       };
 
-      for (const inst of instances) {
-        if (!inst.reference_month.startsWith(monthPrefix) && !inst.due_date?.startsWith(monthPrefix)) continue;
+      for (const entry of monthInstanceEvents(targetYear, targetMonth)) {
+        const inst = instMap.get(entry.ev.instanceId);
+        if (!inst) continue;
         const obl = oblMap.get(inst.obligation_id);
         if (!obl) continue;
-        if (filterDept !== 'all' && obl.department_id !== filterDept) continue;
-        if (filterClient !== 'all' && inst.client_id !== filterClient) continue;
-        if (filterObligation !== 'all' && inst.obligation_id !== filterObligation) continue;
-        if (filterLateDeliveries && !isInstanceLateDelivery(inst.id, inst.obligation_id)) continue;
-        if (!matchesRegime(clientMap.get(inst.client_id))) continue;
         if (onHoldIds.has(inst.id)) continue;
-        if (clientMap.get(inst.client_id)?.services_suspended) continue;
+        const cli = clientMap.get(inst.client_id);
+        if (cli?.services_suspended && todayStr >= entry.firstDate) continue;
 
         const isQuarterly = obl.recurrence === 'trimestral';
         const alertDate = isQuarterly ? null : makeDate(obl.alert_day, inst.reference_month);
