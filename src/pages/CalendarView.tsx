@@ -299,6 +299,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const oblMap = useMemo(() => new Map(obligations.map(o => [o.id, o])), [obligations]);
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+  const instMap = useMemo(() => new Map(instances.map(i => [i.id, i])), [instances]);
 
   const regimeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -461,31 +462,36 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const selectedEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
-  const monthEvents = useMemo(() => {
-    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-    const monthFiltered = events.filter(e => e.date.startsWith(prefix));
-    const byInstance = new Map<string, CalendarEvent>();
+  // Conjunto único de obrigações de um mês: mesma regra usada nas listas
+  // (uma linha por obrigação, priorizando vencimento > meta > alerta).
+  const monthInstanceEvents = useCallback((targetYear: number, targetMonth: number) => {
+    const prefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
     const prio: Record<string, number> = { due: 3, target: 2, alert: 1 };
-    for (const ev of monthFiltered) {
+    const byInstance = new Map<string, { ev: CalendarEvent; firstDate: string }>();
+    for (const ev of events) {
+      if (!ev.date.startsWith(prefix)) continue;
       const existing = byInstance.get(ev.instanceId);
-      if (!existing || (prio[ev.type] ?? 0) > (prio[existing.type] ?? 0)) {
-        byInstance.set(ev.instanceId, ev);
+      if (!existing) {
+        byInstance.set(ev.instanceId, { ev, firstDate: ev.date });
+        continue;
       }
+      if ((prio[ev.type] ?? 0) > (prio[existing.ev.type] ?? 0)) existing.ev = ev;
+      if (ev.date < existing.firstDate) existing.firstDate = ev.date;
     }
-    return Array.from(byInstance.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [events, year, month]);
+    return Array.from(byInstance.values());
+  }, [events]);
+
+  const monthEvents = useMemo(
+    () => monthInstanceEvents(year, month).map(entry => entry.ev).sort((a, b) => a.date.localeCompare(b.date)),
+    [monthInstanceEvents, year, month],
+  );
 
   // Earliest date per instance (alert > target > due) used as the obligation's "initial day"
   const instanceInitialDate = useMemo(() => {
-    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-    const monthFiltered = events.filter(e => e.date.startsWith(prefix));
     const map = new Map<string, string>();
-    for (const ev of monthFiltered) {
-      const existing = map.get(ev.instanceId);
-      if (!existing || ev.date < existing) map.set(ev.instanceId, ev.date);
-    }
+    for (const entry of monthInstanceEvents(year, month)) map.set(entry.ev.instanceId, entry.firstDate);
     return map;
-  }, [events, year, month]);
+  }, [monthInstanceEvents, year, month]);
 
   const isSuspendedEvent = useCallback((ev: CalendarEvent) => {
     const cli = clientMap.get(ev.clientId);
