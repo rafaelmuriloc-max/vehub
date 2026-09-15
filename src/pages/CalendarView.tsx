@@ -252,12 +252,15 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
     const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, completion_kind, on_hold, hold_reason, hold_at, hold_by';
     const [instByRefRes, instByDueRes, taskRes] = await Promise.all([
-      supabase.from('obligation_instances').select(instCols)
-        .gte('reference_month', monthStart).lt('reference_month', monthEnd),
-      supabase.from('obligation_instances').select(instCols)
-        .gte('due_date', monthStart).lt('due_date', monthEnd),
-      supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
-        .gte('due_date', monthStart).lt('due_date', monthEnd),
+      fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols)
+        .gte('reference_month', monthStart).lt('reference_month', monthEnd)
+        .order('id').range(from, to) as any),
+      fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols)
+        .gte('due_date', monthStart).lt('due_date', monthEnd)
+        .order('id').range(from, to) as any),
+      fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
+        .gte('due_date', monthStart).lt('due_date', monthEnd)
+        .order('id').range(from, to) as any),
     ]);
     const firstErr = instByRefRes.error || instByDueRes.error || taskRes.error;
     if (firstErr) {
