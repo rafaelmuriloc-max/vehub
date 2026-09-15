@@ -761,6 +761,16 @@ export default function Tasks() {
                             )}
                           </div>
                           <div className="flex items-center gap-1">
+                            {task.status !== 'done' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[11px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'done'); }}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" />Concluir
+                              </Button>
+                            )}
                             <label className="cursor-pointer text-[11px] flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                               <Upload className="h-3 w-3" />Para o cliente
                               <input type="file" multiple className="hidden" onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
