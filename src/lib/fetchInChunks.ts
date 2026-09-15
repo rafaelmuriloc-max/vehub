@@ -43,3 +43,23 @@ export async function fetchInChunks<T>(
 
   return results.flat();
 }
+
+/**
+ * Sequentially pages a query until a short page arrives, propagating errors.
+ * Supabase caps every response at 1000 rows, so any dataset above that limit
+ * would otherwise be silently truncated.
+ */
+export async function fetchAllPaged<T>(
+  makeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  chunk = 1000
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const all: T[] = [];
+  for (let offset = 0; ; offset += chunk) {
+    const { data, error } = await makeQuery(offset, offset + chunk - 1);
+    if (error) return { data: all, error };
+    const rows = data || [];
+    all.push(...rows);
+    if (rows.length < chunk) break;
+  }
+  return { data: all, error: null };
+}
