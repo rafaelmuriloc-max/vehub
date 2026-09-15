@@ -285,10 +285,8 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       setProfilesMap(map);
     }
     // One compact database call replaces several requests with hundreds of IDs in the URL.
-    const { data: monthCompletions, error: complErr } = await supabase.rpc('get_calendar_month_completions', {
-      p_start: monthStart,
-      p_end: monthEnd,
-    });
+    const { data: monthCompletions, error: complErr } = await fetchAllPaged<Completion>((from, to) =>
+      supabase.rpc('get_calendar_month_completions', { p_start: monthStart, p_end: monthEnd }).range(from, to) as any);
     if (complErr) {
       setLoadError(complErr.message);
       toast({ title: 'Não foi possível carregar as obrigações', description: complErr.message, variant: 'destructive' });
