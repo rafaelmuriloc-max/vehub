@@ -37,9 +37,9 @@ export function OperationPerformance() {
         supabase.from('obligations').select('id, department_id, alert_day, target_day, due_day, recurrence'),
         supabase.from('departments').select('id, name'),
         supabase.from('obligation_activities').select('id, obligation_id'),
-        supabase.from('obligation_instances').select(instCols).gte('reference_month', rangeStart).lt('reference_month', rangeEnd),
-        supabase.from('obligation_instances').select(instCols).gte('due_date', rangeStart).lt('due_date', rangeEnd),
-        supabase.rpc('get_calendar_month_completions', { p_start: rangeStart, p_end: rangeEnd }),
+        fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols).gte('reference_month', rangeStart).lt('reference_month', rangeEnd).order('id').range(from, to) as any),
+        fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols).gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
+        fetchAllPaged<Completion>((from, to) => supabase.rpc('get_calendar_month_completions', { p_start: rangeStart, p_end: rangeEnd }).range(from, to) as any),
         supabase.from('clients').select('id, services_suspended'),
       ]);
       const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error || cliRes.error;
