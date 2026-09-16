@@ -972,7 +972,23 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     ? getInstanceProgress(detailInstance.id, detailInstance.obligation_id)
     : { completed: 0, total: 0, percent: 0 };
 
+  // Tarefas do mês (por prazo), respeitando os mesmos filtros e a suspensão de serviços.
+  const monthTasksFor = useCallback((targetYear: number, targetMonth: number, departmentId?: string) => {
+    const prefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+    return tasks.filter(t => {
+      if (!t.due_date || !t.due_date.startsWith(prefix)) return false;
+      if (departmentId && t.department_id !== departmentId) return false;
+      if (filterDept !== 'all' && t.department_id !== filterDept) return false;
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      const cli = t.client_id ? clientMap.get(t.client_id) : null;
+      if (!matchesRegime(cli)) return false;
+      if (cli?.services_suspended) return false;
+      return true;
+    });
+  }, [tasks, filterDept, filterClient, filterRegime, clientMap]);
+
   const dashboardStats = useMemo(() => {
+
     const calculate = (targetYear: number, targetMonth: number) => {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       
@@ -1020,6 +1036,10 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const completed = doneOnTime + doneLate;
       const toDo = todo + afterAlert + afterTarget + dueToday;
       const total = toDo + overdue + completed;
+      const monthTasks = monthTasksFor(targetYear, targetMonth);
+      const tasksDone = monthTasks.filter(t => t.status === 'done').length;
+      const perfTotal = total + monthTasks.length;
+      const perfDone = completed + tasksDone;
       return {
         toDo,
         overdue,
@@ -1028,15 +1048,16 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         doneLate,
         dueToday,
         total,
-        performance: total > 0 ? Math.round((completed / total) * 100) : 0,
+        performance: perfTotal > 0 ? Math.round((perfDone / perfTotal) * 100) : 0,
       };
+
     };
 
     const current = calculate(year, month);
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [monthInstanceEvents, instMap, completions, activities, oblMap, clientMap, onHoldIds, year, month]);
+  }, [monthInstanceEvents, instMap, completions, activities, oblMap, clientMap, onHoldIds, year, month, monthTasksFor]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
@@ -1054,8 +1075,12 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
+      const deptTasks = monthTasksFor(targetYear, targetMonth, departmentId);
+      total += deptTasks.length;
+      completed += deptTasks.filter(t => t.status === 'done').length;
       return total > 0 ? Math.round((completed / total) * 100) : 0;
     };
+
     const previousDate = new Date(year, month - 1, 1);
     const departmentOrder = ['fiscal', 'contabil', 'pessoal'];
     const visibleDepartments = departments
@@ -1073,7 +1098,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
       return { ...department, name: displayName, value, change: value - previous };
     });
-  }, [departments, filterDept, monthInstanceEvents, instMap, oblMap, clientMap, onHoldIds, completions, activities, year, month]);
+  }, [departments, filterDept, monthInstanceEvents, instMap, oblMap, clientMap, onHoldIds, completions, activities, year, month, monthTasksFor]);
 
   const activeFilters = [filterDept, filterClient, filterObligation, filterRegime].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 

@@ -15,6 +15,8 @@ type Obligation = { id: string; department_id: string; alert_day: number | null;
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null };
+type TaskRow = { id: string; status: string | null; due_date: string | null; client_id: string | null; department_id: string | null };
+
 
 const monthKey = (year: number, month: number) => `${year}-${String(month + 1).padStart(2, '0')}-`;
 const dayKey = (year: number, month: number, day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -34,7 +36,7 @@ export function OperationPerformance() {
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, on_hold';
-      const [oblRes, deptRes, actRes, byRefRes, byDueRes, complRes, cliRes] = await Promise.all([
+      const [oblRes, deptRes, actRes, byRefRes, byDueRes, complRes, cliRes, taskRes] = await Promise.all([
         supabase.from('obligations').select('id, department_id, alert_day, target_day, due_day, recurrence'),
         supabase.from('departments').select('id, name'),
         supabase.from('obligation_activities').select('id, obligation_id'),
@@ -42,8 +44,9 @@ export function OperationPerformance() {
         fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols).gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
         fetchAllPaged<Completion>((from, to) => supabase.rpc('get_calendar_month_completions', { p_start: rangeStart, p_end: rangeEnd }).range(from, to) as any),
         supabase.from('clients').select('id, services_suspended'),
+        fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, status, due_date, client_id, department_id').gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
       ]);
-      const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error || cliRes.error;
+      const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error || cliRes.error || taskRes.error;
       if (firstErr) throw new Error(firstErr.message);
 
       const byId = new Map<string, Instance>();
@@ -63,7 +66,9 @@ export function OperationPerformance() {
         instances: Array.from(byId.values()).filter(i => !i.deleted_at && !i.on_hold),
         suspendedClients,
         completions: (complRes.data as Completion[]) || [],
+        tasks: (taskRes.data as TaskRow[]) || [],
       };
+
     },
   });
 
@@ -74,7 +79,18 @@ export function OperationPerformance() {
     };
     if (!data) return empty;
 
-    const { obligations, departments, activities, instances, completions, suspendedClients } = data;
+    const { obligations, departments, activities, instances, completions, suspendedClients, tasks } = data;
+
+    const monthTasks = (targetYear: number, targetMonth: number, departmentId?: string) => {
+      const prefix = monthKey(targetYear, targetMonth);
+      return tasks.filter(t => {
+        if (!t.due_date || !t.due_date.startsWith(prefix)) return false;
+        if (departmentId && t.department_id !== departmentId) return false;
+        if (t.client_id && suspendedClients.has(t.client_id)) return false;
+        return true;
+      });
+    };
+
     const oblMap = new Map(obligations.map(o => [o.id, o]));
 
     const activitiesByObligation = new Map<string, string[]>();
@@ -166,8 +182,12 @@ export function OperationPerformance() {
       const completed = doneOnTime + doneLate;
       const toDo = todo + afterAlert + afterTarget + dueToday;
       const total = toDo + overdue + completed;
-      return { toDo, overdue, completed, doneOnTime, doneLate, dueToday, total, performance: total > 0 ? Math.round((completed / total) * 100) : 0 };
+      const mTasks = monthTasks(targetYear, targetMonth);
+      const perfTotal = total + mTasks.length;
+      const perfDone = completed + mTasks.filter(t => t.status === 'done').length;
+      return { toDo, overdue, completed, doneOnTime, doneLate, dueToday, total, performance: perfTotal > 0 ? Math.round((perfDone / perfTotal) * 100) : 0 };
     };
+
 
     const current = calculate(year, month);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
@@ -184,6 +204,9 @@ export function OperationPerformance() {
         total++;
         if (isCompleted(inst)) completed++;
       }
+      const depTasks = monthTasks(targetYear, targetMonth, departmentId);
+      total += depTasks.length;
+      completed += depTasks.filter(t => t.status === 'done').length;
       return total > 0 ? Math.round((completed / total) * 100) : 0;
     };
 
