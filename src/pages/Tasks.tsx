@@ -757,7 +757,21 @@ export default function Tasks() {
                             Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </p>
                         )}
+                        {task.status === 'done' && task.notify_whatsapp && !task.notify_sent_at && (
+                          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 dark:border-amber-800 dark:bg-amber-900/20">
+                            <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">Envio pendente</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-2 text-[11px] text-amber-700 hover:bg-amber-100 dark:text-amber-400"
+                              onClick={async (e) => { e.stopPropagation(); await triggerNotify(task.id); loadData(); }}
+                            >
+                              Reenviar
+                            </Button>
+                          </div>
+                        )}
                         <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <TimeTracker taskId={task.id} />
                             {(attachmentCounts[task.id]?.input || 0) > 0 && (
