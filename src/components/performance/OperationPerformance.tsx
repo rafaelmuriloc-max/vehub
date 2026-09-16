@@ -15,6 +15,8 @@ type Obligation = { id: string; department_id: string; alert_day: number | null;
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null };
+type TaskRow = { id: string; status: string | null; due_date: string | null; client_id: string | null; department_id: string | null };
+
 
 const monthKey = (year: number, month: number) => `${year}-${String(month + 1).padStart(2, '0')}-`;
 const dayKey = (year: number, month: number, day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
