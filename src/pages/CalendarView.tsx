@@ -1098,7 +1098,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const displayName = department.name.toLocaleLowerCase('pt-BR').includes('sucesso') ? 'Atendimento' : department.name.replace(/^Depto\s+/i, '');
       return { ...department, name: displayName, value, change: value - previous };
     });
-  }, [departments, filterDept, monthInstanceEvents, instMap, oblMap, clientMap, onHoldIds, completions, activities, year, month]);
+  }, [departments, filterDept, monthInstanceEvents, instMap, oblMap, clientMap, onHoldIds, completions, activities, year, month, monthTasksFor]);
 
   const activeFilters = [filterDept, filterClient, filterObligation, filterRegime].filter(value => value !== 'all').length + (filterLateDeliveries ? 1 : 0);
 
