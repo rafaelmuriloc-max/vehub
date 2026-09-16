@@ -36,7 +36,7 @@ export function OperationPerformance() {
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const instCols = 'id, client_id, obligation_id, reference_month, due_date, deleted_at, status, on_hold';
-      const [oblRes, deptRes, actRes, byRefRes, byDueRes, complRes, cliRes] = await Promise.all([
+      const [oblRes, deptRes, actRes, byRefRes, byDueRes, complRes, cliRes, taskRes] = await Promise.all([
         supabase.from('obligations').select('id, department_id, alert_day, target_day, due_day, recurrence'),
         supabase.from('departments').select('id, name'),
         supabase.from('obligation_activities').select('id, obligation_id'),
@@ -44,8 +44,9 @@ export function OperationPerformance() {
         fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols).gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
         fetchAllPaged<Completion>((from, to) => supabase.rpc('get_calendar_month_completions', { p_start: rangeStart, p_end: rangeEnd }).range(from, to) as any),
         supabase.from('clients').select('id, services_suspended'),
+        fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, status, due_date, client_id, department_id').gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
       ]);
-      const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error || cliRes.error;
+      const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error || cliRes.error || taskRes.error;
       if (firstErr) throw new Error(firstErr.message);
 
       const byId = new Map<string, Instance>();
@@ -65,7 +66,9 @@ export function OperationPerformance() {
         instances: Array.from(byId.values()).filter(i => !i.deleted_at && !i.on_hold),
         suspendedClients,
         completions: (complRes.data as Completion[]) || [],
+        tasks: (taskRes.data as TaskRow[]) || [],
       };
+
     },
   });
 
