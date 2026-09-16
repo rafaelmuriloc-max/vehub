@@ -1036,6 +1036,10 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const completed = doneOnTime + doneLate;
       const toDo = todo + afterAlert + afterTarget + dueToday;
       const total = toDo + overdue + completed;
+      const monthTasks = monthTasksFor(targetYear, targetMonth);
+      const tasksDone = monthTasks.filter(t => t.status === 'done').length;
+      const perfTotal = total + monthTasks.length;
+      const perfDone = completed + tasksDone;
       return {
         toDo,
         overdue,
@@ -1044,8 +1048,9 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         doneLate,
         dueToday,
         total,
-        performance: total > 0 ? Math.round((completed / total) * 100) : 0,
+        performance: perfTotal > 0 ? Math.round((perfDone / perfTotal) * 100) : 0,
       };
+
     };
 
     const current = calculate(year, month);
