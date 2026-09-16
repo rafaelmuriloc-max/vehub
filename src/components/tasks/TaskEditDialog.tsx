@@ -180,7 +180,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
     if (form.assigned_to.length > 0) {
       await supabase.from('task_assignments').insert(form.assigned_to.map(uid => ({ task_id: editing.id, user_id: uid })));
     }
-    if (nextStatus === 'done' && !wasDone && editing.notify_whatsapp && !editing.notify_sent_at) {
+    if (nextStatus === 'done' && !wasDone && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
       await triggerNotify(editing.id);
     }
     onOpenChange(false);

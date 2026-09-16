@@ -316,7 +316,7 @@ export default function Tasks() {
     }
 
     setDialogOpen(false);
-    if (nextStatus === 'done' && !wasDone && editing && editing.notify_whatsapp && !editing.notify_sent_at) {
+    if (nextStatus === 'done' && !wasDone && editing && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
       await triggerNotify(taskId);
     }
     loadData();
@@ -327,7 +327,7 @@ export default function Tasks() {
     const prev = tasks.find(t => t.id === taskId);
     const safeStatus = await guardStatus(taskId, newStatus);
     await supabase.from('tasks').update({ status: safeStatus }).eq('id', taskId);
-    if (newStatus === 'done' && prev?.status !== 'done' && prev?.notify_whatsapp && !prev?.notify_sent_at) {
+    if (newStatus === 'done' && prev?.status !== 'done' && (prev?.notify_whatsapp || prev?.notify_email) && !prev?.notify_sent_at) {
       await triggerNotify(taskId);
     }
     loadData();
@@ -757,7 +757,7 @@ export default function Tasks() {
                             Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </p>
                         )}
-                        {task.status === 'done' && task.notify_whatsapp && !task.notify_sent_at && (
+                        {task.status === 'done' && (task.notify_whatsapp || task.notify_email) && !task.notify_sent_at && (
                           <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 dark:border-amber-800 dark:bg-amber-900/20">
                             <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">Envio pendente</span>
                             <Button
