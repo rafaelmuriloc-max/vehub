@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
     const message = applyTemplateVars(rawMessage, templateVars);
     const signedMessage = responsavel ? `*${responsavel}*\n\n${message}` : message;
 
-    const result: Record<string, any> = { whatsapp: null, email: null };
+    const result: Record<string, any> = { whatsapp: null };
 
     // Resolve or create the chat conversation for this client/phone so each WhatsApp send
     // can be reflected as a chat_messages row (otherwise nothing shows in the internal chat).
@@ -219,8 +219,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---------- WhatsApp via Evolution API ----------
-    if (task.notify_whatsapp) {
+    // ---------- WhatsApp via Evolution API (único canal) ----------
+    {
+
       const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
       const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
       const EVO_INST = Deno.env.get("EVOLUTION_INSTANCE_NAME");
