@@ -1057,7 +1057,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const previousDate = new Date(year, month - 1, 1);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
     return { current, previous, change: current.performance - previous.performance };
-  }, [monthInstanceEvents, instMap, completions, activities, oblMap, clientMap, onHoldIds, year, month]);
+  }, [monthInstanceEvents, instMap, completions, activities, oblMap, clientMap, onHoldIds, year, month, monthTasksFor]);
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
@@ -1075,8 +1075,12 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         total++;
         if (isInstanceCompleted(inst.id, inst.obligation_id)) completed++;
       }
+      const deptTasks = monthTasksFor(targetYear, targetMonth, departmentId);
+      total += deptTasks.length;
+      completed += deptTasks.filter(t => t.status === 'done').length;
       return total > 0 ? Math.round((completed / total) * 100) : 0;
     };
+
     const previousDate = new Date(year, month - 1, 1);
     const departmentOrder = ['fiscal', 'contabil', 'pessoal'];
     const visibleDepartments = departments
