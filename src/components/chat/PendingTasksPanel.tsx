@@ -212,28 +212,26 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
     if (error) { setBusyId(null); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
 
     if (newStatus === 'done' && prev && prev.status !== 'done'
-        && (prev.notify_whatsapp || prev.notify_email)
+        && prev.notify_whatsapp
         && !prev.notify_sent_at) {
       try {
         const { data, error: nErr } = await supabase.functions.invoke('task-notify-client', { body: { taskId } });
         if (nErr) {
-          toast({ title: 'Falha ao notificar cliente', description: nErr.message, variant: 'destructive' });
+          toast({ title: 'Falha ao enviar ao cliente', description: nErr.message, variant: 'destructive' });
         } else {
-          const w = (data as any)?.whatsapp; const e = (data as any)?.email;
-          const msgs: string[] = [];
-          if (w) msgs.push(w.ok ? 'WhatsApp enviado' : `WhatsApp: ${w.error}`);
-          if (e) msgs.push(e.ok ? 'E-mail enviado' : `E-mail: ${e.error}`);
-          const anyOk = (w?.ok) || (e?.ok);
+          const w = (data as any)?.whatsapp;
+          const ok = !!w?.ok;
           toast({
-            title: anyOk ? 'Cliente notificado' : 'Falha ao notificar cliente',
-            description: msgs.join(' • '),
-            variant: anyOk ? 'default' : 'destructive',
+            title: ok ? 'Documentos enviados por WhatsApp' : 'Falha ao enviar ao cliente',
+            description: ok ? undefined : (w?.error || 'Não foi possível enviar pelo WhatsApp.'),
+            variant: ok ? 'default' : 'destructive',
           });
         }
       } catch (err: any) {
-        toast({ title: 'Erro ao notificar cliente', description: err.message, variant: 'destructive' });
+        toast({ title: 'Erro ao enviar ao cliente', description: err.message, variant: 'destructive' });
       }
     }
+
     setBusyId(null);
     setTasks(curr => {
       const next = curr.filter(t => t.id !== taskId);

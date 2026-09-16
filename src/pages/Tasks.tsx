@@ -316,7 +316,7 @@ export default function Tasks() {
     }
 
     setDialogOpen(false);
-    if (nextStatus === 'done' && !wasDone && editing && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
+    if (nextStatus === 'done' && !wasDone && editing && editing.notify_whatsapp && !editing.notify_sent_at) {
       await triggerNotify(taskId);
     }
     loadData();
@@ -327,7 +327,7 @@ export default function Tasks() {
     const prev = tasks.find(t => t.id === taskId);
     const safeStatus = await guardStatus(taskId, newStatus);
     await supabase.from('tasks').update({ status: safeStatus }).eq('id', taskId);
-    if (newStatus === 'done' && prev?.status !== 'done' && (prev?.notify_whatsapp || prev?.notify_email) && !prev?.notify_sent_at) {
+    if (newStatus === 'done' && prev?.status !== 'done' && prev?.notify_whatsapp && !prev?.notify_sent_at) {
       await triggerNotify(taskId);
     }
     loadData();
@@ -336,17 +336,20 @@ export default function Tasks() {
   async function triggerNotify(taskId: string) {
     try {
       const { data, error } = await supabase.functions.invoke('task-notify-client', { body: { taskId } });
-      if (error) { toast({ title: 'Falha ao notificar cliente', description: error.message, variant: 'destructive' }); return; }
-      const w = data?.whatsapp; const e = data?.email;
-      const msgs: string[] = [];
-      if (w) msgs.push(w.ok ? 'WhatsApp enviado' : `WhatsApp: ${w.error}`);
-      if (e) msgs.push(e.ok ? 'E-mail enviado' : `E-mail: ${e.error}`);
-      const anyOk = (w?.ok) || (e?.ok);
-      toast({ title: anyOk ? 'Cliente notificado' : 'Falha ao notificar cliente', description: msgs.join(' • '), variant: anyOk ? 'default' : 'destructive' });
+      if (error) { toast({ title: 'Falha ao enviar ao cliente', description: error.message, variant: 'destructive' }); return; }
+      const w = data?.whatsapp;
+      const ok = !!w?.ok;
+      toast({
+        title: ok ? 'Documentos enviados por WhatsApp' : 'Falha ao enviar ao cliente',
+        description: ok ? undefined : (w?.error || data?.error || 'Não foi possível enviar pelo WhatsApp.'),
+        variant: ok ? 'default' : 'destructive',
+      });
+      return ok;
     } catch (err: any) {
-      toast({ title: 'Erro ao notificar cliente', description: err.message, variant: 'destructive' });
+      toast({ title: 'Erro ao enviar ao cliente', description: err.message, variant: 'destructive' });
     }
   }
+
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -374,7 +377,8 @@ export default function Tasks() {
   function openNewTemplate() {
     setEditingTemplate(null);
     setTemplateForm({ name: '', department_id: '', description: '', default_due_days: '7',
-      notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '' });
+      notify_whatsapp: true, notify_email: false, notify_message: '', notify_email_subject: '' });
+
     setTemplateDialogOpen(true);
   }
   function openEditTemplate(tpl: TaskTemplate) {
@@ -383,9 +387,10 @@ export default function Tasks() {
       name: tpl.name, department_id: tpl.department_id, description: tpl.description || '',
       default_due_days: String(tpl.default_due_days),
       notify_whatsapp: !!tpl.notify_whatsapp,
-      notify_email: !!tpl.notify_email,
+      notify_email: false,
       notify_message: tpl.notify_message || '',
-      notify_email_subject: tpl.notify_email_subject || '',
+      notify_email_subject: '',
+
     });
     setTemplateDialogOpen(true);
   }
@@ -400,9 +405,10 @@ export default function Tasks() {
       description: templateForm.description || null,
       default_due_days: parseInt(templateForm.default_due_days) || 7,
       notify_whatsapp: templateForm.notify_whatsapp,
-      notify_email: templateForm.notify_email,
+      notify_email: false,
       notify_message: templateForm.notify_message || null,
-      notify_email_subject: templateForm.notify_email_subject || null,
+      notify_email_subject: null,
+
     };
     const { error } = editingTemplate
       ? await supabase.from('task_templates').update(payload as any).eq('id', editingTemplate.id)
@@ -454,9 +460,10 @@ export default function Tasks() {
       template_id: requestTemplate?.id || null,
       created_by: user?.id,
       notify_whatsapp: !!requestTemplate?.notify_whatsapp,
-      notify_email: !!requestTemplate?.notify_email,
+      notify_email: false,
       notify_message: requestTemplate?.notify_message || null,
-      notify_email_subject: requestTemplate?.notify_email_subject || null,
+      notify_email_subject: null,
+
     } as any).select('id').single();
     if (error) { setUploading(false); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     if (requestForm.assigned_to.length > 0 && data?.id) {
@@ -750,7 +757,21 @@ export default function Tasks() {
                             Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </p>
                         )}
+                        {task.status === 'done' && task.notify_whatsapp && !task.notify_sent_at && (
+                          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 dark:border-amber-800 dark:bg-amber-900/20">
+                            <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">Envio pendente</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-2 text-[11px] text-amber-700 hover:bg-amber-100 dark:text-amber-400"
+                              onClick={async (e) => { e.stopPropagation(); await triggerNotify(task.id); loadData(); }}
+                            >
+                              Reenviar
+                            </Button>
+                          </div>
+                        )}
                         <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <TimeTracker taskId={task.id} />
                             {(attachmentCounts[task.id]?.input || 0) > 0 && (
@@ -989,15 +1010,13 @@ export default function Tasks() {
             </div>
             {editing && (
               <>
-                {(editing.notify_whatsapp || editing.notify_email) && (
+                {editing.notify_whatsapp && (
                   <div className="text-xs text-muted-foreground border rounded-md p-2 bg-muted/30">
-                    Ao concluir, o cliente será notificado por
-                    {editing.notify_whatsapp ? ' WhatsApp' : ''}
-                    {editing.notify_whatsapp && editing.notify_email ? ' e' : ''}
-                    {editing.notify_email ? ' E-mail' : ''}.
+                    Ao concluir, o cliente será notificado por WhatsApp.
                     {editing.notify_sent_at && ' (Já enviado.)'}
                   </div>
                 )}
+
                 {(['input', 'output'] as const).map(dir => {
                   const list = editAttachments.filter(a => (a.direction || 'input') === dir);
                   return (
@@ -1059,11 +1078,7 @@ export default function Tasks() {
                 <Label htmlFor="tpl-notify-wa" className="text-sm font-normal">Enviar por WhatsApp</Label>
                 <Switch id="tpl-notify-wa" checked={templateForm.notify_whatsapp} onCheckedChange={v => setTemplateForm(f => ({ ...f, notify_whatsapp: v }))} />
               </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="tpl-notify-em" className="text-sm font-normal">Enviar por E-mail</Label>
-                <Switch id="tpl-notify-em" checked={templateForm.notify_email} onCheckedChange={v => setTemplateForm(f => ({ ...f, notify_email: v }))} />
-              </div>
-              {(templateForm.notify_whatsapp || templateForm.notify_email) && (
+              {templateForm.notify_whatsapp && (
                 <>
                   <div className="space-y-1">
                     <Label className="text-xs">Mensagem</Label>
@@ -1077,22 +1092,13 @@ export default function Tasks() {
                       Variáveis: <code>{'{{cliente}}'}</code>, <code>{'{{cnpj}}'}</code>, <code>{'{{tarefa}}'}</code>, <code>{'{{vencimento}}'}</code>, <code>{'{{descricao}}'}</code>, <code>{'{{responsavel}}'}</code>, <code>{'{{data_hoje}}'}</code>
                     </p>
                   </div>
-                  {templateForm.notify_email && (
-                    <div className="space-y-1">
-                      <Label className="text-xs">Assunto do e-mail</Label>
-                      <Input
-                        value={templateForm.notify_email_subject}
-                        onChange={e => setTemplateForm({ ...templateForm, notify_email_subject: e.target.value })}
-                        placeholder={`Documentos da tarefa: ${templateForm.name || ''}`}
-                      />
-                    </div>
-                  )}
                   <p className="text-xs text-muted-foreground">
                     Os arquivos anexados como "Para o cliente" serão enviados junto.
                   </p>
                 </>
               )}
             </div>
+
             <Button type="submit" className="w-full">{editingTemplate ? 'Salvar' : 'Cadastrar'}</Button>
           </form>
         </DialogContent>
