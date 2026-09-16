@@ -972,7 +972,23 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     ? getInstanceProgress(detailInstance.id, detailInstance.obligation_id)
     : { completed: 0, total: 0, percent: 0 };
 
+  // Tarefas do mês (por prazo), respeitando os mesmos filtros e a suspensão de serviços.
+  const monthTasksFor = useCallback((targetYear: number, targetMonth: number, departmentId?: string) => {
+    const prefix = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-`;
+    return tasks.filter(t => {
+      if (!t.due_date || !t.due_date.startsWith(prefix)) return false;
+      if (departmentId && t.department_id !== departmentId) return false;
+      if (filterDept !== 'all' && t.department_id !== filterDept) return false;
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      const cli = t.client_id ? clientMap.get(t.client_id) : null;
+      if (!matchesRegime(cli)) return false;
+      if (cli?.services_suspended) return false;
+      return true;
+    });
+  }, [tasks, filterDept, filterClient, filterRegime, clientMap]);
+
   const dashboardStats = useMemo(() => {
+
     const calculate = (targetYear: number, targetMonth: number) => {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       
