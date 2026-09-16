@@ -182,8 +182,12 @@ export function OperationPerformance() {
       const completed = doneOnTime + doneLate;
       const toDo = todo + afterAlert + afterTarget + dueToday;
       const total = toDo + overdue + completed;
-      return { toDo, overdue, completed, doneOnTime, doneLate, dueToday, total, performance: total > 0 ? Math.round((completed / total) * 100) : 0 };
+      const mTasks = monthTasks(targetYear, targetMonth);
+      const perfTotal = total + mTasks.length;
+      const perfDone = completed + mTasks.filter(t => t.status === 'done').length;
+      return { toDo, overdue, completed, doneOnTime, doneLate, dueToday, total, performance: perfTotal > 0 ? Math.round((perfDone / perfTotal) * 100) : 0 };
     };
+
 
     const current = calculate(year, month);
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
