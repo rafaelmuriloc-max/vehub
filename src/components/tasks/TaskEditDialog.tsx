@@ -180,7 +180,7 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
     if (form.assigned_to.length > 0) {
       await supabase.from('task_assignments').insert(form.assigned_to.map(uid => ({ task_id: editing.id, user_id: uid })));
     }
-    if (nextStatus === 'done' && !wasDone && (editing.notify_whatsapp || editing.notify_email) && !editing.notify_sent_at) {
+    if (nextStatus === 'done' && !wasDone && editing.notify_whatsapp && !editing.notify_sent_at) {
       await triggerNotify(editing.id);
     }
     onOpenChange(false);
@@ -254,15 +254,13 @@ export function TaskEditDialog({ open, onOpenChange, taskId, onSaved }: Props) {
                 ))}
               </div>
             </div>
-            {(editing.notify_whatsapp || editing.notify_email) && (
+            {editing.notify_whatsapp && (
               <div className="text-xs text-muted-foreground border rounded-md p-2 bg-muted/30">
-                Ao concluir, o cliente será notificado por
-                {editing.notify_whatsapp ? ' WhatsApp' : ''}
-                {editing.notify_whatsapp && editing.notify_email ? ' e' : ''}
-                {editing.notify_email ? ' E-mail' : ''}.
+                Ao concluir, o cliente será notificado por WhatsApp.
                 {editing.notify_sent_at && ' (Já enviado.)'}
               </div>
             )}
+
             {(['input', 'output'] as const).map(dir => {
               const list = editAttachments.filter(a => (a.direction || 'input') === dir);
               return (
