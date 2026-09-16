@@ -204,6 +204,9 @@ export function OperationPerformance() {
         total++;
         if (isCompleted(inst)) completed++;
       }
+      const depTasks = monthTasks(targetYear, targetMonth, departmentId);
+      total += depTasks.length;
+      completed += depTasks.filter(t => t.status === 'done').length;
       return total > 0 ? Math.round((completed / total) * 100) : 0;
     };
 
