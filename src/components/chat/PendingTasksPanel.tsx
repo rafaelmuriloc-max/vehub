@@ -212,7 +212,7 @@ export function PendingTasksPanel({ phone, onClose, onCountChange }: Props) {
     if (error) { setBusyId(null); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
 
     if (newStatus === 'done' && prev && prev.status !== 'done'
-        && prev.notify_whatsapp
+        && (prev.notify_whatsapp || prev.notify_email)
         && !prev.notify_sent_at) {
       try {
         const { data, error: nErr } = await supabase.functions.invoke('task-notify-client', { body: { taskId } });
