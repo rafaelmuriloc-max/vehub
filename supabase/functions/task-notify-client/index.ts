@@ -356,43 +356,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---------- Email via smtp-send ----------
-    if (task.notify_email) {
-      if (!email) {
-        result.email = { ok: false, error: "Cliente sem e-mail" };
-      } else if (!task.department_id) {
-        result.email = { ok: false, error: "Tarefa sem departamento" };
-      } else {
-        const subjectRaw = (task.notify_email_subject || `Documentos da tarefa: ${task.title}`).trim();
-        const subject = applyTemplateVars(subjectRaw, templateVars);
-        const signatureHtml = responsavel
-          ? `<p><strong>${escapeHtml(responsavel)}</strong></p>`
-          : "";
-        const html = `${signatureHtml}<p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p>`;
-        const emailAttachments = attachments.map(a => ({ fileUrl: a.file_url, fileName: a.file_name }));
-        try {
-          const r = await fetch(`${SUPABASE_URL}/functions/v1/smtp-send`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: authHeader },
-            body: JSON.stringify({
-              departmentId: task.department_id,
-              to: email,
-              subject,
-              html,
-              attachments: emailAttachments,
-            }),
-          });
-          const j = await r.json().catch(() => ({}));
-          result.email = r.ok ? { ok: true } : { ok: false, error: j.error || `HTTP ${r.status}` };
-        } catch (e: any) {
-          result.email = { ok: false, error: e.message };
-        }
-      }
-    }
+    const anyOk = !!(result.whatsapp && result.whatsapp.ok);
 
-    const anyOk =
-      (result.whatsapp && result.whatsapp.ok) ||
-      (result.email && result.email.ok);
     if (anyOk) {
       await admin
         .from("tasks")

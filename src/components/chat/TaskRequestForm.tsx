@@ -121,9 +121,10 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       template_id: requestTemplate?.id || null,
       created_by: user?.id,
       notify_whatsapp: !!requestTemplate?.notify_whatsapp,
-      notify_email: !!requestTemplate?.notify_email,
+      notify_email: false,
       notify_message: requestTemplate?.notify_message || null,
-      notify_email_subject: requestTemplate?.notify_email_subject || null,
+      notify_email_subject: null,
+
     } as any).select('id').single();
     if (error) { setUploading(false); toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
     if (requestForm.assigned_to.length > 0 && data?.id) {
