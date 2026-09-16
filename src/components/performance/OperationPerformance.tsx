@@ -79,7 +79,18 @@ export function OperationPerformance() {
     };
     if (!data) return empty;
 
-    const { obligations, departments, activities, instances, completions, suspendedClients } = data;
+    const { obligations, departments, activities, instances, completions, suspendedClients, tasks } = data;
+
+    const monthTasks = (targetYear: number, targetMonth: number, departmentId?: string) => {
+      const prefix = monthKey(targetYear, targetMonth);
+      return tasks.filter(t => {
+        if (!t.due_date || !t.due_date.startsWith(prefix)) return false;
+        if (departmentId && t.department_id !== departmentId) return false;
+        if (t.client_id && suspendedClients.has(t.client_id)) return false;
+        return true;
+      });
+    };
+
     const oblMap = new Map(obligations.map(o => [o.id, o]));
 
     const activitiesByObligation = new Map<string, string[]>();
