@@ -159,7 +159,7 @@ export function OperationPerformance() {
     };
 
     const calculate = (targetYear: number, targetMonth: number) => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = todayKey();
       const hols = getHolidays(targetYear);
       let todo = 0, afterAlert = 0, afterTarget = 0, overdue = 0, doneOnTime = 0, doneLate = 0, dueToday = 0;
 
@@ -194,7 +194,7 @@ export function OperationPerformance() {
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
 
     const performanceFor = (departmentId: string, targetYear: number, targetMonth: number) => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = todayKey();
       const hols = getHolidays(targetYear);
       let completed = 0;
       let total = 0;
