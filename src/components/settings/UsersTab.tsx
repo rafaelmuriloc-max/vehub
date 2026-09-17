@@ -13,12 +13,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, UserPlus, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, UserPlus, ChevronDown, KeyRound, RefreshCw, Copy } from 'lucide-react';
 
 interface UserRow {
   id: string; user_id: string; full_name: string | null; job_title: string | null;
   department_id: string | null; department_ids: string[]; role: string; tag_color: string | null;
-  hourly_rate: number | null;
+  hourly_rate: number | null; must_change_password: boolean;
 }
 interface Dept { id: string; name: string; }
 
@@ -27,6 +27,24 @@ const TAG_COLOR_PRESETS = [
   '#2563EB', '#0891B2', '#059669', '#65A30D',
   '#475569', '#0F172A',
 ];
+
+const PWD_UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const PWD_LOWER = 'abcdefghijkmnopqrstuvwxyz';
+const PWD_DIGITS = '23456789';
+const PWD_SYMBOLS = '!@#$%&*';
+
+/** Gera a senha temporária exibida para o admin (a mesma política da rotina de envio). */
+function genTempPassword(): string {
+  const all = PWD_UPPER + PWD_LOWER + PWD_DIGITS + PWD_SYMBOLS;
+  const pick = (chars: string) => chars[Math.floor(Math.random() * chars.length)];
+  const chars = [pick(PWD_UPPER), pick(PWD_LOWER), pick(PWD_DIGITS), pick(PWD_SYMBOLS)];
+  for (let i = 0; i < 8; i++) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
 
 function ColorPickerField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
