@@ -72,3 +72,22 @@ export function isSimplesNacional(value: string | null | undefined): boolean {
   const v = (value || '').toLowerCase();
   return v.includes('simples');
 }
+
+/**
+ * Data (yyyy-MM-dd) no fuso de Brasília. Evita que um horário à noite
+ * seja contado como o dia seguinte por causa do UTC.
+ */
+export function localDateKey(value?: string | Date | null): string {
+  const d = value ? (typeof value === 'string' ? new Date(value) : value) : new Date();
+  if (Number.isNaN(d.getTime())) return typeof value === 'string' ? value.split('T')[0] : '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+  return parts;
+}
+
+/** Data de hoje (yyyy-MM-dd) no fuso de Brasília. */
+export function todayKey(): string {
+  return localDateKey();
+}
