@@ -446,8 +446,34 @@ export function UsersTab() {
               <p className="text-xs text-muted-foreground mt-1">Pode ser fictício — será usado apenas para login (formato de e-mail válido).</p>
             </div>
             <div>
-              <Label>Senha *</Label>
-              <Input type="password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" />
+              <Label>Senha temporária *</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  className="font-mono"
+                  value={createForm.password}
+                  onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
+                  placeholder="Senha temporária enviada por WhatsApp"
+                />
+                <Button
+                  type="button"
+                  variant="outline" size="icon"
+                  title="Gerar outra senha temporária"
+                  onClick={() => setCreateForm({ ...createForm, password: genTempPassword() })}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Enviada por WhatsApp. O usuário será obrigado a trocá-la no primeiro acesso.</p>
+            </div>
+            <div>
+              <Label>WhatsApp (recebe o acesso) *</Label>
+              <Input
+                value={createForm.whatsapp}
+                onChange={e => setCreateForm({ ...createForm, whatsapp: e.target.value })}
+                placeholder="(47) 99999-9999"
+                inputMode="tel"
+              />
             </div>
             <div><Label>Nome</Label><Input value={createForm.full_name} onChange={e => setCreateForm({ ...createForm, full_name: e.target.value })} /></div>
             <div><Label>Cargo</Label><Input value={createForm.job_title} onChange={e => setCreateForm({ ...createForm, job_title: e.target.value })} /></div>
@@ -476,6 +502,61 @@ export function UsersTab() {
             </div>
           </div>
           <DialogFooter><Button onClick={handleCreate} disabled={creating}>{creating ? 'Criando...' : 'Criar Usuário'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Access Dialog */}
+      <Dialog open={!!accessTarget} onOpenChange={o => { if (!o) { setAccessTarget(null); setAccessResult(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar acesso por WhatsApp</DialogTitle>
+          </DialogHeader>
+          {accessResult ? (
+            <div className="space-y-3">
+              <div className={`flex items-start gap-2 p-3 rounded-md text-sm ${accessResult.whatsapp_sent ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+                {accessResult.whatsapp_sent
+                  ? <span>Mensagem enviada para {accessTarget?.full_name || 'o usuário'}. A senha anterior foi invalidada.</span>
+                  : <span>Não foi possível enviar pelo WhatsApp{accessResult.whatsapp_error ? `: ${accessResult.whatsapp_error}` : '.'} A senha temporária abaixo continua válida — repasse manualmente.</span>}
+              </div>
+              <div>
+                <Label>Nova senha temporária (exibida uma única vez)</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input readOnly className="font-mono" value={accessResult.temp_password} />
+                  <Button
+                    type="button" variant="outline" size="icon"
+                    title="Copiar senha"
+                    onClick={() => { navigator.clipboard?.writeText(accessResult.temp_password); toast({ title: 'Senha copiada' }); }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Gera uma nova senha temporária para <strong>{accessTarget?.full_name || 'este usuário'}</strong>, invalida a anterior e envia o acesso por WhatsApp.
+              </p>
+              <div>
+                <Label>WhatsApp do usuário *</Label>
+                <Input
+                  value={accessPhone}
+                  onChange={e => setAccessPhone(e.target.value)}
+                  placeholder="(47) 99999-9999"
+                  inputMode="tel"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            {accessResult ? (
+              <Button onClick={() => { setAccessTarget(null); setAccessResult(null); }}>Fechar</Button>
+            ) : (
+              <Button onClick={handleSendAccess} disabled={sendingAccess}>
+                {sendingAccess ? 'Enviando...' : 'Gerar e enviar'}
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
