@@ -5,10 +5,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, BarChart3, CheckSquare, Clock, ListChecks, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
 import { getHolidays, previousBusinessDay } from '@/lib/holidays';
 import { DepartmentGauge, OfficeGauge } from './gauges';
 import { fetchAllPaged } from '@/lib/fetchInChunks';
+import { localDateKey, todayKey } from '@/lib/utils';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; on_hold?: boolean | null };
 type Obligation = { id: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; recurrence?: string | null };
@@ -131,7 +131,7 @@ export function OperationPerformance() {
       const done = completedAt(inst.id);
       const due = dueDateOf(inst, holidays);
       if (!done || !due) return false;
-      return done.split('T')[0] > due;
+      return localDateKey(done) > due;
     };
 
     // Mesma regra das listas do calendário: a obrigação pertence ao mês quando
@@ -158,7 +158,7 @@ export function OperationPerformance() {
     };
 
     const calculate = (targetYear: number, targetMonth: number) => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = todayKey();
       const hols = getHolidays(targetYear);
       let todo = 0, afterAlert = 0, afterTarget = 0, overdue = 0, doneOnTime = 0, doneLate = 0, dueToday = 0;
 
@@ -193,7 +193,7 @@ export function OperationPerformance() {
     const previous = calculate(previousDate.getFullYear(), previousDate.getMonth());
 
     const performanceFor = (departmentId: string, targetYear: number, targetMonth: number) => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = todayKey();
       const hols = getHolidays(targetYear);
       let completed = 0;
       let total = 0;

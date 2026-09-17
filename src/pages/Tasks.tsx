@@ -20,7 +20,7 @@ import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 import { TasksRankingTab } from '@/components/tasks/TasksRankingTab';
 import { ClientCostReport } from '@/components/tasks/ClientCostReport';
 import { TimeTracker } from '@/components/time-tracking/TimeTracker';
-import { formatClientLabel } from '@/lib/utils';
+import { formatClientLabel, localDateKey, todayKey } from '@/lib/utils';
 
 type Task = {
   id: string; task_number?: number | null; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
@@ -351,7 +351,7 @@ export default function Tasks() {
   }
 
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayKey();
 
   function getDueDateColor(due: string | null) {
     if (!due) return '';
@@ -370,7 +370,7 @@ export default function Tasks() {
   const getDeptName = (id: string | null | undefined) => departments.find(d => d.id === id)?.name || '';
   const isCompletedOnTime = (task: Task) => {
     if (task.status !== 'done' || !task.due_date || !task.completed_at) return false;
-    const completedDate = task.completed_at.split('T')[0];
+    const completedDate = localDateKey(task.completed_at);
     return completedDate <= task.due_date;
   };
 
