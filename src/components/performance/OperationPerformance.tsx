@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { getHolidays, previousBusinessDay } from '@/lib/holidays';
 import { DepartmentGauge, OfficeGauge } from './gauges';
 import { fetchAllPaged } from '@/lib/fetchInChunks';
+import { localDateKey, todayKey } from '@/lib/utils';
 
 type Instance = { id: string; client_id: string; obligation_id: string; reference_month: string; due_date?: string | null; deleted_at?: string | null; status?: string | null; on_hold?: boolean | null };
 type Obligation = { id: string; department_id: string; alert_day: number | null; target_day: number | null; due_day: number | null; recurrence?: string | null };
