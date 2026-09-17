@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { ShieldAlert } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { GOOGLE_AUTH_ENABLED, oauthRedirectTo } from '@/lib/tenant';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 60;
@@ -147,6 +149,39 @@ export default function Auth() {
                 {submitting ? 'Aguarde...' : isLockedOut ? `Bloqueado (${countdown}s)` : isLogin ? 'Entrar' : 'Cadastrar'}
               </Button>
             </form>
+
+            {/* Só aparece após o isolamento aplicado e o provider configurado
+                (VITE_MULTI_TENANT + VITE_ENABLE_GOOGLE_AUTH). */}
+            {GOOGLE_AUTH_ENABLED && (
+              <>
+                <div className="my-5 flex items-center gap-3">
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground">ou</span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11 font-medium"
+                  disabled={submitting}
+                  onClick={async () => {
+                    setSubmitting(true);
+                    const { error } = await supabase.auth.signInWithOAuth({
+                      provider: 'google',
+                      options: { redirectTo: oauthRedirectTo() },
+                    });
+                    setSubmitting(false);
+                    if (error) {
+                      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+                    }
+                  }}
+                >
+                  Entrar com Google
+                </Button>
+              </>
+            )}
+
+
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               {isLogin ? 'Não tem conta?' : 'Já tem conta?'}{' '}
