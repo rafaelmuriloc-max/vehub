@@ -134,8 +134,14 @@ export function UsersTab() {
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_ids: [] as string[], tag_color: '' });
+  const [createForm, setCreateForm] = useState({ email: '', password: '', whatsapp: '', full_name: '', job_title: '', role: 'employee', department_ids: [] as string[], tag_color: '' });
   const [creating, setCreating] = useState(false);
+
+  // Send access (reenvio de credenciais por WhatsApp)
+  const [accessTarget, setAccessTarget] = useState<UserRow | null>(null);
+  const [accessPhone, setAccessPhone] = useState('');
+  const [sendingAccess, setSendingAccess] = useState(false);
+  const [accessResult, setAccessResult] = useState<{ temp_password: string; whatsapp_sent: boolean; whatsapp_error: string | null } | null>(null);
 
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
@@ -161,6 +167,7 @@ export function UsersTab() {
         department_ids: linkMap.get(p.user_id) || [],
         tag_color: p.tag_color ?? null,
         hourly_rate: p.hourly_rate ?? null,
+        must_change_password: !!p.must_change_password,
       })));
     }
   };
