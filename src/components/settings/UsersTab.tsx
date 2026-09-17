@@ -322,7 +322,7 @@ export function UsersTab() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Usuários</CardTitle>
         {admin && (
-          <Button onClick={() => setCreateOpen(true)} size="sm">
+          <Button onClick={openCreate} size="sm">
             <UserPlus className="h-4 w-4 mr-2" />Novo Usuário
           </Button>
         )}
@@ -342,7 +342,14 @@ export function UsersTab() {
           <TableBody>
             {users.map(u => (
               <TableRow key={u.id}>
-                <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
+                <TableCell className="font-medium">
+                  <span className="inline-flex items-center gap-2">
+                    {u.full_name || '—'}
+                    {u.must_change_password && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-500/50 shrink-0">Senha temporária</Badge>
+                    )}
+                  </span>
+                </TableCell>
                 <TableCell>{u.job_title || '—'}</TableCell>
                 <TableCell title={u.department_ids.map(deptName).join(', ') || 'Todos os departamentos'}>
                   {deptListLabel(u.department_ids)}
@@ -357,6 +364,13 @@ export function UsersTab() {
                 </TableCell>
                 {admin && (
                   <TableCell className="flex gap-1">
+                    <Button
+                      variant="ghost" size="icon"
+                      title="Enviar acesso por WhatsApp"
+                      onClick={() => { setAccessTarget(u); setAccessResult(null); setAccessPhone(''); }}
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
                     <Button
                       variant="ghost" size="icon"
