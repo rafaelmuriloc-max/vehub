@@ -26,7 +26,7 @@ import EmailComposeDialog from '@/components/EmailComposeDialog';
 import { sendActivityEmail } from '@/lib/sendActivityEmail';
 import { sendActivityWhatsApp } from '@/lib/sendActivityWhatsApp';
 import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays';
-import { sanitizeStorageName, formatClientLabel, normalizeTaxRegime } from '@/lib/utils';
+import { sanitizeStorageName, formatClientLabel, normalizeTaxRegime, localDateKey, todayKey } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 import { TimeTracker } from '@/components/time-tracking/TimeTracker';
 import { useAuth } from '@/hooks/useAuth';
@@ -388,7 +388,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const month = currentDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayKey();
 
   const days = Array.from({ length: 42 }, (_, i) => {
     const day = i - firstDay + 1;
@@ -607,7 +607,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const completedAt = getInstanceCompletedAt(instanceId);
     const dueDate = getInstanceDueDate(instanceId);
     if (!completedAt || !dueDate) return false;
-    const completedDate = completedAt.split('T')[0];
+    const completedDate = localDateKey(completedAt);
     return completedDate > dueDate;
   }
 
@@ -615,7 +615,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const completedAt = getInstanceCompletedAt(instanceId);
     const dueDate = getInstanceDueDate(instanceId);
     if (!completedAt || !dueDate) return null;
-    const completed = parseISO(completedAt.split('T')[0]);
+    const completed = parseISO(localDateKey(completedAt));
     const due = parseISO(dueDate);
     const diff = Math.floor((completed.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
     return diff > 0 ? diff : null;
@@ -625,13 +625,13 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     if (isInstanceCompleted(instanceId, obligationId)) return false;
     const dueDate = getInstanceDueDate(instanceId);
     if (!dueDate) return false;
-    return format(new Date(), 'yyyy-MM-dd') > dueDate;
+    return todayKey() > dueDate;
   }
 
   function getOverdueDays(instanceId: string): number | null {
     const dueDate = getInstanceDueDate(instanceId);
     if (!dueDate) return null;
-    const today = parseISO(format(new Date(), 'yyyy-MM-dd'));
+    const today = parseISO(todayKey());
     const diff = Math.floor((today.getTime() - parseISO(dueDate).getTime()) / (1000 * 60 * 60 * 24));
     return diff > 0 ? diff : null;
   }
@@ -995,7 +995,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const dashboardStats = useMemo(() => {
 
     const calculate = (targetYear: number, targetMonth: number) => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = todayKey();
       
       const hols = getHolidays(targetYear);
       let todo = 0;
@@ -1066,7 +1066,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const departmentPerformance = useMemo(() => {
     const calculateForDepartment = (departmentId: string, targetYear: number, targetMonth: number) => {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = todayKey();
       let completed = 0;
       let total = 0;
       for (const entry of monthInstanceEvents(targetYear, targetMonth)) {

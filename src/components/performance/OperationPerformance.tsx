@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, BarChart3, CheckSquare, Clock, ListChecks, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
 import { getHolidays, previousBusinessDay } from '@/lib/holidays';
 import { DepartmentGauge, OfficeGauge } from './gauges';
 import { fetchAllPaged } from '@/lib/fetchInChunks';
