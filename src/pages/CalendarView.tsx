@@ -167,6 +167,11 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [nowClock, setNowClock] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNowClock(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
