@@ -2096,6 +2096,7 @@ export type Database = {
           hourly_rate: number | null
           id: string
           job_title: string | null
+          must_change_password: boolean
           tag_color: string | null
           updated_at: string
           user_id: string
@@ -2108,6 +2109,7 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           job_title?: string | null
+          must_change_password?: boolean
           tag_color?: string | null
           updated_at?: string
           user_id: string
@@ -2120,6 +2122,7 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           job_title?: string | null
+          must_change_password?: boolean
           tag_color?: string | null
           updated_at?: string
           user_id?: string
