@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isAdmin: boolean;
-  profile: { full_name: string; avatar_url: string | null; job_title: string | null } | null;
+  profile: { full_name: string; avatar_url: string | null; job_title: string | null; must_change_password: boolean } | null;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchUserData(userId: string) {
     const [{ data: roles }, { data: prof }] = await Promise.all([
       supabase.from('user_roles').select('role').eq('user_id', userId),
-      supabase.from('profiles').select('full_name, avatar_url, job_title').eq('user_id', userId).single(),
+      supabase.from('profiles').select('full_name, avatar_url, job_title, must_change_password').eq('user_id', userId).single(),
     ]);
     setIsAdmin(roles?.some(r => r.role === 'admin') ?? false);
     setProfile(prof ?? null);

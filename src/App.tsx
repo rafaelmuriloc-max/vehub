@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import Auth from "./pages/Auth";
+import ChangePassword from "./pages/ChangePassword";
 import Clients from "./pages/Clients";
 import Financial from "./pages/Financial";
 import CalendarView from "./pages/CalendarView";
