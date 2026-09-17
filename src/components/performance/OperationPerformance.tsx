@@ -132,7 +132,7 @@ export function OperationPerformance() {
       const done = completedAt(inst.id);
       const due = dueDateOf(inst, holidays);
       if (!done || !due) return false;
-      return done.split('T')[0] > due;
+      return localDateKey(done) > due;
     };
 
     // Mesma regra das listas do calendário: a obrigação pertence ao mês quando
