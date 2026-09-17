@@ -208,6 +208,11 @@ export function UsersTab() {
   };
 
   // --- CREATE ---
+  const openCreate = () => {
+    setCreateForm({ email: '', password: genTempPassword(), whatsapp: '', full_name: '', job_title: '', role: 'employee', department_ids: [], tag_color: '' });
+    setCreateOpen(true);
+  };
+
   const handleCreate = async () => {
     if (!createForm.email || !createForm.password) {
       toast({ title: 'Erro', description: 'E-mail e senha são obrigatórios', variant: 'destructive' });
@@ -215,6 +220,11 @@ export function UsersTab() {
     }
     if (createForm.password.length < 6) {
       toast({ title: 'Erro', description: 'A senha deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      return;
+    }
+    const digitsOnly = createForm.whatsapp.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      toast({ title: 'Erro', description: 'Informe o WhatsApp do usuário com DDD para enviar o acesso', variant: 'destructive' });
       return;
     }
     setCreating(true);
@@ -229,19 +239,52 @@ export function UsersTab() {
           department_ids: createForm.department_ids,
           role: createForm.role,
           tag_color: createForm.tag_color || undefined,
+          whatsapp: digitsOnly,
         },
       });
       if (res.error || res.data?.error) {
         throw new Error(res.data?.error || res.error?.message || 'Erro ao criar usuário');
       }
-      toast({ title: 'Usuário criado', description: createForm.email });
+      if (res.data?.whatsapp_sent) {
+        toast({ title: 'Usuário criado', description: 'Acesso enviado por WhatsApp.' });
+      } else {
+        toast({ title: 'Usuário criado', description: res.data?.whatsapp_error || 'Acesso enviado por WhatsApp não confirmado — use "Enviar acesso" na lista.' , variant: 'destructive' });
+      }
       setCreateOpen(false);
-      setCreateForm({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_ids: [], tag_color: '' });
       fetchData();
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  // --- SEND ACCESS (reenvio por WhatsApp) ---
+  const handleSendAccess = async () => {
+    if (!accessTarget) return;
+    const digitsOnly = accessPhone.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      toast({ title: 'Erro', description: 'Informe um número de WhatsApp válido com DDD', variant: 'destructive' });
+      return;
+    }
+    setSendingAccess(true);
+    try {
+      const res = await supabase.functions.invoke('manage-user', {
+        body: { action: 'send-access', user_id: accessTarget.user_id, whatsapp: digitsOnly },
+      });
+      if (res.error || res.data?.error) {
+        throw new Error(res.data?.error || res.error?.message || 'Erro ao enviar acesso');
+      }
+      setAccessResult({
+        temp_password: res.data.temp_password,
+        whatsapp_sent: res.data.whatsapp_sent,
+        whatsapp_error: res.data.whatsapp_error ?? null,
+      });
+      fetchData();
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingAccess(false);
     }
   };
 
