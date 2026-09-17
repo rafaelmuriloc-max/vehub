@@ -44,6 +44,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/chat/popup" element={<ChatPopup />} />
             <Route element={<AppLayout />}>
               <Route path="/" element={<Financial />} />
