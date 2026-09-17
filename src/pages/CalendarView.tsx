@@ -167,6 +167,11 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [nowClock, setNowClock] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNowClock(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [filterDept, setFilterDept] = useState('all');
   const [filterClient, setFilterClient] = useState('all');
@@ -1218,7 +1223,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-medium capitalize text-muted-foreground">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</p>
+            <p className="text-xs font-medium capitalize text-muted-foreground">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(nowClock)}</p>
             <h1 className="mt-0.5 font-calendarHeading text-2xl font-bold text-calendar-navy">Bom dia, {profile?.full_name?.trim().split(/\s+/)[0] || 'Equipe'}!</h1>
             <p className="text-xs text-muted-foreground">Aqui está o panorama das suas obrigações e prazos.</p>
           </div>
