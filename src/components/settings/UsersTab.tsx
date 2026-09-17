@@ -13,12 +13,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, UserPlus, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, UserPlus, ChevronDown, KeyRound, RefreshCw, Copy } from 'lucide-react';
 
 interface UserRow {
   id: string; user_id: string; full_name: string | null; job_title: string | null;
   department_id: string | null; department_ids: string[]; role: string; tag_color: string | null;
-  hourly_rate: number | null;
+  hourly_rate: number | null; must_change_password: boolean;
 }
 interface Dept { id: string; name: string; }
 
@@ -27,6 +27,24 @@ const TAG_COLOR_PRESETS = [
   '#2563EB', '#0891B2', '#059669', '#65A30D',
   '#475569', '#0F172A',
 ];
+
+const PWD_UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const PWD_LOWER = 'abcdefghijkmnopqrstuvwxyz';
+const PWD_DIGITS = '23456789';
+const PWD_SYMBOLS = '!@#$%&*';
+
+/** Gera a senha temporária exibida para o admin (a mesma política da rotina de envio). */
+function genTempPassword(): string {
+  const all = PWD_UPPER + PWD_LOWER + PWD_DIGITS + PWD_SYMBOLS;
+  const pick = (chars: string) => chars[Math.floor(Math.random() * chars.length)];
+  const chars = [pick(PWD_UPPER), pick(PWD_LOWER), pick(PWD_DIGITS), pick(PWD_SYMBOLS)];
+  for (let i = 0; i < 8; i++) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
 
 function ColorPickerField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -116,8 +134,14 @@ export function UsersTab() {
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_ids: [] as string[], tag_color: '' });
+  const [createForm, setCreateForm] = useState({ email: '', password: '', whatsapp: '', full_name: '', job_title: '', role: 'employee', department_ids: [] as string[], tag_color: '' });
   const [creating, setCreating] = useState(false);
+
+  // Send access (reenvio de credenciais por WhatsApp)
+  const [accessTarget, setAccessTarget] = useState<UserRow | null>(null);
+  const [accessPhone, setAccessPhone] = useState('');
+  const [sendingAccess, setSendingAccess] = useState(false);
+  const [accessResult, setAccessResult] = useState<{ temp_password: string; whatsapp_sent: boolean; whatsapp_error: string | null } | null>(null);
 
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
@@ -143,6 +167,7 @@ export function UsersTab() {
         department_ids: linkMap.get(p.user_id) || [],
         tag_color: p.tag_color ?? null,
         hourly_rate: p.hourly_rate ?? null,
+        must_change_password: !!p.must_change_password,
       })));
     }
   };
@@ -183,6 +208,11 @@ export function UsersTab() {
   };
 
   // --- CREATE ---
+  const openCreate = () => {
+    setCreateForm({ email: '', password: genTempPassword(), whatsapp: '', full_name: '', job_title: '', role: 'employee', department_ids: [], tag_color: '' });
+    setCreateOpen(true);
+  };
+
   const handleCreate = async () => {
     if (!createForm.email || !createForm.password) {
       toast({ title: 'Erro', description: 'E-mail e senha são obrigatórios', variant: 'destructive' });
@@ -190,6 +220,11 @@ export function UsersTab() {
     }
     if (createForm.password.length < 6) {
       toast({ title: 'Erro', description: 'A senha deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      return;
+    }
+    const digitsOnly = createForm.whatsapp.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      toast({ title: 'Erro', description: 'Informe o WhatsApp do usuário com DDD para enviar o acesso', variant: 'destructive' });
       return;
     }
     setCreating(true);
@@ -204,19 +239,52 @@ export function UsersTab() {
           department_ids: createForm.department_ids,
           role: createForm.role,
           tag_color: createForm.tag_color || undefined,
+          whatsapp: digitsOnly,
         },
       });
       if (res.error || res.data?.error) {
         throw new Error(res.data?.error || res.error?.message || 'Erro ao criar usuário');
       }
-      toast({ title: 'Usuário criado', description: createForm.email });
+      if (res.data?.whatsapp_sent) {
+        toast({ title: 'Usuário criado', description: 'Acesso enviado por WhatsApp.' });
+      } else {
+        toast({ title: 'Usuário criado', description: res.data?.whatsapp_error || 'Acesso enviado por WhatsApp não confirmado — use "Enviar acesso" na lista.' , variant: 'destructive' });
+      }
       setCreateOpen(false);
-      setCreateForm({ email: '', password: '', full_name: '', job_title: '', role: 'employee', department_ids: [], tag_color: '' });
       fetchData();
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  // --- SEND ACCESS (reenvio por WhatsApp) ---
+  const handleSendAccess = async () => {
+    if (!accessTarget) return;
+    const digitsOnly = accessPhone.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      toast({ title: 'Erro', description: 'Informe um número de WhatsApp válido com DDD', variant: 'destructive' });
+      return;
+    }
+    setSendingAccess(true);
+    try {
+      const res = await supabase.functions.invoke('manage-user', {
+        body: { action: 'send-access', user_id: accessTarget.user_id, whatsapp: digitsOnly },
+      });
+      if (res.error || res.data?.error) {
+        throw new Error(res.data?.error || res.error?.message || 'Erro ao enviar acesso');
+      }
+      setAccessResult({
+        temp_password: res.data.temp_password,
+        whatsapp_sent: res.data.whatsapp_sent,
+        whatsapp_error: res.data.whatsapp_error ?? null,
+      });
+      fetchData();
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingAccess(false);
     }
   };
 
@@ -254,7 +322,7 @@ export function UsersTab() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Usuários</CardTitle>
         {admin && (
-          <Button onClick={() => setCreateOpen(true)} size="sm">
+          <Button onClick={openCreate} size="sm">
             <UserPlus className="h-4 w-4 mr-2" />Novo Usuário
           </Button>
         )}
@@ -274,7 +342,14 @@ export function UsersTab() {
           <TableBody>
             {users.map(u => (
               <TableRow key={u.id}>
-                <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
+                <TableCell className="font-medium">
+                  <span className="inline-flex items-center gap-2">
+                    {u.full_name || '—'}
+                    {u.must_change_password && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-500/50 shrink-0">Senha temporária</Badge>
+                    )}
+                  </span>
+                </TableCell>
                 <TableCell>{u.job_title || '—'}</TableCell>
                 <TableCell title={u.department_ids.map(deptName).join(', ') || 'Todos os departamentos'}>
                   {deptListLabel(u.department_ids)}
@@ -289,6 +364,13 @@ export function UsersTab() {
                 </TableCell>
                 {admin && (
                   <TableCell className="flex gap-1">
+                    <Button
+                      variant="ghost" size="icon"
+                      title="Enviar acesso por WhatsApp"
+                      onClick={() => { setAccessTarget(u); setAccessResult(null); setAccessPhone(''); }}
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
                     <Button
                       variant="ghost" size="icon"
@@ -364,8 +446,34 @@ export function UsersTab() {
               <p className="text-xs text-muted-foreground mt-1">Pode ser fictício — será usado apenas para login (formato de e-mail válido).</p>
             </div>
             <div>
-              <Label>Senha *</Label>
-              <Input type="password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" />
+              <Label>Senha temporária *</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  className="font-mono"
+                  value={createForm.password}
+                  onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
+                  placeholder="Senha temporária enviada por WhatsApp"
+                />
+                <Button
+                  type="button"
+                  variant="outline" size="icon"
+                  title="Gerar outra senha temporária"
+                  onClick={() => setCreateForm({ ...createForm, password: genTempPassword() })}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Enviada por WhatsApp. O usuário será obrigado a trocá-la no primeiro acesso.</p>
+            </div>
+            <div>
+              <Label>WhatsApp (recebe o acesso) *</Label>
+              <Input
+                value={createForm.whatsapp}
+                onChange={e => setCreateForm({ ...createForm, whatsapp: e.target.value })}
+                placeholder="(47) 99999-9999"
+                inputMode="tel"
+              />
             </div>
             <div><Label>Nome</Label><Input value={createForm.full_name} onChange={e => setCreateForm({ ...createForm, full_name: e.target.value })} /></div>
             <div><Label>Cargo</Label><Input value={createForm.job_title} onChange={e => setCreateForm({ ...createForm, job_title: e.target.value })} /></div>
@@ -394,6 +502,61 @@ export function UsersTab() {
             </div>
           </div>
           <DialogFooter><Button onClick={handleCreate} disabled={creating}>{creating ? 'Criando...' : 'Criar Usuário'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Access Dialog */}
+      <Dialog open={!!accessTarget} onOpenChange={o => { if (!o) { setAccessTarget(null); setAccessResult(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar acesso por WhatsApp</DialogTitle>
+          </DialogHeader>
+          {accessResult ? (
+            <div className="space-y-3">
+              <div className={`flex items-start gap-2 p-3 rounded-md text-sm ${accessResult.whatsapp_sent ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+                {accessResult.whatsapp_sent
+                  ? <span>Mensagem enviada para {accessTarget?.full_name || 'o usuário'}. A senha anterior foi invalidada.</span>
+                  : <span>Não foi possível enviar pelo WhatsApp{accessResult.whatsapp_error ? `: ${accessResult.whatsapp_error}` : '.'} A senha temporária abaixo continua válida — repasse manualmente.</span>}
+              </div>
+              <div>
+                <Label>Nova senha temporária (exibida uma única vez)</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input readOnly className="font-mono" value={accessResult.temp_password} />
+                  <Button
+                    type="button" variant="outline" size="icon"
+                    title="Copiar senha"
+                    onClick={() => { navigator.clipboard?.writeText(accessResult.temp_password); toast({ title: 'Senha copiada' }); }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Gera uma nova senha temporária para <strong>{accessTarget?.full_name || 'este usuário'}</strong>, invalida a anterior e envia o acesso por WhatsApp.
+              </p>
+              <div>
+                <Label>WhatsApp do usuário *</Label>
+                <Input
+                  value={accessPhone}
+                  onChange={e => setAccessPhone(e.target.value)}
+                  placeholder="(47) 99999-9999"
+                  inputMode="tel"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            {accessResult ? (
+              <Button onClick={() => { setAccessTarget(null); setAccessResult(null); }}>Fechar</Button>
+            ) : (
+              <Button onClick={handleSendAccess} disabled={sendingAccess}>
+                {sendingAccess ? 'Enviando...' : 'Gerar e enviar'}
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

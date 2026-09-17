@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -14,16 +14,14 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 60;
 
 export default function Auth() {
-  const { user, loading, isAdmin } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
+  const { user, loading, isAdmin, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(0);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const { toast } = useToast();
 
   // Countdown timer for lockout
@@ -47,7 +45,10 @@ export default function Auth() {
   const isLockedOut = lockoutUntil !== null && Date.now() < lockoutUntil;
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p>Carregando...</p></div>;
-  if (user) return <Navigate to={isAdmin ? '/' : '/calendar'} replace />;
+  if (user) {
+    if (profile?.must_change_password) return <Navigate to="/change-password" replace />;
+    return <Navigate to={isAdmin ? '/' : '/calendar'} replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,9 +59,7 @@ export default function Auth() {
     }
 
     setSubmitting(true);
-    const { error } = isLogin
-      ? await signIn(email, password)
-      : await signUp(email, password, fullName);
+    const { error } = await signIn(email, password);
     setSubmitting(false);
 
     if (error) {
@@ -74,9 +73,6 @@ export default function Auth() {
       }
     } else {
       setFailedAttempts(0);
-      if (!isLogin) {
-        toast({ title: 'Sucesso', description: 'Verifique seu email para confirmar o cadastro.' });
-      }
     }
   };
 
@@ -116,21 +112,11 @@ export default function Auth() {
             </div>
 
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-foreground">
-                {isLogin ? 'Bem-vindo de volta' : 'Crie sua conta'}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {isLogin ? 'Faça login para acessar o sistema' : 'Preencha os dados para começar'}
-              </p>
+              <h2 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h2>
+              <p className="text-sm text-muted-foreground mt-1">Faça login para acessar o sistema</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm font-medium">Nome completo</Label>
-                  <Input id="name" value={fullName} onChange={e => setFullName(e.target.value)} required placeholder="Seu nome" />
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">Email</Label>
                 <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="seu@email.com" />
@@ -146,12 +132,11 @@ export default function Auth() {
                 </div>
               )}
               <Button type="submit" className="w-full h-11 font-semibold" disabled={submitting || isLockedOut}>
-                {submitting ? 'Aguarde...' : isLockedOut ? `Bloqueado (${countdown}s)` : isLogin ? 'Entrar' : 'Cadastrar'}
+                {submitting ? 'Aguarde...' : isLockedOut ? `Bloqueado (${countdown}s)` : 'Entrar'}
               </Button>
             </form>
 
-            {/* Só aparece após o isolamento aplicado e o provider configurado
-                (VITE_MULTI_TENANT + VITE_ENABLE_GOOGLE_AUTH). */}
+            {/* Só aparece com VITE_ENABLE_GOOGLE_AUTH ativado e o provider configurado. */}
             {GOOGLE_AUTH_ENABLED && (
               <>
                 <div className="my-5 flex items-center gap-3">
@@ -181,13 +166,8 @@ export default function Auth() {
               </>
             )}
 
-
-
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              {isLogin ? 'Não tem conta?' : 'Já tem conta?'}{' '}
-              <button onClick={() => setIsLogin(!isLogin)} className="text-primary font-medium hover:underline">
-                {isLogin ? 'Cadastre-se' : 'Faça login'}
-              </button>
+            <p className="mt-6 text-center text-xs text-muted-foreground">
+              O acesso é individual e concedido pelo escritório. Se você não recebeu suas credenciais, fale com o administrador.
             </p>
           </CardContent>
         </Card>

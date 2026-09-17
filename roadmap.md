@@ -11,6 +11,8 @@
 - [x] Migrações versionadas de multi-tenant (001–007 + rollback) em supabase/multitenant, não aplicadas
 - [x] Helpers de organização no frontend e em edge functions, desligados por flag
 - [x] Testes de isolamento (SQL) e testes unitários de caminhos/convites
+- [x] Login sem opção de criar conta; usuários pré-cadastrados recebem e-mail + senha temporária por WhatsApp, com troca obrigatória no primeiro acesso (campo must_change_password, action send-access, tela /change-password)
+
 - [ ] Executar as migrações e os testes de isolamento em staging
 - [ ] Migrar as 64 edge functions e os 11 jobs de cron para operar por organização
 - [ ] Validação de assinatura e resolução de organização nos webhooks
