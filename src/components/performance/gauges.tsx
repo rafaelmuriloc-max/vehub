@@ -63,14 +63,53 @@ export function GaugeArc({
           <stop offset="70%" stopColor="#B9D336" />
           <stop offset="100%" stopColor="#4CAF50" />
         </linearGradient>
+        <linearGradient id={`${gradientId}-gloss`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
+          <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`${gradientId}-track-gloss`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.85" />
+          <stop offset="60%" stopColor="#FFFFFF" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id={`${gradientId}-needle`} cx="0.35" cy="0.3" r="0.9">
+          <stop offset="0%" stopColor="#3B5A8F" />
+          <stop offset="55%" stopColor="#102A56" />
+          <stop offset="100%" stopColor="#0B1E3E" />
+        </radialGradient>
+        <filter id={`${gradientId}-glow`} x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation={strokeWidth / 2.2} />
+        </filter>
       </defs>
+      {/* glow difuso colorido sob o arco preenchido */}
+      <path
+        d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
+        fill="none"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        stroke={`url(#${gradientId})`}
+        filter={`url(#${gradientId}-glow)`}
+        opacity="0.55"
+      />
+      {/* trilha de vidro cinza claro */}
       <path
         d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
         fill="none"
         strokeWidth={strokeWidth}
         strokeLinecap="round"
-        className="stroke-muted"
+        className="stroke-muted-foreground/20"
       />
+      <path
+        d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
+        fill="none"
+        strokeWidth={strokeWidth * 0.45}
+        strokeLinecap="round"
+        stroke={`url(#${gradientId}-track-gloss)`}
+        transform={`translate(0 ${-strokeWidth / 4.2})`}
+        opacity="0.8"
+      />
+      {/* arco colorido preenchido */}
       <path
         d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
         fill="none"
@@ -78,14 +117,26 @@ export function GaugeArc({
         strokeLinecap="round"
         stroke={`url(#${gradientId})`}
       />
+      {/* reflexo de vidro no arco colorido */}
+      <path
+        d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
+        fill="none"
+        strokeWidth={strokeWidth * 0.45}
+        strokeLinecap="round"
+        stroke={`url(#${gradientId}-gloss)`}
+        transform={`translate(0 ${-strokeWidth / 4.2})`}
+      />
+      {/* agulha azul-marinho com profundidade */}
       <path
         d={`M ${base1X} ${base1Y} L ${tipX} ${tipY} L ${base2X} ${base2Y} Z`}
         strokeLinejoin="round"
         strokeLinecap="round"
         strokeWidth={strokeWidth / 8}
-        className="fill-foreground stroke-foreground"
+        fill={`url(#${gradientId}-needle)`}
+        stroke="#102A56"
       />
-      <circle cx={cx} cy={pivotY} r={hubRadius} className="fill-foreground" />
+      <circle cx={cx} cy={pivotY} r={hubRadius} fill={`url(#${gradientId}-needle)`} stroke="#102A56" strokeWidth={strokeWidth / 10} />
+      <circle cx={cx - hubRadius / 3} cy={pivotY - hubRadius / 3} r={hubRadius / 2.6} fill="#FFFFFF" opacity="0.45" />
       {showValue && (
         <text x={cx} y={valueBaseline} textAnchor="middle" dominantBaseline="auto" className="fill-calendar-navy font-calendarHeading font-bold" style={{ fontSize: valueFontSize }}>
           {clamped}%
