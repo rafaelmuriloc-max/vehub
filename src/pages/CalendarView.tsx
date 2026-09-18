@@ -458,13 +458,25 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
   function getDayObligationSummary(day: number) {
     const dayEvents = getEventsForDay(day);
-    const grouped: Record<string, { name: string; type: 'alert' | 'target' | 'due'; count: number }> = {};
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const todayStr = todayKey();
+    const grouped: Record<string, { name: string; type: 'alert' | 'target' | 'due'; count: number; pending: number; overdue: number }> = {};
     for (const e of dayEvents) {
       const key = `${e.obligationName}-${e.type}`;
-      if (!grouped[key]) grouped[key] = { name: e.obligationName, type: e.type, count: 0 };
+      if (!grouped[key]) grouped[key] = { name: e.obligationName, type: e.type, count: 0, pending: 0, overdue: 0 };
       grouped[key].count++;
+      const done = isInstanceCompleted(e.instanceId, e.obligationId);
+      if (!done) {
+        grouped[key].pending++;
+        if (dateStr < todayStr) grouped[key].overdue++;
+      }
     }
-    return Object.values(grouped).sort((a, b) => b.count - a.count);
+    return Object.values(grouped)
+      .map(g => ({
+        ...g,
+        status: (g.pending === 0 ? 'done' : g.overdue > 0 ? 'late' : 'pending') as 'done' | 'late' | 'pending',
+      }))
+      .sort((a, b) => b.count - a.count);
   }
 
   const selectedEvents = selectedDay ? getEventsForDay(selectedDay) : [];
