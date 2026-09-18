@@ -1436,87 +1436,140 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       {/* Calendar + Day list side by side */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Calendar */}
-        <Card className="flex-1 lg:flex-[2]">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null); }}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <CardTitle className="capitalize text-xl">{monthNames[month]} {year}</CardTitle>
-              <Button variant="ghost" size="icon" onClick={() => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null); }}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+        <Card className="flex-1 lg:flex-[2] rounded-2xl">
+          <CardHeader className="gap-4 pb-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <CardTitle className="font-calendarHeading text-3xl font-bold text-calendar-navy">Calendário</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">Suas obrigações fiscais e administrativas, em um só lugar.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg" aria-label="Mês anterior" onClick={() => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null); }}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="min-w-[150px] rounded-lg border border-border px-4 py-1.5 text-center text-sm font-semibold capitalize text-calendar-navy">
+                  {monthNames[month]} {year}
+                </div>
+                <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg" aria-label="Próximo mês" onClick={() => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null); }}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="h-9 rounded-lg text-sm" onClick={() => { setCurrentDate(new Date()); setSelectedDay(null); }}>
+                  Hoje
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                {[
+                  { icon: FileText, value: dashboardStats.current.total, label: 'obrigações', detail: 'no mês', tone: 'bg-calendar-blue/15 text-calendar-blue' },
+                  { icon: AlertTriangle, value: dashboardStats.current.overdue + dashboardStats.current.dueToday, label: 'urgentes', detail: 'com prazo próximo', tone: 'bg-calendar-red/15 text-calendar-red' },
+                  { icon: CheckSquare, value: dashboardStats.current.completed, label: 'concluídas', detail: 'no mês', tone: 'bg-calendar-green/15 text-calendar-green' },
+                ].map(stat => (
+                  <div key={stat.label} className="flex items-center gap-2.5">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.tone}`}>
+                      <stat.icon className="h-5 w-5" />
+                    </div>
+                    <div className="leading-tight">
+                      <p className="text-sm font-semibold text-calendar-navy"><span className="font-bold">{stat.value}</span> {stat.label}</p>
+                      <p className="text-xs text-muted-foreground">{stat.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-calendar-red" /> Urgente / Atrasada</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-calendar-orange" /> Pendente</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-calendar-green" /> Concluída</span>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-2">
               {weekdays.map(d => (
-                <div key={d} className="p-1 md:p-2 text-center text-[10px] md:text-xs font-semibold text-muted-foreground uppercase md:tracking-wider">{d}</div>
+                <div key={d} className="p-1 md:p-2 text-center text-[10px] md:text-xs font-semibold uppercase tracking-wider text-muted-foreground">{d}</div>
               ))}
               {days.map((day, i) => {
-                if (!day) return <div key={i} className="min-h-[32px] md:min-h-[100px] p-0.5 md:p-1" />;
+                if (!day) return <div key={i} className="min-h-[32px] md:min-h-[120px]" />;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === today;
                 const isSelected = selectedDay === day;
                 const isHoliday = holidayMap.has(dateStr);
                 const holidayName = holidayMap.get(dateStr);
+                const weekday = i % 7;
+                const isWeekend = weekday === 0 || weekday === 6;
                 const summary = getDayObligationSummary(day);
                 const maxVisible = 3;
                 const visible = summary.slice(0, maxVisible);
                 const remaining = summary.length - maxVisible;
-                const typeColor = { alert: 'bg-green-500', target: 'bg-orange-500', due: 'bg-red-500' };
+                const statusPill: Record<'done' | 'late' | 'pending', string> = {
+                  done: 'bg-calendar-green/10 text-calendar-navy',
+                  late: 'bg-calendar-red/10 text-calendar-navy',
+                  pending: 'bg-calendar-orange/10 text-calendar-navy',
+                };
+                const statusDot: Record<'done' | 'late' | 'pending', string> = {
+                  done: 'bg-calendar-green',
+                  late: 'bg-calendar-red',
+                  pending: 'bg-calendar-orange',
+                };
                 const dayTasks = getTasksForDay(day);
                 return (
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day)}
                     title={isHoliday ? holidayName : undefined}
-                    className={`min-h-[32px] md:min-h-[100px] rounded-lg p-0.5 md:p-1.5 cursor-pointer transition-all duration-200
-                      ${isSelected
-                        ? 'bg-primary/15 border-2 border-primary shadow-md'
-                        : isToday
-                          ? 'bg-blue-50 border border-blue-400 dark:bg-blue-950 dark:border-blue-500'
-                          : isHoliday
-                            ? 'bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600'
-                            : 'border border-border hover:bg-muted/60 hover:shadow-sm'
+                    className={`min-h-[32px] md:min-h-[120px] rounded-xl border p-1 md:p-2 cursor-pointer transition-all duration-200
+                      ${isSelected || isToday
+                        ? 'border-calendar-blue bg-calendar-blue/5 shadow-sm'
+                        : isWeekend
+                          ? 'border-border bg-muted/40 hover:shadow-sm'
+                          : 'border-border bg-card hover:shadow-sm'
                       }`}
                   >
-                    <span className={`inline-flex items-center justify-center text-[10px] md:text-xs font-semibold w-5 h-5 md:w-6 md:h-6 rounded-full
-                      ${isToday ? 'bg-blue-500 text-white' : 'text-foreground'}`}>
+                    <span className={`inline-flex items-center justify-center text-[10px] md:text-sm font-semibold w-5 h-5 md:w-7 md:h-7 rounded-full
+                      ${isToday ? 'bg-calendar-blue text-white' : 'text-calendar-navy'}`}>
                       {day}
                     </span>
                     {isHoliday && (
-                      <span className="hidden md:block text-[9px] text-muted-foreground truncate leading-tight mt-0.5">{holidayName}</span>
+                      <div className="mt-1 hidden items-start gap-2 md:flex">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-calendar-blue/10">
+                          <CalendarDays className="h-4 w-4 text-calendar-blue" />
+                        </div>
+                        <div className="min-w-0 leading-tight">
+                          <p className="truncate text-xs font-medium text-calendar-navy">{holidayName}</p>
+                          <p className="text-[10px] text-muted-foreground">Feriado nacional</p>
+                        </div>
+                      </div>
                     )}
                     {(visible.length > 0 || dayTasks.length > 0) && (
                       <>
                         {/* Mobile: dots only */}
                         <div className="flex flex-wrap gap-0.5 mt-1 md:hidden">
                           {summary.slice(0, 5).map((item, idx) => (
-                            <span key={idx} className={`w-1 h-1 rounded-full ${typeColor[item.type]}`} />
+                            <span key={idx} className={`w-1 h-1 rounded-full ${statusDot[item.status]}`} />
                           ))}
                           {dayTasks.length > 0 && (
-                            <span className="w-1 h-1 rounded-full bg-primary" />
+                            <span className="w-1 h-1 rounded-full bg-calendar-orange" />
                           )}
                           {summary.length > 5 && <span className="text-[8px] text-muted-foreground">+{summary.length - 5}</span>}
                         </div>
-                        {/* Desktop: full text */}
-                        <div className="hidden md:flex flex-col gap-0.5 mt-1">
+                        {/* Desktop: pills */}
+                        <div className="mt-1.5 hidden flex-col gap-1 md:flex">
                           {visible.map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-1 min-w-0">
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeColor[item.type]}`} />
-                              <span className="text-[10px] text-foreground truncate leading-tight">{item.name}</span>
-                              <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{item.count}</span>
+                            <div key={idx} className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 min-w-0 ${statusPill[item.status]}`}>
+                              <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot[item.status]}`} />
+                              <span className="truncate text-[11px] leading-tight">{item.name}</span>
+                              <span className="ml-auto shrink-0 text-[11px] font-medium text-muted-foreground">{item.count}</span>
                             </div>
                           ))}
                           {remaining > 0 && (
-                            <span className="text-[9px] text-muted-foreground pl-2.5">+{remaining} mais</span>
+                            <span className="pl-1.5 text-[11px] font-medium text-calendar-blue">+{remaining} mais</span>
                           )}
                           {dayTasks.length > 0 && (
-                            <div className="flex items-center gap-1 min-w-0">
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
-                              <span className="text-[10px] text-foreground truncate leading-tight">Tarefas</span>
-                              <span className="text-[10px] text-muted-foreground font-medium shrink-0 ml-auto">{dayTasks.length}</span>
+                            <div className="flex items-center gap-1.5 rounded-md bg-calendar-orange/10 px-1.5 py-1 min-w-0">
+                              <span className="h-2 w-2 shrink-0 rounded-full bg-calendar-orange" />
+                              <span className="truncate text-[11px] leading-tight text-calendar-navy">Tarefas</span>
+                              <span className="ml-auto shrink-0 text-[11px] font-medium text-muted-foreground">{dayTasks.length}</span>
                             </div>
                           )}
                         </div>
@@ -1525,14 +1578,6 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
                   </div>
                 );
               })}
-            </div>
-
-            {/* Legend */}
-            <div className="flex flex-wrap gap-3 md:gap-5 mt-4 px-3 py-2 rounded-md bg-muted/40 text-[10px] md:text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Alerta</div>
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meta</div>
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vencimento</div>
-              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary" /> Tarefa</div>
             </div>
           </CardContent>
         </Card>
