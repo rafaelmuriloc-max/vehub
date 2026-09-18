@@ -65,6 +65,13 @@ export function GaugeArc({
         </linearGradient>
       </defs>
       <path
+        d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
+        fill="none"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        className="stroke-muted"
+      />
+      <path
         d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
         fill="none"
         strokeWidth={strokeWidth}
