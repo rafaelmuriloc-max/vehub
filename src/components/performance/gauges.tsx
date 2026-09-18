@@ -51,6 +51,8 @@ export function GaugeArc({
   const base1Y = pivotY + py;
   const base2X = cx - px;
   const base2Y = pivotY - py;
+  const endX = cx + radius * Math.cos(angleRad);
+  const endY = cy - radius * Math.sin(angleRad);
   return (
     <svg viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`} className="h-full w-full" aria-hidden="true">
       <defs>
@@ -62,8 +64,13 @@ export function GaugeArc({
           <stop offset="100%" stopColor="#4CAF50" />
         </linearGradient>
       </defs>
-      <path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} fill="none" strokeWidth={strokeWidth} strokeLinecap="round" className="stroke-muted" />
-      <path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} fill="none" strokeWidth={strokeWidth} strokeLinecap="round" stroke={`url(#${gradientId})`} />
+      <path
+        d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
+        fill="none"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        stroke={`url(#${gradientId})`}
+      />
       <path
         d={`M ${base1X} ${base1Y} L ${tipX} ${tipY} L ${base2X} ${base2Y} Z`}
         strokeLinejoin="round"
