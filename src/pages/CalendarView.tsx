@@ -2762,6 +2762,12 @@ export default function CalendarView() {
   const [view, setView] = useState<'calendar' | 'documents' | 'tasks'>('calendar');
   return (
     <div className="space-y-4">
+      {view !== 'calendar' && (
+        <Button variant="outline" size="sm" className="rounded-sm" onClick={() => setView('calendar')} aria-label="Voltar ao calendário">
+          <ChevronLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Voltar ao calendário</span>
+        </Button>
+      )}
       {view === 'calendar' && <CalendarMain view={view} onViewChange={setView} />}
       {view === 'documents' && <Documents />}
       {view === 'tasks' && <Tasks />}
