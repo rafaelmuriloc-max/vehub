@@ -1146,6 +1146,130 @@ export type Database = {
           },
         ]
       }
+      drive_sync_configs: {
+        Row: {
+          allowed_doc_type_ids: string[]
+          created_at: string
+          created_by: string | null
+          department_id: string | null
+          enabled: boolean
+          folder_id: string
+          folder_name: string
+          id: string
+          last_synced_at: string | null
+          obligation_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          allowed_doc_type_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          enabled?: boolean
+          folder_id: string
+          folder_name: string
+          id?: string
+          last_synced_at?: string | null
+          obligation_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          allowed_doc_type_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          enabled?: boolean
+          folder_id?: string
+          folder_name?: string
+          id?: string
+          last_synced_at?: string | null
+          obligation_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drive_sync_configs_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drive_sync_configs_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drive_synced_files: {
+        Row: {
+          client_id: string | null
+          config_id: string
+          created_at: string
+          document_id: string | null
+          drive_file_id: string
+          drive_modified_time: string | null
+          drive_name: string | null
+          drive_path: string | null
+          error: string | null
+          id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          config_id: string
+          created_at?: string
+          document_id?: string | null
+          drive_file_id: string
+          drive_modified_time?: string | null
+          drive_name?: string | null
+          drive_path?: string | null
+          error?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          config_id?: string
+          created_at?: string
+          document_id?: string | null
+          drive_file_id?: string
+          drive_modified_time?: string | null
+          drive_name?: string | null
+          drive_path?: string | null
+          error?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drive_synced_files_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drive_synced_files_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "drive_sync_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drive_synced_files_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_attachments: {
         Row: {
           created_at: string
