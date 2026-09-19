@@ -26,14 +26,14 @@ function ghHeaders(extra: Record<string, string> = {}) {
 function sanitizeFileName(name: string): string {
   return name
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
 function normalizeText(s: string): string {
   return s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/\b(ltda|me|epp|eireli|sa|s\/a|mei|servicos|servico|comercio|de|da|do|e)\b/g, " ")
     .replace(/[^a-z0-9 ]/g, " ")
