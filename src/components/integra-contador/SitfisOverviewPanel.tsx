@@ -4,10 +4,10 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export const PENDENCY_LABELS: Record<string, string> = {
-  debitos: 'Débitos',
-  omissao: 'Omissão de declaração',
-  parcelamento: 'Parcelamento',
-  divida_ativa: 'Inscrição em dívida ativa',
+  debitos: 'Débitos tributários',
+  omissao: 'Declarações omitidas',
+  parcelamento: 'Parcelamentos',
+  divida_ativa: 'Situação na PGFN',
   suspensa: 'Processo / exigibilidade suspensa',
   outros: 'Outros',
 };
@@ -253,7 +253,7 @@ export default function SitfisOverviewPanel({ items, loading, activeStatus, onSe
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Tipos de pendência</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Clientes irregulares — clique para ver os clientes e a descrição
+            Ocorrências por categoria — clique para filtrar as empresas
           </p>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row items-center gap-4">

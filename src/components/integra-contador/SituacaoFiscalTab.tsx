@@ -45,10 +45,6 @@ async function extractPdfInfoFromBase64(base64: string): Promise<{ text: string;
   }
 }
 
-async function extractTextFromPdfBase64(base64: string): Promise<string> {
-  return (await extractPdfInfoFromBase64(base64)).text;
-}
-
 type ClientWithSitfis = {
   id: string;
   sci_code?: string | null;
@@ -84,7 +80,7 @@ export default function SituacaoFiscalTab() {
   const [parsedReports, setParsedReports] = useState<Record<string, SitfisStructuredReport>>({});
   const [parsingIds, setParsingIds] = useState<Set<string>>(new Set());
   const [detailClientId, setDetailClientId] = useState<string | null>(null);
-  const [certMode, setCertMode] = useState<Set<string>>(new Set());
+  const [, setCertMode] = useState<Set<string>>(new Set());
   const textCache = useRef<Map<string, string>>(new Map());
   const pagesCache = useRef<Map<string, number>>(new Map());
   const pageTextCache = useRef<Map<string, string[]>>(new Map());
