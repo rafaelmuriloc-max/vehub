@@ -3,25 +3,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Eye, Download, Search, PlayCircle, CheckCircle2, XCircle, SquareCheck, SquareX, Clock, AlertCircle, FileArchive, MoreHorizontal } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Check, ChevronsUpDown, Loader2, Search, PlayCircle, FileArchive, SlidersHorizontal } from 'lucide-react';
 import JSZip from 'jszip';
-import SitfisOverviewPanel, { analyzeSitfisReport, extractPendencyExcerpts, PENDENCY_LABELS, resolveStatusKey } from './SitfisOverviewPanel';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import SitfisOverviewPanel, { analyzeSitfisReport, resolveStatusKey } from './SitfisOverviewPanel';
 import * as pdfjsLib from 'pdfjs-dist';
-import { formatClientLabel, normalizeTaxRegime } from '@/lib/utils';
+import { normalizeTaxRegime } from '@/lib/utils';
+import SitfisCompanyCard from './SitfisCompanyCard';
+import SitfisDetailPanel from './SitfisDetailPanel';
+import { parseSitfisReport, type SitfisStructuredReport } from './sitfisParser';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url,
 ).toString();
 
-async function extractPdfInfoFromBase64(base64: string): Promise<{ text: string; numPages: number }> {
+async function extractPdfInfoFromBase64(base64: string): Promise<{ text: string; pages: string[]; numPages: number }> {
   try {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
@@ -38,15 +40,11 @@ async function extractPdfInfoFromBase64(base64: string): Promise<{ text: string;
         .join(' ');
       texts.push(pageText);
     }
-    return { text: texts.join(' '), numPages: doc.numPages };
+    return { text: texts.join(' '), pages: texts, numPages: doc.numPages };
   } catch (err) {
     console.error('[SITFIS] Erro ao extrair texto do PDF:', err);
-    return { text: '', numPages: 0 };
+    return { text: '', pages: [], numPages: 0 };
   }
-}
-
-async function extractTextFromPdfBase64(base64: string): Promise<string> {
-  return (await extractPdfInfoFromBase64(base64)).text;
 }
 
 type ClientWithSitfis = {
@@ -77,13 +75,18 @@ export default function SituacaoFiscalTab() {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
-  const [pendencyKey, setPendencyKey] = useState<string | null>(null);
-  const [excerpts, setExcerpts] = useState<Record<string, string[]>>({});
-
-  const [excerptsLoading, setExcerptsLoading] = useState(false);
-  const [certMode, setCertMode] = useState<Set<string>>(new Set());
+  const [filterCompany, setFilterCompany] = useState('all');
+  const [companyPickerOpen, setCompanyPickerOpen] = useState(false);
+  const [filterOccurrence, setFilterOccurrence] = useState('all');
+  const [filterAgency, setFilterAgency] = useState('all');
+  const [filterCompetency, setFilterCompetency] = useState('all');
+  const [parsedReports, setParsedReports] = useState<Record<string, SitfisStructuredReport>>({});
+  const [parsingIds, setParsingIds] = useState<Set<string>>(new Set());
+  const [detailClientId, setDetailClientId] = useState<string | null>(null);
+  const [, setCertMode] = useState<Set<string>>(new Set());
   const textCache = useRef<Map<string, string>>(new Map());
   const pagesCache = useRef<Map<string, number>>(new Map());
+  const pageTextCache = useRef<Map<string, string[]>>(new Map());
 
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -530,19 +533,24 @@ export default function SituacaoFiscalTab() {
     }
   }
 
-  const regimeOptions = Array.from(
-    new Set(clients.map(c => normalizeTaxRegime(c.tax_regime)).filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const regimeOptions = Array.from(new Set(clients.map(c => normalizeTaxRegime(c.tax_regime)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const companyOptions = [...clients].sort((a, b) => a.company_name.localeCompare(b.company_name, 'pt-BR'));
+  const parsedValues = Object.values(parsedReports);
+  const agencyOptions = Array.from(new Set(parsedValues.flatMap(report => report.agencies))).sort();
 
   const baseFiltered = clients.filter(c => {
-    const matchSearch = !search ||
-      c.company_name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.sci_code || '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.document || '').includes(search);
+    const term = search.toLowerCase();
+    const matchSearch = !search || c.company_name.toLowerCase().includes(term) || (c.sci_code || '').toLowerCase().includes(term) || (c.document || '').replace(/\D/g, '').includes(search.replace(/\D/g, ''));
     const normalizedRegime = normalizeTaxRegime(c.tax_regime);
-    const matchRegime = filterRegime === 'all' ||
-      (filterRegime === 'none' ? !normalizedRegime : normalizedRegime === filterRegime);
-    return matchSearch && matchRegime;
+    const matchRegime = filterRegime === 'all' || (filterRegime === 'none' ? !normalizedRegime : normalizedRegime === filterRegime);
+    const report = parsedReports[c.id];
+    const types = report?.occurrenceTypes.length ? report.occurrenceTypes : c.pendency_types;
+    return matchSearch && matchRegime && (filterCompany === 'all' || c.id === filterCompany)
+      && (filterOccurrence === 'all' || types.includes(filterOccurrence))
+      && (filterAgency === 'all' || report?.agencies.includes(filterAgency)
+        || (filterAgency === 'PGFN' && types.includes('divida_ativa'))
+        || (filterAgency === 'Receita Federal' && types.some(type => type !== 'divida_ativa')))
+      && (filterCompetency === 'all' || report?.competencies.includes(filterCompetency));
   });
 
   const tabCounts = {
@@ -551,79 +559,41 @@ export default function SituacaoFiscalTab() {
     regular: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'regular').length,
     pending: baseFiltered.filter(c => resolveStatusKey(c.sitfis_status) === 'pending').length,
   };
-
-  const filtered = baseFiltered.filter(c =>
-    filterStatus === 'all' || resolveStatusKey(c.sitfis_status) === filterStatus
-  );
-
-  const statusTabs: { key: string; label: string; count: number }[] = [
-    { key: 'all', label: 'Todos', count: tabCounts.all },
-    { key: 'irregular', label: 'Com pendência', count: tabCounts.irregular },
-    { key: 'regular', label: 'Regulares', count: tabCounts.regular },
-    { key: 'pending', label: 'Sem consulta', count: tabCounts.pending },
+  const filtered = baseFiltered.filter(c => filterStatus === 'all' || resolveStatusKey(c.sitfis_status) === filterStatus);
+  const statusTabs = [
+    { key: 'all', label: 'Todos', count: tabCounts.all }, { key: 'irregular', label: 'Com pendência', count: tabCounts.irregular },
+    { key: 'regular', label: 'Regulares', count: tabCounts.regular }, { key: 'pending', label: 'Sem consulta', count: tabCounts.pending },
   ];
   const activeTab = statusTabs.some(t => t.key === filterStatus) ? filterStatus : 'all';
-
-  useEffect(() => { setPage(1); }, [search, filterStatus, filterRegime]);
-
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterRegime, filterCompany, filterOccurrence, filterAgency, filterCompetency]);
   const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const paginatedClients = pageSize === 'all'
-    ? filtered
-    : filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-
+  const paginatedClients = pageSize === 'all' ? filtered : filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
   const downloadScope = selected.size > 0 ? filtered.filter(c => selected.has(c.id)) : filtered;
   const availablePdfCount = downloadScope.filter(c => !!c.pdf_base64).length;
+  const detailClient = clients.find(c => c.id === detailClientId) || null;
 
-  const pendencyClients = pendencyKey
-    ? filtered.filter(c => c.sitfis_status === 'irregular' && (c.pendency_types || []).includes(pendencyKey))
-    : [];
+  async function ensureParsed(client: ClientWithSitfis) {
+    if (parsedReports[client.id] || !client.pdf_base64 || parsingIds.has(client.id)) return;
+    setParsingIds(prev => new Set(prev).add(client.id));
+    const info = await extractPdfInfoFromBase64(client.pdf_base64);
+    textCache.current.set(client.id, info.text);
+    pagesCache.current.set(client.id, info.numPages);
+    pageTextCache.current.set(client.id, info.pages);
+    setParsedReports(prev => ({ ...prev, [client.id]: parseSitfisReport(info.pages) }));
+    setParsingIds(prev => { const next = new Set(prev); next.delete(client.id); return next; });
+  }
+  async function showDetails(client: ClientWithSitfis) {
+    setDetailClientId(client.id);
+    await ensureParsed(client);
+  }
 
   useEffect(() => {
-    if (!pendencyKey) return;
-    let cancelled = false;
-    const targets = clients.filter(
-      c => c.sitfis_status === 'irregular' && (c.pendency_types || []).includes(pendencyKey) && !!c.pdf_base64
-    );
-    const pending = targets.filter(c => !textCache.current.has(c.id));
-    setExcerptsLoading(pending.length > 0);
-    (async () => {
-      for (const c of pending) {
-        if (cancelled) return;
-        const text = await extractTextFromPdfBase64(c.pdf_base64 as string);
-        textCache.current.set(c.id, text);
-      }
-      if (cancelled) return;
-      const next: Record<string, string[]> = {};
-      targets.forEach(c => {
-        next[c.id] = extractPendencyExcerpts(textCache.current.get(c.id) || '', pendencyKey);
-      });
-      setExcerpts(next);
-      setExcerptsLoading(false);
-    })();
-    return () => { cancelled = true; };
+    if (filterCompetency === 'all') return;
+    clients.filter(client => client.pdf_base64 && !parsedReports[client.id]).forEach(client => void ensureParsed(client));
+    // A competência só existe dentro do PDF e é lida quando o filtro é usado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendencyKey]);
-
-  function statusBadge(status: string | null) {
-    const pill = 'rounded-full px-3 py-0.5 text-xs font-medium gap-1 border-0';
-    if (!status || status === 'pending') {
-      return <Badge variant="secondary" className={pill}><Clock className="h-3 w-3" /> Pendente</Badge>;
-    }
-    if (status === 'regular') {
-      return <Badge title="Regular" className={`${pill} bg-transparent text-emerald-600 hover:bg-transparent`}><SquareCheck className="h-4 w-4" strokeWidth={2.5} /></Badge>;
-    }
-    if (status === 'irregular') {
-      return <Badge title="Com pendência" className={`${pill} bg-transparent text-red-600 hover:bg-transparent`}><SquareX className="h-4 w-4" strokeWidth={2.5} /></Badge>;
-    }
-    if (status === 'error') {
-      return <Badge className={`${pill} bg-orange-500 text-white hover:bg-orange-500`}><AlertCircle className="h-3 w-3" /> Erro</Badge>;
-    }
-    if (status === 'sem_procuracao') {
-      return <Badge className={`${pill} bg-amber-500 text-white hover:bg-amber-500`}><AlertCircle className="h-3 w-3" /> Sem procuração</Badge>;
-    }
-    return <Badge variant="outline" className={pill}>{status}</Badge>;
-  }
+  }, [filterCompetency]);
 
   if (loading && clients.length === 0) {
     return (
@@ -686,269 +656,24 @@ export default function SituacaoFiscalTab() {
         loading={loading && clients.length === 0}
         activeStatus={filterStatus}
         onSelectStatus={setFilterStatus}
-        onSelectPendency={setPendencyKey}
+        onSelectPendency={setFilterOccurrence}
       />
 
-      <Dialog open={!!pendencyKey} onOpenChange={open => !open && setPendencyKey(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {pendencyKey ? (PENDENCY_LABELS[pendencyKey] || pendencyKey) : ''}
-            </DialogTitle>
-            <DialogDescription>
-              {pendencyClients.length} cliente(s) com esta pendência
-            </DialogDescription>
-          </DialogHeader>
-          {excerptsLoading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Lendo relatórios...
-            </div>
-          )}
-          <div className="space-y-3">
-            {pendencyClients.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum cliente encontrado.</p>
-            ) : (
-              pendencyClients.map(c => {
-                const list = excerpts[c.id] || [];
-                return (
-                  <div key={c.id} className="rounded-lg border border-border p-3 space-y-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{formatClientLabel(c)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {c.document || '—'}
-                          {c.consulted_at
-                            ? ` • ${new Date(c.consulted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
-                            : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
-                          disabled={!c.pdf_base64}
-                        >
-                          <Eye className="h-3.5 w-3.5" /> Ver
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
-                          disabled={!c.pdf_base64}
-                        >
-                          <Download className="h-3.5 w-3.5" /> Baixar
-                        </Button>
-                      </div>
-                    </div>
-                    {(c.pendency_types || []).filter(t => t !== pendencyKey).length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {(c.pendency_types || [])
-                          .filter(t => t !== pendencyKey)
-                          .map(t => (
-                            <Badge key={t} variant="outline" className="text-[10px]">
-                              {PENDENCY_LABELS[t] || t}
-                            </Badge>
-                          ))}
-                      </div>
-                    )}
-                    {!c.pdf_base64 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Descrição não disponível — refaça a consulta.
-                      </p>
-                    ) : list.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        {excerptsLoading ? 'Carregando trechos...' : 'Trecho não localizado no relatório.'}
-                      </p>
-                    ) : (
-                      <div className="space-y-1">
-                        {list.map((ex, i) => (
-                          <p key={i} className="text-xs text-foreground bg-muted/50 rounded p-2 leading-relaxed">
-                            {ex}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
+      <Card className="rounded-md">
+        <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><SlidersHorizontal className="h-5 w-5" />Gestão de pendências fiscais</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="relative md:col-span-2"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Buscar por empresa, código ou CNPJ..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+            <Popover open={companyPickerOpen} onOpenChange={setCompanyPickerOpen}><PopoverTrigger asChild><Button variant="outline" role="combobox" aria-expanded={companyPickerOpen} className="w-full justify-between font-normal"><span className="truncate">{filterCompany === 'all' ? 'Todas as empresas' : companyOptions.find(client => client.id === filterCompany)?.company_name || 'Empresa'}</span><ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button></PopoverTrigger><PopoverContent align="start" className="w-[calc(100vw-2rem)] p-0 md:w-[360px]"><Command><CommandInput placeholder="Buscar empresa ou código..." /><CommandList><CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty><CommandGroup><CommandItem value="todas-as-empresas" onSelect={() => { setFilterCompany('all'); setCompanyPickerOpen(false); }}><Check className={filterCompany === 'all' ? 'mr-2 h-4 w-4 opacity-100' : 'mr-2 h-4 w-4 opacity-0'} />Todas as empresas</CommandItem>{companyOptions.map(client => <CommandItem key={client.id} value={`${client.sci_code || ''} ${client.company_name} ${client.document || ''}`} onSelect={() => { setFilterCompany(client.id); setCompanyPickerOpen(false); }}><Check className={filterCompany === client.id ? 'mr-2 h-4 w-4 opacity-100' : 'mr-2 h-4 w-4 opacity-0'} />{client.sci_code ? `${client.sci_code} - ` : ''}{client.company_name}</CommandItem>)}</CommandGroup></CommandList></Command></PopoverContent></Popover>
+            <Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="Situação fiscal" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as situações</SelectItem><SelectItem value="regular">Regular</SelectItem><SelectItem value="irregular">Com pendência</SelectItem><SelectItem value="error">Erro</SelectItem><SelectItem value="sem_procuracao">Sem procuração</SelectItem><SelectItem value="pending">Sem consulta</SelectItem></SelectContent></Select>
+            <Select value={filterOccurrence} onValueChange={setFilterOccurrence}><SelectTrigger><SelectValue placeholder="Tipo de ocorrência" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os tipos</SelectItem><SelectItem value="omissao">Declarações omitidas</SelectItem><SelectItem value="debitos">Débitos tributários</SelectItem><SelectItem value="parcelamento">Parcelamentos</SelectItem><SelectItem value="suspensa">Exigibilidade suspensa</SelectItem><SelectItem value="divida_ativa">Situação na PGFN</SelectItem></SelectContent></Select>
+            <Select value={filterAgency} onValueChange={setFilterAgency}><SelectTrigger><SelectValue placeholder="Órgão" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os órgãos</SelectItem><SelectItem value="Receita Federal">Receita Federal</SelectItem><SelectItem value="PGFN">PGFN</SelectItem>{agencyOptions.filter(a => !['Receita Federal','PGFN'].includes(a)).map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent></Select>
+            <div className="flex items-center gap-2"><Input type="month" aria-label="Filtrar por competência" value={filterCompetency === 'all' ? '' : filterCompetency} onChange={event => setFilterCompetency(event.target.value || 'all')} /><Button variant="ghost" size="sm" onClick={() => setFilterCompetency('all')} disabled={filterCompetency === 'all'}>Limpar</Button></div>
+            <Select value={filterRegime} onValueChange={setFilterRegime}><SelectTrigger><SelectValue placeholder="Regime tributário" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os regimes</SelectItem>{regimeOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}<SelectItem value="none">Não informado</SelectItem></SelectContent></Select>
           </div>
-        </DialogContent>
-      </Dialog>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Situação Fiscal dos Clientes</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por cliente ou CNPJ..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Todos os status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="regular">Regular</SelectItem>
-                <SelectItem value="irregular">Com pendência</SelectItem>
-                <SelectItem value="error">Erro</SelectItem>
-                <SelectItem value="sem_procuracao">Sem procuração</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterRegime} onValueChange={setFilterRegime}>
-              <SelectTrigger className="w-full sm:w-52">
-                <SelectValue placeholder="Todos os regimes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os regimes</SelectItem>
-                {regimeOptions.map(r => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
-                ))}
-                <SelectItem value="none">Não informado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-1 border-b border-border overflow-x-auto">
-            {statusTabs.map(tab => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setFilterStatus(tab.key)}
-                className={`whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                  activeTab === tab.key
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {tab.label} <span className="text-muted-foreground">({tab.count})</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={filtered.length > 0 && selected.size === filtered.length}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="hidden md:table-cell">CNPJ/CPF</TableHead>
-                  <TableHead className="hidden lg:table-cell">Regime</TableHead>
-                  <TableHead className="w-16 text-center">Status</TableHead>
-                  <TableHead className="hidden md:table-cell w-24 text-center">Pendências</TableHead>
-                  <TableHead className="hidden lg:table-cell w-44">Última Verificação</TableHead>
-                  <TableHead className="w-16 text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      Nenhum cliente encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedClients.map(c => (
-                    <TableRow key={c.id} className="[&_td]:py-2">
-                      <TableCell>
-
-                        <Checkbox
-                          checked={selected.has(c.id)}
-                          onCheckedChange={() => toggleSelect(c.id)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{formatClientLabel(c)}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                        {c.document || '—'}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {normalizeTaxRegime(c.tax_regime) || '—'}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {consultingId === c.id ? (
-                          <Badge variant="outline" className="gap-1 rounded-full">
-                            <Loader2 className="h-3 w-3 animate-spin" /> Consultando
-                          </Badge>
-                        ) : (
-                          statusBadge(c.sitfis_status)
-                        )}
-                        {certMode.has(c.id) && (
-                          <span className="ml-1 text-[10px] text-muted-foreground align-middle">via certificado</span>
-                        )}
-                        {c.error_message && (c.sitfis_status === 'error' || c.sitfis_status === 'sem_procuracao') && (
-                          <p className="text-xs text-destructive mt-1 line-clamp-1" title={c.error_message}>
-                            {c.error_message}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-center">
-                        {c.sitfis_status === 'irregular' ? (
-                          <span className="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold dark:bg-red-950 dark:text-red-300">
-                            {(c.pendency_types || []).length}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">0</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {c.consulted_at
-                          ? new Date(c.consulted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" title="Ações">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => handleConsultarIndividual(c.id)}
-                                disabled={!!consultingId || batchRunning}
-                              >
-                                <RefreshCw className="h-4 w-4 mr-2" /> Consultar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => c.pdf_base64 && openPdf(c.pdf_base64)}
-                                disabled={!c.pdf_base64}
-                              >
-                                <Eye className="h-4 w-4 mr-2" /> Visualizar PDF
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)}
-                                disabled={!c.pdf_base64}
-                              >
-                                <Download className="h-4 w-4 mr-2" /> Baixar PDF
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
+          <div className="flex items-center gap-1 overflow-x-auto border-b">{statusTabs.map(tab => <Button key={tab.key} variant="ghost" size="sm" onClick={() => setFilterStatus(tab.key)} className={activeTab === tab.key ? 'rounded-none border-b-2 border-primary text-primary' : 'rounded-none text-muted-foreground'}>{tab.label} ({tab.count})</Button>)}</div>
+          <div className="flex items-center gap-2"><Checkbox checked={filtered.length > 0 && filtered.every(c => selected.has(c.id))} onCheckedChange={toggleSelectAll} /><span className="text-sm text-muted-foreground">Selecionar todos os clientes filtrados</span></div>
+          <div className="space-y-3">{paginatedClients.length === 0 ? <div className="rounded-sm border border-dashed py-12 text-center text-sm text-muted-foreground">Nenhuma empresa encontrada.</div> : paginatedClients.map(c => <SitfisCompanyCard key={c.id} client={c} selected={selected.has(c.id)} parsed={parsedReports[c.id]} parsing={parsingIds.has(c.id)} consulting={consultingId === c.id} onSelect={() => toggleSelect(c.id)} onRequestParse={() => void ensureParsed(c)} onDetails={() => void showDetails(c)} onDownload={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)} onConsult={() => void handleConsultarIndividual(c.id)} />)}</div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>{filtered.length} cliente(s)</span>
@@ -1006,6 +731,7 @@ export default function SituacaoFiscalTab() {
           </div>
         </CardContent>
       </Card>
+      <SitfisDetailPanel client={detailClient} parsed={detailClient ? parsedReports[detailClient.id] : undefined} onClose={() => setDetailClientId(null)} onOpenPdf={() => detailClient?.pdf_base64 && openPdf(detailClient.pdf_base64)} onDownload={() => detailClient?.pdf_base64 && downloadPdf(detailClient.pdf_base64, detailClient.company_name)} />
     </div>
   );
 }
