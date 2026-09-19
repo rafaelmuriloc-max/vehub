@@ -376,7 +376,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        await supabase.from("drive_synced_files").delete();
         await supabase.from("drive_sync_configs")
           .update({ last_synced_at: new Date().toISOString() })
           .eq("id", cfg.id);
