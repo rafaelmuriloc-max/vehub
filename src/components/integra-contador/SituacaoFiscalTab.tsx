@@ -538,7 +538,6 @@ export default function SituacaoFiscalTab() {
   const companyOptions = [...clients].sort((a, b) => a.company_name.localeCompare(b.company_name, 'pt-BR'));
   const parsedValues = Object.values(parsedReports);
   const agencyOptions = Array.from(new Set(parsedValues.flatMap(report => report.agencies))).sort();
-  const competencyOptions = Array.from(new Set(parsedValues.flatMap(report => report.competencies))).sort().reverse();
 
   const baseFiltered = clients.filter(c => {
     const term = search.toLowerCase();
@@ -549,7 +548,9 @@ export default function SituacaoFiscalTab() {
     const types = report?.occurrenceTypes.length ? report.occurrenceTypes : c.pendency_types;
     return matchSearch && matchRegime && (filterCompany === 'all' || c.id === filterCompany)
       && (filterOccurrence === 'all' || types.includes(filterOccurrence))
-      && (filterAgency === 'all' || report?.agencies.includes(filterAgency))
+      && (filterAgency === 'all' || report?.agencies.includes(filterAgency)
+        || (filterAgency === 'PGFN' && types.includes('divida_ativa'))
+        || (filterAgency === 'Receita Federal' && types.some(type => type !== 'divida_ativa')))
       && (filterCompetency === 'all' || report?.competencies.includes(filterCompetency));
   });
 
@@ -587,6 +588,13 @@ export default function SituacaoFiscalTab() {
     setDetailClientId(client.id);
     await ensureParsed(client);
   }
+
+  useEffect(() => {
+    if (filterCompetency === 'all') return;
+    clients.filter(client => client.pdf_base64 && !parsedReports[client.id]).forEach(client => void ensureParsed(client));
+    // A competência só existe dentro do PDF e é lida quando o filtro é usado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCompetency]);
 
   if (loading && clients.length === 0) {
     return (
@@ -649,7 +657,7 @@ export default function SituacaoFiscalTab() {
         loading={loading && clients.length === 0}
         activeStatus={filterStatus}
         onSelectStatus={setFilterStatus}
-        onSelectPendency={setPendencyKey}
+        onSelectPendency={setFilterOccurrence}
       />
 
       <Card className="rounded-md">
@@ -661,7 +669,7 @@ export default function SituacaoFiscalTab() {
             <Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="Situação fiscal" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as situações</SelectItem><SelectItem value="regular">Regular</SelectItem><SelectItem value="irregular">Com pendência</SelectItem><SelectItem value="error">Erro</SelectItem><SelectItem value="sem_procuracao">Sem procuração</SelectItem><SelectItem value="pending">Sem consulta</SelectItem></SelectContent></Select>
             <Select value={filterOccurrence} onValueChange={setFilterOccurrence}><SelectTrigger><SelectValue placeholder="Tipo de ocorrência" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os tipos</SelectItem><SelectItem value="omissao">Declarações omitidas</SelectItem><SelectItem value="debitos">Débitos tributários</SelectItem><SelectItem value="parcelamento">Parcelamentos</SelectItem><SelectItem value="suspensa">Exigibilidade suspensa</SelectItem><SelectItem value="divida_ativa">Situação na PGFN</SelectItem></SelectContent></Select>
             <Select value={filterAgency} onValueChange={setFilterAgency}><SelectTrigger><SelectValue placeholder="Órgão" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os órgãos</SelectItem><SelectItem value="Receita Federal">Receita Federal</SelectItem><SelectItem value="PGFN">PGFN</SelectItem>{agencyOptions.filter(a => !['Receita Federal','PGFN'].includes(a)).map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent></Select>
-            <Select value={filterCompetency} onValueChange={setFilterCompetency}><SelectTrigger><SelectValue placeholder="Competência" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as competências</SelectItem>{competencyOptions.map(c => <SelectItem key={c} value={c}>{c.slice(5)}/{c.slice(0,4)}</SelectItem>)}</SelectContent></Select>
+            <div className="flex items-center gap-2"><Input type="month" aria-label="Filtrar por competência" value={filterCompetency === 'all' ? '' : filterCompetency} onChange={event => setFilterCompetency(event.target.value || 'all')} /><Button variant="ghost" size="sm" onClick={() => setFilterCompetency('all')} disabled={filterCompetency === 'all'}>Limpar</Button></div>
             <Select value={filterRegime} onValueChange={setFilterRegime}><SelectTrigger><SelectValue placeholder="Regime tributário" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os regimes</SelectItem>{regimeOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}<SelectItem value="none">Não informado</SelectItem></SelectContent></Select>
           </div>
           <div className="flex items-center gap-1 overflow-x-auto border-b">{statusTabs.map(tab => <Button key={tab.key} variant="ghost" size="sm" onClick={() => setFilterStatus(tab.key)} className={activeTab === tab.key ? 'rounded-none border-b-2 border-primary text-primary' : 'rounded-none text-muted-foreground'}>{tab.label} ({tab.count})</Button>)}</div>

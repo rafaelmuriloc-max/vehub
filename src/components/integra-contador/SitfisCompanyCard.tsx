@@ -32,8 +32,8 @@ function dateTime(value: string | null) {
 function Status({ status }: { status: string | null }) {
   const key = resolveStatusKey(status);
   const styles: Record<string, string> = {
-    regular: 'border-success/30 bg-success/10 text-success', irregular: 'border-destructive/30 bg-destructive/10 text-destructive',
-    error: 'border-warning/30 bg-warning/10 text-warning-foreground', sem_procuracao: 'border-warning/30 bg-warning/10 text-warning-foreground',
+    regular: 'border-calendar-green/30 bg-calendar-green-soft text-calendar-green', irregular: 'border-destructive/30 bg-calendar-red-soft text-destructive',
+    error: 'border-primary/30 bg-calendar-orange-soft text-primary', sem_procuracao: 'border-primary/30 bg-calendar-orange-soft text-primary',
     pending: 'border-border bg-muted text-muted-foreground',
   };
   const labels: Record<string, string> = { regular: 'Regular', irregular: 'Com pendência', error: 'Erro', sem_procuracao: 'Sem procuração', pending: 'Sem consulta' };
