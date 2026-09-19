@@ -1,1 +1,2 @@
 - [Registro de Chamados](mem://features/chat/tickets-registry) — support_tickets, triggers de abertura/encerramento e resumo por IA
+- [Drive Folder Sync](mem://features/integrations/drive-folder-sync) — Pasta do Drive monitorada a cada 10 min importa para Documentos
