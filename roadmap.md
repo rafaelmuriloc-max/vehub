@@ -13,6 +13,8 @@
 - [x] Testes de isolamento (SQL) e testes unitários de caminhos/convites
 - [x] Login sem opção de criar conta; usuários pré-cadastrados recebem e-mail + senha temporária por WhatsApp, com troca obrigatória no primeiro acesso (campo must_change_password, action send-access, tela /change-password)
 - [x] Redesenhar a Situação Fiscal com cards expansíveis, dados estruturados, filtros e relatório original rastreável
+- [x] Monitoramento de pasta do Google Drive (raiz + subpastas) a cada 10 min importando para Documentos; tabelas drive_sync_configs/drive_synced_files, função drive-folder-sync publicada, job drive-folder-sync-10min, aba Drive em Configurações (admin)
+- [ ] Configurar a primeira pasta monitorada em Configurações > Drive e validar a importação de um arquivo de teste
 
 - [ ] Executar as migrações e os testes de isolamento em staging
 - [ ] Migrar as 64 edge functions e os 11 jobs de cron para operar por organização
