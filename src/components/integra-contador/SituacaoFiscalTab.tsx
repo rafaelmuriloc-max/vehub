@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Search, PlayCircle, FileArchive, SlidersHorizontal } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Search, PlayCircle, FileArchive, SlidersHorizontal } from 'lucide-react';
 import JSZip from 'jszip';
 import SitfisOverviewPanel, { analyzeSitfisReport, resolveStatusKey } from './SitfisOverviewPanel';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -15,6 +15,8 @@ import { normalizeTaxRegime } from '@/lib/utils';
 import SitfisCompanyCard from './SitfisCompanyCard';
 import SitfisDetailPanel from './SitfisDetailPanel';
 import { parseSitfisReport, type SitfisStructuredReport } from './sitfisParser';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -74,6 +76,7 @@ export default function SituacaoFiscalTab() {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState({ current: 0, total: 0 });
   const [filterCompany, setFilterCompany] = useState('all');
+  const [companyPickerOpen, setCompanyPickerOpen] = useState(false);
   const [filterOccurrence, setFilterOccurrence] = useState('all');
   const [filterAgency, setFilterAgency] = useState('all');
   const [filterCompetency, setFilterCompetency] = useState('all');
@@ -661,7 +664,7 @@ export default function SituacaoFiscalTab() {
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="relative md:col-span-2"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Buscar por empresa, código ou CNPJ..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
-            <Select value={filterCompany} onValueChange={setFilterCompany}><SelectTrigger><SelectValue placeholder="Todas as empresas" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as empresas</SelectItem>{companyOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.sci_code ? `${c.sci_code} - ` : ''}{c.company_name}</SelectItem>)}</SelectContent></Select>
+            <Popover open={companyPickerOpen} onOpenChange={setCompanyPickerOpen}><PopoverTrigger asChild><Button variant="outline" role="combobox" aria-expanded={companyPickerOpen} className="w-full justify-between font-normal"><span className="truncate">{filterCompany === 'all' ? 'Todas as empresas' : companyOptions.find(client => client.id === filterCompany)?.company_name || 'Empresa'}</span><ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button></PopoverTrigger><PopoverContent align="start" className="w-[calc(100vw-2rem)] p-0 md:w-[360px]"><Command><CommandInput placeholder="Buscar empresa ou código..." /><CommandList><CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty><CommandGroup><CommandItem value="todas-as-empresas" onSelect={() => { setFilterCompany('all'); setCompanyPickerOpen(false); }}><Check className={filterCompany === 'all' ? 'mr-2 h-4 w-4 opacity-100' : 'mr-2 h-4 w-4 opacity-0'} />Todas as empresas</CommandItem>{companyOptions.map(client => <CommandItem key={client.id} value={`${client.sci_code || ''} ${client.company_name} ${client.document || ''}`} onSelect={() => { setFilterCompany(client.id); setCompanyPickerOpen(false); }}><Check className={filterCompany === client.id ? 'mr-2 h-4 w-4 opacity-100' : 'mr-2 h-4 w-4 opacity-0'} />{client.sci_code ? `${client.sci_code} - ` : ''}{client.company_name}</CommandItem>)}</CommandGroup></CommandList></Command></PopoverContent></Popover>
             <Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="Situação fiscal" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as situações</SelectItem><SelectItem value="regular">Regular</SelectItem><SelectItem value="irregular">Com pendência</SelectItem><SelectItem value="error">Erro</SelectItem><SelectItem value="sem_procuracao">Sem procuração</SelectItem><SelectItem value="pending">Sem consulta</SelectItem></SelectContent></Select>
             <Select value={filterOccurrence} onValueChange={setFilterOccurrence}><SelectTrigger><SelectValue placeholder="Tipo de ocorrência" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os tipos</SelectItem><SelectItem value="omissao">Declarações omitidas</SelectItem><SelectItem value="debitos">Débitos tributários</SelectItem><SelectItem value="parcelamento">Parcelamentos</SelectItem><SelectItem value="suspensa">Exigibilidade suspensa</SelectItem><SelectItem value="divida_ativa">Situação na PGFN</SelectItem></SelectContent></Select>
             <Select value={filterAgency} onValueChange={setFilterAgency}><SelectTrigger><SelectValue placeholder="Órgão" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os órgãos</SelectItem><SelectItem value="Receita Federal">Receita Federal</SelectItem><SelectItem value="PGFN">PGFN</SelectItem>{agencyOptions.filter(a => !['Receita Federal','PGFN'].includes(a)).map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent></Select>
