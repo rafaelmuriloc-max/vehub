@@ -24,6 +24,7 @@ import Dashboard from "./pages/Dashboard";
 import Tickets from "./pages/Tickets";
 import ScheduledMessages from "./pages/ScheduledMessages";
 import NotFound from "./pages/NotFound";
+import DemoShowcase from "./pages/DemoShowcase";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/chat/popup" element={<ChatPopup />} />
+            <Route path="/showcase/:screen" element={<DemoShowcase />} />
             <Route element={<AppLayout />}>
               <Route path="/" element={<Financial />} />
               <Route path="/clients" element={<Clients />} />
