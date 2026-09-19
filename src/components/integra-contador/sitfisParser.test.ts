@@ -26,4 +26,14 @@ describe('sitfisParser', () => {
     const parsed = parseSitfisReport(['Débito - IRPJ Competência: 07/2026']);
     expect(parsed.debts[0]).toMatchObject({ principal: null, updated: null, dueDate: null });
   });
+
+  it('extrai campos inequívocos de um débito completo', () => {
+    const parsed = parseSitfisReport(['Débito - IRPJ Competência: 07/2026 Valor Principal: R$ 1.200,50 Valor Atualizado: R$ 1.310,75 Vencimento: 20/08/2026 Situação: Em aberto']);
+    expect(parsed.debts[0]).toMatchObject({ principal: 1200.5, updated: 1310.75, dueDate: '20/08/2026' });
+  });
+
+  it('não inclui rodapé repetido na descrição da PGFN', () => {
+    const parsed = parseSitfisReport(['Diagnóstico Fiscal na Procuradoria-Geral da Fazenda Nacional Não foram detectadas pendências. MINISTÉRIO DA ECONOMIA Relatório Página: 1 / 1']);
+    expect(parsed.pgfn[0]?.description).toBe('Nenhuma pendência identificada na seção PGFN.');
+  });
 });

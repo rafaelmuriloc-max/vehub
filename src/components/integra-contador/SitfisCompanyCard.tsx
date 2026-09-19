@@ -22,6 +22,21 @@ type Props = {
 };
 
 const unavailable = <span className="text-muted-foreground">Informação não disponível</span>;
+function Competencies({ values }: { values: string[] }) {
+  const [showAll, setShowAll] = useState(false);
+  if (!values.length) return unavailable;
+  const visible = showAll ? values : values.slice(0, 6);
+  const grouped = visible.reduce<Record<string, string[]>>((acc, value) => {
+    const [year, month] = value.split('-');
+    if (!acc[year]) acc[year] = [];
+    acc[year].push(month);
+    return acc;
+  }, {});
+  return <div className="space-y-2">
+    {Object.entries(grouped).map(([year, months]) => <div key={year} className="flex items-center gap-2"><span className="w-10 text-xs font-semibold text-foreground">{year}</span><div className="flex flex-wrap gap-1">{months.map(month => <Badge key={`${year}-${month}`} variant="outline" className="rounded-sm">{month}</Badge>)}</div></div>)}
+    {values.length > 6 && <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setShowAll(value => !value)}>{showAll ? 'Mostrar menos' : `Ver todos os períodos (+${values.length - 6})`}</Button>}
+  </div>;
+}
 function documentLabel(value: string | null) {
   const d = (value || '').replace(/\D/g, '');
   return d.length === 14 ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}` : value || 'Informação não disponível';
@@ -77,7 +92,7 @@ export default function SitfisCompanyCard(props: Props) {
             {props.parsing ? <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Estruturando relatório...</div>
               : !client.pdf_base64 ? <div className="py-6 text-center text-sm text-muted-foreground">Relatório não disponível — refaça a consulta.</div>
               : parsed ? <Accordion type="multiple" className="grid gap-2 xl:grid-cols-2">
-                  <AccordionItem value="omissoes" className="rounded-sm border px-3"><AccordionTrigger className="py-3 hover:no-underline">Declarações omitidas <Badge variant="secondary">{parsed.omissions.length}</Badge></AccordionTrigger><AccordionContent>{parsed.omissions.length ? parsed.omissions.map((item, i) => <div key={i} className="border-t py-3 text-sm"><strong>{item.declaration}</strong><p className="mt-1 text-muted-foreground">{item.reason}</p><div className="mt-2 flex flex-wrap gap-1">{item.competencies.length ? item.competencies.map(c => <Badge key={c} variant="outline" className="rounded-sm">{c.slice(5)}/{c.slice(0, 4)}</Badge>) : unavailable}</div></div>) : <p className="text-muted-foreground">Nenhuma omissão identificada.</p>}</AccordionContent></AccordionItem>
+                  <AccordionItem value="omissoes" className="rounded-sm border px-3"><AccordionTrigger className="py-3 hover:no-underline">Declarações omitidas <Badge variant="secondary">{parsed.omissions.length}</Badge></AccordionTrigger><AccordionContent>{parsed.omissions.length ? parsed.omissions.map((item, i) => <div key={i} className="border-t py-3 text-sm"><strong>{item.declaration}</strong><p className="mt-1 line-clamp-2 text-muted-foreground">{item.reason}</p><div className="mt-2"><Competencies values={item.competencies} /></div></div>) : <p className="text-muted-foreground">Nenhuma omissão identificada.</p>}</AccordionContent></AccordionItem>
                   <AccordionItem value="debitos" className="rounded-sm border px-3"><AccordionTrigger className="py-3 hover:no-underline">Débitos tributários <Badge variant="secondary">{parsed.debts.length}</Badge></AccordionTrigger><AccordionContent>{parsed.debts.length ? parsed.debts.map((item, i) => <div key={i} className="border-t py-3 text-sm"><strong>{item.tax || 'Débito não identificado'}</strong><p className="mt-1 text-muted-foreground">Competência: {item.competency || 'Informação não disponível'} · Vencimento: {item.dueDate || 'Informação não disponível'}</p></div>) : <p className="text-muted-foreground">Nenhum débito identificado.</p>}</AccordionContent></AccordionItem>
                   <AccordionItem value="parcelamentos" className="rounded-sm border px-3"><AccordionTrigger className="py-3 hover:no-underline">Parcelamentos <Badge variant="secondary">{parsed.installments.length}</Badge></AccordionTrigger><AccordionContent>{parsed.installments.length ? parsed.installments.map((item, i) => <div key={i} className="border-t py-3 text-sm"><strong>{item.modality || 'Modalidade não disponível'}</strong><p className="mt-1 text-muted-foreground">Situação: {item.status || 'Informação não disponível'} · Nº: {item.number || 'Informação não disponível'}</p></div>) : <p className="text-muted-foreground">Nenhum parcelamento identificado.</p>}</AccordionContent></AccordionItem>
                   <AccordionItem value="suspensoes" className="rounded-sm border px-3"><AccordionTrigger className="py-3 hover:no-underline">Processos / exigibilidade suspensa <Badge variant="secondary">{parsed.suspensions.length}</Badge></AccordionTrigger><AccordionContent>{parsed.suspensions.length ? parsed.suspensions.map((item, i) => <div key={i} className="border-t py-3 text-sm"><strong>{item.status || 'Exigibilidade suspensa'}</strong><p className="mt-1 text-muted-foreground">Processo: {item.identification || 'Informação não disponível'}</p></div>) : <p className="text-muted-foreground">Nenhum processo identificado.</p>}</AccordionContent></AccordionItem>
