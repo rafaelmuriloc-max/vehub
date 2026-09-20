@@ -165,9 +165,9 @@ async function pdfToText(bytes: Uint8Array): Promise<string> {
   }
 }
 
-async function aiExtractChunk(haystack: string, docText: string): Promise<ParsedEmployee[]> {
+async function aiExtractChunk(haystack: string, docText: string): Promise<ParsedEmployee[] | null> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) return [];
+  if (!LOVABLE_API_KEY) return null;
   try {
     const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
