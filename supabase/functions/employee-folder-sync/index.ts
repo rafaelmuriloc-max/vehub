@@ -374,18 +374,27 @@ Deno.serve(async (req) => {
         const docText = isPdf ? await pdfToText(bytes) : "";
         const searchSpace = `${haystack}\n${docText}`;
 
-        // Empresa: CNPJ no caminho ou no conteúdo; senão razão social na pasta
+        // Empresa: CNPJ (caminho/conteúdo) → código SCI (nome/caminho) → razão social (caminho/conteúdo)
         let client: any = null;
-        for (const cnpj of extractCnpjs(searchSpace)) {
+        const cnpjs = extractCnpjs(searchSpace);
+        for (const cnpj of cnpjs) {
           const hit = clientsByCnpj.get(cnpj);
           if (hit) { client = hit; break; }
         }
+        const scis = extractSciCodes(haystack);
+        if (!client) {
+          for (const sci of scis) {
+            const hit = clientsBySci.get(sci);
+            if (hit) { client = hit; break; }
+          }
+        }
         if (!client) {
           const normHay = normalizeText(haystack);
+          const normDoc = normalizeText(docText.slice(0, 5000));
           let best: any = null; let bestLen = 0;
           for (const c of clients ?? []) {
             const normName = normalizeText(c.company_name || "");
-            if (normName.length >= 6 && normHay.includes(normName) && normName.length > bestLen) {
+            if (normName.length >= 6 && (normHay.includes(normName) || normDoc.includes(normName)) && normName.length > bestLen) {
               best = c; bestLen = normName.length;
             }
           }
@@ -393,9 +402,13 @@ Deno.serve(async (req) => {
         }
 
         if (!client) {
-          await markPending("Empresa não identificada", null);
+          await markPending(
+            `Empresa não identificada (texto do PDF: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
+            null,
+          );
           continue;
         }
+
 
         if (isPdf && docText.trim().length < 40) {
           await markPending("PDF sem texto legível (documento escaneado)", client.id);
