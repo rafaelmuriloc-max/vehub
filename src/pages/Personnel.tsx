@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Building2, ChevronDown, ChevronLeft, ChevronRight, FileText, FolderOpen, FolderSync,
+  Building2, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
   Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
