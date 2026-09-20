@@ -203,7 +203,9 @@ export default function Personnel() {
     if (!config) { setFolderDialog(true); return; }
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('employee-folder-sync', { body: {} });
+      const { data, error } = await supabase.functions.invoke('employee-folder-sync', {
+        body: { force_reprocess: true },
+      });
       if (error) throw error;
       if (data?.ok === false) throw new Error(data.error);
       const s = data?.stats ?? {};
