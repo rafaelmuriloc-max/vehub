@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Building2, ChevronDown, ChevronRight, FileText, FolderOpen, FolderSync,
+  Building2, ChevronDown, ChevronLeft, ChevronRight, FileText, FolderOpen, FolderSync,
   Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -120,6 +120,8 @@ export default function Personnel() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('active');
+  const [pageSize, setPageSize] = useState<number | 'all'>(10);
+  const [page, setPage] = useState(1);
 
   const [folderDialog, setFolderDialog] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -179,6 +181,17 @@ export default function Personnel() {
       || (c.sci_code ?? '').toLowerCase().includes(q),
     );
   }, [clients, search]);
+
+  const totalPages = pageSize === 'all'
+    ? 1
+    : Math.max(1, Math.ceil(filteredClients.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const paginatedClients = useMemo(() => {
+    if (pageSize === 'all') return filteredClients;
+    const start = (safePage - 1) * pageSize;
+    return filteredClients.slice(start, start + pageSize);
+  }, [filteredClients, pageSize, safePage]);
 
   function visibleEmployees(clientId: string) {
     const list = employeesByClient.get(clientId) ?? [];
@@ -323,7 +336,7 @@ export default function Personnel() {
               className="pl-9"
               placeholder="Buscar empresa por nome, CNPJ ou código SCI..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}>
@@ -332,6 +345,18 @@ export default function Personnel() {
               <SelectItem value="active">Somente ativos</SelectItem>
               <SelectItem value="terminated">Somente desligados</SelectItem>
               <SelectItem value="all">Todos</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(pageSize)}
+            onValueChange={v => { setPageSize(v === 'all' ? 'all' : Number(v)); setPage(1); }}
+          >
+            <SelectTrigger className="w-full sm:w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10 por página</SelectItem>
+              <SelectItem value="20">20 por página</SelectItem>
+              <SelectItem value="30">30 por página</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" onClick={loadAll}><RefreshCw className="h-4 w-4" /></Button>
@@ -350,7 +375,7 @@ export default function Personnel() {
             {filteredClients.length === 0 && (
               <p className="text-sm text-muted-foreground p-6 text-center">Nenhuma empresa encontrada.</p>
             )}
-            {filteredClients.map(c => {
+            {paginatedClients.map(c => {
               const list = employeesByClient.get(c.id) ?? [];
               const actives = list.filter(e => e.status === 'active').length;
               const isOpen = expanded === c.id;
@@ -462,6 +487,30 @@ export default function Personnel() {
               );
             })}
           </div>
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t">
+              <p className="text-xs text-muted-foreground order-2 sm:order-1">
+                {filteredClients.length} empresa(s) — página {safePage} de {totalPages}
+              </p>
+              <div className="flex items-center gap-1 order-1 sm:order-2">
+                <Button
+                  variant="outline" size="icon"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm px-2 tabular-nums">{safePage} / {totalPages}</span>
+                <Button
+                  variant="outline" size="icon"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
