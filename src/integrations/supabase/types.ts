@@ -648,6 +648,62 @@ export type Database = {
           },
         ]
       }
+      client_employees: {
+        Row: {
+          admission_date: string | null
+          client_id: string
+          cpf: string | null
+          created_at: string
+          full_name: string
+          id: string
+          notes: string | null
+          position: string | null
+          salary: number | null
+          source: string
+          status: string
+          termination_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          admission_date?: string | null
+          client_id: string
+          cpf?: string | null
+          created_at?: string
+          full_name: string
+          id?: string
+          notes?: string | null
+          position?: string | null
+          salary?: number | null
+          source?: string
+          status?: string
+          termination_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admission_date?: string | null
+          client_id?: string
+          cpf?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          notes?: string | null
+          position?: string | null
+          salary?: number | null
+          source?: string
+          status?: string
+          termination_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_employees_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_society_documents: {
         Row: {
           client_id: string
@@ -1427,6 +1483,102 @@ export type Database = {
           snippet?: string | null
           subject?: string | null
           to_emails?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      employee_documents: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          doc_kind: string | null
+          drive_file_id: string
+          drive_modified_time: string | null
+          drive_path: string | null
+          employee_id: string | null
+          error: string | null
+          file_name: string
+          id: string
+          parsed_at: string | null
+          status: string
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          doc_kind?: string | null
+          drive_file_id: string
+          drive_modified_time?: string | null
+          drive_path?: string | null
+          employee_id?: string | null
+          error?: string | null
+          file_name: string
+          id?: string
+          parsed_at?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          doc_kind?: string | null
+          drive_file_id?: string
+          drive_modified_time?: string | null
+          drive_path?: string | null
+          employee_id?: string | null
+          error?: string | null
+          file_name?: string
+          id?: string
+          parsed_at?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_documents_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "client_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_sync_config: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          folder_id: string
+          folder_name: string
+          id: string
+          last_synced_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          folder_id: string
+          folder_name: string
+          id?: string
+          last_synced_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          folder_id?: string
+          folder_name?: string
+          id?: string
+          last_synced_at?: string | null
           updated_at?: string
         }
         Relationships: []
