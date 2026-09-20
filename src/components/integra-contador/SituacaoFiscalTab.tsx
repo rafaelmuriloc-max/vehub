@@ -574,13 +574,15 @@ export default function SituacaoFiscalTab() {
   const detailClient = clients.find(c => c.id === detailClientId) || null;
 
   async function ensureParsed(client: ClientWithSitfis) {
-    if (parsedReports[client.id] || !client.pdf_base64 || parsingIds.has(client.id)) return;
+    if (parsedReports[client.id] || !client.pdf_base64 || parsingRef.current.has(client.id)) return;
+    parsingRef.current.add(client.id);
     setParsingIds(prev => new Set(prev).add(client.id));
     const info = await extractPdfInfoFromBase64(client.pdf_base64);
     textCache.current.set(client.id, info.text);
     pagesCache.current.set(client.id, info.numPages);
     pageTextCache.current.set(client.id, info.pages);
     setParsedReports(prev => ({ ...prev, [client.id]: parseSitfisReport(info.pages) }));
+    parsingRef.current.delete(client.id);
     setParsingIds(prev => { const next = new Set(prev); next.delete(client.id); return next; });
   }
   async function showDetails(client: ClientWithSitfis) {
@@ -590,7 +592,16 @@ export default function SituacaoFiscalTab() {
 
   useEffect(() => {
     if (filterCompetency === 'all') return;
-    clients.filter(client => client.pdf_base64 && !parsedReports[client.id]).forEach(client => void ensureParsed(client));
+    let cancelled = false;
+    const queue = clients.filter(client => client.pdf_base64 && !parsedReports[client.id]);
+    (async () => {
+      for (const client of queue) {
+        if (cancelled) return;
+        await ensureParsed(client);
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    })();
+    return () => { cancelled = true; };
     // A competência só existe dentro do PDF e é lida quando o filtro é usado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCompetency]);
