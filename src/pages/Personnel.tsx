@@ -426,25 +426,6 @@ export default function Personnel() {
                                         {e.status === 'active' ? 'Ativo' : 'Desligado'}
                                       </Badge>
                                     </TableCell>
-                                    <TableCell className="hidden md:table-cell">
-                                      {eDocs.length === 0 ? <span className="text-xs text-muted-foreground">—</span> : (
-                                        <div className="flex flex-wrap gap-1">
-                                          {eDocs.slice(0, 3).map(d => (
-                                            <button
-                                              key={d.id}
-                                              onClick={() => openDoc(d)}
-                                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline max-w-[160px]"
-                                            >
-                                              <FileText className="h-3 w-3 shrink-0" />
-                                              <span className="truncate">{d.file_name}</span>
-                                            </button>
-                                          ))}
-                                          {eDocs.length > 3 && (
-                                            <span className="text-xs text-muted-foreground">+{eDocs.length - 3}</span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </TableCell>
                                     <TableCell>
                                       <div className="flex gap-1 justify-end">
                                         <Button variant="ghost" size="icon" onClick={() => openEdit(e)}>
