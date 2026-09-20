@@ -315,6 +315,16 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
   try {
+    let forceReprocess = false;
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        forceReprocess = body?.force_reprocess === true;
+      } catch {
+        // Chamadas automáticas podem não enviar corpo.
+      }
+    }
+
     const cronSecret = req.headers.get("x-cron-secret");
     const expectedSecret = Deno.env.get("CRON_SECRET");
     let authorized = !!expectedSecret && cronSecret === expectedSecret;
@@ -374,8 +384,8 @@ Deno.serve(async (req) => {
 
     for (const f of files) {
       const prev = knownById.get(f.id);
-      // Arquivos em revisão são sempre reprocessados
-      if (prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
+      // O botão manual força a releitura; o cron continua econômico e ignora arquivos inalterados.
+      if (!forceReprocess && prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
 
 
       if (f.mimeType.startsWith("application/vnd.google-apps.")) {
