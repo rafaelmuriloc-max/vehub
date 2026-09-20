@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
+import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +65,23 @@ function guessDocKind(name: string): string {
   return "outros";
 }
 
+function normalizeDate(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return null;
+}
+
+function normalizeSalary(v: unknown): number | null {
+  if (typeof v === "number" && isFinite(v)) return v;
+  if (typeof v !== "string") return null;
+  const cleaned = v.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
+  const n = Number(cleaned);
+  return isFinite(n) && n > 0 ? n : null;
+}
+
 interface DriveFileEntry {
   id: string;
   name: string;
@@ -71,6 +89,15 @@ interface DriveFileEntry {
   modifiedTime?: string;
   size?: string;
   path: string;
+}
+
+interface ParsedEmployee {
+  full_name: string;
+  cpf: string | null;
+  position: string | null;
+  admission_date: string | null;
+  salary: number | null;
+  termination_date: string | null;
 }
 
 async function listFolderRecursive(rootId: string): Promise<DriveFileEntry[]> {
@@ -110,54 +137,105 @@ async function listFolderRecursive(rootId: string): Promise<DriveFileEntry[]> {
   return result;
 }
 
-async function aiExtractEmployee(haystack: string): Promise<{ full_name: string; cpf: string; position: string }> {
+async function pdfToText(bytes: Uint8Array): Promise<string> {
+  try {
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
+    return (Array.isArray(text) ? text.join("\n") : text) ?? "";
+  } catch (e) {
+    console.warn("pdf text extraction failed:", (e as Error).message);
+    return "";
+  }
+}
+
+async function aiExtractEmployees(haystack: string, docText: string): Promise<ParsedEmployee[]> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  const empty = { full_name: "", cpf: "", position: "" };
-  if (!LOVABLE_API_KEY) return empty;
+  if (!LOVABLE_API_KEY) return [];
   try {
     const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-2.5-flash",
         messages: [
           {
             role: "system",
             content:
-              "Você identifica dados de um funcionário a partir do caminho/nome de um arquivo de departamento pessoal brasileiro. Retorne o nome completo do funcionário (sem tipo de documento, sem nome da empresa), CPF apenas com dígitos e o cargo, se houver. Se não souber, retorne string vazia.",
+              `Você extrai a relação de funcionários de documentos de departamento pessoal brasileiros (ficha de registro, folha de pagamento, relação de empregados etc.).
+Retorne TODOS os funcionários encontrados no documento — um documento pode conter dezenas de pessoas.
+Regras:
+- full_name: nome completo da pessoa, sem cargo, sem empresa, sem tipo de documento.
+- cpf: apenas os 11 dígitos; string vazia se não houver.
+- position: cargo/função; string vazia se não houver.
+- admission_date e termination_date: formato AAAA-MM-DD; string vazia se não houver.
+- salary: valor numérico do salário mensal; string vazia se não houver.
+- Não invente dados. Não inclua sócios, contadores, testemunhas ou responsáveis pela empresa.
+- Se o texto não trouxer nenhum funcionário, retorne a lista vazia.`,
           },
-          { role: "user", content: `Caminho do arquivo:\n${haystack}` },
+          {
+            role: "user",
+            content: `Caminho do arquivo: ${haystack}\n\nTexto do documento:\n${docText.slice(0, 20000)}`,
+          },
         ],
         tools: [{
           type: "function",
           function: {
-            name: "extract_employee",
-            description: "Dados do funcionário",
+            name: "extract_employees",
+            description: "Lista de funcionários encontrados no documento",
             parameters: {
               type: "object",
               properties: {
-                full_name: { type: "string" },
-                cpf: { type: "string" },
-                position: { type: "string" },
+                employees: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      full_name: { type: "string" },
+                      cpf: { type: "string" },
+                      position: { type: "string" },
+                      admission_date: { type: "string" },
+                      salary: { type: "string" },
+                      termination_date: { type: "string" },
+                    },
+                    required: ["full_name", "cpf", "position", "admission_date", "salary", "termination_date"],
+                    additionalProperties: false,
+                  },
+                },
               },
-              required: ["full_name", "cpf", "position"],
+              required: ["employees"],
               additionalProperties: false,
             },
           },
         }],
-        tool_choice: { type: "function", function: { name: "extract_employee" } },
+        tool_choice: { type: "function", function: { name: "extract_employees" } },
       }),
     });
     if (!r.ok) {
       console.warn("ai extract failed", r.status, await r.text());
-      return empty;
+      return [];
     }
     const data = await r.json();
     const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    return args ? { ...empty, ...JSON.parse(args) } : empty;
+    if (!args) return [];
+    const parsed = JSON.parse(args);
+    const list: ParsedEmployee[] = [];
+    for (const e of parsed.employees ?? []) {
+      const name = String(e.full_name ?? "").trim();
+      const cpfDigits = String(e.cpf ?? "").replace(/\D/g, "");
+      if (!name && cpfDigits.length !== 11) continue;
+      list.push({
+        full_name: name,
+        cpf: cpfDigits.length === 11 ? cpfDigits : null,
+        position: String(e.position ?? "").trim() || null,
+        admission_date: normalizeDate(e.admission_date),
+        salary: normalizeSalary(e.salary),
+        termination_date: normalizeDate(e.termination_date),
+      });
+    }
+    return list;
   } catch (e) {
     console.warn("ai extract error", (e as Error).message);
-    return empty;
+    return [];
   }
 }
 
@@ -213,10 +291,14 @@ Deno.serve(async (req) => {
 
     const files = await listFolderRecursive(cfg.folder_id);
     const { data: known } = await supabase
-      .from("employee_documents").select("id, drive_file_id, drive_modified_time, employee_id");
+      .from("employee_documents").select("drive_file_id, drive_modified_time");
     const knownById = new Map<string, any>((known ?? []).map((k: any) => [k.drive_file_id, k]));
 
-    const stats = { novos: 0, atualizados: 0, funcionarios: 0, revisao: 0, erros: 0, ignorados: 0 };
+    const stats = {
+      arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
+      funcionarios_criados: 0, funcionarios_atualizados: 0,
+      revisao: 0, erros: 0, ignorados: 0,
+    };
     let processed = 0;
 
     for (const f of files) {
@@ -248,16 +330,34 @@ Deno.serve(async (req) => {
       if (processed >= MAX_FILES_PER_RUN) break;
       processed++;
 
+      const markPending = async (reason: string, clientId: string | null) => {
+        await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
+        await supabase.from("employee_documents").insert({
+          drive_file_id: f.id, file_name: f.name, drive_path: f.path,
+          drive_modified_time: f.modifiedTime ?? null, status: "pending_review",
+          client_id: clientId, doc_kind: guessDocKind(f.name), error: reason,
+        } as any);
+        stats.revisao++;
+      };
+
       try {
         const haystack = `${f.path} / ${f.name}`;
 
-        // 1) Empresa: CNPJ no caminho
+        // Download do arquivo (necessário para ler o conteúdo)
+        const r = await fetch(`${DRIVE_GATEWAY}/files/${f.id}?alt=media`, { headers: ghHeaders() });
+        if (!r.ok) throw new Error(`download [${r.status}]: ${await r.text()}`);
+        const bytes = new Uint8Array(await r.arrayBuffer());
+
+        const isPdf = f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name);
+        const docText = isPdf ? await pdfToText(bytes) : "";
+        const searchSpace = `${haystack}\n${docText}`;
+
+        // Empresa: CNPJ no caminho ou no conteúdo; senão razão social na pasta
         let client: any = null;
-        for (const cnpj of extractCnpjs(haystack)) {
+        for (const cnpj of extractCnpjs(searchSpace)) {
           const hit = clientsByCnpj.get(cnpj);
           if (hit) { client = hit; break; }
         }
-        // 2) Empresa: razão social na pasta
         if (!client) {
           const normHay = normalizeText(haystack);
           let best: any = null; let bestLen = 0;
@@ -270,89 +370,113 @@ Deno.serve(async (req) => {
           client = best;
         }
 
-        // 3) Funcionário: CPF no caminho, senão IA
-        let cpf = extractCpf(haystack);
-        let fullName = "";
-        let position = "";
-        if (!cpf || !fullName) {
-          const ai = await aiExtractEmployee(haystack);
-          if (!cpf && ai.cpf) {
-            const d = ai.cpf.replace(/\D/g, "");
-            if (d.length === 11) cpf = d;
-          }
-          fullName = (ai.full_name || "").trim();
-          position = (ai.position || "").trim();
-        }
-
-        if (!client || (!cpf && !fullName)) {
-          await supabase.from("employee_documents").upsert({
-            drive_file_id: f.id, file_name: f.name, drive_path: f.path,
-            drive_modified_time: f.modifiedTime ?? null, status: "pending_review",
-            client_id: client?.id ?? null,
-            doc_kind: guessDocKind(f.name),
-            error: !client ? "Empresa não identificada" : "Funcionário não identificado",
-          } as any, { onConflict: "drive_file_id" });
-          stats.revisao++;
+        if (!client) {
+          await markPending("Empresa não identificada", null);
           continue;
         }
 
-        // Localiza ou cria o funcionário
-        let employee: any = null;
-        if (cpf) {
-          const { data } = await supabase.from("client_employees")
-            .select("*").eq("client_id", client.id).eq("cpf", cpf).limit(1);
-          employee = data?.[0] ?? null;
+        if (isPdf && docText.trim().length < 40) {
+          await markPending("PDF sem texto legível (documento escaneado)", client.id);
+          continue;
         }
-        if (!employee && fullName) {
-          const { data } = await supabase.from("client_employees")
-            .select("*").eq("client_id", client.id).ilike("full_name", fullName).limit(1);
-          employee = data?.[0] ?? null;
-        }
-        if (!employee) {
-          const { data, error } = await supabase.from("client_employees").insert({
-            client_id: client.id,
-            full_name: fullName || `Funcionário ${cpf}`,
-            cpf: cpf,
-            position: position || null,
-            source: "drive",
-          } as any).select("*").single();
-          if (error) throw error;
-          employee = data;
-          stats.funcionarios++;
-        } else {
-          const patch: any = {};
-          if (!employee.cpf && cpf) patch.cpf = cpf;
-          if (!employee.position && position) patch.position = position;
-          if (Object.keys(patch).length > 0) {
-            await supabase.from("client_employees").update(patch).eq("id", employee.id);
+
+        // Funcionários: todos os presentes no documento
+        let parsedEmployees = await aiExtractEmployees(haystack, docText);
+
+        // Fallback: um único funcionário pelo CPF/nome do arquivo
+        if (parsedEmployees.length === 0) {
+          const cpf = extractCpf(haystack);
+          if (cpf) {
+            parsedEmployees = [{
+              full_name: "", cpf, position: null,
+              admission_date: null, salary: null, termination_date: null,
+            }];
           }
         }
 
-        // Download e upload
-        const r = await fetch(`${DRIVE_GATEWAY}/files/${f.id}?alt=media`, { headers: ghHeaders() });
-        if (!r.ok) throw new Error(`download [${r.status}]: ${await r.text()}`);
-        const bytes = new Uint8Array(await r.arrayBuffer());
-        const storagePath = `${client.id}/pessoal/${employee.id}/${sanitizeFileName(f.name)}`;
+        if (parsedEmployees.length === 0) {
+          await markPending("Nenhum funcionário identificado no arquivo", client.id);
+          continue;
+        }
+
+        stats.fichas_lidas++;
+
+        // Sobe o arquivo uma única vez
+        const storagePath = `${client.id}/pessoal/${sanitizeFileName(f.name)}`;
         const { error: upErr } = await supabase.storage
           .from("documents").upload(storagePath, bytes, { upsert: true, contentType: f.mimeType });
         if (upErr) throw upErr;
 
-        await supabase.from("employee_documents").upsert({
-          drive_file_id: f.id, file_name: f.name, drive_path: f.path,
-          drive_modified_time: f.modifiedTime ?? null, status: "imported",
-          employee_id: employee.id, client_id: client.id,
-          storage_path: storagePath, doc_kind: guessDocKind(f.name),
-          parsed_at: new Date().toISOString(), error: null,
-        } as any, { onConflict: "drive_file_id" });
+        // Regrava os vínculos deste arquivo
+        await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
 
-        if (prev) stats.atualizados++; else stats.novos++;
+        const linkedIds = new Set<string>();
+        for (const pe of parsedEmployees) {
+          let employee: any = null;
+          if (pe.cpf) {
+            const { data } = await supabase.from("client_employees")
+              .select("*").eq("client_id", client.id).eq("cpf", pe.cpf).limit(1);
+            employee = data?.[0] ?? null;
+          }
+          if (!employee && pe.full_name) {
+            const { data } = await supabase.from("client_employees")
+              .select("*").eq("client_id", client.id).ilike("full_name", pe.full_name).limit(1);
+            employee = data?.[0] ?? null;
+          }
+
+          if (!employee) {
+            const { data, error } = await supabase.from("client_employees").insert({
+              client_id: client.id,
+              full_name: pe.full_name || `Funcionário ${pe.cpf}`,
+              cpf: pe.cpf,
+              position: pe.position,
+              admission_date: pe.admission_date,
+              salary: pe.salary,
+              termination_date: pe.termination_date,
+              status: pe.termination_date ? "terminated" : "active",
+              source: "drive",
+            } as any).select("*").single();
+            if (error) throw error;
+            employee = data;
+            stats.funcionarios_criados++;
+          } else {
+            // Completa apenas os campos vazios — nunca sobrescreve dado manual
+            const patch: any = {};
+            if (!employee.cpf && pe.cpf) patch.cpf = pe.cpf;
+            if (!employee.position && pe.position) patch.position = pe.position;
+            if (!employee.admission_date && pe.admission_date) patch.admission_date = pe.admission_date;
+            if (employee.salary == null && pe.salary != null) patch.salary = pe.salary;
+            if (!employee.termination_date && pe.termination_date) {
+              patch.termination_date = pe.termination_date;
+              patch.status = "terminated";
+            }
+            if (Object.keys(patch).length > 0) {
+              await supabase.from("client_employees").update(patch).eq("id", employee.id);
+              stats.funcionarios_atualizados++;
+            }
+          }
+
+          if (linkedIds.has(employee.id)) continue;
+          linkedIds.add(employee.id);
+
+          await supabase.from("employee_documents").insert({
+            drive_file_id: f.id, file_name: f.name, drive_path: f.path,
+            drive_modified_time: f.modifiedTime ?? null, status: "imported",
+            employee_id: employee.id, client_id: client.id,
+            storage_path: storagePath, doc_kind: guessDocKind(f.name),
+            parsed_at: new Date().toISOString(), error: null,
+          } as any);
+        }
+
+        if (prev) stats.arquivos_atualizados++; else stats.arquivos_novos++;
       } catch (e) {
         console.error(`Erro em ${f.name}:`, e);
-        await supabase.from("employee_documents").upsert({
+        await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
+        await supabase.from("employee_documents").insert({
           drive_file_id: f.id, file_name: f.name, drive_path: f.path,
           drive_modified_time: f.modifiedTime ?? null, status: "error",
           error: (e as Error).message?.slice(0, 500),
-        } as any, { onConflict: "drive_file_id" });
+        } as any);
         stats.erros++;
       }
     }
