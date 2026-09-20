@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Building2, ChevronDown, ChevronRight, FileText, FolderOpen, FolderSync,
+  Building2, ChevronDown, ChevronLeft, ChevronRight, FileText, FolderOpen, FolderSync,
   Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -336,7 +336,7 @@ export default function Personnel() {
               className="pl-9"
               placeholder="Buscar empresa por nome, CNPJ ou código SCI..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}>
@@ -345,6 +345,18 @@ export default function Personnel() {
               <SelectItem value="active">Somente ativos</SelectItem>
               <SelectItem value="terminated">Somente desligados</SelectItem>
               <SelectItem value="all">Todos</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(pageSize)}
+            onValueChange={v => { setPageSize(v === 'all' ? 'all' : Number(v)); setPage(1); }}
+          >
+            <SelectTrigger className="w-full sm:w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10 por página</SelectItem>
+              <SelectItem value="20">20 por página</SelectItem>
+              <SelectItem value="30">30 por página</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" onClick={loadAll}><RefreshCw className="h-4 w-4" /></Button>
