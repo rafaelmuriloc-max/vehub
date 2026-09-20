@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Building2, ChevronDown, ChevronLeft, ChevronRight, FileText, FolderOpen, FolderSync,
+  Building2, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
   Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -159,17 +159,6 @@ export default function Personnel() {
     return map;
   }, [employees]);
 
-  const docsByEmployee = useMemo(() => {
-    const map = new Map<string, EmployeeDoc[]>();
-    for (const d of docs) {
-      if (!d.employee_id) continue;
-      const arr = map.get(d.employee_id) ?? [];
-      arr.push(d);
-      map.set(d.employee_id, arr);
-    }
-    return map;
-  }, [docs]);
-
   const pendingDocs = useMemo(() => docs.filter(d => d.status !== 'imported'), [docs]);
 
   const filteredClients = useMemo(() => {
@@ -295,15 +284,6 @@ export default function Personnel() {
     loadAll();
   }
 
-  async function openDoc(d: EmployeeDoc) {
-    if (!d.storage_path) return;
-    const { data, error } = await supabase.storage.from('documents').createSignedUrl(d.storage_path, 3600);
-    if (error || !data) {
-      toast({ title: 'Não foi possível abrir o arquivo', variant: 'destructive' });
-      return;
-    }
-    window.open(data.signedUrl, '_blank');
-  }
 
   if (loading) {
     return <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin" /></div>;
@@ -420,13 +400,11 @@ export default function Personnel() {
                                 <TableHead className="hidden lg:table-cell">Data de rescisão</TableHead>
                                 <TableHead className="hidden lg:table-cell">Salário</TableHead>
                                 <TableHead>Situação</TableHead>
-                                <TableHead className="hidden md:table-cell">Documentos</TableHead>
                                 <TableHead className="w-24" />
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {visibleEmployees(c.id).map(e => {
-                                const eDocs = docsByEmployee.get(e.id) ?? [];
                                 return (
                                   <TableRow key={e.id}>
                                     <TableCell className="font-medium text-sm">{e.full_name}</TableCell>
@@ -447,25 +425,6 @@ export default function Personnel() {
                                         : 'bg-muted text-muted-foreground'}>
                                         {e.status === 'active' ? 'Ativo' : 'Desligado'}
                                       </Badge>
-                                    </TableCell>
-                                    <TableCell className="hidden md:table-cell">
-                                      {eDocs.length === 0 ? <span className="text-xs text-muted-foreground">—</span> : (
-                                        <div className="flex flex-wrap gap-1">
-                                          {eDocs.slice(0, 3).map(d => (
-                                            <button
-                                              key={d.id}
-                                              onClick={() => openDoc(d)}
-                                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline max-w-[160px]"
-                                            >
-                                              <FileText className="h-3 w-3 shrink-0" />
-                                              <span className="truncate">{d.file_name}</span>
-                                            </button>
-                                          ))}
-                                          {eDocs.length > 3 && (
-                                            <span className="text-xs text-muted-foreground">+{eDocs.length - 3}</span>
-                                          )}
-                                        </div>
-                                      )}
                                     </TableCell>
                                     <TableCell>
                                       <div className="flex gap-1 justify-end">
