@@ -558,14 +558,20 @@ Deno.serve(async (req) => {
 
           await supabase.from("employee_documents").insert({
             drive_file_id: f.id, file_name: f.name, drive_path: f.path,
-            drive_modified_time: f.modifiedTime ?? null, status: "imported",
+            drive_modified_time: f.modifiedTime ?? null,
+            status: partial ? "pending_review" : "imported",
             employee_id: employee.id, client_id: client.id,
             storage_path: storagePath, doc_kind: guessDocKind(f.name),
-            parsed_at: new Date().toISOString(), error: null,
+            parsed_at: new Date().toISOString(),
+            error: partial
+              ? `Leitura parcial: ${parsedEmployees.length} funcionário(s) lidos em ${extraction.chunks} bloco(s); sincronize novamente para completar`
+              : null,
           } as any);
         }
 
+        if (partial) stats.parciais++;
         if (prev) stats.arquivos_atualizados++; else stats.arquivos_novos++;
+
       } catch (e) {
         console.error(`Erro em ${f.name}:`, e);
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
