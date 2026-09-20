@@ -191,7 +191,7 @@ Regras:
           },
           {
             role: "user",
-            content: `Caminho do arquivo: ${haystack}\n\nTexto do documento:\n${docText.slice(0, 20000)}`,
+            content: `Caminho do arquivo: ${haystack}\n\nTexto do documento:\n${docText}`,
           },
         ],
         tools: [{
