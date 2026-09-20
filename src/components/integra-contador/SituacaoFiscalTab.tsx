@@ -84,6 +84,7 @@ export default function SituacaoFiscalTab() {
   const [parsingIds, setParsingIds] = useState<Set<string>>(new Set());
   const [detailClientId, setDetailClientId] = useState<string | null>(null);
   const [, setCertMode] = useState<Set<string>>(new Set());
+  const parsingRef = useRef<Set<string>>(new Set());
   const textCache = useRef<Map<string, string>>(new Map());
   const pagesCache = useRef<Map<string, number>>(new Map());
   const pageTextCache = useRef<Map<string, string[]>>(new Map());
@@ -684,7 +685,7 @@ export default function SituacaoFiscalTab() {
           </div>
           <div className="flex items-center gap-1 overflow-x-auto border-b">{statusTabs.map(tab => <Button key={tab.key} variant="ghost" size="sm" onClick={() => setFilterStatus(tab.key)} className={activeTab === tab.key ? 'rounded-none border-b-2 border-primary text-primary' : 'rounded-none text-muted-foreground'}>{tab.label} ({tab.count})</Button>)}</div>
           <div className="flex items-center gap-2"><Checkbox checked={filtered.length > 0 && filtered.every(c => selected.has(c.id))} onCheckedChange={toggleSelectAll} /><span className="text-sm text-muted-foreground">Selecionar todos os clientes filtrados</span></div>
-          <div className="space-y-3">{paginatedClients.length === 0 ? <div className="rounded-sm border border-dashed py-12 text-center text-sm text-muted-foreground">Nenhuma empresa encontrada.</div> : paginatedClients.map(c => <SitfisCompanyCard key={c.id} client={c} selected={selected.has(c.id)} parsed={parsedReports[c.id]} parsing={parsingIds.has(c.id)} consulting={consultingId === c.id} onSelect={() => toggleSelect(c.id)} onRequestParse={() => void ensureParsed(c)} onDetails={() => void showDetails(c)} onDownload={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)} onConsult={() => void handleConsultarIndividual(c.id)} />)}</div>
+          <div className="space-y-3">{paginatedClients.length === 0 ? <div className="rounded-sm border border-dashed py-12 text-center text-sm text-muted-foreground">{parsingIds.size > 0 ? 'Lendo relatórios para filtrar por competência...' : 'Nenhuma empresa encontrada.'}</div> : paginatedClients.map(c => <SitfisCompanyCard key={c.id} client={c} selected={selected.has(c.id)} parsed={parsedReports[c.id]} parsing={parsingIds.has(c.id)} consulting={consultingId === c.id} onSelect={() => toggleSelect(c.id)} onRequestParse={() => void ensureParsed(c)} onDetails={() => void showDetails(c)} onDownload={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)} onConsult={() => void handleConsultarIndividual(c.id)} />)}</div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>{filtered.length} cliente(s)</span>
