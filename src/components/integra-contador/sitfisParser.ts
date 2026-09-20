@@ -64,13 +64,19 @@ function splitBlocks(pages: string[]): { text: string; page: number; pgfn: boole
   pages.forEach((pageText, index) => {
     const prepared = pageText.replace(MARKER, '\n');
     const pgfnAt = prepared.search(/(?:Diagnóstico Fiscal na Procuradoria|Procuradoria-Geral da Fazenda|\bPGFN\b)/i);
-    prepared.split('\n').map(clean).filter(Boolean).forEach(text => {
-      if (!/^(?:Pend[êe]ncia|Parcelamento|Processo|Inscri[çc][ãa]o|D[ée]bito)\s*[-–:]/i.test(text)) return;
-      blocks.push({ text, page: index + 1, pgfn: pgfnAt >= 0 && prepared.indexOf(text) >= pgfnAt });
-    });
+    let offset = 0;
+    for (const rawLine of prepared.split('\n')) {
+      const lineOffset = offset;
+      offset += rawLine.length + 1;
+      const text = clean(rawLine);
+      if (!text) continue;
+      if (!/^(?:Pend[êe]ncia|Parcelamento|Processo|Inscri[çc][ãa]o|D[ée]bito)\s*[-–:]/i.test(text)) continue;
+      blocks.push({ text, page: index + 1, pgfn: pgfnAt >= 0 && lineOffset >= pgfnAt });
+    }
   });
   return blocks;
 }
+
 
 export function parseSitfisReport(pages: string[]): SitfisStructuredReport {
   const omissions: SitfisOmission[] = [];
