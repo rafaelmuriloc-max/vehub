@@ -44,8 +44,25 @@ function extractCnpjs(text: string): string[] {
     const d = m.replace(/\D/g, "");
     if (d.length === 14) out.add(d);
   }
+  for (const m of text.match(/\b\d{14}\b/g) ?? []) out.add(m);
   return [...out];
 }
+
+function normalizeSci(v: string): string {
+  const d = (v || "").replace(/\D/g, "").replace(/^0+/, "");
+  return d;
+}
+
+// Códigos SCI presentes no nome/caminho: E00195, 00195, 195-, [195] etc.
+function extractSciCodes(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.match(/(?:^|[^0-9a-zA-Z])[a-zA-Z]?0*\d{1,6}(?=[^0-9]|$)/g) ?? []) {
+    const n = normalizeSci(m);
+    if (n && n.length <= 6) out.add(n);
+  }
+  return [...out];
+}
+
 
 function extractCpf(text: string): string | null {
   const m = text.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/);
