@@ -260,7 +260,21 @@ const CHUNK_SIZE = 18000;
 const CHUNK_OVERLAP = 1000;
 const MAX_CHUNKS = 12;
 
+function splitEmployeeForms(text: string): string[] {
+  const matches = [...text.matchAll(/REGISTRO DE COLABORADORES/gi)];
+  if (matches.length <= 1) return [];
+  return matches.map((match, index) => {
+    const start = match.index ?? 0;
+    const end = matches[index + 1]?.index ?? text.length;
+    return text.slice(start, end).trim();
+  }).filter(form => form.length >= 100);
+}
+
 function chunkText(text: string): string[] {
+  // Fichas de registro possuem uma pessoa por página. Mantê-las separadas evita
+  // associar CPF, cargo ou rescisão de uma página ao nome da página seguinte.
+  const forms = splitEmployeeForms(text);
+  if (forms.length > 1) return forms.slice(0, MAX_CHUNKS * 3);
   if (text.length <= CHUNK_SIZE) return [text];
   const chunks: string[] = [];
   let start = 0;
@@ -276,7 +290,10 @@ async function aiExtractEmployees(
   docText: string,
 ): Promise<{ employees: ParsedEmployee[]; chunks: number; truncated: boolean; failed: boolean }> {
   const chunks = chunkText(docText);
-  const totalNeeded = docText.length > CHUNK_SIZE
+  const forms = splitEmployeeForms(docText);
+  const totalNeeded = forms.length > 1
+    ? forms.length
+    : docText.length > CHUNK_SIZE
     ? Math.ceil((docText.length - CHUNK_OVERLAP) / (CHUNK_SIZE - CHUNK_OVERLAP))
     : 1;
   const truncated = totalNeeded > chunks.length;
@@ -531,6 +548,13 @@ Deno.serve(async (req) => {
             employee = data?.[0] ?? null;
           }
 
+          const todayInSaoPaulo = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+          }).format(new Date());
+          const importedStatus = pe.termination_date && pe.termination_date <= todayInSaoPaulo
+            ? "terminated"
+            : "active";
+
           if (!employee) {
             const { data, error } = await supabase.from("client_employees").insert({
               client_id: client.id,
@@ -540,22 +564,32 @@ Deno.serve(async (req) => {
               admission_date: pe.admission_date,
               salary: pe.salary,
               termination_date: pe.termination_date,
-              status: pe.termination_date ? "terminated" : "active",
+              status: importedStatus,
               source: "drive",
             } as any).select("*").single();
             if (error) throw error;
             employee = data;
             stats.funcionarios_criados++;
           } else {
-            // Completa apenas os campos vazios — nunca sobrescreve dado manual
+            // Dados manuais são preservados. Registros importados são atualizados
+            // pela ficha mais recente para corrigir associações feitas em leituras anteriores.
             const patch: any = {};
-            if (!employee.cpf && pe.cpf) patch.cpf = pe.cpf;
-            if (!employee.position && pe.position) patch.position = pe.position;
-            if (!employee.admission_date && pe.admission_date) patch.admission_date = pe.admission_date;
-            if (employee.salary == null && pe.salary != null) patch.salary = pe.salary;
-            if (!employee.termination_date && pe.termination_date) {
+            if (employee.source === "drive") {
+              if (pe.cpf) patch.cpf = pe.cpf;
+              if (pe.position) patch.position = pe.position;
+              if (pe.admission_date) patch.admission_date = pe.admission_date;
+              if (pe.salary != null) patch.salary = pe.salary;
               patch.termination_date = pe.termination_date;
-              patch.status = "terminated";
+              patch.status = importedStatus;
+            } else {
+              if (!employee.cpf && pe.cpf) patch.cpf = pe.cpf;
+              if (!employee.position && pe.position) patch.position = pe.position;
+              if (!employee.admission_date && pe.admission_date) patch.admission_date = pe.admission_date;
+              if (employee.salary == null && pe.salary != null) patch.salary = pe.salary;
+              if (!employee.termination_date && pe.termination_date) {
+                patch.termination_date = pe.termination_date;
+                patch.status = importedStatus;
+              }
             }
             if (Object.keys(patch).length > 0) {
               await supabase.from("client_employees").update(patch).eq("id", employee.id);
