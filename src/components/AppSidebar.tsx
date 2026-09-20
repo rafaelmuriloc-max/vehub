@@ -1,4 +1,4 @@
-import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive, MonitorPlay, Send, Ticket } from 'lucide-react';
+import { DollarSign, CheckSquare, Calendar, Building2, LogOut, FileText, ChevronRight, Scale, MessageCircle, Mail, HardDrive, MonitorPlay, Send, Ticket, Users } from 'lucide-react';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -18,6 +18,7 @@ const menuItems = [
   { title: 'E-mail', icon: Mail, path: '/email' },
   { title: 'Drive', icon: HardDrive, path: '/drive' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
+  { title: 'Pessoal', icon: Users, path: '/personnel' },
 ];
 
 const cadastroSubItems = [
