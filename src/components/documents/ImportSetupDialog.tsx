@@ -98,7 +98,7 @@ export default function ImportSetupDialog({ open, onOpenChange, onConfirm }: Pro
   }, [activities, obligationId, docTypes]);
 
   const selectedObligation = filteredObligations.find(o => o.id === obligationId);
-  const isQuarterly = selectedObligation?.recurrence === 'quarterly';
+  const isQuarterly = selectedObligation?.recurrence === 'trimestral';
 
   // Derive quarter/year from current referenceMonth (YYYY-MM)
   const [refYear, refMonth] = referenceMonth.split('-').map(Number);
