@@ -22,6 +22,7 @@ import Email from "./pages/Email";
 import Drive from "./pages/Drive";
 import Dashboard from "./pages/Dashboard";
 import Tickets from "./pages/Tickets";
+import Personnel from "./pages/Personnel";
 import ScheduledMessages from "./pages/ScheduledMessages";
 import NotFound from "./pages/NotFound";
 import DemoShowcase from "./pages/DemoShowcase";
@@ -60,6 +61,7 @@ const App = () => (
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/tickets" element={<Tickets />} />
+              <Route path="/personnel" element={<Personnel />} />
               <Route path="/scheduled-messages" element={<ScheduledMessages />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/document-types" element={<DocumentTypes />} />
