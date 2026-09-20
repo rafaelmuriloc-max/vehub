@@ -133,11 +133,12 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (!conv) continue;
 
+        // Evita duplicar: considera chamados abertos ou já fechados que cobrem o período.
         const { data: exists } = await supabase
           .from("support_tickets")
           .select("id")
           .eq("conversation_id", convId)
-          .gte("opened_at", sinceIso)
+          .or(`status.eq.open,opened_at.gte.${sinceIso},closed_at.gte.${sinceIso}`)
           .limit(1);
         if (exists && exists.length > 0) continue;
 
@@ -152,9 +153,15 @@ Deno.serve(async (req) => {
           closedAt = conv.closed_at && conv.closed_at >= openedAt ? conv.closed_at : lastAt;
         }
 
+        let clientId = conv.client_id as string | null;
+        if (!clientId && conv.whatsapp_phone) {
+          const { data: resolved } = await supabase.rpc("resolve_client_by_phone", { _phone: conv.whatsapp_phone });
+          clientId = (resolved as string | null) ?? null;
+        }
+
         const { error: insErr } = await supabase.from("support_tickets").insert({
           conversation_id: conv.id,
-          client_id: conv.client_id,
+          client_id: clientId,
           contact_name: conv.name,
           contact_phone: conv.whatsapp_phone,
           department_id: conv.triaged_department_id,
