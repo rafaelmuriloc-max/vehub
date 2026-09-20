@@ -466,8 +466,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Funcionários: todos os presentes no documento
-        let parsedEmployees = await aiExtractEmployees(haystack, docText);
+        // Funcionários: todos os presentes no documento (lido em blocos)
+        const extraction = await aiExtractEmployees(haystack, docText);
+        let parsedEmployees = extraction.employees;
+        console.log("extracao", f.name, {
+          caracteres: docText.length,
+          blocos: extraction.chunks,
+          encontrados: parsedEmployees.length,
+          falhou: extraction.failed,
+          truncado: extraction.truncated,
+        });
 
         // Fallback: um único funcionário pelo CPF/nome do arquivo
         if (parsedEmployees.length === 0) {
@@ -485,7 +493,10 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const partial = extraction.failed || extraction.truncated;
         stats.fichas_lidas++;
+        stats.funcionarios_encontrados += parsedEmployees.length;
+
 
         // Sobe o arquivo uma única vez
         const storagePath = `${client.id}/pessoal/${sanitizeFileName(f.name)}`;
