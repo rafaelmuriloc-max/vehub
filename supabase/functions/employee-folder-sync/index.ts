@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
       if (f.mimeType.startsWith("application/vnd.google-apps.")) {
         if (!prev) {
           await supabase.from("employee_documents").insert({
-            drive_file_id: f.id, drive_name: f.name, file_name: f.name, drive_path: f.path,
+            drive_file_id: f.id, file_name: f.name, drive_path: f.path,
             drive_modified_time: f.modifiedTime ?? null, status: "pending_review",
             error: "Arquivo nativo do Google não suportado",
           } as any);
@@ -300,13 +300,13 @@ Deno.serve(async (req) => {
         let employee: any = null;
         if (cpf) {
           const { data } = await supabase.from("client_employees")
-            .select("*").eq("client_id", client.id).eq("cpf", cpf).maybeSingle();
-          employee = data;
+            .select("*").eq("client_id", client.id).eq("cpf", cpf).limit(1);
+          employee = data?.[0] ?? null;
         }
         if (!employee && fullName) {
           const { data } = await supabase.from("client_employees")
-            .select("*").eq("client_id", client.id).ilike("full_name", fullName).maybeSingle();
-          employee = data;
+            .select("*").eq("client_id", client.id).ilike("full_name", fullName).limit(1);
+          employee = data?.[0] ?? null;
         }
         if (!employee) {
           const { data, error } = await supabase.from("client_employees").insert({
