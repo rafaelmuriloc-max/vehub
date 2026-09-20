@@ -44,8 +44,25 @@ function extractCnpjs(text: string): string[] {
     const d = m.replace(/\D/g, "");
     if (d.length === 14) out.add(d);
   }
+  for (const m of text.match(/\b\d{14}\b/g) ?? []) out.add(m);
   return [...out];
 }
+
+function normalizeSci(v: string): string {
+  const d = (v || "").replace(/\D/g, "").replace(/^0+/, "");
+  return d;
+}
+
+// Códigos SCI presentes no nome/caminho: E00195, 00195, 195-, [195] etc.
+function extractSciCodes(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.match(/(?:^|[^0-9a-zA-Z])[a-zA-Z]?0*\d{1,6}(?=[^0-9]|$)/g) ?? []) {
+    const n = normalizeSci(m);
+    if (n && n.length <= 6) out.add(n);
+  }
+  return [...out];
+}
+
 
 function extractCpf(text: string): string | null {
   const m = text.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/);
@@ -282,16 +299,19 @@ Deno.serve(async (req) => {
     }
 
     const { data: clients } = await supabase
-      .from("clients").select("id, company_name, document, status");
+      .from("clients").select("id, company_name, document, status, sci_code");
     const clientsByCnpj = new Map<string, any>();
+    const clientsBySci = new Map<string, any>();
     for (const c of clients ?? []) {
       const digits = (c.document || "").replace(/\D/g, "");
       if (digits) clientsByCnpj.set(digits, c);
+      const sci = normalizeSci(String(c.sci_code ?? ""));
+      if (sci && !clientsBySci.has(sci)) clientsBySci.set(sci, c);
     }
 
     const files = await listFolderRecursive(cfg.folder_id);
     const { data: known } = await supabase
-      .from("employee_documents").select("drive_file_id, drive_modified_time");
+      .from("employee_documents").select("drive_file_id, drive_modified_time, status");
     const knownById = new Map<string, any>((known ?? []).map((k: any) => [k.drive_file_id, k]));
 
     const stats = {
@@ -303,7 +323,9 @@ Deno.serve(async (req) => {
 
     for (const f of files) {
       const prev = knownById.get(f.id);
-      if (prev && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
+      // Arquivos em revisão são sempre reprocessados
+      if (prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
+
 
       if (f.mimeType.startsWith("application/vnd.google-apps.")) {
         if (!prev) {
@@ -352,18 +374,27 @@ Deno.serve(async (req) => {
         const docText = isPdf ? await pdfToText(bytes) : "";
         const searchSpace = `${haystack}\n${docText}`;
 
-        // Empresa: CNPJ no caminho ou no conteúdo; senão razão social na pasta
+        // Empresa: CNPJ (caminho/conteúdo) → código SCI (nome/caminho) → razão social (caminho/conteúdo)
         let client: any = null;
-        for (const cnpj of extractCnpjs(searchSpace)) {
+        const cnpjs = extractCnpjs(searchSpace);
+        for (const cnpj of cnpjs) {
           const hit = clientsByCnpj.get(cnpj);
           if (hit) { client = hit; break; }
         }
+        const scis = extractSciCodes(haystack);
+        if (!client) {
+          for (const sci of scis) {
+            const hit = clientsBySci.get(sci);
+            if (hit) { client = hit; break; }
+          }
+        }
         if (!client) {
           const normHay = normalizeText(haystack);
+          const normDoc = normalizeText(docText.slice(0, 5000));
           let best: any = null; let bestLen = 0;
           for (const c of clients ?? []) {
             const normName = normalizeText(c.company_name || "");
-            if (normName.length >= 6 && normHay.includes(normName) && normName.length > bestLen) {
+            if (normName.length >= 6 && (normHay.includes(normName) || normDoc.includes(normName)) && normName.length > bestLen) {
               best = c; bestLen = normName.length;
             }
           }
@@ -371,9 +402,13 @@ Deno.serve(async (req) => {
         }
 
         if (!client) {
-          await markPending("Empresa não identificada", null);
+          await markPending(
+            `Empresa não identificada (texto do PDF: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
+            null,
+          );
           continue;
         }
+
 
         if (isPdf && docText.trim().length < 40) {
           await markPending("PDF sem texto legível (documento escaneado)", client.id);
