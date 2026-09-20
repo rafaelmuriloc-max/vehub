@@ -487,6 +487,30 @@ export default function Personnel() {
               );
             })}
           </div>
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t">
+              <p className="text-xs text-muted-foreground order-2 sm:order-1">
+                {filteredClients.length} empresa(s) — página {safePage} de {totalPages}
+              </p>
+              <div className="flex items-center gap-1 order-1 sm:order-2">
+                <Button
+                  variant="outline" size="icon"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm px-2 tabular-nums">{safePage} / {totalPages}</span>
+                <Button
+                  variant="outline" size="icon"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
