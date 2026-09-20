@@ -165,9 +165,9 @@ async function pdfToText(bytes: Uint8Array): Promise<string> {
   }
 }
 
-async function aiExtractEmployees(haystack: string, docText: string): Promise<ParsedEmployee[]> {
+async function aiExtractChunk(haystack: string, docText: string): Promise<ParsedEmployee[] | null> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) return [];
+  if (!LOVABLE_API_KEY) return null;
   try {
     const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -191,7 +191,7 @@ Regras:
           },
           {
             role: "user",
-            content: `Caminho do arquivo: ${haystack}\n\nTexto do documento:\n${docText.slice(0, 20000)}`,
+            content: `Caminho do arquivo: ${haystack}\n\nTexto do documento:\n${docText}`,
           },
         ],
         tools: [{
@@ -229,11 +229,11 @@ Regras:
     });
     if (!r.ok) {
       console.warn("ai extract failed", r.status, await r.text());
-      return [];
+      return null;
     }
     const data = await r.json();
     const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (!args) return [];
+    if (!args) return null;
     const parsed = JSON.parse(args);
     const list: ParsedEmployee[] = [];
     for (const e of parsed.employees ?? []) {
@@ -252,9 +252,60 @@ Regras:
     return list;
   } catch (e) {
     console.warn("ai extract error", (e as Error).message);
-    return [];
+    return null;
   }
 }
+
+const CHUNK_SIZE = 18000;
+const CHUNK_OVERLAP = 1000;
+const MAX_CHUNKS = 12;
+
+function chunkText(text: string): string[] {
+  if (text.length <= CHUNK_SIZE) return [text];
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length && chunks.length < MAX_CHUNKS) {
+    chunks.push(text.slice(start, start + CHUNK_SIZE));
+    start += CHUNK_SIZE - CHUNK_OVERLAP;
+  }
+  return chunks;
+}
+
+async function aiExtractEmployees(
+  haystack: string,
+  docText: string,
+): Promise<{ employees: ParsedEmployee[]; chunks: number; truncated: boolean; failed: boolean }> {
+  const chunks = chunkText(docText);
+  const totalNeeded = docText.length > CHUNK_SIZE
+    ? Math.ceil((docText.length - CHUNK_OVERLAP) / (CHUNK_SIZE - CHUNK_OVERLAP))
+    : 1;
+  const truncated = totalNeeded > chunks.length;
+  const seen = new Map<string, ParsedEmployee>();
+  let failed = false;
+
+  for (const chunk of chunks) {
+    const part = await aiExtractChunk(haystack, chunk);
+    if (part === null) { failed = true; continue; }
+    for (const emp of part) {
+      const key = emp.cpf ? `cpf:${emp.cpf}` : `nome:${normalizeText(emp.full_name)}`;
+      if (!key || key === "nome:") continue;
+      const prev = seen.get(key);
+      if (!prev) { seen.set(key, emp); continue; }
+      // Completa campos vazios com o que o outro bloco trouxe
+      seen.set(key, {
+        full_name: prev.full_name || emp.full_name,
+        cpf: prev.cpf ?? emp.cpf,
+        position: prev.position ?? emp.position,
+        admission_date: prev.admission_date ?? emp.admission_date,
+        salary: prev.salary ?? emp.salary,
+        termination_date: prev.termination_date ?? emp.termination_date,
+      });
+    }
+  }
+
+  return { employees: [...seen.values()], chunks: chunks.length, truncated, failed };
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -316,8 +367,8 @@ Deno.serve(async (req) => {
 
     const stats = {
       arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
-      funcionarios_criados: 0, funcionarios_atualizados: 0,
-      revisao: 0, erros: 0, ignorados: 0,
+      funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0,
+      parciais: 0, revisao: 0, erros: 0, ignorados: 0,
     };
     let processed = 0;
 
@@ -415,8 +466,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Funcionários: todos os presentes no documento
-        let parsedEmployees = await aiExtractEmployees(haystack, docText);
+        // Funcionários: todos os presentes no documento (lido em blocos)
+        const extraction = await aiExtractEmployees(haystack, docText);
+        let parsedEmployees = extraction.employees;
+        console.log("extracao", f.name, {
+          caracteres: docText.length,
+          blocos: extraction.chunks,
+          encontrados: parsedEmployees.length,
+          falhou: extraction.failed,
+          truncado: extraction.truncated,
+        });
 
         // Fallback: um único funcionário pelo CPF/nome do arquivo
         if (parsedEmployees.length === 0) {
@@ -434,7 +493,10 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const partial = extraction.failed || extraction.truncated;
         stats.fichas_lidas++;
+        stats.funcionarios_encontrados += parsedEmployees.length;
+
 
         // Sobe o arquivo uma única vez
         const storagePath = `${client.id}/pessoal/${sanitizeFileName(f.name)}`;
@@ -496,14 +558,20 @@ Deno.serve(async (req) => {
 
           await supabase.from("employee_documents").insert({
             drive_file_id: f.id, file_name: f.name, drive_path: f.path,
-            drive_modified_time: f.modifiedTime ?? null, status: "imported",
+            drive_modified_time: f.modifiedTime ?? null,
+            status: partial ? "pending_review" : "imported",
             employee_id: employee.id, client_id: client.id,
             storage_path: storagePath, doc_kind: guessDocKind(f.name),
-            parsed_at: new Date().toISOString(), error: null,
+            parsed_at: new Date().toISOString(),
+            error: partial
+              ? `Leitura parcial: ${parsedEmployees.length} funcionário(s) lidos em ${extraction.chunks} bloco(s); sincronize novamente para completar`
+              : null,
           } as any);
         }
 
+        if (partial) stats.parciais++;
         if (prev) stats.arquivos_atualizados++; else stats.arquivos_novos++;
+
       } catch (e) {
         console.error(`Erro em ${f.name}:`, e);
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
