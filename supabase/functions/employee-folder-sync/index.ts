@@ -525,11 +525,8 @@ Deno.serve(async (req) => {
         stats.funcionarios_encontrados += parsedEmployees.length;
 
 
-        // Sobe o arquivo uma única vez
-        const storagePath = `${client.id}/pessoal/${sanitizeFileName(f.name)}`;
-        const { error: upErr } = await supabase.storage
-          .from("documents").upload(storagePath, bytes, { upsert: true, contentType: f.mimeType });
-        if (upErr) throw upErr;
+        // O arquivo não é salvo no armazenamento: ele é lido apenas em memória
+        // para extrair os funcionários.
 
         // Regrava os vínculos deste arquivo
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
@@ -605,7 +602,7 @@ Deno.serve(async (req) => {
             drive_modified_time: f.modifiedTime ?? null,
             status: partial ? "pending_review" : "imported",
             employee_id: employee.id, client_id: client.id,
-            storage_path: storagePath, doc_kind: guessDocKind(f.name),
+            storage_path: null, doc_kind: guessDocKind(f.name),
             parsed_at: new Date().toISOString(),
             error: partial
               ? `Leitura parcial: ${parsedEmployees.length} funcionário(s) lidos em ${extraction.chunks} bloco(s); sincronize novamente para completar`
