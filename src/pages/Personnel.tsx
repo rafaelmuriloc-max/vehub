@@ -375,7 +375,7 @@ export default function Personnel() {
             {filteredClients.length === 0 && (
               <p className="text-sm text-muted-foreground p-6 text-center">Nenhuma empresa encontrada.</p>
             )}
-            {filteredClients.map(c => {
+            {paginatedClients.map(c => {
               const list = employeesByClient.get(c.id) ?? [];
               const actives = list.filter(e => e.status === 'active').length;
               const isOpen = expanded === c.id;
