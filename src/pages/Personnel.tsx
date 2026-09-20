@@ -159,17 +159,6 @@ export default function Personnel() {
     return map;
   }, [employees]);
 
-  const docsByEmployee = useMemo(() => {
-    const map = new Map<string, EmployeeDoc[]>();
-    for (const d of docs) {
-      if (!d.employee_id) continue;
-      const arr = map.get(d.employee_id) ?? [];
-      arr.push(d);
-      map.set(d.employee_id, arr);
-    }
-    return map;
-  }, [docs]);
-
   const pendingDocs = useMemo(() => docs.filter(d => d.status !== 'imported'), [docs]);
 
   const filteredClients = useMemo(() => {
@@ -295,15 +284,6 @@ export default function Personnel() {
     loadAll();
   }
 
-  async function openDoc(d: EmployeeDoc) {
-    if (!d.storage_path) return;
-    const { data, error } = await supabase.storage.from('documents').createSignedUrl(d.storage_path, 3600);
-    if (error || !data) {
-      toast({ title: 'Não foi possível abrir o arquivo', variant: 'destructive' });
-      return;
-    }
-    window.open(data.signedUrl, '_blank');
-  }
 
   if (loading) {
     return <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin" /></div>;
