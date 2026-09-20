@@ -58,8 +58,8 @@ async function loadAll() {
     grouped.set(key, list);
   };
   const queries: Promise<any>[] = [];
-  if (taskIds.length) queries.push(supabase.from('time_entries' as any).select('*').in('task_id', taskIds));
-  if (instanceIds.length) queries.push(supabase.from('time_entries' as any).select('*').in('instance_id', instanceIds));
+  if (taskIds.length) queries.push(Promise.resolve(supabase.from('time_entries' as any).select('*').in('task_id', taskIds)));
+  if (instanceIds.length) queries.push(Promise.resolve(supabase.from('time_entries' as any).select('*').in('instance_id', instanceIds)));
   const results = await Promise.all(queries);
   for (const res of results) {
     for (const row of ((res?.data as any[]) || []) as TimeEntry[]) {
