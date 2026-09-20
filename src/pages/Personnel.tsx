@@ -120,6 +120,8 @@ export default function Personnel() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('active');
+  const [pageSize, setPageSize] = useState<number | 'all'>(10);
+  const [page, setPage] = useState(1);
 
   const [folderDialog, setFolderDialog] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -179,6 +181,17 @@ export default function Personnel() {
       || (c.sci_code ?? '').toLowerCase().includes(q),
     );
   }, [clients, search]);
+
+  const totalPages = pageSize === 'all'
+    ? 1
+    : Math.max(1, Math.ceil(filteredClients.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const paginatedClients = useMemo(() => {
+    if (pageSize === 'all') return filteredClients;
+    const start = (safePage - 1) * pageSize;
+    return filteredClients.slice(start, start + pageSize);
+  }, [filteredClients, pageSize, safePage]);
 
   function visibleEmployees(clientId: string) {
     const list = employeesByClient.get(clientId) ?? [];
