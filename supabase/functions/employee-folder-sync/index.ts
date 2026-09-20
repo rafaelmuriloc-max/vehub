@@ -299,16 +299,19 @@ Deno.serve(async (req) => {
     }
 
     const { data: clients } = await supabase
-      .from("clients").select("id, company_name, document, status");
+      .from("clients").select("id, company_name, document, status, sci_code");
     const clientsByCnpj = new Map<string, any>();
+    const clientsBySci = new Map<string, any>();
     for (const c of clients ?? []) {
       const digits = (c.document || "").replace(/\D/g, "");
       if (digits) clientsByCnpj.set(digits, c);
+      const sci = normalizeSci(String(c.sci_code ?? ""));
+      if (sci && !clientsBySci.has(sci)) clientsBySci.set(sci, c);
     }
 
     const files = await listFolderRecursive(cfg.folder_id);
     const { data: known } = await supabase
-      .from("employee_documents").select("drive_file_id, drive_modified_time");
+      .from("employee_documents").select("drive_file_id, drive_modified_time, status");
     const knownById = new Map<string, any>((known ?? []).map((k: any) => [k.drive_file_id, k]));
 
     const stats = {
@@ -320,7 +323,9 @@ Deno.serve(async (req) => {
 
     for (const f of files) {
       const prev = knownById.get(f.id);
-      if (prev && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
+      // Arquivos em revisão são sempre reprocessados
+      if (prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
+
 
       if (f.mimeType.startsWith("application/vnd.google-apps.")) {
         if (!prev) {
