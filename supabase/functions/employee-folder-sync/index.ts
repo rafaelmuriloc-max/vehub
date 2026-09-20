@@ -229,11 +229,11 @@ Regras:
     });
     if (!r.ok) {
       console.warn("ai extract failed", r.status, await r.text());
-      return [];
+      return null;
     }
     const data = await r.json();
     const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (!args) return [];
+    if (!args) return null;
     const parsed = JSON.parse(args);
     const list: ParsedEmployee[] = [];
     for (const e of parsed.employees ?? []) {
