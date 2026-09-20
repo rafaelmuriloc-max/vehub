@@ -34,8 +34,74 @@ export function totalSeconds(entries: TimeEntry[], nowMs: number): number {
 }
 
 /**
- * Self-contained play/stop timer for a task OR an obligation instance.
- * Loads its own entries and syncs via realtime.
+ * Store compartilhado: um único canal realtime e uma consulta em lote para
+ * todos os cronômetros montados na tela (antes era 1 por card).
+ */
+type Listener = (entries: TimeEntry[]) => void;
+const listeners = new Map<string, Set<Listener>>();
+const cache = new Map<string, TimeEntry[]>();
+let channel: ReturnType<typeof supabase.channel> | null = null;
+let loadTimer: ReturnType<typeof setTimeout> | null = null;
+
+function emit(key: string) {
+  listeners.get(key)?.forEach(fn => fn(cache.get(key) || []));
+}
+
+async function loadAll() {
+  const keys = [...listeners.keys()];
+  const taskIds = keys.filter(k => k.startsWith('task:')).map(k => k.slice(5));
+  const instanceIds = keys.filter(k => k.startsWith('instance:')).map(k => k.slice(9));
+  const grouped = new Map<string, TimeEntry[]>();
+  const push = (key: string, row: TimeEntry) => {
+    const list = grouped.get(key) || [];
+    list.push(row);
+    grouped.set(key, list);
+  };
+  const queries: Promise<any>[] = [];
+  if (taskIds.length) queries.push(supabase.from('time_entries' as any).select('*').in('task_id', taskIds));
+  if (instanceIds.length) queries.push(supabase.from('time_entries' as any).select('*').in('instance_id', instanceIds));
+  const results = await Promise.all(queries);
+  for (const res of results) {
+    for (const row of ((res?.data as any[]) || []) as TimeEntry[]) {
+      if (row.task_id) push(`task:${row.task_id}`, row);
+      else if (row.instance_id) push(`instance:${row.instance_id}`, row);
+    }
+  }
+  keys.forEach(key => {
+    cache.set(key, grouped.get(key) || []);
+    emit(key);
+  });
+}
+
+function scheduleLoad() {
+  if (loadTimer) clearTimeout(loadTimer);
+  loadTimer = setTimeout(() => { loadTimer = null; void loadAll(); }, 150);
+}
+
+function subscribe(key: string, listener: Listener): () => void {
+  const set = listeners.get(key) || new Set<Listener>();
+  set.add(listener);
+  listeners.set(key, set);
+  if (cache.has(key)) listener(cache.get(key)!);
+  if (!channel) {
+    channel = supabase
+      .channel('time-entries-shared')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, () => scheduleLoad())
+      .subscribe();
+  }
+  scheduleLoad();
+  return () => {
+    set.delete(listener);
+    if (set.size === 0) listeners.delete(key);
+    if (listeners.size === 0 && channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+  };
+}
+
+/**
+ * Play/stop timer for a task OR an obligation instance.
  */
 export function TimeTracker({ taskId, instanceId, compact = true }: { taskId?: string; instanceId?: string; compact?: boolean }) {
   const { user } = useAuth();
@@ -46,24 +112,10 @@ export function TimeTracker({ taskId, instanceId, compact = true }: { taskId?: s
   const targetKey = taskId ? `task:${taskId}` : `instance:${instanceId}`;
   const busyRef = useRef(false);
 
-  const load = useCallback(async () => {
-    let q = supabase.from('time_entries' as any).select('*');
-    q = taskId ? q.eq('task_id', taskId) : q.eq('instance_id', instanceId!);
-    const { data } = await q;
-    setEntries(((data as any[]) || []) as TimeEntry[]);
-  }, [taskId, instanceId]);
+  const load = useCallback(async () => { await loadAll(); }, []);
 
-  useEffect(() => {
-    load();
-    const channel = supabase
-      .channel(`time-entries-${targetKey}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, (payload) => {
-        const row: any = payload.new || payload.old;
-        if ((taskId && row?.task_id === taskId) || (instanceId && row?.instance_id === instanceId)) load();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [load, targetKey, taskId, instanceId]);
+  useEffect(() => subscribe(targetKey, setEntries), [targetKey]);
+
 
   const running = entries.find(e => !e.ended_at) || null;
   const myRunning = running && running.user_id === user?.id ? running : null;
