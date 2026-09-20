@@ -165,7 +165,7 @@ async function pdfToText(bytes: Uint8Array): Promise<string> {
   }
 }
 
-async function aiExtractEmployees(haystack: string, docText: string): Promise<ParsedEmployee[]> {
+async function aiExtractChunk(haystack: string, docText: string): Promise<ParsedEmployee[]> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) return [];
   try {
