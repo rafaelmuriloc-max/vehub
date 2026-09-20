@@ -347,18 +347,6 @@ export default function Personnel() {
               <SelectItem value="all">Todos</SelectItem>
             </SelectContent>
           </Select>
-          <Select
-            value={String(pageSize)}
-            onValueChange={v => { setPageSize(v === 'all' ? 'all' : Number(v)); setPage(1); }}
-          >
-            <SelectTrigger className="w-full sm:w-32"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10 por página</SelectItem>
-              <SelectItem value="20">20 por página</SelectItem>
-              <SelectItem value="30">30 por página</SelectItem>
-              <SelectItem value="all">Todas</SelectItem>
-            </SelectContent>
-          </Select>
           <Button variant="outline" size="icon" onClick={loadAll}><RefreshCw className="h-4 w-4" /></Button>
         </CardContent>
       </Card>
@@ -487,27 +475,45 @@ export default function Personnel() {
               );
             })}
           </div>
-          {totalPages > 1 && (
+          {filteredClients.length > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t">
               <p className="text-xs text-muted-foreground order-2 sm:order-1">
                 {filteredClients.length} empresa(s) — página {safePage} de {totalPages}
               </p>
-              <div className="flex items-center gap-1 order-1 sm:order-2">
-                <Button
-                  variant="outline" size="icon"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage(safePage - 1)}
+              <div className="flex items-center gap-2 order-3 sm:order-2">
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={v => { setPageSize(v === 'all' ? 'all' : Number(v)); setPage(1); }}
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm px-2 tabular-nums">{safePage} / {totalPages}</span>
-                <Button
-                  variant="outline" size="icon"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage(safePage + 1)}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                  <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 por página</SelectItem>
+                    <SelectItem value="20">20 por página</SelectItem>
+                    <SelectItem value="30">30 por página</SelectItem>
+                    <SelectItem value="all">Todas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1 order-1 sm:order-3">
+                {totalPages > 1 && (
+                  <>
+                    <Button
+                      variant="outline" size="icon"
+                      disabled={safePage <= 1}
+                      onClick={() => setPage(safePage - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm px-2 tabular-nums">{safePage} / {totalPages}</span>
+                    <Button
+                      variant="outline" size="icon"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setPage(safePage + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           )}
