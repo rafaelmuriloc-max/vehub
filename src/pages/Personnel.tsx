@@ -209,7 +209,7 @@ export default function Personnel() {
       const s = data?.stats ?? {};
       toast({
         title: 'Sincronização concluída',
-        description: `${s.fichas_lidas ?? 0} arquivo(s) lido(s), ${s.funcionarios_criados ?? 0} funcionário(s) cadastrado(s), ${s.funcionarios_atualizados ?? 0} atualizado(s), ${s.revisao ?? 0} aguardando revisão.`,
+        description: `${s.fichas_lidas ?? 0} arquivo(s) lido(s), ${s.funcionarios_encontrados ?? 0} funcionário(s) encontrado(s), ${s.funcionarios_criados ?? 0} cadastrado(s), ${s.funcionarios_atualizados ?? 0} atualizado(s), ${s.revisao ?? 0} aguardando revisão.`,
       });
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
