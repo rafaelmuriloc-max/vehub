@@ -252,9 +252,60 @@ Regras:
     return list;
   } catch (e) {
     console.warn("ai extract error", (e as Error).message);
-    return [];
+    return null;
   }
 }
+
+const CHUNK_SIZE = 18000;
+const CHUNK_OVERLAP = 1000;
+const MAX_CHUNKS = 12;
+
+function chunkText(text: string): string[] {
+  if (text.length <= CHUNK_SIZE) return [text];
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length && chunks.length < MAX_CHUNKS) {
+    chunks.push(text.slice(start, start + CHUNK_SIZE));
+    start += CHUNK_SIZE - CHUNK_OVERLAP;
+  }
+  return chunks;
+}
+
+async function aiExtractEmployees(
+  haystack: string,
+  docText: string,
+): Promise<{ employees: ParsedEmployee[]; chunks: number; truncated: boolean; failed: boolean }> {
+  const chunks = chunkText(docText);
+  const totalNeeded = docText.length > CHUNK_SIZE
+    ? Math.ceil((docText.length - CHUNK_OVERLAP) / (CHUNK_SIZE - CHUNK_OVERLAP))
+    : 1;
+  const truncated = totalNeeded > chunks.length;
+  const seen = new Map<string, ParsedEmployee>();
+  let failed = false;
+
+  for (const chunk of chunks) {
+    const part = await aiExtractChunk(haystack, chunk);
+    if (part === null) { failed = true; continue; }
+    for (const emp of part) {
+      const key = emp.cpf ? `cpf:${emp.cpf}` : `nome:${normalizeText(emp.full_name)}`;
+      if (!key || key === "nome:") continue;
+      const prev = seen.get(key);
+      if (!prev) { seen.set(key, emp); continue; }
+      // Completa campos vazios com o que o outro bloco trouxe
+      seen.set(key, {
+        full_name: prev.full_name || emp.full_name,
+        cpf: prev.cpf ?? emp.cpf,
+        position: prev.position ?? emp.position,
+        admission_date: prev.admission_date ?? emp.admission_date,
+        salary: prev.salary ?? emp.salary,
+        termination_date: prev.termination_date ?? emp.termination_date,
+      });
+    }
+  }
+
+  return { employees: [...seen.values()], chunks: chunks.length, truncated, failed };
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
