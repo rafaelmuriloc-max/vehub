@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 
 export default function ChangePassword() {
-  const { user, loading, profile } = useAuth();
+  const { user, loading, profile, refreshProfile } = useAuth();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -64,6 +64,7 @@ export default function ChangePassword() {
         return;
       }
 
+      await refreshProfile();
       toast({ title: 'Senha alterada', description: 'Sua nova senha já está ativa.' });
       navigate('/', { replace: true });
     } finally {

@@ -10,9 +10,9 @@ Deno.serve(async (req) => {
 
     let { data: ac } = await sb.from("asaas_customers").select("*").eq("client_id", client_id).eq("environment", env).maybeSingle();
     if (!ac) {
-      const { data: client } = await sb.from("clients").select("id, company_name, cnpj, email, phone").eq("id", client_id).maybeSingle();
+      const { data: client } = await sb.from("clients").select("id, company_name, document, contact_email, contact_phone").eq("id", client_id).maybeSingle();
       if (!client) return jsonResponse({ error: "Cliente nao encontrado" }, 404);
-      const customer = await asaasFetch(env, "/customers", { method: "POST", body: JSON.stringify({ name: client.company_name, cpfCnpj: onlyDigits(client.cnpj), email: client.email || undefined, phone: onlyDigits(client.phone) || undefined }) });
+      const customer = await asaasFetch(env, "/customers", { method: "POST", body: JSON.stringify({ name: client.company_name, cpfCnpj: onlyDigits(client.document), email: client.contact_email || undefined, phone: onlyDigits(client.contact_phone) || undefined }) });
       const ins = await sb.from("asaas_customers").insert({ client_id, asaas_customer_id: customer.id, environment: env }).select().single();
       ac = ins.data;
     }

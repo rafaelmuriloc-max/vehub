@@ -84,6 +84,7 @@ export default function SituacaoFiscalTab() {
   const [parsingIds, setParsingIds] = useState<Set<string>>(new Set());
   const [detailClientId, setDetailClientId] = useState<string | null>(null);
   const [, setCertMode] = useState<Set<string>>(new Set());
+  const parsingRef = useRef<Set<string>>(new Set());
   const textCache = useRef<Map<string, string>>(new Map());
   const pagesCache = useRef<Map<string, number>>(new Map());
   const pageTextCache = useRef<Map<string, string[]>>(new Map());
@@ -574,13 +575,15 @@ export default function SituacaoFiscalTab() {
   const detailClient = clients.find(c => c.id === detailClientId) || null;
 
   async function ensureParsed(client: ClientWithSitfis) {
-    if (parsedReports[client.id] || !client.pdf_base64 || parsingIds.has(client.id)) return;
+    if (parsedReports[client.id] || !client.pdf_base64 || parsingRef.current.has(client.id)) return;
+    parsingRef.current.add(client.id);
     setParsingIds(prev => new Set(prev).add(client.id));
     const info = await extractPdfInfoFromBase64(client.pdf_base64);
     textCache.current.set(client.id, info.text);
     pagesCache.current.set(client.id, info.numPages);
     pageTextCache.current.set(client.id, info.pages);
     setParsedReports(prev => ({ ...prev, [client.id]: parseSitfisReport(info.pages) }));
+    parsingRef.current.delete(client.id);
     setParsingIds(prev => { const next = new Set(prev); next.delete(client.id); return next; });
   }
   async function showDetails(client: ClientWithSitfis) {
@@ -590,7 +593,16 @@ export default function SituacaoFiscalTab() {
 
   useEffect(() => {
     if (filterCompetency === 'all') return;
-    clients.filter(client => client.pdf_base64 && !parsedReports[client.id]).forEach(client => void ensureParsed(client));
+    let cancelled = false;
+    const queue = clients.filter(client => client.pdf_base64 && !parsedReports[client.id]);
+    (async () => {
+      for (const client of queue) {
+        if (cancelled) return;
+        await ensureParsed(client);
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    })();
+    return () => { cancelled = true; };
     // A competência só existe dentro do PDF e é lida quando o filtro é usado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCompetency]);
@@ -673,7 +685,7 @@ export default function SituacaoFiscalTab() {
           </div>
           <div className="flex items-center gap-1 overflow-x-auto border-b">{statusTabs.map(tab => <Button key={tab.key} variant="ghost" size="sm" onClick={() => setFilterStatus(tab.key)} className={activeTab === tab.key ? 'rounded-none border-b-2 border-primary text-primary' : 'rounded-none text-muted-foreground'}>{tab.label} ({tab.count})</Button>)}</div>
           <div className="flex items-center gap-2"><Checkbox checked={filtered.length > 0 && filtered.every(c => selected.has(c.id))} onCheckedChange={toggleSelectAll} /><span className="text-sm text-muted-foreground">Selecionar todos os clientes filtrados</span></div>
-          <div className="space-y-3">{paginatedClients.length === 0 ? <div className="rounded-sm border border-dashed py-12 text-center text-sm text-muted-foreground">Nenhuma empresa encontrada.</div> : paginatedClients.map(c => <SitfisCompanyCard key={c.id} client={c} selected={selected.has(c.id)} parsed={parsedReports[c.id]} parsing={parsingIds.has(c.id)} consulting={consultingId === c.id} onSelect={() => toggleSelect(c.id)} onRequestParse={() => void ensureParsed(c)} onDetails={() => void showDetails(c)} onDownload={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)} onConsult={() => void handleConsultarIndividual(c.id)} />)}</div>
+          <div className="space-y-3">{paginatedClients.length === 0 ? <div className="rounded-sm border border-dashed py-12 text-center text-sm text-muted-foreground">{parsingIds.size > 0 ? 'Lendo relatórios para filtrar por competência...' : 'Nenhuma empresa encontrada.'}</div> : paginatedClients.map(c => <SitfisCompanyCard key={c.id} client={c} selected={selected.has(c.id)} parsed={parsedReports[c.id]} parsing={parsingIds.has(c.id)} consulting={consultingId === c.id} onSelect={() => toggleSelect(c.id)} onRequestParse={() => void ensureParsed(c)} onDetails={() => void showDetails(c)} onDownload={() => c.pdf_base64 && downloadPdf(c.pdf_base64, c.company_name)} onConsult={() => void handleConsultarIndividual(c.id)} />)}</div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>{filtered.length} cliente(s)</span>

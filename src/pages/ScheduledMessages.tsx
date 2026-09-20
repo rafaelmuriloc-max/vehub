@@ -17,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Pencil, Trash2, Pause, Play, Send, Search, Paperclip, History, X } from 'lucide-react';
-import { formatClientLabel, TAX_REGIME } from '@/lib/utils';
+import { formatClientLabel, TAX_REGIME, normalizeTaxRegime } from '@/lib/utils';
 
 type Department = { id: string; name: string };
 type Client = { id: string; sci_code?: string | null; company_name: string; document: string | null; tax_regime: string | null; payroll_type: string | null; address: string | null; status: string };
@@ -143,7 +143,10 @@ export default function ScheduledMessages() {
     let list = clients;
     if (form.segment_payroll_filter === 'all') list = list.filter(c => c.payroll_type);
     else if (form.segment_payroll_filter) list = list.filter(c => c.payroll_type === form.segment_payroll_filter);
-    if (form.segment_tax_regimes.length) list = list.filter(c => form.segment_tax_regimes.includes(c.tax_regime || ''));
+    if (form.segment_tax_regimes.length) list = list.filter(c => {
+      const regime = normalizeTaxRegime(c.tax_regime);
+      return !!regime && form.segment_tax_regimes.some(r => normalizeTaxRegime(r) === regime);
+    });
     if (form.segment_city) list = list.filter(c => (c.address || '').toLowerCase().includes(form.segment_city.toLowerCase()));
     return list;
   }, [form, clients]);

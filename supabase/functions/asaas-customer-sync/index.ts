@@ -9,20 +9,17 @@ Deno.serve(async (req) => {
     const sb = getServiceClient();
     const { env } = await getSettings();
 
-    const { data: client, error: cErr } = await sb.from("clients").select("id, company_name, cnpj, email, phone, address, city, state, zip_code").eq("id", client_id).maybeSingle();
+    const { data: client, error: cErr } = await sb.from("clients").select("id, company_name, document, contact_email, contact_phone, address").eq("id", client_id).maybeSingle();
     if (cErr || !client) return jsonResponse({ error: "Cliente não encontrado" }, 404);
 
     const { data: existing } = await sb.from("asaas_customers").select("*").eq("client_id", client_id).eq("environment", env).maybeSingle();
 
     const body = {
       name: client.company_name,
-      cpfCnpj: onlyDigits(client.cnpj),
-      email: client.email || undefined,
-      phone: onlyDigits(client.phone) || undefined,
+      cpfCnpj: onlyDigits(client.document),
+      email: client.contact_email || undefined,
+      phone: onlyDigits(client.contact_phone) || undefined,
       address: client.address || undefined,
-      postalCode: onlyDigits(client.zip_code) || undefined,
-      province: client.city || undefined,
-      state: client.state || undefined,
       notificationDisabled: false,
     };
 

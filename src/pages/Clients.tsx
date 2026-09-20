@@ -953,7 +953,7 @@ export default function Clients() {
       }
       case 'company_name': return { v: formatClientLabel(c).toLowerCase(), empty: !c.company_name };
       case 'document': return { v: (c.document || '').toLowerCase(), empty: !c.document };
-      case 'tax_regime': return { v: (TAX_REGIME_LABELS[c.tax_regime as string] || c.tax_regime || '').toLowerCase(), empty: !c.tax_regime };
+      case 'tax_regime': return { v: (TAX_REGIME_LABELS[normalizeTaxRegime(c.tax_regime) as string] || c.tax_regime || '').toLowerCase(), empty: !c.tax_regime };
       case 'contact_name': return { v: (c.contact_name || '').toLowerCase(), empty: !c.contact_name };
       case 'monthly_value': return { v: Number(c.monthly_value || 0), empty: c.monthly_value == null };
       case 'status': return { v: (statusLabels[c.status] || '').toLowerCase(), empty: !c.status };
@@ -1522,7 +1522,7 @@ export default function Clients() {
                   <TableCell>{c.document || '-'}</TableCell>
                   <TableCell>
                     {c.tax_regime ? (
-                      <Badge variant="outline" className="text-xs">{TAX_REGIME_LABELS[c.tax_regime] || c.tax_regime}</Badge>
+                      <Badge variant="outline" className="text-xs">{TAX_REGIME_LABELS[normalizeTaxRegime(c.tax_regime) as string] || c.tax_regime}</Badge>
                     ) : (
                       <span className="text-muted-foreground text-xs">—</span>
                     )}

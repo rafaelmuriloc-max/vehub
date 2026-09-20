@@ -40,7 +40,7 @@ const activityTypeLabels: Record<string, string> = {
   document: 'Documento', checklist: 'Checklist', whatsapp: 'WhatsApp', email: 'E-mail',
 };
 
-import { TAX_REGIME } from '@/lib/utils';
+import { TAX_REGIME, normalizeTaxRegime } from '@/lib/utils';
 
 const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -118,7 +118,10 @@ export default function Obligations() {
       if (filters.payroll_filter === 'all' && !c.payroll_type) return false;
       if (filters.payroll_filter === 'normal' && c.payroll_type !== 'normal') return false;
       if (filters.payroll_filter === 'pro_labore' && c.payroll_type !== 'pro_labore') return false;
-      if (filters.tax_regimes.length > 0 && (!c.tax_regime || !filters.tax_regimes.includes(c.tax_regime))) return false;
+      if (filters.tax_regimes.length > 0) {
+        const regime = normalizeTaxRegime(c.tax_regime);
+        if (!regime || !filters.tax_regimes.some(r => normalizeTaxRegime(r) === regime)) return false;
+      }
       if (filters.city && c.address && !c.address.toLowerCase().includes(filters.city.toLowerCase())) return false;
       if (filters.city && !c.address) return false;
       return true;

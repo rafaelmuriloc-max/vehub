@@ -61,5 +61,5 @@ export function isValidInviteToken(token: string | null | undefined): boolean {
 
 /** URL de callback do OAuth — precisa estar cadastrada no Google e no Supabase. */
 export function oauthRedirectTo(): string {
-  return `${window.location.origin}/auth/callback`;
+  return `${window.location.origin}/`;
 }
