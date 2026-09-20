@@ -119,7 +119,7 @@ export default function Personnel() {
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('active');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('all');
   const [pageSize, setPageSize] = useState<number | 'all'>(10);
   const [page, setPage] = useState(1);
 
@@ -368,6 +368,7 @@ export default function Personnel() {
             {paginatedClients.map(c => {
               const list = employeesByClient.get(c.id) ?? [];
               const actives = list.filter(e => e.status === 'active').length;
+              const terminated = list.length - actives;
               const isOpen = expanded === c.id;
               return (
                 <div key={c.id}>
@@ -383,9 +384,19 @@ export default function Personnel() {
                       </div>
                       <div className="text-xs text-muted-foreground truncate">{c.document ?? '—'}</div>
                     </div>
-                    <Badge variant="outline" className="shrink-0 gap-1">
-                      <Users className="h-3 w-3" /> {actives}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant="outline" className="gap-1">
+                        <Users className="h-3 w-3" /> {list.length} no total
+                      </Badge>
+                      <Badge variant="outline" className="hidden sm:inline-flex bg-green-100 text-green-700 border-green-200">
+                        {actives} ativos
+                      </Badge>
+                      {terminated > 0 && (
+                        <Badge variant="outline" className="hidden sm:inline-flex bg-muted text-muted-foreground">
+                          {terminated} desligados
+                        </Badge>
+                      )}
+                    </div>
                   </button>
 
                   {isOpen && (
@@ -406,6 +417,7 @@ export default function Personnel() {
                                 <TableHead className="hidden md:table-cell">CPF</TableHead>
                                 <TableHead className="hidden sm:table-cell">Cargo</TableHead>
                                 <TableHead className="hidden lg:table-cell">Admissão</TableHead>
+                                <TableHead className="hidden lg:table-cell">Data de rescisão</TableHead>
                                 <TableHead className="hidden lg:table-cell">Salário</TableHead>
                                 <TableHead>Situação</TableHead>
                                 <TableHead className="hidden md:table-cell">Documentos</TableHead>
@@ -423,6 +435,9 @@ export default function Personnel() {
                                     <TableCell className="hidden lg:table-cell text-sm">
                                       {e.admission_date ? format(new Date(`${e.admission_date}T12:00:00`), 'dd/MM/yyyy') : '—'}
                                     </TableCell>
+                                     <TableCell className="hidden lg:table-cell text-sm">
+                                       {e.termination_date ? format(new Date(`${e.termination_date}T12:00:00`), 'dd/MM/yyyy') : '—'}
+                                     </TableCell>
                                     <TableCell className="hidden lg:table-cell text-sm">
                                       {e.salary != null ? e.salary.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}
                                     </TableCell>
