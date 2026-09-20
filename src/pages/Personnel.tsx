@@ -400,13 +400,11 @@ export default function Personnel() {
                                 <TableHead className="hidden lg:table-cell">Data de rescisão</TableHead>
                                 <TableHead className="hidden lg:table-cell">Salário</TableHead>
                                 <TableHead>Situação</TableHead>
-                                <TableHead className="hidden md:table-cell">Documentos</TableHead>
                                 <TableHead className="w-24" />
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {visibleEmployees(c.id).map(e => {
-                                const eDocs = docsByEmployee.get(e.id) ?? [];
                                 return (
                                   <TableRow key={e.id}>
                                     <TableCell className="font-medium text-sm">{e.full_name}</TableCell>
