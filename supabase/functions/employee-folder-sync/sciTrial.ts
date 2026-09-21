@@ -3,7 +3,7 @@
 // cabeçalho de colunas) ou ficha (rótulo numa linha, valor na linha seguinte).
 // A interpretação é estrutural, sem IA.
 
-import { alignRows, type Cell, htmlToRows, norm, parseDate } from "./sciHtml.ts";
+import { alignRows, type Cell, htmlToCells, htmlToRows, norm, parseDate } from "./sciHtml.ts";
 
 export interface TrialEmployee {
   full_name: string;
@@ -25,7 +25,8 @@ export interface TrialParseResult {
 }
 
 export function looksLikeTrialHtml(text: string): boolean {
-  const n = norm(text.slice(0, 200_000));
+  // O texto vem em HTML com entidades (experi&ecirc;ncia): decodifica antes.
+  const n = norm(htmlToCells(text.slice(0, 200_000)).join(" "));
   return n.includes("contrato de experiencia") || n.includes("previsao de experiencia") ||
     (n.includes("previsao") && n.includes("experiencia"));
 }
