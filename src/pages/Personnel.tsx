@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Building2, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
-  Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users,
+  Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
