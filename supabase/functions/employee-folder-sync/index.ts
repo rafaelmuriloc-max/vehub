@@ -109,6 +109,7 @@ interface DriveFileEntry {
 
 interface ParsedEmployee {
   full_name: string;
+  employee_code?: string | null;
   cpf: string | null;
   position: string | null;
   admission_date: string | null;
