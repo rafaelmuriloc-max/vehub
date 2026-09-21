@@ -506,6 +506,12 @@ Deno.serve(async (req) => {
       /\.(html?|xls)$/i.test(name) &&
       name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("experiencia");
 
+    // Só as fichas de registro de colaboradores
+    const isRegistrationFileName = (name: string) =>
+      /\.(pdf|html?|xlsx?|csv)$/i.test(name) &&
+      name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        .replace(/[^a-z0-9]/g, "").includes("registrocolaborador");
+
     const cronSecret = req.headers.get("x-cron-secret");
     const expectedSecret = Deno.env.get("CRON_SECRET");
     let authorized = !!expectedSecret && cronSecret === expectedSecret;
@@ -561,7 +567,7 @@ Deno.serve(async (req) => {
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_ignorados: 0, funcionarios_atualizados: 0,
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
       linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0, fichas_html: 0,
-      experiencias_atualizadas: 0,
+      experiencias_atualizadas: 0, fora_do_padrao: 0,
     };
 
     let processed = 0;
@@ -570,6 +576,8 @@ Deno.serve(async (req) => {
 
     for (const f of files) {
       if (onlyTrial && !isTrialFileName(f.name)) continue;
+      // Fora do modo experiência, só as fichas de registro de colaboradores.
+      if (!onlyTrial && !isRegistrationFileName(f.name)) { stats.fora_do_padrao++; continue; }
       const prev = knownById.get(f.id);
       // O botão manual força a releitura; o cron continua econômico e ignora arquivos inalterados.
       if (!forceReprocess && prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
