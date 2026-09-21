@@ -111,7 +111,9 @@ interface ParsedEmployee {
   admission_date: string | null;
   salary: number | null;
   termination_date: string | null;
-  company_hint?: string | null;
+  company_code?: string | null;
+  company_document?: string | null;
+  company_name?: string | null;
 }
 
 // ---------- Leitura de planilhas .csv ----------
