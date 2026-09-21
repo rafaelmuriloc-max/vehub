@@ -388,9 +388,11 @@ Deno.serve(async (req) => {
     const stats = {
       arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0,
-      parciais: 0, revisao: 0, erros: 0, ignorados: 0,
+      parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
     };
     let processed = 0;
+    const startedAt = Date.now();
+
 
     for (const f of files) {
       const prev = knownById.get(f.id);
