@@ -111,7 +111,9 @@ interface ParsedEmployee {
   admission_date: string | null;
   salary: number | null;
   termination_date: string | null;
-  company_hint?: string | null;
+  company_code?: string | null;
+  company_document?: string | null;
+  company_name?: string | null;
 }
 
 // ---------- Leitura de planilhas .csv ----------
@@ -166,40 +168,68 @@ function normalizeHeader(s: string): string {
 }
 
 const HEADER_ALIASES: Record<string, string[]> = {
-  full_name: ["nome", "nome completo", "funcionario", "funcionaria", "colaborador", "colaboradora", "empregado", "trabalhador"],
-  cpf: ["cpf", "n cpf", "cpf do funcionario"],
-  position: ["cargo", "funcao", "ocupacao", "cbo descricao"],
-  admission_date: ["admissao", "data de admissao", "data admissao", "dt admissao", "entrada"],
-  salary: ["salario", "salario base", "remuneracao", "vencimento", "valor salario"],
-  termination_date: ["demissao", "data de demissao", "rescisao", "data de rescisao", "desligamento", "saida", "dt rescisao"],
-  company: ["cnpj", "empresa", "razao social", "codigo", "cod", "sci", "codigo sci", "cliente"],
+  full_name: ["nome", "nome completo", "nome do colaborador", "nome do funcionario", "nome do empregado", "funcionario", "funcionaria", "colaborador", "colaboradora", "empregado", "trabalhador"],
+  cpf: ["cpf", "n cpf", "nr cpf", "cpf do funcionario", "cpf colaborador"],
+  position: ["cargo", "funcao", "ocupacao", "cbo descricao", "descricao do cargo"],
+  admission_date: ["admissao", "data de admissao", "data admissao", "dt admissao", "data da admissao", "entrada"],
+  salary: ["salario", "salario base", "salario contratual", "remuneracao", "vencimento", "valor salario"],
+  termination_date: ["demissao", "data de demissao", "rescisao", "data de rescisao", "data da rescisao", "desligamento", "saida", "dt rescisao"],
+  company_document: ["cnpj", "cnpj empresa", "cnpj da empresa", "cpf cnpj empresa"],
+  company_code: ["codigo", "cod", "cod empresa", "codigo empresa", "codigo da empresa", "sci", "codigo sci", "cod sci"],
+  company_name: ["empresa", "razao social", "nome da empresa", "cliente", "estabelecimento"],
 };
 
+// Pontua o quanto uma linha se parece com um cabeçalho de planilha de funcionários.
 function mapCsvHeaders(header: string[]): Record<string, number> {
   const map: Record<string, number> = {};
+  const exact: Record<string, boolean> = {};
   header.forEach((raw, index) => {
     const h = normalizeHeader(raw);
     if (!h) return;
     for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
-      if (map[field] !== undefined) continue;
-      if (aliases.includes(h) || aliases.some((a) => h === a || h.startsWith(a + " "))) {
-        map[field] = index;
-        break;
-      }
+      const isExact = aliases.includes(h);
+      const isPartial = !isExact && aliases.some((a) => h.startsWith(a + " ") || h.endsWith(" " + a) || h.includes(" " + a + " "));
+      if (!isExact && !isPartial) continue;
+      if (map[field] !== undefined && (exact[field] || !isExact)) continue;
+      map[field] = index;
+      exact[field] = isExact;
+      break;
     }
   });
   return map;
 }
 
-function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: number } | null {
+function scoreHeaderMap(map: Record<string, number>): number {
+  return Object.keys(map).length;
+}
+
+function csvToEmployees(
+  text: string,
+): { employees: ParsedEmployee[]; skipped: number; hasCompanyColumn: boolean } | null {
   const rows = parseCsv(text);
   if (rows.length < 2) return null;
-  const map = mapCsvHeaders(rows[0]);
-  if (map.full_name === undefined && map.cpf === undefined) return null;
+
+  // O cabeçalho nem sempre está na primeira linha (relatórios trazem título antes).
+  let headerIndex = -1;
+  let map: Record<string, number> = {};
+  const limit = Math.min(rows.length, 15);
+  for (let i = 0; i < limit; i++) {
+    const candidate = mapCsvHeaders(rows[i]);
+    if (candidate.full_name === undefined && candidate.cpf === undefined) continue;
+    if (scoreHeaderMap(candidate) > scoreHeaderMap(map)) {
+      map = candidate;
+      headerIndex = i;
+    }
+  }
+  if (headerIndex < 0) return null;
+
+  const hasCompanyColumn = map.company_document !== undefined
+    || map.company_code !== undefined
+    || map.company_name !== undefined;
 
   const employees: ParsedEmployee[] = [];
   let skipped = 0;
-  for (const row of rows.slice(1)) {
+  for (const row of rows.slice(headerIndex + 1)) {
     const get = (field: string) => {
       const i = map[field];
       return i === undefined ? "" : (row[i] ?? "").trim();
@@ -207,6 +237,8 @@ function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: n
     const name = get("full_name");
     const cpfDigits = get("cpf").replace(/\D/g, "");
     if (!name && cpfDigits.length !== 11) { skipped++; continue; }
+    // Linha que repete o cabeçalho (relatórios quebrados por página)
+    if (normalizeHeader(name) && HEADER_ALIASES.full_name.includes(normalizeHeader(name))) { skipped++; continue; }
     employees.push({
       full_name: name,
       cpf: cpfDigits.length === 11 ? cpfDigits : null,
@@ -214,10 +246,12 @@ function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: n
       admission_date: normalizeDate(get("admission_date")),
       salary: normalizeSalary(get("salary")),
       termination_date: normalizeDate(get("termination_date")),
-      company_hint: get("company") || null,
+      company_code: get("company_code") || null,
+      company_document: get("company_document") || null,
+      company_name: get("company_name") || null,
     });
   }
-  return { employees, skipped };
+  return { employees, skipped, hasCompanyColumn };
 }
 
 async function listFolderRecursive(rootId: string): Promise<DriveFileEntry[]> {
@@ -499,7 +533,7 @@ Deno.serve(async (req) => {
       arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0,
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
-      linhas_ignoradas: 0,
+      linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0,
     };
     let processed = 0;
     const startedAt = Date.now();
@@ -604,7 +638,9 @@ Deno.serve(async (req) => {
             if (hit) { client = hit; break; }
           }
         }
-        if (!client) client = resolveClientFrom(`${haystack}\n${docText}`, false);
+        // Planilhas podem reunir várias empresas: o nome encontrado no conteúdo
+        // não pode virar empresa padrão do arquivo. PDFs continuam usando o texto.
+        if (!client) client = isCsvFile ? resolveClientFrom(haystack, false) : resolveClientFrom(searchSpace, false);
 
         if (isPdf && docText.trim().length < 40) {
           await markPending("PDF sem texto legível (documento escaneado)", client?.id ?? null);
@@ -623,6 +659,7 @@ Deno.serve(async (req) => {
           console.log("csv", f.name, {
             linhas: parsedEmployees.length,
             ignoradas: csvParsed.skipped,
+            coluna_empresa: csvParsed.hasCompanyColumn,
           });
         } else {
           // PDF ou .csv sem cabeçalho reconhecido: leitura automática do texto
@@ -650,25 +687,40 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código)
+        // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código).
+        // Quando a planilha tem coluna de empresa, a linha só é gravada se a
+        // empresa for identificada — nunca cai numa empresa "padrão".
+        const perRowCompany = csvParsed?.hasCompanyColumn === true;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
+        const companiesSeen = new Set<string>();
         for (const pe of parsedEmployees) {
-          const rowClient = pe.company_hint
-            ? (resolveClientFrom(pe.company_hint, true) ?? client)
-            : client;
-          if (!rowClient) { stats.linhas_ignoradas++; continue; }
+          let rowClient: any = null;
+          if (pe.company_document) rowClient = resolveClientFrom(pe.company_document, false);
+          if (!rowClient && pe.company_code) {
+            const sci = normalizeSci(pe.company_code);
+            rowClient = (sci ? clientsBySci.get(sci) : null) ?? null;
+          }
+          if (!rowClient && pe.company_name) rowClient = resolveClientFrom(pe.company_name, false);
+          if (!rowClient && !perRowCompany) rowClient = client;
+          if (!rowClient) { stats.linhas_sem_empresa++; continue; }
+          companiesSeen.add(rowClient.id);
           entries.push({ pe, client: rowClient });
         }
+        stats.empresas_atendidas = Math.max(stats.empresas_atendidas, companiesSeen.size);
 
         if (entries.length === 0) {
           await markPending(
-            client
-              ? "Nenhum funcionário identificado no arquivo"
-              : `Empresa não identificada (texto lido: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
+            perRowCompany
+              ? `Nenhuma empresa da planilha foi reconhecida (${parsedEmployees.length} linha(s) lidas)`
+              : client
+                ? "Nenhum funcionário identificado no arquivo"
+                : `Empresa não identificada (texto lido: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
             client?.id ?? null,
           );
           continue;
         }
+
+        if (stats.linhas_sem_empresa > 0 && perRowCompany) partial = true;
 
         stats.fichas_lidas++;
         stats.funcionarios_encontrados += entries.length;
@@ -754,7 +806,9 @@ Deno.serve(async (req) => {
             storage_path: null, doc_kind: guessDocKind(f.name),
             parsed_at: new Date().toISOString(),
             error: partial
-              ? `Leitura parcial: ${entries.length} funcionário(s) lidos em ${chunksRead} bloco(s); sincronize novamente para completar`
+              ? (chunksRead > 0
+                ? `Leitura parcial: ${entries.length} funcionário(s) lidos em ${chunksRead} bloco(s); sincronize novamente para completar`
+                : `${stats.linhas_sem_empresa} linha(s) sem empresa reconhecida foram deixadas de fora`)
               : null,
           } as any);
         }
