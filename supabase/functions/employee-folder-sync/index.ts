@@ -37,6 +37,11 @@ function normalizeText(s: string): string {
     .trim();
 }
 
+// Código do funcionário sem zeros à esquerda, para "007" casar com "7".
+function normalizeCode(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase().replace(/^0+(?=.)/, "");
+}
+
 function extractCnpjs(text: string): string[] {
   const out = new Set<string>();
   for (const m of text.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g) ?? []) {
@@ -449,13 +454,19 @@ async function aiExtractEmployees(
     const part = await aiExtractChunk(haystack, chunk);
     if (part === null) { failed = true; continue; }
     for (const emp of part) {
-      const key = emp.cpf ? `cpf:${emp.cpf}` : `nome:${normalizeText(emp.full_name)}`;
+      const empCode = normalizeCode(emp.employee_code);
+      const key = emp.cpf
+        ? `cpf:${emp.cpf}`
+        : empCode
+        ? `cod:${empCode}`
+        : `nome:${normalizeText(emp.full_name)}`;
       if (!key || key === "nome:") continue;
       const prev = seen.get(key);
       if (!prev) { seen.set(key, emp); continue; }
       // Completa campos vazios com o que o outro bloco trouxe
       seen.set(key, {
         full_name: prev.full_name || emp.full_name,
+        employee_code: prev.employee_code ?? emp.employee_code,
         cpf: prev.cpf ?? emp.cpf,
         position: prev.position ?? emp.position,
         admission_date: prev.admission_date ?? emp.admission_date,
@@ -840,13 +851,24 @@ Deno.serve(async (req) => {
               .select("*").eq("client_id", rowClient.id).eq("cpf", pe.cpf).limit(1);
             employee = data?.[0] ?? null;
           }
-          if (!employee && pe.full_name) {
-            // O relatório de experiência não traz CPF: casa pelo nome sem acentos,
-            // maiúsculas nem espaços extras.
+          if (!employee && (pe.employee_code || pe.full_name)) {
+            // Sem CPF no relatório: casa primeiro pelo código do funcionário e,
+            // só depois, pelo nome sem acentos, maiúsculas nem espaços extras.
             const { data } = await supabase.from("client_employees")
               .select("*").eq("client_id", rowClient.id);
-            const target = normalizeText(pe.full_name);
-            employee = (data ?? []).find((e: any) => normalizeText(e.full_name || "") === target) ?? null;
+            const rows = data ?? [];
+            const code = normalizeCode(pe.employee_code);
+            if (code) {
+              employee = rows.find((e: any) => normalizeCode(e.employee_code) === code) ?? null;
+            }
+            if (!employee && pe.full_name) {
+              const target = normalizeText(pe.full_name);
+              employee = rows.find((e: any) =>
+                normalizeText(e.full_name || "") === target &&
+                // Não casa por nome quando o cadastro tem outro código.
+                (!code || !normalizeCode(e.employee_code) || normalizeCode(e.employee_code) === code)
+              ) ?? null;
+            }
           }
 
           const todayInSaoPaulo = new Intl.DateTimeFormat("en-CA", {
