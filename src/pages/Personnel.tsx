@@ -226,7 +226,6 @@ export default function Personnel() {
         description: `${total.fichas_lidas} arquivo(s) lido(s)${total.fichas_html > 0 ? `, ${total.fichas_html} ficha(s) de registro` : ''}, ${total.funcionarios_encontrados} funcionário(s) encontrado(s) em ${total.empresas_atendidas} empresa(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} ficha(s)/linha(s) ignorada(s).` : ''}${total.linhas_sem_empresa > 0 ? ` ${total.linhas_sem_empresa} sem empresa reconhecida.` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
       });
 
-      });
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
     } finally {
