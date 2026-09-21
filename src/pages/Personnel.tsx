@@ -575,6 +575,7 @@ export default function Personnel() {
                           <Table>
                             <TableHeader>
                               <TableRow>
+                                <TableHead className="w-20">Código</TableHead>
                                 <TableHead>Nome</TableHead>
                                 <TableHead className="hidden md:table-cell">CPF</TableHead>
                                 <TableHead className="hidden sm:table-cell">Cargo</TableHead>
