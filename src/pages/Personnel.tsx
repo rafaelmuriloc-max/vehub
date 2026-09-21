@@ -214,6 +214,7 @@ export default function Personnel() {
         total.funcionarios_criados += s.funcionarios_criados ?? 0;
         total.funcionarios_atualizados += s.funcionarios_atualizados ?? 0;
         total.revisao += s.revisao ?? 0;
+        total.linhas_ignoradas += s.linhas_ignoradas ?? 0;
         restantes = s.restantes ?? 0;
         if (restantes === 0) break;
       }
