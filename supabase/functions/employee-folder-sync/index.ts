@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
-import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
+import { htmlToCells, htmlToRows, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
 import { looksLikeTrialHtml, parseTrialHtml } from "./sciTrial.ts";
 
 
@@ -739,6 +739,22 @@ Deno.serve(async (req) => {
             ignoradas: csvParsed.skipped,
             coluna_empresa: csvParsed.hasCompanyColumn,
           });
+        } else if (onlyTrial) {
+          // Sincronização exclusiva do relatório de experiência: nunca adivinhar.
+          // Registra uma amostra do formato para ajustarmos o leitor estruturado.
+          try {
+            const rows = htmlToRows(rawText);
+            const sample = rows.slice(0, 40).map((r) => r.map((c) => String(c.text ?? c).slice(0, 40)));
+            console.log("amostra-experiencia", f.name, {
+              caracteres: rawText.length,
+              linhas: rows.length,
+              primeiras_linhas: sample,
+            });
+          } catch (e) {
+            console.log("amostra-experiencia-erro", f.name, String(e));
+          }
+          await markPending("Relatório de experiência não reconhecido (formato novo)", null);
+          continue;
         } else {
           // PDF, .csv ou HTML sem estrutura reconhecida: leitura automática do texto
           const extraction = await aiExtractEmployees(haystack, docText);
