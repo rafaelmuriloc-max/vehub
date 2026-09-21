@@ -681,7 +681,29 @@ Deno.serve(async (req) => {
         let partial = false;
         let chunksRead = 0;
 
-        if (sciParsed && sciParsed.employees.length > 0) {
+        if (trialParsed && trialParsed.employees.length > 0) {
+          parsedEmployees = trialParsed.employees.map((e) => ({
+            full_name: e.full_name,
+            cpf: e.cpf,
+            position: null,
+            admission_date: e.admission_date,
+            salary: null,
+            termination_date: null,
+            company_code: e.company_code,
+            company_document: e.company_document,
+            company_name: e.company_name,
+            trial_end_1: e.trial_end_1,
+            trial_days_1: e.trial_days_1,
+            trial_end_2: e.trial_end_2,
+            trial_days_2: e.trial_days_2,
+          }));
+          stats.linhas_ignoradas += trialParsed.incomplete;
+          console.log("experiencia-html", f.name, {
+            linhas: trialParsed.rows,
+            extraidos: parsedEmployees.length,
+            incompletas: trialParsed.incomplete,
+          });
+        } else if (sciParsed && sciParsed.employees.length > 0) {
           parsedEmployees = sciParsed.employees.map((e) => ({
             full_name: e.full_name,
             cpf: e.cpf,
