@@ -819,30 +819,8 @@ Deno.serve(async (req) => {
             employee = data;
             stats.funcionarios_criados++;
           } else {
-            // Dados manuais são preservados. Registros importados são atualizados
-            // pela ficha mais recente para corrigir associações feitas em leituras anteriores.
-            const patch: any = {};
-            if (employee.source === "drive") {
-              if (pe.cpf) patch.cpf = pe.cpf;
-              if (pe.position) patch.position = pe.position;
-              if (pe.admission_date) patch.admission_date = pe.admission_date;
-              if (pe.salary != null) patch.salary = pe.salary;
-              patch.termination_date = pe.termination_date;
-              patch.status = importedStatus;
-            } else {
-              if (!employee.cpf && pe.cpf) patch.cpf = pe.cpf;
-              if (!employee.position && pe.position) patch.position = pe.position;
-              if (!employee.admission_date && pe.admission_date) patch.admission_date = pe.admission_date;
-              if (employee.salary == null && pe.salary != null) patch.salary = pe.salary;
-              if (!employee.termination_date && pe.termination_date) {
-                patch.termination_date = pe.termination_date;
-                patch.status = importedStatus;
-              }
-            }
-            if (Object.keys(patch).length > 0) {
-              await supabase.from("client_employees").update(patch).eq("id", employee.id);
-              stats.funcionarios_atualizados++;
-            }
+            // Funcionário já cadastrado: desconsidera por completo, sem tocar em nenhum campo.
+            stats.funcionarios_ignorados++;
           }
 
           if (linkedIds.has(employee.id)) continue;
