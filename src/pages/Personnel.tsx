@@ -316,6 +316,41 @@ export default function Personnel() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Total de funcionários ativos
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {activeEmployees.length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {employees.length - activeEmployees.length} desligado(s)
+              </p>
+            </div>
+            <Users className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Total de salários
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {totalSalaries.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Folha dos {activeEmployees.length} funcionário(s) ativo(s)
+              </p>
+            </div>
+            <Wallet className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="relative flex-1">
