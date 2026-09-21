@@ -654,6 +654,7 @@ export type Database = {
           client_id: string
           cpf: string | null
           created_at: string
+          employee_code: string | null
           full_name: string
           id: string
           notes: string | null
@@ -673,6 +674,7 @@ export type Database = {
           client_id: string
           cpf?: string | null
           created_at?: string
+          employee_code?: string | null
           full_name: string
           id?: string
           notes?: string | null
@@ -692,6 +694,7 @@ export type Database = {
           client_id?: string
           cpf?: string | null
           created_at?: string
+          employee_code?: string | null
           full_name?: string
           id?: string
           notes?: string | null
