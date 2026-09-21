@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 
 interface Client { id: string; company_name: string; document: string | null; sci_code: string | null }
 interface Employee {
-  id: string; client_id: string; full_name: string; cpf: string | null; position: string | null;
+  id: string; client_id: string; employee_code: string | null; full_name: string; cpf: string | null; position: string | null;
   admission_date: string | null; salary: number | null; termination_date: string | null;
   status: string; source: string;
   trial_end_1: string | null; trial_days_1: number | null;
