@@ -760,7 +760,9 @@ Deno.serve(async (req) => {
         // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código).
         // Quando a planilha tem coluna de empresa, a linha só é gravada se a
         // empresa for identificada — nunca cai numa empresa "padrão".
-        const perRowCompany = csvParsed?.hasCompanyColumn === true || (sciParsed?.employees.length ?? 0) > 0;
+        const perRowCompany = csvParsed?.hasCompanyColumn === true
+          || (sciParsed?.employees.length ?? 0) > 0
+          || (trialParsed?.employees.length ?? 0) > 0;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
         const companiesSeen = new Set<string>();
         const perCompanyCount: Record<string, number> = {};
@@ -835,6 +837,15 @@ Deno.serve(async (req) => {
             ? "terminated"
             : "active";
 
+          // Prazos de experiência: o relatório governa esse dado e sempre atualiza.
+          const hasTrial = pe.trial_end_1 != null || pe.trial_end_2 != null;
+          const trialPatch = {
+            trial_end_1: pe.trial_end_1 ?? null,
+            trial_days_1: pe.trial_days_1 ?? null,
+            trial_end_2: pe.trial_end_2 ?? null,
+            trial_days_2: pe.trial_days_2 ?? null,
+          };
+
           if (!employee) {
             const { data, error } = await supabase.from("client_employees").insert({
               client_id: rowClient.id,
@@ -846,16 +857,21 @@ Deno.serve(async (req) => {
               termination_date: pe.termination_date,
               status: importedStatus,
               source: "drive",
+              ...(hasTrial ? trialPatch : {}),
             } as any).select("*").single();
             if (error) throw error;
             employee = data;
             stats.funcionarios_criados++;
-          } else if (pe.termination_date) {
-            // Cadastro existente: só a rescisão é atualizada; demais campos não são tocados.
-            await supabase.from("client_employees")
-              .update({ termination_date: pe.termination_date, status: importedStatus } as any)
-              .eq("id", employee.id);
-            stats.funcionarios_atualizados++;
+          } else if (pe.termination_date || hasTrial) {
+            // Cadastro existente: só rescisão e prazos de experiência são atualizados.
+            const patch: Record<string, unknown> = hasTrial ? { ...trialPatch } : {};
+            if (pe.termination_date) {
+              patch.termination_date = pe.termination_date;
+              patch.status = importedStatus;
+            }
+            await supabase.from("client_employees").update(patch as any).eq("id", employee.id);
+            if (hasTrial) stats.experiencias_atualizadas++;
+            if (pe.termination_date) stats.funcionarios_atualizados++;
           } else {
             // Funcionário já cadastrado e sem rescisão na ficha: desconsidera por completo.
             stats.funcionarios_ignorados++;
