@@ -1,6 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
+import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -533,8 +535,9 @@ Deno.serve(async (req) => {
       arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0,
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
-      linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0,
+      linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0, fichas_html: 0,
     };
+
     let processed = 0;
     const startedAt = Date.now();
 
@@ -567,17 +570,20 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const isCsvFile = f.mimeType === "text/csv" || f.mimeType === "text/plain" ||
-        /\.(csv|txt)$/i.test(f.name);
+      const isHtmlFile = f.mimeType === "text/html" || /\.(html?|xls)$/i.test(f.name);
+      const isCsvFile = !isHtmlFile && (f.mimeType === "text/csv" || f.mimeType === "text/plain" ||
+        /\.(csv|txt)$/i.test(f.name));
 
       // A leitura de PDF é pesada; processa poucos arquivos por execução para
       // não estourar o limite de CPU da função (o restante entra na próxima).
-      // Planilhas .csv são leves e não consomem essa cota.
-      if (!isCsvFile && (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS)) {
+      // Planilhas .csv e relatórios HTML são leves e não consomem essa cota.
+      const isLightFile = isCsvFile || isHtmlFile;
+      if (!isLightFile && (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS)) {
         stats.restantes++;
         continue;
       }
-      if (!isCsvFile) processed++;
+      if (!isLightFile) processed++;
+
 
 
       const markPending = async (reason: string, clientId: string | null) => {
@@ -599,7 +605,13 @@ Deno.serve(async (req) => {
         const bytes = new Uint8Array(await r.arrayBuffer());
 
         const isPdf = f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name);
-        const docText = isPdf ? await pdfToText(bytes) : isCsvFile ? decodeBytes(bytes) : "";
+        const rawText = isPdf ? "" : (isCsvFile || isHtmlFile) ? decodeBytes(bytes) : "";
+        const docText = isPdf
+          ? await pdfToText(bytes)
+          : isHtmlFile
+            ? htmlToCells(rawText).join("\n")
+            : rawText;
+
         const searchSpace = `${haystack}\n${docText}`;
 
         // Empresa: CNPJ (caminho/conteúdo) → código SCI (nome/caminho) → razão social (caminho/conteúdo)
@@ -638,22 +650,47 @@ Deno.serve(async (req) => {
             if (hit) { client = hit; break; }
           }
         }
-        // Planilhas podem reunir várias empresas: o nome encontrado no conteúdo
-        // não pode virar empresa padrão do arquivo. PDFs continuam usando o texto.
-        if (!client) client = isCsvFile ? resolveClientFrom(haystack, false) : resolveClientFrom(searchSpace, false);
+        // Relatórios e planilhas podem reunir várias empresas: o nome encontrado no
+        // conteúdo não pode virar empresa padrão do arquivo. PDFs continuam usando o texto.
+        if (!client) {
+          client = (isCsvFile || isHtmlFile)
+            ? resolveClientFrom(haystack, false)
+            : resolveClientFrom(searchSpace, false);
+        }
 
         if (isPdf && docText.trim().length < 40) {
           await markPending("PDF sem texto legível (documento escaneado)", client?.id ?? null);
           continue;
         }
 
+        // Relatório HTML do SCI: leitura estrutural por ficha (sem IA)
+        const sciParsed = isHtmlFile && looksLikeSciHtml(rawText) ? parseSciHtml(rawText) : null;
         // Planilha .csv: colunas reconhecidas pelo cabeçalho
         const csvParsed = isCsvFile ? csvToEmployees(docText) : null;
         let parsedEmployees: ParsedEmployee[] = [];
         let partial = false;
         let chunksRead = 0;
 
-        if (csvParsed) {
+        if (sciParsed && sciParsed.employees.length > 0) {
+          parsedEmployees = sciParsed.employees.map((e) => ({
+            full_name: e.full_name,
+            cpf: e.cpf,
+            position: e.position,
+            admission_date: e.admission_date,
+            salary: e.salary,
+            termination_date: e.termination_date,
+            company_code: e.company_code,
+            company_document: e.company_document,
+            company_name: e.company_name,
+          }));
+          stats.fichas_html += sciParsed.forms;
+          stats.linhas_ignoradas += sciParsed.incomplete;
+          console.log("sci-html", f.name, {
+            fichas: sciParsed.forms,
+            extraidos: parsedEmployees.length,
+            incompletas: sciParsed.incomplete,
+          });
+        } else if (csvParsed) {
           parsedEmployees = csvParsed.employees;
           stats.linhas_ignoradas += csvParsed.skipped;
           console.log("csv", f.name, {
@@ -662,9 +699,10 @@ Deno.serve(async (req) => {
             coluna_empresa: csvParsed.hasCompanyColumn,
           });
         } else {
-          // PDF ou .csv sem cabeçalho reconhecido: leitura automática do texto
+          // PDF, .csv ou HTML sem estrutura reconhecida: leitura automática do texto
           const extraction = await aiExtractEmployees(haystack, docText);
           parsedEmployees = extraction.employees;
+
           partial = extraction.failed || extraction.truncated;
           chunksRead = extraction.chunks;
           console.log("extracao", f.name, {
@@ -690,9 +728,10 @@ Deno.serve(async (req) => {
         // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código).
         // Quando a planilha tem coluna de empresa, a linha só é gravada se a
         // empresa for identificada — nunca cai numa empresa "padrão".
-        const perRowCompany = csvParsed?.hasCompanyColumn === true;
+        const perRowCompany = csvParsed?.hasCompanyColumn === true || (sciParsed?.employees.length ?? 0) > 0;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
         const companiesSeen = new Set<string>();
+        const perCompanyCount: Record<string, number> = {};
         for (const pe of parsedEmployees) {
           let rowClient: any = null;
           if (pe.company_document) rowClient = resolveClientFrom(pe.company_document, false);
@@ -704,9 +743,20 @@ Deno.serve(async (req) => {
           if (!rowClient && !perRowCompany) rowClient = client;
           if (!rowClient) { stats.linhas_sem_empresa++; continue; }
           companiesSeen.add(rowClient.id);
+          perCompanyCount[rowClient.company_name ?? rowClient.id] =
+            (perCompanyCount[rowClient.company_name ?? rowClient.id] ?? 0) + 1;
           entries.push({ pe, client: rowClient });
         }
         stats.empresas_atendidas = Math.max(stats.empresas_atendidas, companiesSeen.size);
+        // Conferência: fichas lidas x funcionários vinculados por empresa
+        console.log("conferencia", f.name, {
+          fichas: sciParsed?.forms ?? parsedEmployees.length,
+          extraidos: parsedEmployees.length,
+          empresas: companiesSeen.size,
+          sem_empresa: parsedEmployees.length - entries.length,
+          por_empresa: perCompanyCount,
+        });
+
 
         if (entries.length === 0) {
           await markPending(
