@@ -638,7 +638,9 @@ Deno.serve(async (req) => {
             if (hit) { client = hit; break; }
           }
         }
-        if (!client) client = resolveClientFrom(`${haystack}\n${docText}`, false);
+        // Planilhas podem reunir várias empresas: o nome encontrado no conteúdo
+        // não pode virar empresa padrão do arquivo. PDFs continuam usando o texto.
+        if (!client) client = isCsvFile ? resolveClientFrom(haystack, false) : resolveClientFrom(searchSpace, false);
 
         if (isPdf && docText.trim().length < 40) {
           await markPending("PDF sem texto legível (documento escaneado)", client?.id ?? null);
