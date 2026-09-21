@@ -750,11 +750,11 @@ Deno.serve(async (req) => {
             drive_file_id: f.id, file_name: f.name, drive_path: f.path,
             drive_modified_time: f.modifiedTime ?? null,
             status: partial ? "pending_review" : "imported",
-            employee_id: employee.id, client_id: client.id,
+            employee_id: employee.id, client_id: rowClient.id,
             storage_path: null, doc_kind: guessDocKind(f.name),
             parsed_at: new Date().toISOString(),
             error: partial
-              ? `Leitura parcial: ${parsedEmployees.length} funcionário(s) lidos em ${extraction.chunks} bloco(s); sincronize novamente para completar`
+              ? `Leitura parcial: ${entries.length} funcionário(s) lidos em ${chunksRead} bloco(s); sincronize novamente para completar`
               : null,
           } as any);
         }
