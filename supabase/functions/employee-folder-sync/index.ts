@@ -477,14 +477,22 @@ Deno.serve(async (req) => {
 
   try {
     let forceReprocess = false;
+    let onlyTrial = false;
     if (req.method === "POST") {
       try {
         const body = await req.json();
         forceReprocess = body?.force_reprocess === true;
+        onlyTrial = body?.only === "experiencia";
+        if (onlyTrial) forceReprocess = true;
       } catch {
         // Chamadas automáticas podem não enviar corpo.
       }
     }
+
+    // Só o relatório "Previsão contrato de experiência"
+    const isTrialFileName = (name: string) =>
+      /\.(html?|xls)$/i.test(name) &&
+      name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("experiencia");
 
     const cronSecret = req.headers.get("x-cron-secret");
     const expectedSecret = Deno.env.get("CRON_SECRET");
@@ -549,6 +557,7 @@ Deno.serve(async (req) => {
 
 
     for (const f of files) {
+      if (onlyTrial && !isTrialFileName(f.name)) continue;
       const prev = knownById.get(f.id);
       // O botão manual força a releitura; o cron continua econômico e ignora arquivos inalterados.
       if (!forceReprocess && prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;

@@ -162,6 +162,7 @@ export default function Personnel() {
   const [config, setConfig] = useState<SyncConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncingTrial, setSyncingTrial] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('all');
@@ -257,17 +258,19 @@ export default function Personnel() {
     return list.filter(e => (statusFilter === 'active' ? e.status === 'active' : e.status !== 'active'));
   }
 
-  async function syncNow() {
+  async function syncNow(onlyTrial = false) {
     if (!config) { setFolderDialog(true); return; }
-    setSyncing(true);
+    if (onlyTrial) setSyncingTrial(true); else setSyncing(true);
     try {
       const total = { fichas_lidas: 0, fichas_html: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_ignorados: 0, funcionarios_atualizados: 0, experiencias_atualizadas: 0, revisao: 0, linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0 };
       let restantes = 0;
       // A leitura de PDF é pesada: a função processa poucos arquivos por vez,
       // então repetimos até acabar a fila.
-      for (let round = 0; round < 40; round++) {
+      for (let round = 0; round < (onlyTrial ? 1 : 40); round++) {
         const { data, error } = await supabase.functions.invoke('employee-folder-sync', {
-          body: { force_reprocess: round === 0 },
+          body: onlyTrial
+            ? { only: 'experiencia', force_reprocess: true }
+            : { force_reprocess: round === 0 },
         });
         if (error) throw error;
         if (data?.ok === false) throw new Error(data.error);
@@ -287,14 +290,16 @@ export default function Personnel() {
         if (restantes === 0) break;
       }
       toast({
-        title: restantes > 0 ? 'Sincronização parcial' : 'Sincronização concluída',
+        title: onlyTrial
+          ? 'Relatório de experiência sincronizado'
+          : restantes > 0 ? 'Sincronização parcial' : 'Sincronização concluída',
         description: `${total.fichas_lidas} arquivo(s) lido(s)${total.fichas_html > 0 ? `, ${total.fichas_html} ficha(s) de registro` : ''}, ${total.funcionarios_encontrados} funcionário(s) encontrado(s) em ${total.empresas_atendidas} empresa(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_ignorados} já cadastrado(s) ignorado(s)${total.funcionarios_atualizados > 0 ? `, ${total.funcionarios_atualizados} atualizado(s) com rescisão` : ''}${total.experiencias_atualizadas > 0 ? `, ${total.experiencias_atualizadas} com prazo de experiência atualizado` : ''}, ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} ficha(s)/linha(s) ignorada(s).` : ''}${total.linhas_sem_empresa > 0 ? ` ${total.linhas_sem_empresa} sem empresa reconhecida.` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
       });
 
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
     } finally {
-      setSyncing(false);
+      if (onlyTrial) setSyncingTrial(false); else setSyncing(false);
       loadAll();
     }
   }
@@ -401,7 +406,16 @@ export default function Personnel() {
               {config ? config.folder_name : 'Definir pasta'}
             </Button>
           )}
-          <Button size="sm" onClick={syncNow} disabled={syncing}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncNow(true)}
+            disabled={syncing || syncingTrial}
+          >
+            {syncingTrial ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarClock className="h-4 w-4 mr-1" />}
+            Sincronizar experiência
+          </Button>
+          <Button size="sm" onClick={() => syncNow()} disabled={syncing || syncingTrial}>
             {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}
             Sincronizar pasta
           </Button>
