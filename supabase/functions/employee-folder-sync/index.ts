@@ -109,6 +109,7 @@ interface DriveFileEntry {
 
 interface ParsedEmployee {
   full_name: string;
+  employee_code?: string | null;
   cpf: string | null;
   position: string | null;
   admission_date: string | null;
@@ -693,6 +694,7 @@ Deno.serve(async (req) => {
         if (trialParsed && trialParsed.employees.length > 0) {
           parsedEmployees = trialParsed.employees.map((e) => ({
             full_name: e.full_name,
+            employee_code: e.employee_code,
             cpf: e.cpf,
             position: null,
             admission_date: e.admission_date,
@@ -715,6 +717,7 @@ Deno.serve(async (req) => {
         } else if (sciParsed && sciParsed.employees.length > 0) {
           parsedEmployees = sciParsed.employees.map((e) => ({
             full_name: e.full_name,
+            employee_code: e.employee_code,
             cpf: e.cpf,
             position: e.position,
             admission_date: e.admission_date,
@@ -862,10 +865,15 @@ Deno.serve(async (req) => {
             trial_days_2: pe.trial_days_2 ?? null,
           };
 
+          // Código da ficha de registro: preenche quando o cadastro estiver sem código.
+          const importedCode = (pe.employee_code ?? "").toString().trim() || null;
+          const fillCode = importedCode && employee && !(employee.employee_code ?? "").toString().trim();
+
           if (!employee) {
             const { data, error } = await supabase.from("client_employees").insert({
               client_id: rowClient.id,
               full_name: pe.full_name || `Funcionário ${pe.cpf}`,
+              employee_code: importedCode,
               cpf: pe.cpf,
               position: pe.position,
               admission_date: pe.admission_date,
@@ -878,9 +886,10 @@ Deno.serve(async (req) => {
             if (error) throw error;
             employee = data;
             stats.funcionarios_criados++;
-          } else if (pe.termination_date || hasTrial) {
-            // Cadastro existente: só rescisão e prazos de experiência são atualizados.
+          } else if (pe.termination_date || hasTrial || fillCode) {
+            // Cadastro existente: só rescisão, prazos de experiência e código vazio.
             const patch: Record<string, unknown> = hasTrial ? { ...trialPatch } : {};
+            if (fillCode) patch.employee_code = importedCode;
             if (pe.termination_date) {
               patch.termination_date = pe.termination_date;
               patch.status = importedStatus;

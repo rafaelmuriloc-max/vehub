@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 
 interface Client { id: string; company_name: string; document: string | null; sci_code: string | null }
 interface Employee {
-  id: string; client_id: string; full_name: string; cpf: string | null; position: string | null;
+  id: string; client_id: string; employee_code: string | null; full_name: string; cpf: string | null; position: string | null;
   admission_date: string | null; salary: number | null; termination_date: string | null;
   status: string; source: string;
   trial_end_1: string | null; trial_days_1: number | null;
@@ -34,7 +34,7 @@ interface DriveFolder { id: string; name: string; mimeType: string }
 interface SyncConfig { id: string; folder_id: string; folder_name: string; enabled: boolean; last_synced_at: string | null }
 
 const emptyForm = {
-  full_name: '', cpf: '', position: '', admission_date: '', salary: '', termination_date: '', status: 'active',
+  employee_code: '', full_name: '', cpf: '', position: '', admission_date: '', salary: '', termination_date: '', status: 'active',
   trial_end_1: '', trial_days_1: '', trial_end_2: '', trial_days_2: '',
 };
 
@@ -237,9 +237,15 @@ export default function Personnel() {
     return base.filter(c =>
       c.company_name.toLowerCase().includes(q)
       || (c.document ?? '').toLowerCase().includes(q)
-      || (c.sci_code ?? '').toLowerCase().includes(q),
+      || (c.sci_code ?? '').toLowerCase().includes(q)
+      // também encontra pela pessoa: nome, CPF ou código da ficha
+      || (employeesByClient.get(c.id) ?? []).some(e =>
+        e.full_name.toLowerCase().includes(q)
+        || (e.cpf ?? '').toLowerCase().includes(q)
+        || (e.employee_code ?? '').toLowerCase() === q,
+      ),
     );
-  }, [clients, activeEmployees, search]);
+  }, [clients, activeEmployees, employeesByClient, search]);
 
   const totalPages = pageSize === 'all'
     ? 1
@@ -253,9 +259,22 @@ export default function Personnel() {
   }, [filteredClients, pageSize, safePage]);
 
   function visibleEmployees(clientId: string) {
-    const list = employeesByClient.get(clientId) ?? [];
-    if (statusFilter === 'all') return list;
-    return list.filter(e => (statusFilter === 'active' ? e.status === 'active' : e.status !== 'active'));
+    const all = employeesByClient.get(clientId) ?? [];
+    const list = statusFilter === 'all'
+      ? all
+      : all.filter(e => (statusFilter === 'active' ? e.status === 'active' : e.status !== 'active'));
+    // Ordena por código (numérico quando possível); sem código, pelo nome no fim.
+    return [...list].sort((a, b) => {
+      const ca = a.employee_code?.trim();
+      const cb = b.employee_code?.trim();
+      if (ca && cb) {
+        const na = Number(ca), nb = Number(cb);
+        if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
+        if (ca !== cb) return ca.localeCompare(cb, 'pt-BR');
+      } else if (ca) return -1;
+      else if (cb) return 1;
+      return a.full_name.localeCompare(b.full_name, 'pt-BR');
+    });
   }
 
   async function syncNow(onlyTrial = false) {
@@ -336,6 +355,7 @@ export default function Personnel() {
     setEditing(e);
     setFormClientId(e.client_id);
     setForm({
+      employee_code: e.employee_code ?? '',
       full_name: e.full_name,
       cpf: e.cpf ?? '',
       position: e.position ?? '',
@@ -355,6 +375,7 @@ export default function Personnel() {
     if (!form.full_name.trim() || !formClientId) return;
     const payload = {
       client_id: formClientId,
+      employee_code: form.employee_code.trim() || null,
       full_name: form.full_name.trim(),
       cpf: form.cpf.replace(/\D/g, '') || null,
       position: form.position.trim() || null,
@@ -573,6 +594,7 @@ export default function Personnel() {
                           <Table>
                             <TableHeader>
                               <TableRow>
+                                <TableHead className="w-20">Código</TableHead>
                                 <TableHead>Nome</TableHead>
                                 <TableHead className="hidden md:table-cell">CPF</TableHead>
                                 <TableHead className="hidden sm:table-cell">Cargo</TableHead>
@@ -591,6 +613,7 @@ export default function Personnel() {
                               {visibleEmployees(c.id).map(e => {
                                 return (
                                   <TableRow key={e.id}>
+                                    <TableCell className="text-sm text-muted-foreground tabular-nums">{e.employee_code ?? '—'}</TableCell>
                                     <TableCell className="font-medium text-sm">{e.full_name}</TableCell>
                                     <TableCell className="hidden md:table-cell text-sm">{e.cpf ?? '—'}</TableCell>
                                     <TableCell className="hidden sm:table-cell text-sm">{e.position ?? '—'}</TableCell>
@@ -712,9 +735,15 @@ export default function Personnel() {
             <DialogTitle>{editing ? 'Editar funcionário' : 'Novo funcionário'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Nome completo</Label>
-              <Input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} />
+            <div className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-3">
+              <div className="space-y-1.5">
+                <Label>Código</Label>
+                <Input value={form.employee_code} onChange={e => setForm({ ...form, employee_code: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nome completo</Label>
+                <Input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} />
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">

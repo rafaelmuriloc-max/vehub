@@ -1,0 +1,1 @@
+ALTER TABLE public.client_employees ADD COLUMN IF NOT EXISTS employee_code text;
