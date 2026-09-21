@@ -14,3 +14,9 @@ Página `/personnel` (`src/pages/Personnel.tsx`, item "Pessoal" no menu) lista e
 - Relatórios HTML do SCI (FastReport; `.html`/`.htm`/`.xls` com tabelas): parser estrutural em `supabase/functions/employee-folder-sync/sciHtml.ts` (sem IA) — cada ficha é delimitada pelo título "REGISTRO DE COLABORADORES"; os rótulos ficam numa `<tr>` e os valores na `<tr>` seguinte, casados pelo `colspan` (`alignRows`). Campos: Empregador, CNPJ, Código, Contrato, "Nome do(a) trabalhador(a)", CPF, Categoria, Data de admissão, Função, Salário Inicial, Forma de pagamento, Data rescisão. A empresa vem do CNPJ da própria ficha; nunca há empresa padrão. Sócios (categoria 11 ou cargo com sócio/diretor/titular/administrador) são importados com `is_partner` e sufixo "(sócio)" no cargo quando não explícito; "R$ 0,00" é gravado como 0. Testes em `sciHtml.test.ts`. Conferido com o relatório real: 385 fichas, 385 funcionários, 102 empresas, 27 rescisões.
 - CSV e HTML são leves e não consomem a cota de arquivos por execução (válida só para PDF).
 
+
+## Contrato de experiência
+- `client_employees` tem `trial_end_1`, `trial_days_1`, `trial_end_2`, `trial_days_2`.
+- O relatório "Previsão contrato de experiência" (HTML do SCI) é lido por `sciTrial.ts` (sem IA), em formato grade ou ficha; a empresa vem do CNPJ do grupo/linha.
+- Prazos são sempre atualizados no cadastro existente (diferente dos demais campos, que são ignorados); rescisão continua atualizando situação.
+- Tela Pessoal: colunas Prazo 1 / Dias / Prazo 2 / Dias (vermelho vencido, laranja ≤7 dias) e card "Experiências a vencer em 15 dias".

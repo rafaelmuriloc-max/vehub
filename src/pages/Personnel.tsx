@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Building2, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
+  Building2, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
   Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -22,6 +22,8 @@ interface Employee {
   id: string; client_id: string; full_name: string; cpf: string | null; position: string | null;
   admission_date: string | null; salary: number | null; termination_date: string | null;
   status: string; source: string;
+  trial_end_1: string | null; trial_days_1: number | null;
+  trial_end_2: string | null; trial_days_2: number | null;
 }
 interface EmployeeDoc {
   id: string; employee_id: string | null; client_id: string | null; file_name: string;
@@ -33,7 +35,50 @@ interface SyncConfig { id: string; folder_id: string; folder_name: string; enabl
 
 const emptyForm = {
   full_name: '', cpf: '', position: '', admission_date: '', salary: '', termination_date: '', status: 'active',
+  trial_end_1: '', trial_days_1: '', trial_end_2: '', trial_days_2: '',
 };
+
+// Hoje no fuso de São Paulo, para a contagem de dias até o vencimento.
+function todayKeySP(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
+function daysUntil(date: string | null): number | null {
+  if (!date) return null;
+  const today = new Date(`${todayKeySP()}T12:00:00`).getTime();
+  const target = new Date(`${date}T12:00:00`).getTime();
+  if (!isFinite(target)) return null;
+  return Math.round((target - today) / 86400000);
+}
+
+function trialTone(date: string | null): string {
+  const d = daysUntil(date);
+  if (d === null) return '';
+  if (d < 0) return 'text-destructive font-medium';
+  if (d <= 7) return 'text-amber-600 font-medium';
+  return '';
+}
+
+function TrialCells({ date, days }: { date: string | null; days: number | null }) {
+  const left = daysUntil(date);
+  return (
+    <>
+      <TableCell className={cn('hidden lg:table-cell text-sm', trialTone(date))}>
+        {date ? format(new Date(`${date}T12:00:00`), 'dd/MM/yyyy') : '—'}
+      </TableCell>
+      <TableCell className={cn('hidden lg:table-cell text-sm whitespace-nowrap', trialTone(date))}>
+        {days != null ? `${days} d` : '—'}
+        {left !== null && (
+          <span className="text-xs text-muted-foreground ml-1">
+            {left < 0 ? `· venceu há ${Math.abs(left)} d` : left === 0 ? '· vence hoje' : `· faltam ${left}`}
+          </span>
+        )}
+      </TableCell>
+    </>
+  );
+}
 
 function FolderPicker({ onPick, onClose }: { onPick: (f: { id: string; name: string }) => void; onClose: () => void }) {
   const [folderId, setFolderId] = useState('root');
@@ -170,6 +215,19 @@ export default function Personnel() {
     [activeEmployees],
   );
 
+  // Prazos de experiência dos funcionários ativos
+  const trialSoon = useMemo(() => activeEmployees.filter(e =>
+    [e.trial_end_1, e.trial_end_2].some(d => {
+      const left = daysUntil(d);
+      return left !== null && left >= 0 && left <= 15;
+    })).length, [activeEmployees]);
+
+  const trialOverdue = useMemo(() => activeEmployees.filter(e =>
+    [e.trial_end_1, e.trial_end_2].some(d => {
+      const left = daysUntil(d);
+      return left !== null && left < 0;
+    })).length, [activeEmployees]);
+
   const filteredClients = useMemo(() => {
     const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
     const base = clients.filter(c => idsWithActive.has(c.id));
@@ -203,7 +261,7 @@ export default function Personnel() {
     if (!config) { setFolderDialog(true); return; }
     setSyncing(true);
     try {
-      const total = { fichas_lidas: 0, fichas_html: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_ignorados: 0, funcionarios_atualizados: 0, revisao: 0, linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0 };
+      const total = { fichas_lidas: 0, fichas_html: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_ignorados: 0, funcionarios_atualizados: 0, experiencias_atualizadas: 0, revisao: 0, linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0 };
       let restantes = 0;
       // A leitura de PDF é pesada: a função processa poucos arquivos por vez,
       // então repetimos até acabar a fila.
@@ -220,6 +278,7 @@ export default function Personnel() {
         total.funcionarios_criados += s.funcionarios_criados ?? 0;
         total.funcionarios_ignorados += s.funcionarios_ignorados ?? 0;
         total.funcionarios_atualizados += s.funcionarios_atualizados ?? 0;
+        total.experiencias_atualizadas += s.experiencias_atualizadas ?? 0;
         total.revisao += s.revisao ?? 0;
         total.linhas_ignoradas += s.linhas_ignoradas ?? 0;
         total.linhas_sem_empresa += s.linhas_sem_empresa ?? 0;
@@ -229,7 +288,7 @@ export default function Personnel() {
       }
       toast({
         title: restantes > 0 ? 'Sincronização parcial' : 'Sincronização concluída',
-        description: `${total.fichas_lidas} arquivo(s) lido(s)${total.fichas_html > 0 ? `, ${total.fichas_html} ficha(s) de registro` : ''}, ${total.funcionarios_encontrados} funcionário(s) encontrado(s) em ${total.empresas_atendidas} empresa(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_ignorados} já cadastrado(s) ignorado(s)${total.funcionarios_atualizados > 0 ? `, ${total.funcionarios_atualizados} atualizado(s) com rescisão` : ''}, ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} ficha(s)/linha(s) ignorada(s).` : ''}${total.linhas_sem_empresa > 0 ? ` ${total.linhas_sem_empresa} sem empresa reconhecida.` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
+        description: `${total.fichas_lidas} arquivo(s) lido(s)${total.fichas_html > 0 ? `, ${total.fichas_html} ficha(s) de registro` : ''}, ${total.funcionarios_encontrados} funcionário(s) encontrado(s) em ${total.empresas_atendidas} empresa(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_ignorados} já cadastrado(s) ignorado(s)${total.funcionarios_atualizados > 0 ? `, ${total.funcionarios_atualizados} atualizado(s) com rescisão` : ''}${total.experiencias_atualizadas > 0 ? `, ${total.experiencias_atualizadas} com prazo de experiência atualizado` : ''}, ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} ficha(s)/linha(s) ignorada(s).` : ''}${total.linhas_sem_empresa > 0 ? ` ${total.linhas_sem_empresa} sem empresa reconhecida.` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
       });
 
     } catch (e) {
@@ -279,6 +338,10 @@ export default function Personnel() {
       salary: e.salary != null ? String(e.salary) : '',
       termination_date: e.termination_date ?? '',
       status: e.status,
+      trial_end_1: e.trial_end_1 ?? '',
+      trial_days_1: e.trial_days_1 != null ? String(e.trial_days_1) : '',
+      trial_end_2: e.trial_end_2 ?? '',
+      trial_days_2: e.trial_days_2 != null ? String(e.trial_days_2) : '',
     });
     setEmpDialog(true);
   }
@@ -294,6 +357,10 @@ export default function Personnel() {
       salary: form.salary ? Number(form.salary.replace(',', '.')) : null,
       termination_date: form.termination_date || null,
       status: form.termination_date ? 'terminated' : form.status,
+      trial_end_1: form.trial_end_1 || null,
+      trial_days_1: form.trial_days_1 ? Number(form.trial_days_1) : null,
+      trial_end_2: form.trial_end_2 || null,
+      trial_days_2: form.trial_days_2 ? Number(form.trial_days_2) : null,
     };
     const res = editing
       ? await supabase.from('client_employees').update(payload as never).eq('id', editing.id)
@@ -341,7 +408,7 @@ export default function Personnel() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -388,6 +455,23 @@ export default function Personnel() {
               </p>
             </div>
             <Building2 className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Experiências a vencer em 15 dias
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {trialSoon}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {trialOverdue} prazo(s) já vencido(s)
+              </p>
+            </div>
+            <CalendarClock className="h-8 w-8 text-muted-foreground/40 shrink-0" />
           </CardContent>
         </Card>
       </div>
@@ -479,6 +563,10 @@ export default function Personnel() {
                                 <TableHead className="hidden md:table-cell">CPF</TableHead>
                                 <TableHead className="hidden sm:table-cell">Cargo</TableHead>
                                 <TableHead className="hidden lg:table-cell">Admissão</TableHead>
+                                <TableHead className="hidden lg:table-cell">Prazo 1</TableHead>
+                                <TableHead className="hidden lg:table-cell">Dias</TableHead>
+                                <TableHead className="hidden lg:table-cell">Prazo 2</TableHead>
+                                <TableHead className="hidden lg:table-cell">Dias</TableHead>
                                 <TableHead className="hidden lg:table-cell">Data de rescisão</TableHead>
                                 <TableHead className="hidden lg:table-cell">Salário</TableHead>
                                 <TableHead>Situação</TableHead>
@@ -495,6 +583,8 @@ export default function Personnel() {
                                     <TableCell className="hidden lg:table-cell text-sm">
                                       {e.admission_date ? format(new Date(`${e.admission_date}T12:00:00`), 'dd/MM/yyyy') : '—'}
                                     </TableCell>
+                                    <TrialCells date={e.trial_end_1} days={e.trial_days_1} />
+                                    <TrialCells date={e.trial_end_2} days={e.trial_days_2} />
                                      <TableCell className="hidden lg:table-cell text-sm">
                                        {e.termination_date ? format(new Date(`${e.termination_date}T12:00:00`), 'dd/MM/yyyy') : '—'}
                                      </TableCell>
@@ -628,6 +718,22 @@ export default function Personnel() {
               <div className="space-y-1.5">
                 <Label>Salário</Label>
                 <Input inputMode="decimal" value={form.salary} onChange={e => setForm({ ...form, salary: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prazo 1 da experiência</Label>
+                <Input type="date" value={form.trial_end_1} onChange={e => setForm({ ...form, trial_end_1: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Dias do prazo 1</Label>
+                <Input inputMode="numeric" value={form.trial_days_1} onChange={e => setForm({ ...form, trial_days_1: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prazo 2 da experiência</Label>
+                <Input type="date" value={form.trial_end_2} onChange={e => setForm({ ...form, trial_end_2: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Dias do prazo 2</Label>
+                <Input inputMode="numeric" value={form.trial_days_2} onChange={e => setForm({ ...form, trial_days_2: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Desligamento</Label>

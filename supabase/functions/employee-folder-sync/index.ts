@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
 import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
+import { looksLikeTrialHtml, parseTrialHtml } from "./sciTrial.ts";
 
 
 const corsHeaders = {
@@ -116,6 +117,10 @@ interface ParsedEmployee {
   company_code?: string | null;
   company_document?: string | null;
   company_name?: string | null;
+  trial_end_1?: string | null;
+  trial_days_1?: number | null;
+  trial_end_2?: string | null;
+  trial_days_2?: number | null;
 }
 
 // ---------- Leitura de planilhas .csv ----------
@@ -536,6 +541,7 @@ Deno.serve(async (req) => {
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_ignorados: 0, funcionarios_atualizados: 0,
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
       linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0, fichas_html: 0,
+      experiencias_atualizadas: 0,
     };
 
     let processed = 0;
@@ -663,15 +669,41 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Relatório "Previsão contrato de experiência" do SCI (sem IA)
+        const trialParsed = isHtmlFile && looksLikeTrialHtml(rawText) ? parseTrialHtml(rawText) : null;
         // Relatório HTML do SCI: leitura estrutural por ficha (sem IA)
-        const sciParsed = isHtmlFile && looksLikeSciHtml(rawText) ? parseSciHtml(rawText) : null;
+        const sciParsed = isHtmlFile && !trialParsed?.employees.length && looksLikeSciHtml(rawText)
+          ? parseSciHtml(rawText)
+          : null;
         // Planilha .csv: colunas reconhecidas pelo cabeçalho
         const csvParsed = isCsvFile ? csvToEmployees(docText) : null;
         let parsedEmployees: ParsedEmployee[] = [];
         let partial = false;
         let chunksRead = 0;
 
-        if (sciParsed && sciParsed.employees.length > 0) {
+        if (trialParsed && trialParsed.employees.length > 0) {
+          parsedEmployees = trialParsed.employees.map((e) => ({
+            full_name: e.full_name,
+            cpf: e.cpf,
+            position: null,
+            admission_date: e.admission_date,
+            salary: null,
+            termination_date: null,
+            company_code: e.company_code,
+            company_document: e.company_document,
+            company_name: e.company_name,
+            trial_end_1: e.trial_end_1,
+            trial_days_1: e.trial_days_1,
+            trial_end_2: e.trial_end_2,
+            trial_days_2: e.trial_days_2,
+          }));
+          stats.linhas_ignoradas += trialParsed.incomplete;
+          console.log("experiencia-html", f.name, {
+            linhas: trialParsed.rows,
+            extraidos: parsedEmployees.length,
+            incompletas: trialParsed.incomplete,
+          });
+        } else if (sciParsed && sciParsed.employees.length > 0) {
           parsedEmployees = sciParsed.employees.map((e) => ({
             full_name: e.full_name,
             cpf: e.cpf,
@@ -728,7 +760,9 @@ Deno.serve(async (req) => {
         // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código).
         // Quando a planilha tem coluna de empresa, a linha só é gravada se a
         // empresa for identificada — nunca cai numa empresa "padrão".
-        const perRowCompany = csvParsed?.hasCompanyColumn === true || (sciParsed?.employees.length ?? 0) > 0;
+        const perRowCompany = csvParsed?.hasCompanyColumn === true
+          || (sciParsed?.employees.length ?? 0) > 0
+          || (trialParsed?.employees.length ?? 0) > 0;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
         const companiesSeen = new Set<string>();
         const perCompanyCount: Record<string, number> = {};
@@ -803,6 +837,15 @@ Deno.serve(async (req) => {
             ? "terminated"
             : "active";
 
+          // Prazos de experiência: o relatório governa esse dado e sempre atualiza.
+          const hasTrial = pe.trial_end_1 != null || pe.trial_end_2 != null;
+          const trialPatch = {
+            trial_end_1: pe.trial_end_1 ?? null,
+            trial_days_1: pe.trial_days_1 ?? null,
+            trial_end_2: pe.trial_end_2 ?? null,
+            trial_days_2: pe.trial_days_2 ?? null,
+          };
+
           if (!employee) {
             const { data, error } = await supabase.from("client_employees").insert({
               client_id: rowClient.id,
@@ -814,16 +857,21 @@ Deno.serve(async (req) => {
               termination_date: pe.termination_date,
               status: importedStatus,
               source: "drive",
+              ...(hasTrial ? trialPatch : {}),
             } as any).select("*").single();
             if (error) throw error;
             employee = data;
             stats.funcionarios_criados++;
-          } else if (pe.termination_date) {
-            // Cadastro existente: só a rescisão é atualizada; demais campos não são tocados.
-            await supabase.from("client_employees")
-              .update({ termination_date: pe.termination_date, status: importedStatus } as any)
-              .eq("id", employee.id);
-            stats.funcionarios_atualizados++;
+          } else if (pe.termination_date || hasTrial) {
+            // Cadastro existente: só rescisão e prazos de experiência são atualizados.
+            const patch: Record<string, unknown> = hasTrial ? { ...trialPatch } : {};
+            if (pe.termination_date) {
+              patch.termination_date = pe.termination_date;
+              patch.status = importedStatus;
+            }
+            await supabase.from("client_employees").update(patch as any).eq("id", employee.id);
+            if (hasTrial) stats.experiencias_atualizadas++;
+            if (pe.termination_date) stats.funcionarios_atualizados++;
           } else {
             // Funcionário já cadastrado e sem rescisão na ficha: desconsidera por completo.
             stats.funcionarios_ignorados++;
