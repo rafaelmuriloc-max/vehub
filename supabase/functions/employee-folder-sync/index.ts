@@ -168,40 +168,68 @@ function normalizeHeader(s: string): string {
 }
 
 const HEADER_ALIASES: Record<string, string[]> = {
-  full_name: ["nome", "nome completo", "funcionario", "funcionaria", "colaborador", "colaboradora", "empregado", "trabalhador"],
-  cpf: ["cpf", "n cpf", "cpf do funcionario"],
-  position: ["cargo", "funcao", "ocupacao", "cbo descricao"],
-  admission_date: ["admissao", "data de admissao", "data admissao", "dt admissao", "entrada"],
-  salary: ["salario", "salario base", "remuneracao", "vencimento", "valor salario"],
-  termination_date: ["demissao", "data de demissao", "rescisao", "data de rescisao", "desligamento", "saida", "dt rescisao"],
-  company: ["cnpj", "empresa", "razao social", "codigo", "cod", "sci", "codigo sci", "cliente"],
+  full_name: ["nome", "nome completo", "nome do colaborador", "nome do funcionario", "nome do empregado", "funcionario", "funcionaria", "colaborador", "colaboradora", "empregado", "trabalhador"],
+  cpf: ["cpf", "n cpf", "nr cpf", "cpf do funcionario", "cpf colaborador"],
+  position: ["cargo", "funcao", "ocupacao", "cbo descricao", "descricao do cargo"],
+  admission_date: ["admissao", "data de admissao", "data admissao", "dt admissao", "data da admissao", "entrada"],
+  salary: ["salario", "salario base", "salario contratual", "remuneracao", "vencimento", "valor salario"],
+  termination_date: ["demissao", "data de demissao", "rescisao", "data de rescisao", "data da rescisao", "desligamento", "saida", "dt rescisao"],
+  company_document: ["cnpj", "cnpj empresa", "cnpj da empresa", "cpf cnpj empresa"],
+  company_code: ["codigo", "cod", "cod empresa", "codigo empresa", "codigo da empresa", "sci", "codigo sci", "cod sci"],
+  company_name: ["empresa", "razao social", "nome da empresa", "cliente", "estabelecimento"],
 };
 
+// Pontua o quanto uma linha se parece com um cabeçalho de planilha de funcionários.
 function mapCsvHeaders(header: string[]): Record<string, number> {
   const map: Record<string, number> = {};
+  const exact: Record<string, boolean> = {};
   header.forEach((raw, index) => {
     const h = normalizeHeader(raw);
     if (!h) return;
     for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
-      if (map[field] !== undefined) continue;
-      if (aliases.includes(h) || aliases.some((a) => h === a || h.startsWith(a + " "))) {
-        map[field] = index;
-        break;
-      }
+      const isExact = aliases.includes(h);
+      const isPartial = !isExact && aliases.some((a) => h.startsWith(a + " ") || h.endsWith(" " + a) || h.includes(" " + a + " "));
+      if (!isExact && !isPartial) continue;
+      if (map[field] !== undefined && (exact[field] || !isExact)) continue;
+      map[field] = index;
+      exact[field] = isExact;
+      break;
     }
   });
   return map;
 }
 
-function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: number } | null {
+function scoreHeaderMap(map: Record<string, number>): number {
+  return Object.keys(map).length;
+}
+
+function csvToEmployees(
+  text: string,
+): { employees: ParsedEmployee[]; skipped: number; hasCompanyColumn: boolean } | null {
   const rows = parseCsv(text);
   if (rows.length < 2) return null;
-  const map = mapCsvHeaders(rows[0]);
-  if (map.full_name === undefined && map.cpf === undefined) return null;
+
+  // O cabeçalho nem sempre está na primeira linha (relatórios trazem título antes).
+  let headerIndex = -1;
+  let map: Record<string, number> = {};
+  const limit = Math.min(rows.length, 15);
+  for (let i = 0; i < limit; i++) {
+    const candidate = mapCsvHeaders(rows[i]);
+    if (candidate.full_name === undefined && candidate.cpf === undefined) continue;
+    if (scoreHeaderMap(candidate) > scoreHeaderMap(map)) {
+      map = candidate;
+      headerIndex = i;
+    }
+  }
+  if (headerIndex < 0) return null;
+
+  const hasCompanyColumn = map.company_document !== undefined
+    || map.company_code !== undefined
+    || map.company_name !== undefined;
 
   const employees: ParsedEmployee[] = [];
   let skipped = 0;
-  for (const row of rows.slice(1)) {
+  for (const row of rows.slice(headerIndex + 1)) {
     const get = (field: string) => {
       const i = map[field];
       return i === undefined ? "" : (row[i] ?? "").trim();
@@ -209,6 +237,8 @@ function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: n
     const name = get("full_name");
     const cpfDigits = get("cpf").replace(/\D/g, "");
     if (!name && cpfDigits.length !== 11) { skipped++; continue; }
+    // Linha que repete o cabeçalho (relatórios quebrados por página)
+    if (normalizeHeader(name) && HEADER_ALIASES.full_name.includes(normalizeHeader(name))) { skipped++; continue; }
     employees.push({
       full_name: name,
       cpf: cpfDigits.length === 11 ? cpfDigits : null,
@@ -216,10 +246,12 @@ function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: n
       admission_date: normalizeDate(get("admission_date")),
       salary: normalizeSalary(get("salary")),
       termination_date: normalizeDate(get("termination_date")),
-      company_hint: get("company") || null,
+      company_code: get("company_code") || null,
+      company_document: get("company_document") || null,
+      company_name: get("company_name") || null,
     });
   }
-  return { employees, skipped };
+  return { employees, skipped, hasCompanyColumn };
 }
 
 async function listFolderRecursive(rootId: string): Promise<DriveFileEntry[]> {
