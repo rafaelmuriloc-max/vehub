@@ -703,7 +703,7 @@ Deno.serve(async (req) => {
 
           if (!employee) {
             const { data, error } = await supabase.from("client_employees").insert({
-              client_id: client.id,
+              client_id: rowClient.id,
               full_name: pe.full_name || `Funcionário ${pe.cpf}`,
               cpf: pe.cpf,
               position: pe.position,
