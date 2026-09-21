@@ -165,6 +165,10 @@ export default function Personnel() {
     () => activeEmployees.reduce((sum, e) => sum + (e.salary ?? 0), 0),
     [activeEmployees],
   );
+  const clientsWithActive = useMemo(
+    () => new Set(activeEmployees.map(e => e.client_id)).size,
+    [activeEmployees],
+  );
 
   const filteredClients = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -335,7 +339,7 @@ export default function Personnel() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -366,6 +370,22 @@ export default function Personnel() {
               </p>
             </div>
             <Wallet className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Empresas com funcionários ativos
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {clientsWithActive}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {clients.length - clientsWithActive} empresa(s) sem funcionário(s) ativo(s)
+              </p>
+            </div>
+            <Building2 className="h-8 w-8 text-muted-foreground/40 shrink-0" />
           </CardContent>
         </Card>
       </div>
