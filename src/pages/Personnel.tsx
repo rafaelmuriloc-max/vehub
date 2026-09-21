@@ -237,7 +237,13 @@ export default function Personnel() {
     return base.filter(c =>
       c.company_name.toLowerCase().includes(q)
       || (c.document ?? '').toLowerCase().includes(q)
-      || (c.sci_code ?? '').toLowerCase().includes(q),
+      || (c.sci_code ?? '').toLowerCase().includes(q)
+      // também encontra pela pessoa: nome, CPF ou código da ficha
+      || (employeesByClient.get(c.id) ?? []).some(e =>
+        e.full_name.toLowerCase().includes(q)
+        || (e.cpf ?? '').toLowerCase().includes(q)
+        || (e.employee_code ?? '').toLowerCase() === q,
+      ),
     );
   }, [clients, activeEmployees, search]);
 
