@@ -422,8 +422,14 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      if (processed >= MAX_FILES_PER_RUN) break;
+      // A leitura de PDF é pesada; processa poucos arquivos por execução para
+      // não estourar o limite de CPU da função (o restante entra na próxima).
+      if (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS) {
+        stats.restantes++;
+        continue;
+      }
       processed++;
+
 
       const markPending = async (reason: string, clientId: string | null) => {
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
