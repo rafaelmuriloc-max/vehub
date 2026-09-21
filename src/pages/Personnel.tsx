@@ -165,6 +165,10 @@ export default function Personnel() {
     () => activeEmployees.reduce((sum, e) => sum + (e.salary ?? 0), 0),
     [activeEmployees],
   );
+  const clientsWithActive = useMemo(
+    () => new Set(activeEmployees.map(e => e.client_id)).size,
+    [activeEmployees],
+  );
 
   const filteredClients = useMemo(() => {
     const q = search.trim().toLowerCase();
