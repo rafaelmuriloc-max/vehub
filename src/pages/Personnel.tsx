@@ -169,6 +169,7 @@ export default function Personnel() {
   const [pageSize, setPageSize] = useState<number | 'all'>(10);
   const [page, setPage] = useState(1);
 
+  const [trialDialogOpen, setTrialDialogOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState(false);
   const [picking, setPicking] = useState(false);
   const [folder, setFolder] = useState<{ id: string; name: string } | null>(null);
@@ -228,6 +229,41 @@ export default function Personnel() {
       const left = daysUntil(d);
       return left !== null && left < 0;
     })).length, [activeEmployees]);
+
+  // Alertas de experiência (a vencer em 15 dias e já vencidos), agrupados por empresa
+  const trialAlerts = useMemo(() => {
+    const soon: TrialAlert[] = [];
+    const overdue: TrialAlert[] = [];
+    for (const e of activeEmployees) {
+      const prazos: [string | null, number | null, 1 | 2][] = [
+        [e.trial_end_1, e.trial_days_1, 1],
+        [e.trial_end_2, e.trial_days_2, 2],
+      ];
+      for (const [date, days, which] of prazos) {
+        if (!date) continue;
+        const left = daysUntil(date);
+        if (left === null) continue;
+        const alert: TrialAlert = { employee: e, which, date, days, left };
+        if (left < 0) overdue.push(alert);
+        else if (left <= 15) soon.push(alert);
+      }
+    }
+    const byCompany = (list: TrialAlert[]) => {
+      const map = new Map<string, { name: string; items: TrialAlert[] }>();
+      for (const a of list) {
+        const entry = map.get(a.employee.client_id) ?? {
+          name: clients.find(c => c.id === a.employee.client_id)?.company_name ?? 'Empresa não identificada',
+          items: [],
+        };
+        entry.items.push(a);
+        map.set(a.employee.client_id, entry);
+      }
+      return [...map.values()]
+        .map(g => ({ ...g, items: g.items.sort((x, y) => x.left - y.left) }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    };
+    return { soon: byCompany(soon), overdue: byCompany(overdue) };
+  }, [activeEmployees, clients]);
 
   const filteredClients = useMemo(() => {
     const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
