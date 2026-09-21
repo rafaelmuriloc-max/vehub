@@ -10,7 +10,9 @@ const corsHeaders = {
 
 const DRIVE_GATEWAY = "https://connector-gateway.lovable.dev/google_drive/drive/v3";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const MAX_FILES_PER_RUN = 60;
+const MAX_FILES_PER_RUN = 3;
+const TIME_BUDGET_MS = 45_000;
+
 
 function ghHeaders() {
   const LOVABLE = Deno.env.get("LOVABLE_API_KEY");
