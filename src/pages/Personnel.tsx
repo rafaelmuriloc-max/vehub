@@ -337,6 +337,10 @@ export default function Personnel() {
       salary: e.salary != null ? String(e.salary) : '',
       termination_date: e.termination_date ?? '',
       status: e.status,
+      trial_end_1: e.trial_end_1 ?? '',
+      trial_days_1: e.trial_days_1 != null ? String(e.trial_days_1) : '',
+      trial_end_2: e.trial_end_2 ?? '',
+      trial_days_2: e.trial_days_2 != null ? String(e.trial_days_2) : '',
     });
     setEmpDialog(true);
   }
@@ -352,6 +356,10 @@ export default function Personnel() {
       salary: form.salary ? Number(form.salary.replace(',', '.')) : null,
       termination_date: form.termination_date || null,
       status: form.termination_date ? 'terminated' : form.status,
+      trial_end_1: form.trial_end_1 || null,
+      trial_days_1: form.trial_days_1 ? Number(form.trial_days_1) : null,
+      trial_end_2: form.trial_end_2 || null,
+      trial_days_2: form.trial_days_2 ? Number(form.trial_days_2) : null,
     };
     const res = editing
       ? await supabase.from('client_employees').update(payload as never).eq('id', editing.id)
@@ -709,6 +717,22 @@ export default function Personnel() {
               <div className="space-y-1.5">
                 <Label>Salário</Label>
                 <Input inputMode="decimal" value={form.salary} onChange={e => setForm({ ...form, salary: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prazo 1 da experiência</Label>
+                <Input type="date" value={form.trial_end_1} onChange={e => setForm({ ...form, trial_end_1: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Dias do prazo 1</Label>
+                <Input inputMode="numeric" value={form.trial_days_1} onChange={e => setForm({ ...form, trial_days_1: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prazo 2 da experiência</Label>
+                <Input type="date" value={form.trial_end_2} onChange={e => setForm({ ...form, trial_end_2: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Dias do prazo 2</Label>
+                <Input inputMode="numeric" value={form.trial_days_2} onChange={e => setForm({ ...form, trial_days_2: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Desligamento</Label>
