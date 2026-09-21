@@ -565,80 +565,113 @@ Deno.serve(async (req) => {
         const bytes = new Uint8Array(await r.arrayBuffer());
 
         const isPdf = f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name);
-        const docText = isPdf ? await pdfToText(bytes) : "";
+        const docText = isPdf ? await pdfToText(bytes) : isCsvFile ? decodeBytes(bytes) : "";
         const searchSpace = `${haystack}\n${docText}`;
 
         // Empresa: CNPJ (caminho/conteúdo) → código SCI (nome/caminho) → razão social (caminho/conteúdo)
-        let client: any = null;
+        const resolveClientFrom = (text: string, useSci: boolean): any => {
+          for (const cnpj of extractCnpjs(text)) {
+            const hit = clientsByCnpj.get(cnpj);
+            if (hit) return hit;
+          }
+          if (useSci) {
+            for (const sci of extractSciCodes(text)) {
+              const hit = clientsBySci.get(sci);
+              if (hit) return hit;
+            }
+          }
+          const norm = normalizeText(text.slice(0, 5000));
+          let best: any = null; let bestLen = 0;
+          for (const c of clients ?? []) {
+            const normName = normalizeText(c.company_name || "");
+            if (normName.length >= 6 && norm.includes(normName) && normName.length > bestLen) {
+              best = c; bestLen = normName.length;
+            }
+          }
+          return best;
+        };
+
         const cnpjs = extractCnpjs(searchSpace);
+        const scis = extractSciCodes(haystack);
+        let client: any = null;
         for (const cnpj of cnpjs) {
           const hit = clientsByCnpj.get(cnpj);
           if (hit) { client = hit; break; }
         }
-        const scis = extractSciCodes(haystack);
         if (!client) {
           for (const sci of scis) {
             const hit = clientsBySci.get(sci);
             if (hit) { client = hit; break; }
           }
         }
-        if (!client) {
-          const normHay = normalizeText(haystack);
-          const normDoc = normalizeText(docText.slice(0, 5000));
-          let best: any = null; let bestLen = 0;
-          for (const c of clients ?? []) {
-            const normName = normalizeText(c.company_name || "");
-            if (normName.length >= 6 && (normHay.includes(normName) || normDoc.includes(normName)) && normName.length > bestLen) {
-              best = c; bestLen = normName.length;
-            }
-          }
-          client = best;
+        if (!client) client = resolveClientFrom(`${haystack}\n${docText}`, false);
+
+        if (isPdf && docText.trim().length < 40) {
+          await markPending("PDF sem texto legível (documento escaneado)", client?.id ?? null);
+          continue;
         }
 
-        if (!client) {
+        // Planilha .csv: colunas reconhecidas pelo cabeçalho
+        const csvParsed = isCsvFile ? csvToEmployees(docText) : null;
+        let parsedEmployees: ParsedEmployee[] = [];
+        let partial = false;
+        let chunksRead = 0;
+
+        if (csvParsed) {
+          parsedEmployees = csvParsed.employees;
+          stats.linhas_ignoradas += csvParsed.skipped;
+          console.log("csv", f.name, {
+            linhas: parsedEmployees.length,
+            ignoradas: csvParsed.skipped,
+          });
+        } else {
+          // PDF ou .csv sem cabeçalho reconhecido: leitura automática do texto
+          const extraction = await aiExtractEmployees(haystack, docText);
+          parsedEmployees = extraction.employees;
+          partial = extraction.failed || extraction.truncated;
+          chunksRead = extraction.chunks;
+          console.log("extracao", f.name, {
+            caracteres: docText.length,
+            blocos: extraction.chunks,
+            encontrados: parsedEmployees.length,
+            falhou: extraction.failed,
+            truncado: extraction.truncated,
+          });
+
+          // Fallback: um único funcionário pelo CPF/nome do arquivo
+          if (parsedEmployees.length === 0) {
+            const cpf = extractCpf(haystack);
+            if (cpf) {
+              parsedEmployees = [{
+                full_name: "", cpf, position: null,
+                admission_date: null, salary: null, termination_date: null,
+              }];
+            }
+          }
+        }
+
+        // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código)
+        const entries: { pe: ParsedEmployee; client: any }[] = [];
+        for (const pe of parsedEmployees) {
+          const rowClient = pe.company_hint
+            ? (resolveClientFrom(pe.company_hint, true) ?? client)
+            : client;
+          if (!rowClient) { stats.linhas_ignoradas++; continue; }
+          entries.push({ pe, client: rowClient });
+        }
+
+        if (entries.length === 0) {
           await markPending(
-            `Empresa não identificada (texto do PDF: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
-            null,
+            client
+              ? "Nenhum funcionário identificado no arquivo"
+              : `Empresa não identificada (texto lido: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
+            client?.id ?? null,
           );
           continue;
         }
 
-
-        if (isPdf && docText.trim().length < 40) {
-          await markPending("PDF sem texto legível (documento escaneado)", client.id);
-          continue;
-        }
-
-        // Funcionários: todos os presentes no documento (lido em blocos)
-        const extraction = await aiExtractEmployees(haystack, docText);
-        let parsedEmployees = extraction.employees;
-        console.log("extracao", f.name, {
-          caracteres: docText.length,
-          blocos: extraction.chunks,
-          encontrados: parsedEmployees.length,
-          falhou: extraction.failed,
-          truncado: extraction.truncated,
-        });
-
-        // Fallback: um único funcionário pelo CPF/nome do arquivo
-        if (parsedEmployees.length === 0) {
-          const cpf = extractCpf(haystack);
-          if (cpf) {
-            parsedEmployees = [{
-              full_name: "", cpf, position: null,
-              admission_date: null, salary: null, termination_date: null,
-            }];
-          }
-        }
-
-        if (parsedEmployees.length === 0) {
-          await markPending("Nenhum funcionário identificado no arquivo", client.id);
-          continue;
-        }
-
-        const partial = extraction.failed || extraction.truncated;
         stats.fichas_lidas++;
-        stats.funcionarios_encontrados += parsedEmployees.length;
+        stats.funcionarios_encontrados += entries.length;
 
 
         // O arquivo não é salvo no armazenamento: ele é lido apenas em memória
