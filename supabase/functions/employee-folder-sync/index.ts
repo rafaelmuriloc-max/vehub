@@ -466,6 +466,7 @@ async function aiExtractEmployees(
       // Completa campos vazios com o que o outro bloco trouxe
       seen.set(key, {
         full_name: prev.full_name || emp.full_name,
+        employee_code: prev.employee_code ?? emp.employee_code,
         cpf: prev.cpf ?? emp.cpf,
         position: prev.position ?? emp.position,
         admission_date: prev.admission_date ?? emp.admission_date,
