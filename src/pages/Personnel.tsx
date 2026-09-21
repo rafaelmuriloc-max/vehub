@@ -261,7 +261,7 @@ export default function Personnel() {
     if (!config) { setFolderDialog(true); return; }
     setSyncing(true);
     try {
-      const total = { fichas_lidas: 0, fichas_html: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_ignorados: 0, funcionarios_atualizados: 0, revisao: 0, linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0 };
+      const total = { fichas_lidas: 0, fichas_html: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_ignorados: 0, funcionarios_atualizados: 0, experiencias_atualizadas: 0, revisao: 0, linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0 };
       let restantes = 0;
       // A leitura de PDF é pesada: a função processa poucos arquivos por vez,
       // então repetimos até acabar a fila.
@@ -278,6 +278,7 @@ export default function Personnel() {
         total.funcionarios_criados += s.funcionarios_criados ?? 0;
         total.funcionarios_ignorados += s.funcionarios_ignorados ?? 0;
         total.funcionarios_atualizados += s.funcionarios_atualizados ?? 0;
+        total.experiencias_atualizadas += s.experiencias_atualizadas ?? 0;
         total.revisao += s.revisao ?? 0;
         total.linhas_ignoradas += s.linhas_ignoradas ?? 0;
         total.linhas_sem_empresa += s.linhas_sem_empresa ?? 0;
