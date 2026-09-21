@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Building2, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
-  Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users,
+  Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -161,6 +161,12 @@ export default function Personnel() {
 
   const pendingDocs = useMemo(() => docs.filter(d => d.status !== 'imported'), [docs]);
 
+  const activeEmployees = useMemo(() => employees.filter(e => e.status === 'active'), [employees]);
+  const totalSalaries = useMemo(
+    () => activeEmployees.reduce((sum, e) => sum + (e.salary ?? 0), 0),
+    [activeEmployees],
+  );
+
   const filteredClients = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return clients;
@@ -308,6 +314,41 @@ export default function Personnel() {
             Sincronizar pasta
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Total de funcionários ativos
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {activeEmployees.length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {employees.length - activeEmployees.length} desligado(s)
+              </p>
+            </div>
+            <Users className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Total de salários
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {totalSalaries.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Folha dos {activeEmployees.length} funcionário(s) ativo(s)
+              </p>
+            </div>
+            <Wallet className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
