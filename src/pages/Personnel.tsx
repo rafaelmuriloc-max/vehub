@@ -220,7 +220,7 @@ export default function Personnel() {
       }
       toast({
         title: restantes > 0 ? 'Sincronização parcial' : 'Sincronização concluída',
-        description: `${total.fichas_lidas} arquivo(s) lido(s), ${total.funcionarios_encontrados} funcionário(s) encontrado(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
+        description: `${total.fichas_lidas} arquivo(s) lido(s), ${total.funcionarios_encontrados} funcionário(s) encontrado(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} linha(s) ignorada(s).` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
       });
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
