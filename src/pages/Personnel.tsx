@@ -253,9 +253,22 @@ export default function Personnel() {
   }, [filteredClients, pageSize, safePage]);
 
   function visibleEmployees(clientId: string) {
-    const list = employeesByClient.get(clientId) ?? [];
-    if (statusFilter === 'all') return list;
-    return list.filter(e => (statusFilter === 'active' ? e.status === 'active' : e.status !== 'active'));
+    const all = employeesByClient.get(clientId) ?? [];
+    const list = statusFilter === 'all'
+      ? all
+      : all.filter(e => (statusFilter === 'active' ? e.status === 'active' : e.status !== 'active'));
+    // Ordena por código (numérico quando possível); sem código, pelo nome no fim.
+    return [...list].sort((a, b) => {
+      const ca = a.employee_code?.trim();
+      const cb = b.employee_code?.trim();
+      if (ca && cb) {
+        const na = Number(ca), nb = Number(cb);
+        if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
+        if (ca !== cb) return ca.localeCompare(cb, 'pt-BR');
+      } else if (ca) return -1;
+      else if (cb) return 1;
+      return a.full_name.localeCompare(b.full_name, 'pt-BR');
+    });
   }
 
   async function syncNow(onlyTrial = false) {
