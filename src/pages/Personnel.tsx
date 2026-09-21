@@ -336,6 +336,7 @@ export default function Personnel() {
     setEditing(e);
     setFormClientId(e.client_id);
     setForm({
+      employee_code: e.employee_code ?? '',
       full_name: e.full_name,
       cpf: e.cpf ?? '',
       position: e.position ?? '',
