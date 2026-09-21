@@ -506,6 +506,12 @@ Deno.serve(async (req) => {
       /\.(html?|xls)$/i.test(name) &&
       name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("experiencia");
 
+    // Só as fichas de registro de colaboradores
+    const isRegistrationFileName = (name: string) =>
+      /\.(pdf|html?|xlsx?|csv)$/i.test(name) &&
+      name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        .replace(/[^a-z0-9]/g, "").includes("registrocolaborador");
+
     const cronSecret = req.headers.get("x-cron-secret");
     const expectedSecret = Deno.env.get("CRON_SECRET");
     let authorized = !!expectedSecret && cronSecret === expectedSecret;
