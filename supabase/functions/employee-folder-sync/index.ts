@@ -681,16 +681,16 @@ Deno.serve(async (req) => {
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
 
         const linkedIds = new Set<string>();
-        for (const pe of parsedEmployees) {
+        for (const { pe, client: rowClient } of entries) {
           let employee: any = null;
           if (pe.cpf) {
             const { data } = await supabase.from("client_employees")
-              .select("*").eq("client_id", client.id).eq("cpf", pe.cpf).limit(1);
+              .select("*").eq("client_id", rowClient.id).eq("cpf", pe.cpf).limit(1);
             employee = data?.[0] ?? null;
           }
           if (!employee && pe.full_name) {
             const { data } = await supabase.from("client_employees")
-              .select("*").eq("client_id", client.id).ilike("full_name", pe.full_name).limit(1);
+              .select("*").eq("client_id", rowClient.id).ilike("full_name", pe.full_name).limit(1);
             employee = data?.[0] ?? null;
           }
 
