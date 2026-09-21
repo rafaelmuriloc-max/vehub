@@ -111,6 +111,113 @@ interface ParsedEmployee {
   admission_date: string | null;
   salary: number | null;
   termination_date: string | null;
+  company_hint?: string | null;
+}
+
+// ---------- Leitura de planilhas .csv ----------
+
+function decodeBytes(bytes: Uint8Array): string {
+  let text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  if (text.includes("\uFFFD")) {
+    text = new TextDecoder("iso-8859-1").decode(bytes);
+  }
+  return text.replace(/^\uFEFF/, "");
+}
+
+function detectDelimiter(firstLine: string): string {
+  const counts: Record<string, number> = {
+    ";": (firstLine.match(/;/g) ?? []).length,
+    ",": (firstLine.match(/,/g) ?? []).length,
+    "\t": (firstLine.match(/\t/g) ?? []).length,
+  };
+  let best = ";";
+  for (const [d, n] of Object.entries(counts)) if (n > counts[best]) best = d;
+  return counts[best] > 0 ? best : ";";
+}
+
+function parseCsv(text: string): string[][] {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter = detectDelimiter(firstLine);
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else quoted = false;
+      } else field += ch;
+      continue;
+    }
+    if (ch === '"') { quoted = true; continue; }
+    if (ch === delimiter) { row.push(field); field = ""; continue; }
+    if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; continue; }
+    if (ch === "\r") continue;
+    field += ch;
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+function normalizeHeader(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+const HEADER_ALIASES: Record<string, string[]> = {
+  full_name: ["nome", "nome completo", "funcionario", "funcionaria", "colaborador", "colaboradora", "empregado", "trabalhador"],
+  cpf: ["cpf", "n cpf", "cpf do funcionario"],
+  position: ["cargo", "funcao", "ocupacao", "cbo descricao"],
+  admission_date: ["admissao", "data de admissao", "data admissao", "dt admissao", "entrada"],
+  salary: ["salario", "salario base", "remuneracao", "vencimento", "valor salario"],
+  termination_date: ["demissao", "data de demissao", "rescisao", "data de rescisao", "desligamento", "saida", "dt rescisao"],
+  company: ["cnpj", "empresa", "razao social", "codigo", "cod", "sci", "codigo sci", "cliente"],
+};
+
+function mapCsvHeaders(header: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  header.forEach((raw, index) => {
+    const h = normalizeHeader(raw);
+    if (!h) return;
+    for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+      if (map[field] !== undefined) continue;
+      if (aliases.includes(h) || aliases.some((a) => h === a || h.startsWith(a + " "))) {
+        map[field] = index;
+        break;
+      }
+    }
+  });
+  return map;
+}
+
+function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: number } | null {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return null;
+  const map = mapCsvHeaders(rows[0]);
+  if (map.full_name === undefined && map.cpf === undefined) return null;
+
+  const employees: ParsedEmployee[] = [];
+  let skipped = 0;
+  for (const row of rows.slice(1)) {
+    const get = (field: string) => {
+      const i = map[field];
+      return i === undefined ? "" : (row[i] ?? "").trim();
+    };
+    const name = get("full_name");
+    const cpfDigits = get("cpf").replace(/\D/g, "");
+    if (!name && cpfDigits.length !== 11) { skipped++; continue; }
+    employees.push({
+      full_name: name,
+      cpf: cpfDigits.length === 11 ? cpfDigits : null,
+      position: get("position") || null,
+      admission_date: normalizeDate(get("admission_date")),
+      salary: normalizeSalary(get("salary")),
+      termination_date: normalizeDate(get("termination_date")),
+      company_hint: get("company") || null,
+    });
+  }
+  return { employees, skipped };
 }
 
 async function listFolderRecursive(rootId: string): Promise<DriveFileEntry[]> {
