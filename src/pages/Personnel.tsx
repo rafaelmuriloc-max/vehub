@@ -198,15 +198,28 @@ export default function Personnel() {
     if (!config) { setFolderDialog(true); return; }
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('employee-folder-sync', {
-        body: { force_reprocess: true },
-      });
-      if (error) throw error;
-      if (data?.ok === false) throw new Error(data.error);
-      const s = data?.stats ?? {};
+      const total = { fichas_lidas: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0, revisao: 0 };
+      let restantes = 0;
+      // A leitura de PDF é pesada: a função processa poucos arquivos por vez,
+      // então repetimos até acabar a fila.
+      for (let round = 0; round < 20; round++) {
+        const { data, error } = await supabase.functions.invoke('employee-folder-sync', {
+          body: { force_reprocess: round === 0 },
+        });
+        if (error) throw error;
+        if (data?.ok === false) throw new Error(data.error);
+        const s = data?.stats ?? {};
+        total.fichas_lidas += s.fichas_lidas ?? 0;
+        total.funcionarios_encontrados += s.funcionarios_encontrados ?? 0;
+        total.funcionarios_criados += s.funcionarios_criados ?? 0;
+        total.funcionarios_atualizados += s.funcionarios_atualizados ?? 0;
+        total.revisao += s.revisao ?? 0;
+        restantes = s.restantes ?? 0;
+        if (restantes === 0) break;
+      }
       toast({
-        title: 'Sincronização concluída',
-        description: `${s.fichas_lidas ?? 0} arquivo(s) lido(s), ${s.funcionarios_encontrados ?? 0} funcionário(s) encontrado(s), ${s.funcionarios_criados ?? 0} cadastrado(s), ${s.funcionarios_atualizados ?? 0} atualizado(s), ${s.revisao ?? 0} aguardando revisão.`,
+        title: restantes > 0 ? 'Sincronização parcial' : 'Sincronização concluída',
+        description: `${total.fichas_lidas} arquivo(s) lido(s), ${total.funcionarios_encontrados} funcionário(s) encontrado(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
       });
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
@@ -215,6 +228,7 @@ export default function Personnel() {
       loadAll();
     }
   }
+
 
   async function saveFolder() {
     if (!folder) return;

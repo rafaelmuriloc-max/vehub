@@ -10,7 +10,9 @@ const corsHeaders = {
 
 const DRIVE_GATEWAY = "https://connector-gateway.lovable.dev/google_drive/drive/v3";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const MAX_FILES_PER_RUN = 60;
+const MAX_FILES_PER_RUN = 3;
+const TIME_BUDGET_MS = 45_000;
+
 
 function ghHeaders() {
   const LOVABLE = Deno.env.get("LOVABLE_API_KEY");
@@ -388,9 +390,11 @@ Deno.serve(async (req) => {
     const stats = {
       arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0,
-      parciais: 0, revisao: 0, erros: 0, ignorados: 0,
+      parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
     };
     let processed = 0;
+    const startedAt = Date.now();
+
 
     for (const f of files) {
       const prev = knownById.get(f.id);
@@ -420,8 +424,14 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      if (processed >= MAX_FILES_PER_RUN) break;
+      // A leitura de PDF é pesada; processa poucos arquivos por execução para
+      // não estourar o limite de CPU da função (o restante entra na próxima).
+      if (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS) {
+        stats.restantes++;
+        continue;
+      }
       processed++;
+
 
       const markPending = async (reason: string, clientId: string | null) => {
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
