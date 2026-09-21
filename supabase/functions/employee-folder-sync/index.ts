@@ -576,6 +576,8 @@ Deno.serve(async (req) => {
 
     for (const f of files) {
       if (onlyTrial && !isTrialFileName(f.name)) continue;
+      // Fora do modo experiência, só as fichas de registro de colaboradores.
+      if (!onlyTrial && !isRegistrationFileName(f.name)) { stats.fora_do_padrao++; continue; }
       const prev = knownById.get(f.id);
       // O botão manual força a releitura; o cron continua econômico e ignora arquivos inalterados.
       if (!forceReprocess && prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
