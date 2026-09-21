@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
-import { htmlToCells, htmlToRows, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
+import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
 import { looksLikeTrialHtml, parseTrialHtml } from "./sciTrial.ts";
 
 
