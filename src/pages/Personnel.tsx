@@ -435,6 +435,23 @@ export default function Personnel() {
             <Building2 className="h-8 w-8 text-muted-foreground/40 shrink-0" />
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Experiências a vencer em 15 dias
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {trialSoon}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {trialOverdue} prazo(s) já vencido(s)
+              </p>
+            </div>
+            <CalendarClock className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -524,6 +541,10 @@ export default function Personnel() {
                                 <TableHead className="hidden md:table-cell">CPF</TableHead>
                                 <TableHead className="hidden sm:table-cell">Cargo</TableHead>
                                 <TableHead className="hidden lg:table-cell">Admissão</TableHead>
+                                <TableHead className="hidden lg:table-cell">Prazo 1</TableHead>
+                                <TableHead className="hidden lg:table-cell">Dias</TableHead>
+                                <TableHead className="hidden lg:table-cell">Prazo 2</TableHead>
+                                <TableHead className="hidden lg:table-cell">Dias</TableHead>
                                 <TableHead className="hidden lg:table-cell">Data de rescisão</TableHead>
                                 <TableHead className="hidden lg:table-cell">Salário</TableHead>
                                 <TableHead>Situação</TableHead>
@@ -540,6 +561,8 @@ export default function Personnel() {
                                     <TableCell className="hidden lg:table-cell text-sm">
                                       {e.admission_date ? format(new Date(`${e.admission_date}T12:00:00`), 'dd/MM/yyyy') : '—'}
                                     </TableCell>
+                                    <TrialCells date={e.trial_end_1} days={e.trial_days_1} />
+                                    <TrialCells date={e.trial_end_2} days={e.trial_days_2} />
                                      <TableCell className="hidden lg:table-cell text-sm">
                                        {e.termination_date ? format(new Date(`${e.termination_date}T12:00:00`), 'dd/MM/yyyy') : '—'}
                                      </TableCell>
