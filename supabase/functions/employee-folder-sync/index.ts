@@ -567,17 +567,20 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const isCsvFile = f.mimeType === "text/csv" || f.mimeType === "text/plain" ||
-        /\.(csv|txt)$/i.test(f.name);
+      const isHtmlFile = f.mimeType === "text/html" || /\.(html?|xls)$/i.test(f.name);
+      const isCsvFile = !isHtmlFile && (f.mimeType === "text/csv" || f.mimeType === "text/plain" ||
+        /\.(csv|txt)$/i.test(f.name));
 
       // A leitura de PDF é pesada; processa poucos arquivos por execução para
       // não estourar o limite de CPU da função (o restante entra na próxima).
-      // Planilhas .csv são leves e não consomem essa cota.
-      if (!isCsvFile && (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS)) {
+      // Planilhas .csv e relatórios HTML são leves e não consomem essa cota.
+      const isLightFile = isCsvFile || isHtmlFile;
+      if (!isLightFile && (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS)) {
         stats.restantes++;
         continue;
       }
-      if (!isCsvFile) processed++;
+      if (!isLightFile) processed++;
+
 
 
       const markPending = async (reason: string, clientId: string | null) => {
