@@ -806,7 +806,9 @@ Deno.serve(async (req) => {
             storage_path: null, doc_kind: guessDocKind(f.name),
             parsed_at: new Date().toISOString(),
             error: partial
-              ? `Leitura parcial: ${entries.length} funcionário(s) lidos em ${chunksRead} bloco(s); sincronize novamente para completar`
+              ? (chunksRead > 0
+                ? `Leitura parcial: ${entries.length} funcionário(s) lidos em ${chunksRead} bloco(s); sincronize novamente para completar`
+                : `${stats.linhas_sem_empresa} linha(s) sem empresa reconhecida foram deixadas de fora`)
               : null,
           } as any);
         }
