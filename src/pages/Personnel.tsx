@@ -714,9 +714,15 @@ export default function Personnel() {
             <DialogTitle>{editing ? 'Editar funcionário' : 'Novo funcionário'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Nome completo</Label>
-              <Input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} />
+            <div className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-3">
+              <div className="space-y-1.5">
+                <Label>Código</Label>
+                <Input value={form.employee_code} onChange={e => setForm({ ...form, employee_code: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nome completo</Label>
+                <Input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} />
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
