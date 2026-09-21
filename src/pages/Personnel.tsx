@@ -215,6 +215,19 @@ export default function Personnel() {
     [activeEmployees],
   );
 
+  // Prazos de experiência dos funcionários ativos
+  const trialSoon = useMemo(() => activeEmployees.filter(e =>
+    [e.trial_end_1, e.trial_end_2].some(d => {
+      const left = daysUntil(d);
+      return left !== null && left >= 0 && left <= 15;
+    })).length, [activeEmployees]);
+
+  const trialOverdue = useMemo(() => activeEmployees.filter(e =>
+    [e.trial_end_1, e.trial_end_2].some(d => {
+      const left = daysUntil(d);
+      return left !== null && left < 0;
+    })).length, [activeEmployees]);
+
   const filteredClients = useMemo(() => {
     const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
     const base = clients.filter(c => idsWithActive.has(c.id));
@@ -386,7 +399,7 @@ export default function Personnel() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
