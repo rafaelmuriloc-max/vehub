@@ -161,6 +161,12 @@ export default function Personnel() {
 
   const pendingDocs = useMemo(() => docs.filter(d => d.status !== 'imported'), [docs]);
 
+  const activeEmployees = useMemo(() => employees.filter(e => e.status === 'active'), [employees]);
+  const totalSalaries = useMemo(
+    () => activeEmployees.reduce((sum, e) => sum + (e.salary ?? 0), 0),
+    [activeEmployees],
+  );
+
   const filteredClients = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return clients;
