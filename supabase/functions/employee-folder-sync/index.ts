@@ -838,9 +838,12 @@ Deno.serve(async (req) => {
             employee = data?.[0] ?? null;
           }
           if (!employee && pe.full_name) {
+            // O relatório de experiência não traz CPF: casa pelo nome sem acentos,
+            // maiúsculas nem espaços extras.
             const { data } = await supabase.from("client_employees")
-              .select("*").eq("client_id", rowClient.id).ilike("full_name", pe.full_name).limit(1);
-            employee = data?.[0] ?? null;
+              .select("*").eq("client_id", rowClient.id);
+            const target = normalizeText(pe.full_name);
+            employee = (data ?? []).find((e: any) => normalizeText(e.full_name || "") === target) ?? null;
           }
 
           const todayInSaoPaulo = new Intl.DateTimeFormat("en-CA", {
