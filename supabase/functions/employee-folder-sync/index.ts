@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
-import { htmlToCells, htmlToRows, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
+import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
 import { looksLikeTrialHtml, parseTrialHtml } from "./sciTrial.ts";
 
 
@@ -741,18 +741,6 @@ Deno.serve(async (req) => {
           });
         } else if (onlyTrial) {
           // Sincronização exclusiva do relatório de experiência: nunca adivinhar.
-          // Registra uma amostra do formato para ajustarmos o leitor estruturado.
-          try {
-            const rows = htmlToRows(rawText);
-            const sample = rows.slice(0, 40).map((r) => r.map((c) => String(c.text ?? c).slice(0, 40)));
-            console.log("amostra-experiencia", f.name, {
-              caracteres: rawText.length,
-              linhas: rows.length,
-              primeiras_linhas: sample,
-            });
-          } catch (e) {
-            console.log("amostra-experiencia-erro", f.name, String(e));
-          }
           await markPending("Relatório de experiência não reconhecido (formato novo)", null);
           continue;
         } else {
@@ -850,9 +838,12 @@ Deno.serve(async (req) => {
             employee = data?.[0] ?? null;
           }
           if (!employee && pe.full_name) {
+            // O relatório de experiência não traz CPF: casa pelo nome sem acentos,
+            // maiúsculas nem espaços extras.
             const { data } = await supabase.from("client_employees")
-              .select("*").eq("client_id", rowClient.id).ilike("full_name", pe.full_name).limit(1);
-            employee = data?.[0] ?? null;
+              .select("*").eq("client_id", rowClient.id);
+            const target = normalizeText(pe.full_name);
+            employee = (data ?? []).find((e: any) => normalizeText(e.full_name || "") === target) ?? null;
           }
 
           const todayInSaoPaulo = new Intl.DateTimeFormat("en-CA", {
