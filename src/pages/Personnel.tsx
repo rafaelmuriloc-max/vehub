@@ -356,6 +356,7 @@ export default function Personnel() {
     if (!form.full_name.trim() || !formClientId) return;
     const payload = {
       client_id: formClientId,
+      employee_code: form.employee_code.trim() || null,
       full_name: form.full_name.trim(),
       cpf: form.cpf.replace(/\D/g, '') || null,
       position: form.position.trim() || null,
