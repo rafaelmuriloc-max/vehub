@@ -669,8 +669,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Relatório "Previsão contrato de experiência" do SCI (sem IA)
+        const trialParsed = isHtmlFile && looksLikeTrialHtml(rawText) ? parseTrialHtml(rawText) : null;
         // Relatório HTML do SCI: leitura estrutural por ficha (sem IA)
-        const sciParsed = isHtmlFile && looksLikeSciHtml(rawText) ? parseSciHtml(rawText) : null;
+        const sciParsed = isHtmlFile && !trialParsed?.employees.length && looksLikeSciHtml(rawText)
+          ? parseSciHtml(rawText)
+          : null;
         // Planilha .csv: colunas reconhecidas pelo cabeçalho
         const csvParsed = isCsvFile ? csvToEmployees(docText) : null;
         let parsedEmployees: ParsedEmployee[] = [];
