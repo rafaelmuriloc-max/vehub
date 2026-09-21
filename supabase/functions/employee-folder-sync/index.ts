@@ -454,7 +454,12 @@ async function aiExtractEmployees(
     const part = await aiExtractChunk(haystack, chunk);
     if (part === null) { failed = true; continue; }
     for (const emp of part) {
-      const key = emp.cpf ? `cpf:${emp.cpf}` : `nome:${normalizeText(emp.full_name)}`;
+      const empCode = normalizeCode(emp.employee_code);
+      const key = emp.cpf
+        ? `cpf:${emp.cpf}`
+        : empCode
+        ? `cod:${empCode}`
+        : `nome:${normalizeText(emp.full_name)}`;
       if (!key || key === "nome:") continue;
       const prev = seen.get(key);
       if (!prev) { seen.set(key, emp); continue; }
