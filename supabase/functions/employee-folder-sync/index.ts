@@ -717,6 +717,7 @@ Deno.serve(async (req) => {
         } else if (sciParsed && sciParsed.employees.length > 0) {
           parsedEmployees = sciParsed.employees.map((e) => ({
             full_name: e.full_name,
+            employee_code: e.employee_code,
             cpf: e.cpf,
             position: e.position,
             admission_date: e.admission_date,
