@@ -37,6 +37,11 @@ function normalizeText(s: string): string {
     .trim();
 }
 
+// Código do funcionário sem zeros à esquerda, para "007" casar com "7".
+function normalizeCode(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase().replace(/^0+(?=.)/, "");
+}
+
 function extractCnpjs(text: string): string[] {
   const out = new Set<string>();
   for (const m of text.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g) ?? []) {
