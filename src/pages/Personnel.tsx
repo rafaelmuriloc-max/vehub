@@ -215,6 +215,8 @@ export default function Personnel() {
         total.funcionarios_atualizados += s.funcionarios_atualizados ?? 0;
         total.revisao += s.revisao ?? 0;
         total.linhas_ignoradas += s.linhas_ignoradas ?? 0;
+        total.linhas_sem_empresa += s.linhas_sem_empresa ?? 0;
+        total.empresas_atendidas = Math.max(total.empresas_atendidas, s.empresas_atendidas ?? 0);
         restantes = s.restantes ?? 0;
         if (restantes === 0) break;
       }
