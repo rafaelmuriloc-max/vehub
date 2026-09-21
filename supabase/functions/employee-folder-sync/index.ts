@@ -694,6 +694,7 @@ Deno.serve(async (req) => {
         if (trialParsed && trialParsed.employees.length > 0) {
           parsedEmployees = trialParsed.employees.map((e) => ({
             full_name: e.full_name,
+            employee_code: e.employee_code,
             cpf: e.cpf,
             position: null,
             admission_date: e.admission_date,
