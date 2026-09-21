@@ -198,7 +198,7 @@ export default function Personnel() {
     if (!config) { setFolderDialog(true); return; }
     setSyncing(true);
     try {
-      const total = { fichas_lidas: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0, revisao: 0 };
+      const total = { fichas_lidas: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0, revisao: 0, linhas_ignoradas: 0 };
       let restantes = 0;
       // A leitura de PDF é pesada: a função processa poucos arquivos por vez,
       // então repetimos até acabar a fila.
@@ -214,12 +214,13 @@ export default function Personnel() {
         total.funcionarios_criados += s.funcionarios_criados ?? 0;
         total.funcionarios_atualizados += s.funcionarios_atualizados ?? 0;
         total.revisao += s.revisao ?? 0;
+        total.linhas_ignoradas += s.linhas_ignoradas ?? 0;
         restantes = s.restantes ?? 0;
         if (restantes === 0) break;
       }
       toast({
         title: restantes > 0 ? 'Sincronização parcial' : 'Sincronização concluída',
-        description: `${total.fichas_lidas} arquivo(s) lido(s), ${total.funcionarios_encontrados} funcionário(s) encontrado(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
+        description: `${total.fichas_lidas} arquivo(s) lido(s), ${total.funcionarios_encontrados} funcionário(s) encontrado(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} linha(s) ignorada(s).` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
       });
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });

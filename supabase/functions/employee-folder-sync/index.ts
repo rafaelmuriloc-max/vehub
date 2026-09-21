@@ -111,6 +111,113 @@ interface ParsedEmployee {
   admission_date: string | null;
   salary: number | null;
   termination_date: string | null;
+  company_hint?: string | null;
+}
+
+// ---------- Leitura de planilhas .csv ----------
+
+function decodeBytes(bytes: Uint8Array): string {
+  let text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  if (text.includes("\uFFFD")) {
+    text = new TextDecoder("iso-8859-1").decode(bytes);
+  }
+  return text.replace(/^\uFEFF/, "");
+}
+
+function detectDelimiter(firstLine: string): string {
+  const counts: Record<string, number> = {
+    ";": (firstLine.match(/;/g) ?? []).length,
+    ",": (firstLine.match(/,/g) ?? []).length,
+    "\t": (firstLine.match(/\t/g) ?? []).length,
+  };
+  let best = ";";
+  for (const [d, n] of Object.entries(counts)) if (n > counts[best]) best = d;
+  return counts[best] > 0 ? best : ";";
+}
+
+function parseCsv(text: string): string[][] {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter = detectDelimiter(firstLine);
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else quoted = false;
+      } else field += ch;
+      continue;
+    }
+    if (ch === '"') { quoted = true; continue; }
+    if (ch === delimiter) { row.push(field); field = ""; continue; }
+    if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; continue; }
+    if (ch === "\r") continue;
+    field += ch;
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+function normalizeHeader(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+const HEADER_ALIASES: Record<string, string[]> = {
+  full_name: ["nome", "nome completo", "funcionario", "funcionaria", "colaborador", "colaboradora", "empregado", "trabalhador"],
+  cpf: ["cpf", "n cpf", "cpf do funcionario"],
+  position: ["cargo", "funcao", "ocupacao", "cbo descricao"],
+  admission_date: ["admissao", "data de admissao", "data admissao", "dt admissao", "entrada"],
+  salary: ["salario", "salario base", "remuneracao", "vencimento", "valor salario"],
+  termination_date: ["demissao", "data de demissao", "rescisao", "data de rescisao", "desligamento", "saida", "dt rescisao"],
+  company: ["cnpj", "empresa", "razao social", "codigo", "cod", "sci", "codigo sci", "cliente"],
+};
+
+function mapCsvHeaders(header: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  header.forEach((raw, index) => {
+    const h = normalizeHeader(raw);
+    if (!h) return;
+    for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+      if (map[field] !== undefined) continue;
+      if (aliases.includes(h) || aliases.some((a) => h === a || h.startsWith(a + " "))) {
+        map[field] = index;
+        break;
+      }
+    }
+  });
+  return map;
+}
+
+function csvToEmployees(text: string): { employees: ParsedEmployee[]; skipped: number } | null {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return null;
+  const map = mapCsvHeaders(rows[0]);
+  if (map.full_name === undefined && map.cpf === undefined) return null;
+
+  const employees: ParsedEmployee[] = [];
+  let skipped = 0;
+  for (const row of rows.slice(1)) {
+    const get = (field: string) => {
+      const i = map[field];
+      return i === undefined ? "" : (row[i] ?? "").trim();
+    };
+    const name = get("full_name");
+    const cpfDigits = get("cpf").replace(/\D/g, "");
+    if (!name && cpfDigits.length !== 11) { skipped++; continue; }
+    employees.push({
+      full_name: name,
+      cpf: cpfDigits.length === 11 ? cpfDigits : null,
+      position: get("position") || null,
+      admission_date: normalizeDate(get("admission_date")),
+      salary: normalizeSalary(get("salary")),
+      termination_date: normalizeDate(get("termination_date")),
+      company_hint: get("company") || null,
+    });
+  }
+  return { employees, skipped };
 }
 
 async function listFolderRecursive(rootId: string): Promise<DriveFileEntry[]> {
@@ -392,6 +499,7 @@ Deno.serve(async (req) => {
       arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0,
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
+      linhas_ignoradas: 0,
     };
     let processed = 0;
     const startedAt = Date.now();
@@ -425,13 +533,17 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      const isCsvFile = f.mimeType === "text/csv" || f.mimeType === "text/plain" ||
+        /\.(csv|txt)$/i.test(f.name);
+
       // A leitura de PDF é pesada; processa poucos arquivos por execução para
       // não estourar o limite de CPU da função (o restante entra na próxima).
-      if (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS) {
+      // Planilhas .csv são leves e não consomem essa cota.
+      if (!isCsvFile && (processed >= MAX_FILES_PER_RUN || Date.now() - startedAt > TIME_BUDGET_MS)) {
         stats.restantes++;
         continue;
       }
-      processed++;
+      if (!isCsvFile) processed++;
 
 
       const markPending = async (reason: string, clientId: string | null) => {
@@ -453,80 +565,113 @@ Deno.serve(async (req) => {
         const bytes = new Uint8Array(await r.arrayBuffer());
 
         const isPdf = f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name);
-        const docText = isPdf ? await pdfToText(bytes) : "";
+        const docText = isPdf ? await pdfToText(bytes) : isCsvFile ? decodeBytes(bytes) : "";
         const searchSpace = `${haystack}\n${docText}`;
 
         // Empresa: CNPJ (caminho/conteúdo) → código SCI (nome/caminho) → razão social (caminho/conteúdo)
-        let client: any = null;
+        const resolveClientFrom = (text: string, useSci: boolean): any => {
+          for (const cnpj of extractCnpjs(text)) {
+            const hit = clientsByCnpj.get(cnpj);
+            if (hit) return hit;
+          }
+          if (useSci) {
+            for (const sci of extractSciCodes(text)) {
+              const hit = clientsBySci.get(sci);
+              if (hit) return hit;
+            }
+          }
+          const norm = normalizeText(text.slice(0, 5000));
+          let best: any = null; let bestLen = 0;
+          for (const c of clients ?? []) {
+            const normName = normalizeText(c.company_name || "");
+            if (normName.length >= 6 && norm.includes(normName) && normName.length > bestLen) {
+              best = c; bestLen = normName.length;
+            }
+          }
+          return best;
+        };
+
         const cnpjs = extractCnpjs(searchSpace);
+        const scis = extractSciCodes(haystack);
+        let client: any = null;
         for (const cnpj of cnpjs) {
           const hit = clientsByCnpj.get(cnpj);
           if (hit) { client = hit; break; }
         }
-        const scis = extractSciCodes(haystack);
         if (!client) {
           for (const sci of scis) {
             const hit = clientsBySci.get(sci);
             if (hit) { client = hit; break; }
           }
         }
-        if (!client) {
-          const normHay = normalizeText(haystack);
-          const normDoc = normalizeText(docText.slice(0, 5000));
-          let best: any = null; let bestLen = 0;
-          for (const c of clients ?? []) {
-            const normName = normalizeText(c.company_name || "");
-            if (normName.length >= 6 && (normHay.includes(normName) || normDoc.includes(normName)) && normName.length > bestLen) {
-              best = c; bestLen = normName.length;
-            }
-          }
-          client = best;
+        if (!client) client = resolveClientFrom(`${haystack}\n${docText}`, false);
+
+        if (isPdf && docText.trim().length < 40) {
+          await markPending("PDF sem texto legível (documento escaneado)", client?.id ?? null);
+          continue;
         }
 
-        if (!client) {
+        // Planilha .csv: colunas reconhecidas pelo cabeçalho
+        const csvParsed = isCsvFile ? csvToEmployees(docText) : null;
+        let parsedEmployees: ParsedEmployee[] = [];
+        let partial = false;
+        let chunksRead = 0;
+
+        if (csvParsed) {
+          parsedEmployees = csvParsed.employees;
+          stats.linhas_ignoradas += csvParsed.skipped;
+          console.log("csv", f.name, {
+            linhas: parsedEmployees.length,
+            ignoradas: csvParsed.skipped,
+          });
+        } else {
+          // PDF ou .csv sem cabeçalho reconhecido: leitura automática do texto
+          const extraction = await aiExtractEmployees(haystack, docText);
+          parsedEmployees = extraction.employees;
+          partial = extraction.failed || extraction.truncated;
+          chunksRead = extraction.chunks;
+          console.log("extracao", f.name, {
+            caracteres: docText.length,
+            blocos: extraction.chunks,
+            encontrados: parsedEmployees.length,
+            falhou: extraction.failed,
+            truncado: extraction.truncated,
+          });
+
+          // Fallback: um único funcionário pelo CPF/nome do arquivo
+          if (parsedEmployees.length === 0) {
+            const cpf = extractCpf(haystack);
+            if (cpf) {
+              parsedEmployees = [{
+                full_name: "", cpf, position: null,
+                admission_date: null, salary: null, termination_date: null,
+              }];
+            }
+          }
+        }
+
+        // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código)
+        const entries: { pe: ParsedEmployee; client: any }[] = [];
+        for (const pe of parsedEmployees) {
+          const rowClient = pe.company_hint
+            ? (resolveClientFrom(pe.company_hint, true) ?? client)
+            : client;
+          if (!rowClient) { stats.linhas_ignoradas++; continue; }
+          entries.push({ pe, client: rowClient });
+        }
+
+        if (entries.length === 0) {
           await markPending(
-            `Empresa não identificada (texto do PDF: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
-            null,
+            client
+              ? "Nenhum funcionário identificado no arquivo"
+              : `Empresa não identificada (texto lido: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
+            client?.id ?? null,
           );
           continue;
         }
 
-
-        if (isPdf && docText.trim().length < 40) {
-          await markPending("PDF sem texto legível (documento escaneado)", client.id);
-          continue;
-        }
-
-        // Funcionários: todos os presentes no documento (lido em blocos)
-        const extraction = await aiExtractEmployees(haystack, docText);
-        let parsedEmployees = extraction.employees;
-        console.log("extracao", f.name, {
-          caracteres: docText.length,
-          blocos: extraction.chunks,
-          encontrados: parsedEmployees.length,
-          falhou: extraction.failed,
-          truncado: extraction.truncated,
-        });
-
-        // Fallback: um único funcionário pelo CPF/nome do arquivo
-        if (parsedEmployees.length === 0) {
-          const cpf = extractCpf(haystack);
-          if (cpf) {
-            parsedEmployees = [{
-              full_name: "", cpf, position: null,
-              admission_date: null, salary: null, termination_date: null,
-            }];
-          }
-        }
-
-        if (parsedEmployees.length === 0) {
-          await markPending("Nenhum funcionário identificado no arquivo", client.id);
-          continue;
-        }
-
-        const partial = extraction.failed || extraction.truncated;
         stats.fichas_lidas++;
-        stats.funcionarios_encontrados += parsedEmployees.length;
+        stats.funcionarios_encontrados += entries.length;
 
 
         // O arquivo não é salvo no armazenamento: ele é lido apenas em memória
@@ -536,16 +681,16 @@ Deno.serve(async (req) => {
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
 
         const linkedIds = new Set<string>();
-        for (const pe of parsedEmployees) {
+        for (const { pe, client: rowClient } of entries) {
           let employee: any = null;
           if (pe.cpf) {
             const { data } = await supabase.from("client_employees")
-              .select("*").eq("client_id", client.id).eq("cpf", pe.cpf).limit(1);
+              .select("*").eq("client_id", rowClient.id).eq("cpf", pe.cpf).limit(1);
             employee = data?.[0] ?? null;
           }
           if (!employee && pe.full_name) {
             const { data } = await supabase.from("client_employees")
-              .select("*").eq("client_id", client.id).ilike("full_name", pe.full_name).limit(1);
+              .select("*").eq("client_id", rowClient.id).ilike("full_name", pe.full_name).limit(1);
             employee = data?.[0] ?? null;
           }
 
@@ -558,7 +703,7 @@ Deno.serve(async (req) => {
 
           if (!employee) {
             const { data, error } = await supabase.from("client_employees").insert({
-              client_id: client.id,
+              client_id: rowClient.id,
               full_name: pe.full_name || `Funcionário ${pe.cpf}`,
               cpf: pe.cpf,
               position: pe.position,
@@ -605,11 +750,11 @@ Deno.serve(async (req) => {
             drive_file_id: f.id, file_name: f.name, drive_path: f.path,
             drive_modified_time: f.modifiedTime ?? null,
             status: partial ? "pending_review" : "imported",
-            employee_id: employee.id, client_id: client.id,
+            employee_id: employee.id, client_id: rowClient.id,
             storage_path: null, doc_kind: guessDocKind(f.name),
             parsed_at: new Date().toISOString(),
             error: partial
-              ? `Leitura parcial: ${parsedEmployees.length} funcionário(s) lidos em ${extraction.chunks} bloco(s); sincronize novamente para completar`
+              ? `Leitura parcial: ${entries.length} funcionário(s) lidos em ${chunksRead} bloco(s); sincronize novamente para completar`
               : null,
           } as any);
         }
