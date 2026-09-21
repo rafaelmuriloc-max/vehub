@@ -202,7 +202,7 @@ export default function Personnel() {
       let restantes = 0;
       // A leitura de PDF é pesada: a função processa poucos arquivos por vez,
       // então repetimos até acabar a fila.
-      for (let round = 0; round < 20; round++) {
+      for (let round = 0; round < 40; round++) {
         const { data, error } = await supabase.functions.invoke('employee-folder-sync', {
           body: { force_reprocess: round === 0 },
         });
