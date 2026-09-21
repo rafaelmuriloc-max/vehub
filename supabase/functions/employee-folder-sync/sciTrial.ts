@@ -1,13 +1,15 @@
-// Leitura do relatório "Previsão contrato de experiência" exportado pelo SCI Sistemas.
-// O relatório pode vir em dois formatos: grade (uma linha por funcionário, com
-// cabeçalho de colunas) ou ficha (rótulo numa linha, valor na linha seguinte).
+// Leitura do relatório "Previsão de Contrato de Experiência" exportado pelo SCI
+// Sistemas (FastReport). Formato real: blocos por empresa, com cabeçalho
+// "Empresa: 16 - RAZAO SOCIAL" + "CNPJ:00.000.000/0001-00" e uma grade:
+//   Código | Colaborador | Data Adm. | Data Venc. | Prazo | Data Venc. | Prazo
 // A interpretação é estrutural, sem IA.
 
-import { alignRows, type Cell, htmlToCells, htmlToRows, norm, parseDate } from "./sciHtml.ts";
+import { type Cell, htmlToRows, norm, parseDate } from "./sciHtml.ts";
 
 export interface TrialEmployee {
   full_name: string;
   cpf: string | null;
+  employee_code: string | null;
   admission_date: string | null;
   trial_end_1: string | null;
   trial_days_1: number | null;
@@ -25,46 +27,83 @@ export interface TrialParseResult {
 }
 
 export function looksLikeTrialHtml(text: string): boolean {
-  // O texto vem em HTML com entidades (experi&ecirc;ncia): decodifica antes.
-  const n = norm(htmlToCells(text.slice(0, 200_000)).join(" "));
-  return n.includes("contrato de experiencia") || n.includes("previsao de experiencia") ||
-    (n.includes("previsao") && n.includes("experiencia"));
+  const n = norm(text.slice(0, 400_000).replace(/<[^>]+>/g, " "));
+  return n.includes("contrato de experiencia") ||
+    (n.includes("previsao") && n.includes("experiencia")) ||
+    n.includes("previsao contrato experiencia");
 }
 
-const FIELD_ALIASES: [string, string[]][] = [
-  ["company_document", ["cnpj", "cnpj cei", "cgc"]],
-  ["company_code", ["codigo da empresa", "cod empresa", "codigo empresa", "empresa codigo"]],
-  ["company_name", ["empregador", "razao social", "nome empresarial", "empresa"]],
+type Field =
+  | "employee_code"
+  | "full_name"
+  | "cpf"
+  | "admission_date"
+  | "trial_end"
+  | "trial_days";
+
+const ALIASES: [Field, string[]][] = [
+  ["employee_code", ["codigo", "cod", "matricula", "registro"]],
   ["full_name", [
-    "nome do a trabalhador a", "nome do trabalhador", "nome da trabalhadora",
-    "nome do a colaborador a", "nome do colaborador", "nome do funcionario",
-    "nome do empregado", "colaborador", "funcionario", "trabalhador", "nome",
+    "colaborador", "nome do colaborador", "nome do a colaborador a", "trabalhador",
+    "nome do trabalhador", "nome do a trabalhador a", "funcionario", "nome", "empregado",
   ]],
-  ["cpf", ["cpf"]],
-  ["admission_date", ["data de admissao", "data admissao", "admissao", "dt admissao"]],
-  ["trial_end_1", [
-    "1 prazo", "1o prazo", "primeiro prazo", "prazo 1", "vencimento 1", "1 vencimento",
-    "termino 1", "1 termino", "vencimento do 1 prazo", "termino do 1 prazo",
-    "fim 1 periodo", "1 periodo",
+  ["cpf", ["cpf", "c p f"]],
+  ["admission_date", ["data adm", "data adm.", "data de admissao", "data admissao", "admissao"]],
+  ["trial_end", [
+    "data venc", "data venc.", "vencimento", "data de vencimento", "data vencimento",
+    "prazo 1", "1 prazo", "prazo 2", "2 prazo", "termino",
   ]],
-  ["trial_end_2", [
-    "2 prazo", "2o prazo", "segundo prazo", "prazo 2", "vencimento 2", "2 vencimento",
-    "termino 2", "2 termino", "vencimento do 2 prazo", "termino do 2 prazo",
-    "prorrogacao", "fim 2 periodo", "2 periodo",
-  ]],
-  ["days", ["dias", "qtde dias", "qtd dias", "n dias", "dias experiencia"]],
+  ["trial_days", ["prazo", "dias", "qtde dias", "qtd dias"]],
 ];
 
-function fieldOf(label: string): string | null {
+function fieldOf(label: string): Field | null {
   const n = norm(label);
   if (!n) return null;
-  for (const [field, aliases] of FIELD_ALIASES) {
-    if (aliases.includes(n)) return field;
+  for (const [field, aliases] of ALIASES) {
+    if (aliases.some((a) => norm(a) === n)) return field;
   }
-  for (const [field, aliases] of FIELD_ALIASES) {
-    if (aliases.some((a) => a.length >= 4 && n.includes(a))) return field;
+  for (const [field, aliases] of ALIASES) {
+    if (aliases.some((a) => norm(a).length >= 4 && n.includes(norm(a)))) return field;
   }
   return null;
+}
+
+interface Column { start: number; field: string }
+
+// As colunas "Data Venc." / "Prazo" aparecem duas vezes: a primeira dupla é o
+// 1º prazo, a segunda é o 2º.
+function headerColumns(row: Cell[]): Column[] | null {
+  const cols: Column[] = [];
+  let start = 0;
+  let ends = 0;
+  let days = 0;
+  let hasName = false;
+  for (const c of row) {
+    const f = fieldOf(c.text);
+    if (f === "trial_end") {
+      ends++;
+      cols.push({ start, field: ends === 1 ? "trial_end_1" : "trial_end_2" });
+    } else if (f === "trial_days") {
+      days++;
+      cols.push({ start, field: days === 1 ? "trial_days_1" : "trial_days_2" });
+    } else if (f) {
+      if (f === "full_name") hasName = true;
+      cols.push({ start, field: f });
+    }
+    start += c.width;
+  }
+  return hasName && ends > 0 ? cols : null;
+}
+
+function valuesByColumn(cols: Column[], row: Cell[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  let start = 0;
+  for (const c of row) {
+    const hit = cols.find((s) => Math.abs(s.start - start) <= 1);
+    if (hit && c.text && !out[hit.field]) out[hit.field] = c.text;
+    start += c.width;
+  }
+  return out;
 }
 
 function digits(v: string | null | undefined, len: number): string | null {
@@ -81,134 +120,71 @@ function parseDays(v: string | null | undefined): number | null {
   return isFinite(n) && n > 0 && n <= 365 ? n : null;
 }
 
-interface Slot { start: number; field: string; label: string }
-
-function slots(row: Cell[]): Slot[] {
-  const out: Slot[] = [];
-  let start = 0;
-  for (const c of row) {
-    const field = fieldOf(c.text);
-    if (field) out.push({ start, field, label: c.text });
-    start += c.width;
-  }
-  return out;
-}
-
-// A coluna "Dias" pertence ao prazo imediatamente à esquerda.
-function resolveDays(cols: Slot[]): Slot[] {
-  let lastTrial: string | null = null;
-  return cols.map((c) => {
-    if (c.field === "trial_end_1" || c.field === "trial_end_2") {
-      lastTrial = c.field === "trial_end_1" ? "trial_days_1" : "trial_days_2";
-      return c;
-    }
-    if (c.field === "days") {
-      const field = lastTrial ?? "trial_days_1";
-      lastTrial = field === "trial_days_1" ? "trial_days_2" : null;
-      return { ...c, field };
-    }
-    return c;
-  });
-}
-
-function valuesByColumn(cols: Slot[], row: Cell[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  let start = 0;
-  for (const c of row) {
-    const hit = cols.find((s) => Math.abs(s.start - start) <= 1);
-    if (hit && c.text && !out[hit.field]) out[hit.field] = c.text;
-    start += c.width;
-  }
-  return out;
-}
-
-function build(v: Record<string, string>, ctx: Record<string, string>): TrialEmployee | null {
-  const name = (v.full_name ?? "").trim();
-  const cpf = digits(v.cpf, 11);
-  if (!name && !cpf) return null;
-  const end1 = parseDate(v.trial_end_1);
-  const end2 = parseDate(v.trial_end_2);
-  if (!end1 && !end2) return null;
-  return {
-    full_name: name,
-    cpf,
-    admission_date: parseDate(v.admission_date),
-    trial_end_1: end1,
-    trial_days_1: parseDays(v.trial_days_1),
-    trial_end_2: end2,
-    trial_days_2: parseDays(v.trial_days_2),
-    company_document: digits(v.company_document ?? ctx.company_document, 14),
-    company_name: (v.company_name ?? ctx.company_name ?? "").trim() || null,
-    company_code: (v.company_code ?? ctx.company_code ?? "").trim() || null,
-  };
-}
-
 export function parseTrialHtml(html: string): TrialParseResult {
   const rows = htmlToRows(html);
   const employees: TrialEmployee[] = [];
   let seen = 0;
   let incomplete = 0;
 
-  // Empresa corrente: o relatório é agrupado por empresa, com o CNPJ num cabeçalho.
-  const ctx: Record<string, string> = {};
-  let cols: Slot[] | null = null;
+  const ctx: { document: string | null; name: string | null; code: string | null } = {
+    document: null,
+    name: null,
+    code: null,
+  };
+  let cols: Column[] | null = null;
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  for (const row of rows) {
     const flat = row.map((c) => c.text).join(" ");
 
+    // Cabeçalho da empresa: "Empresa: 16 - RAZAO SOCIAL" e "... CNPJ:00.000.000/0001-00"
+    const emp = flat.match(/empresa\s*:\s*(\d{1,6})?\s*-?\s*([^|]*?)\s*(?:penha|cnpj|$)/i);
     const cnpj = flat.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
-    if (cnpj) {
-      ctx.company_document = cnpj[0];
-      const nameCell = row
-        .map((c) => c.text)
-        .filter((t) => t && !/\d{2}\.\d{3}\.\d{3}\//.test(t) && norm(t).length >= 6)
-        .sort((a, b) => b.length - a.length)[0];
-      if (nameCell && !fieldOf(nameCell)) ctx.company_name = nameCell;
-      const code = flat.match(/c[oó]d(?:igo)?\.?\s*:?\s*(\d{1,6})/i);
-      if (code) ctx.company_code = code[1];
+    if (/empresa\s*:/i.test(flat)) {
+      ctx.code = emp?.[1]?.trim() || null;
+      ctx.name = emp?.[2]?.trim() || null;
+      ctx.document = cnpj ? cnpj[0] : null;
+      cols = null;
+      continue;
     }
+    if (cnpj && !ctx.document) ctx.document = cnpj[0];
 
-    const s = slots(row);
-    const hasName = s.some((x) => x.field === "full_name");
-    const hasTrial = s.some((x) => x.field === "trial_end_1" || x.field === "trial_end_2");
-
-    // Cabeçalho de grade: nome + prazo na mesma linha de rótulos
-    if (hasName && hasTrial) {
-      cols = resolveDays(s);
-      // Formato ficha: valores na linha seguinte, casados por colspan
-      const next = rows[i + 1];
-      if (next) {
-        const pairs = alignRows(row, next);
-        const v: Record<string, string> = {};
-        const mapped = resolveDays(row.map((c, idx) => ({ start: idx, field: fieldOf(c.text) ?? "", label: c.text })).filter((x) => x.field));
-        let p = 0;
-        for (const [label, value] of pairs) {
-          const field = mapped[p]?.label === label ? mapped[p].field : fieldOf(label);
-          if (mapped[p]?.label === label) p++;
-          if (field && value && !v[field]) v[field] = value;
-        }
-        const emp = build(v, ctx);
-        if (emp) {
-          employees.push(emp);
-          seen++;
-          i++;
-          continue;
-        }
-      }
+    const header = headerColumns(row);
+    if (header) {
+      cols = header;
       continue;
     }
 
-    // Linhas de dados da grade
-    if (cols) {
-      const v = valuesByColumn(cols, row);
-      const hasAny = v.full_name || v.cpf;
-      if (!hasAny) continue;
-      seen++;
-      const emp = build(v, ctx);
-      if (emp) employees.push(emp);
-      else incomplete++;
+    if (!cols) continue;
+    if (/total de colaboradores/i.test(flat)) {
+      cols = null;
+      continue;
     }
+
+    const v = valuesByColumn(cols, row);
+    const name = (v.full_name ?? "").trim();
+    if (!name) continue;
+    seen++;
+
+    const end1 = parseDate(v.trial_end_1);
+    const end2 = parseDate(v.trial_end_2);
+    if (!end1 && !end2) {
+      incomplete++;
+      continue;
+    }
+
+    employees.push({
+      full_name: name,
+      cpf: digits(v.cpf, 11),
+      employee_code: (v.employee_code ?? "").trim() || null,
+      admission_date: parseDate(v.admission_date),
+      trial_end_1: end1,
+      trial_days_1: parseDays(v.trial_days_1),
+      trial_end_2: end2,
+      trial_days_2: parseDays(v.trial_days_2),
+      company_document: digits(ctx.document, 14),
+      company_name: ctx.name,
+      company_code: ctx.code,
+    });
   }
 
   return { employees, rows: seen, incomplete };
