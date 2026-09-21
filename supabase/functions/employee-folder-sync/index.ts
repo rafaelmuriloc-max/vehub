@@ -499,6 +499,7 @@ Deno.serve(async (req) => {
       arquivos_novos: 0, arquivos_atualizados: 0, fichas_lidas: 0,
       funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0,
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
+      linhas_ignoradas: 0,
     };
     let processed = 0;
     const startedAt = Date.now();
