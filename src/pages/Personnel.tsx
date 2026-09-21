@@ -34,7 +34,7 @@ interface DriveFolder { id: string; name: string; mimeType: string }
 interface SyncConfig { id: string; folder_id: string; folder_name: string; enabled: boolean; last_synced_at: string | null }
 
 const emptyForm = {
-  full_name: '', cpf: '', position: '', admission_date: '', salary: '', termination_date: '', status: 'active',
+  employee_code: '', full_name: '', cpf: '', position: '', admission_date: '', salary: '', termination_date: '', status: 'active',
   trial_end_1: '', trial_days_1: '', trial_end_2: '', trial_days_2: '',
 };
 
