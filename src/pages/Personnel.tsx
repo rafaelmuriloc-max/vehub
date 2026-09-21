@@ -31,6 +31,7 @@ interface EmployeeDoc {
   status: string; error: string | null; updated_at: string;
 }
 interface DriveFolder { id: string; name: string; mimeType: string }
+interface TrialAlert { employee: Employee; which: 1 | 2; date: string; days: number | null; left: number }
 interface SyncConfig { id: string; folder_id: string; folder_name: string; enabled: boolean; last_synced_at: string | null }
 
 const emptyForm = {
@@ -59,6 +60,12 @@ function trialTone(date: string | null): string {
   if (d < 0) return 'text-destructive font-medium';
   if (d <= 7) return 'text-amber-600 font-medium';
   return '';
+}
+
+function trialLeftLabel(left: number): string {
+  if (left < 0) return `venceu há ${Math.abs(left)} d`;
+  if (left === 0) return 'vence hoje';
+  return `faltam ${left} d`;
 }
 
 function TrialCells({ date, days }: { date: string | null; days: number | null }) {
@@ -169,6 +176,7 @@ export default function Personnel() {
   const [pageSize, setPageSize] = useState<number | 'all'>(10);
   const [page, setPage] = useState(1);
 
+  const [trialDialogOpen, setTrialDialogOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState(false);
   const [picking, setPicking] = useState(false);
   const [folder, setFolder] = useState<{ id: string; name: string } | null>(null);
@@ -228,6 +236,41 @@ export default function Personnel() {
       const left = daysUntil(d);
       return left !== null && left < 0;
     })).length, [activeEmployees]);
+
+  // Alertas de experiência (a vencer em 15 dias e já vencidos), agrupados por empresa
+  const trialAlerts = useMemo(() => {
+    const soon: TrialAlert[] = [];
+    const overdue: TrialAlert[] = [];
+    for (const e of activeEmployees) {
+      const prazos: [string | null, number | null, 1 | 2][] = [
+        [e.trial_end_1, e.trial_days_1, 1],
+        [e.trial_end_2, e.trial_days_2, 2],
+      ];
+      for (const [date, days, which] of prazos) {
+        if (!date) continue;
+        const left = daysUntil(date);
+        if (left === null) continue;
+        const alert: TrialAlert = { employee: e, which, date, days, left };
+        if (left < 0) overdue.push(alert);
+        else if (left <= 15) soon.push(alert);
+      }
+    }
+    const byCompany = (list: TrialAlert[]) => {
+      const map = new Map<string, { name: string; items: TrialAlert[] }>();
+      for (const a of list) {
+        const entry = map.get(a.employee.client_id) ?? {
+          name: clients.find(c => c.id === a.employee.client_id)?.company_name ?? 'Empresa não identificada',
+          items: [],
+        };
+        entry.items.push(a);
+        map.set(a.employee.client_id, entry);
+      }
+      return [...map.values()]
+        .map(g => ({ ...g, items: g.items.sort((x, y) => x.left - y.left) }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    };
+    return { soon: byCompany(soon), overdue: byCompany(overdue) };
+  }, [activeEmployees, clients]);
 
   const filteredClients = useMemo(() => {
     const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
@@ -493,7 +536,10 @@ export default function Personnel() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-accent/40"
+          onClick={() => setTrialDialogOpen(true)}
+        >
           <CardContent className="p-4 flex items-start justify-between gap-3">
             <div className="space-y-1">
               <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
@@ -798,6 +844,89 @@ export default function Personnel() {
             <Button variant="outline" onClick={() => setEmpDialog(false)}>Cancelar</Button>
             <Button onClick={saveEmployee} disabled={!form.full_name.trim()}>Salvar</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={trialDialogOpen} onOpenChange={setTrialDialogOpen}>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[80dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Experiências a vencer</DialogTitle>
+            <DialogDescription>
+              Funcionários ativos com prazo de experiência vencendo nos próximos 15 dias, por empresa.
+            </DialogDescription>
+          </DialogHeader>
+
+          {trialAlerts.soon.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Nenhuma experiência a vencer nos próximos 15 dias.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {trialAlerts.soon.map(g => (
+                <div key={g.name} className="border rounded-md overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-accent/40 border-b">
+                    <Building2 className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-sm font-medium truncate">{g.name}</span>
+                    <Badge variant="outline" className="ml-auto shrink-0">{g.items.length}</Badge>
+                  </div>
+                  <div className="divide-y">
+                    {g.items.map((a, i) => (
+                      <div key={`${a.employee.id}-${a.which}-${i}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                        <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0">
+                          {a.employee.employee_code ?? '—'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{a.employee.full_name}</div>
+                          {a.employee.position && (
+                            <div className="text-xs text-muted-foreground truncate">{a.employee.position}</div>
+                          )}
+                        </div>
+                        <div className={cn('text-right shrink-0', trialTone(a.date))}>
+                          <div className="text-xs">{a.which}º prazo · {format(new Date(`${a.date}T12:00:00`), 'dd/MM/yyyy')}</div>
+                          <div className="text-xs text-muted-foreground">{trialLeftLabel(a.left)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {trialAlerts.overdue.length > 0 && (
+            <div className="space-y-3 mt-6">
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Já vencidos
+              </h3>
+              {trialAlerts.overdue.map(g => (
+                <div key={g.name} className="border border-destructive/30 rounded-md overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border-b border-destructive/30">
+                    <Building2 className="h-4 w-4 text-destructive shrink-0" />
+                    <span className="text-sm font-medium truncate">{g.name}</span>
+                    <Badge variant="outline" className="ml-auto shrink-0">{g.items.length}</Badge>
+                  </div>
+                  <div className="divide-y">
+                    {g.items.map((a, i) => (
+                      <div key={`${a.employee.id}-${a.which}-${i}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                        <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0">
+                          {a.employee.employee_code ?? '—'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{a.employee.full_name}</div>
+                          {a.employee.position && (
+                            <div className="text-xs text-muted-foreground truncate">{a.employee.position}</div>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0 text-destructive font-medium">
+                          <div className="text-xs">{a.which}º prazo · {format(new Date(`${a.date}T12:00:00`), 'dd/MM/yyyy')}</div>
+                          <div className="text-xs">{trialLeftLabel(a.left)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
