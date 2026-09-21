@@ -31,6 +31,7 @@ interface EmployeeDoc {
   status: string; error: string | null; updated_at: string;
 }
 interface DriveFolder { id: string; name: string; mimeType: string }
+interface TrialAlert { employee: Employee; which: 1 | 2; date: string; days: number | null; left: number }
 interface SyncConfig { id: string; folder_id: string; folder_name: string; enabled: boolean; last_synced_at: string | null }
 
 const emptyForm = {
@@ -59,6 +60,12 @@ function trialTone(date: string | null): string {
   if (d < 0) return 'text-destructive font-medium';
   if (d <= 7) return 'text-amber-600 font-medium';
   return '';
+}
+
+function trialLeftLabel(left: number): string {
+  if (left < 0) return `venceu há ${Math.abs(left)} d`;
+  if (left === 0) return 'vence hoje';
+  return `faltam ${left} d`;
 }
 
 function TrialCells({ date, days }: { date: string | null; days: number | null }) {
