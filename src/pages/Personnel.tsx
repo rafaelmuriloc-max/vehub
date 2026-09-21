@@ -198,7 +198,7 @@ export default function Personnel() {
     if (!config) { setFolderDialog(true); return; }
     setSyncing(true);
     try {
-      const total = { fichas_lidas: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0, revisao: 0, linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0 };
+      const total = { fichas_lidas: 0, fichas_html: 0, funcionarios_encontrados: 0, funcionarios_criados: 0, funcionarios_atualizados: 0, revisao: 0, linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0 };
       let restantes = 0;
       // A leitura de PDF é pesada: a função processa poucos arquivos por vez,
       // então repetimos até acabar a fila.
@@ -210,6 +210,7 @@ export default function Personnel() {
         if (data?.ok === false) throw new Error(data.error);
         const s = data?.stats ?? {};
         total.fichas_lidas += s.fichas_lidas ?? 0;
+        total.fichas_html += s.fichas_html ?? 0;
         total.funcionarios_encontrados += s.funcionarios_encontrados ?? 0;
         total.funcionarios_criados += s.funcionarios_criados ?? 0;
         total.funcionarios_atualizados += s.funcionarios_atualizados ?? 0;
@@ -222,7 +223,9 @@ export default function Personnel() {
       }
       toast({
         title: restantes > 0 ? 'Sincronização parcial' : 'Sincronização concluída',
-        description: `${total.fichas_lidas} arquivo(s) lido(s), ${total.funcionarios_encontrados} funcionário(s) encontrado(s) em ${total.empresas_atendidas} empresa(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} linha(s) ignorada(s).` : ''}${total.linhas_sem_empresa > 0 ? ` ${total.linhas_sem_empresa} linha(s) sem empresa reconhecida.` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
+        description: `${total.fichas_lidas} arquivo(s) lido(s)${total.fichas_html > 0 ? `, ${total.fichas_html} ficha(s) de registro` : ''}, ${total.funcionarios_encontrados} funcionário(s) encontrado(s) em ${total.empresas_atendidas} empresa(s), ${total.funcionarios_criados} cadastrado(s), ${total.funcionarios_atualizados} atualizado(s), ${total.revisao} aguardando revisão.${total.linhas_ignoradas > 0 ? ` ${total.linhas_ignoradas} ficha(s)/linha(s) ignorada(s).` : ''}${total.linhas_sem_empresa > 0 ? ` ${total.linhas_sem_empresa} sem empresa reconhecida.` : ''}${restantes > 0 ? ` ${restantes} arquivo(s) ainda na fila — sincronize novamente.` : ''}`,
+      });
+
       });
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
