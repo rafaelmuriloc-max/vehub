@@ -159,7 +159,6 @@ export default function Personnel() {
     return map;
   }, [employees]);
 
-  const pendingDocs = useMemo(() => docs.filter(d => d.status !== 'imported'), [docs]);
 
   const activeEmployees = useMemo(() => employees.filter(e => e.status === 'active'), [employees]);
   const totalSalaries = useMemo(
