@@ -171,14 +171,16 @@ export default function Personnel() {
   );
 
   const filteredClients = useMemo(() => {
+    const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
+    const base = clients.filter(c => idsWithActive.has(c.id));
     const q = search.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter(c =>
+    if (!q) return base;
+    return base.filter(c =>
       c.company_name.toLowerCase().includes(q)
       || (c.document ?? '').toLowerCase().includes(q)
       || (c.sci_code ?? '').toLowerCase().includes(q),
     );
-  }, [clients, search]);
+  }, [clients, activeEmployees, search]);
 
   const totalPages = pageSize === 'all'
     ? 1
