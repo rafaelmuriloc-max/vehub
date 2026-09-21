@@ -687,25 +687,40 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código)
+        // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código).
+        // Quando a planilha tem coluna de empresa, a linha só é gravada se a
+        // empresa for identificada — nunca cai numa empresa "padrão".
+        const perRowCompany = csvParsed?.hasCompanyColumn === true;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
+        const companiesSeen = new Set<string>();
         for (const pe of parsedEmployees) {
-          const rowClient = pe.company_hint
-            ? (resolveClientFrom(pe.company_hint, true) ?? client)
-            : client;
-          if (!rowClient) { stats.linhas_ignoradas++; continue; }
+          let rowClient: any = null;
+          if (pe.company_document) rowClient = resolveClientFrom(pe.company_document, false);
+          if (!rowClient && pe.company_code) {
+            const sci = normalizeSci(pe.company_code);
+            rowClient = (sci ? clientsBySci.get(sci) : null) ?? null;
+          }
+          if (!rowClient && pe.company_name) rowClient = resolveClientFrom(pe.company_name, false);
+          if (!rowClient && !perRowCompany) rowClient = client;
+          if (!rowClient) { stats.linhas_sem_empresa++; continue; }
+          companiesSeen.add(rowClient.id);
           entries.push({ pe, client: rowClient });
         }
+        stats.empresas_atendidas = Math.max(stats.empresas_atendidas, companiesSeen.size);
 
         if (entries.length === 0) {
           await markPending(
-            client
-              ? "Nenhum funcionário identificado no arquivo"
-              : `Empresa não identificada (texto lido: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
+            perRowCompany
+              ? `Nenhuma empresa da planilha foi reconhecida (${parsedEmployees.length} linha(s) lidas)`
+              : client
+                ? "Nenhum funcionário identificado no arquivo"
+                : `Empresa não identificada (texto lido: ${docText.trim().length} caracteres; CNPJs vistos: ${cnpjs.join(", ") || "nenhum"}; códigos vistos: ${scis.join(", ") || "nenhum"})`,
             client?.id ?? null,
           );
           continue;
         }
+
+        if (stats.linhas_sem_empresa > 0 && perRowCompany) partial = true;
 
         stats.fichas_lidas++;
         stats.funcionarios_encontrados += entries.length;
