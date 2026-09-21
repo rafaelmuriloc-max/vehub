@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Building2, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
+  Building2, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
   Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -22,6 +22,8 @@ interface Employee {
   id: string; client_id: string; full_name: string; cpf: string | null; position: string | null;
   admission_date: string | null; salary: number | null; termination_date: string | null;
   status: string; source: string;
+  trial_end_1: string | null; trial_days_1: number | null;
+  trial_end_2: string | null; trial_days_2: number | null;
 }
 interface EmployeeDoc {
   id: string; employee_id: string | null; client_id: string | null; file_name: string;
@@ -33,7 +35,50 @@ interface SyncConfig { id: string; folder_id: string; folder_name: string; enabl
 
 const emptyForm = {
   full_name: '', cpf: '', position: '', admission_date: '', salary: '', termination_date: '', status: 'active',
+  trial_end_1: '', trial_days_1: '', trial_end_2: '', trial_days_2: '',
 };
+
+// Hoje no fuso de São Paulo, para a contagem de dias até o vencimento.
+function todayKeySP(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
+function daysUntil(date: string | null): number | null {
+  if (!date) return null;
+  const today = new Date(`${todayKeySP()}T12:00:00`).getTime();
+  const target = new Date(`${date}T12:00:00`).getTime();
+  if (!isFinite(target)) return null;
+  return Math.round((target - today) / 86400000);
+}
+
+function trialTone(date: string | null): string {
+  const d = daysUntil(date);
+  if (d === null) return '';
+  if (d < 0) return 'text-destructive font-medium';
+  if (d <= 7) return 'text-amber-600 font-medium';
+  return '';
+}
+
+function TrialCells({ date, days }: { date: string | null; days: number | null }) {
+  const left = daysUntil(date);
+  return (
+    <>
+      <TableCell className={cn('hidden lg:table-cell text-sm', trialTone(date))}>
+        {date ? format(new Date(`${date}T12:00:00`), 'dd/MM/yyyy') : '—'}
+      </TableCell>
+      <TableCell className={cn('hidden lg:table-cell text-sm whitespace-nowrap', trialTone(date))}>
+        {days != null ? `${days} d` : '—'}
+        {left !== null && (
+          <span className="text-xs text-muted-foreground ml-1">
+            {left < 0 ? `· venceu há ${Math.abs(left)} d` : left === 0 ? '· vence hoje' : `· faltam ${left}`}
+          </span>
+        )}
+      </TableCell>
+    </>
+  );
+}
 
 function FolderPicker({ onPick, onClose }: { onPick: (f: { id: string; name: string }) => void; onClose: () => void }) {
   const [folderId, setFolderId] = useState('root');
