@@ -27,7 +27,8 @@ export interface TrialParseResult {
 }
 
 export function looksLikeTrialHtml(text: string): boolean {
-  const n = norm(text.slice(0, 400_000).replace(/<[^>]+>/g, " "));
+  // O texto vem com entidades (experi&ecirc;ncia): decodifica antes de comparar.
+  const n = norm(htmlToCells(text.slice(0, 400_000)).join(" "));
   return n.includes("contrato de experiencia") ||
     (n.includes("previsao") && n.includes("experiencia")) ||
     n.includes("previsao contrato experiencia");
