@@ -4,7 +4,7 @@
 //   Código | Colaborador | Data Adm. | Data Venc. | Prazo | Data Venc. | Prazo
 // A interpretação é estrutural, sem IA.
 
-import { type Cell, htmlToRows, norm, parseDate } from "./sciHtml.ts";
+import { type Cell, htmlToCells, htmlToRows, norm, parseDate } from "./sciHtml.ts";
 
 export interface TrialEmployee {
   full_name: string;
