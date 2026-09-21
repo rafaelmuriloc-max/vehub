@@ -406,7 +406,16 @@ export default function Personnel() {
               {config ? config.folder_name : 'Definir pasta'}
             </Button>
           )}
-          <Button size="sm" onClick={syncNow} disabled={syncing}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncNow(true)}
+            disabled={syncing || syncingTrial}
+          >
+            {syncingTrial ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarClock className="h-4 w-4 mr-1" />}
+            Sincronizar experiência
+          </Button>
+          <Button size="sm" onClick={() => syncNow()} disabled={syncing || syncingTrial}>
             {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}
             Sincronizar pasta
           </Button>
