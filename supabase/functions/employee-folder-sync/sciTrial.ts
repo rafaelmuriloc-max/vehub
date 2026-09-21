@@ -137,11 +137,15 @@ export function parseTrialHtml(html: string): TrialParseResult {
     const flat = row.map((c) => c.text).join(" ");
 
     // Cabeçalho da empresa: "Empresa: 16 - RAZAO SOCIAL" e "... CNPJ:00.000.000/0001-00"
-    const emp = flat.match(/empresa\s*:\s*(\d{1,6})?\s*-?\s*([^|]*?)\s*(?:penha|cnpj|$)/i);
+    const emp = flat.match(/empresa\s*:\s*(\d{1,6})?\s*-?\s*(.*)$/i);
     const cnpj = flat.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
     if (/empresa\s*:/i.test(flat)) {
       ctx.code = emp?.[1]?.trim() || null;
-      ctx.name = emp?.[2]?.trim() || null;
+      // Remove o sufixo "Cidade/UF - CNPJ:..." que vem na mesma linha.
+      ctx.name = (emp?.[2] ?? "")
+        .replace(/\s*[-–]?\s*[^\s]*\s*\/\s*[A-Z]{2}\b.*$/, "")
+        .replace(/\s*-?\s*cnpj\s*:?.*$/i, "")
+        .trim() || null;
       ctx.document = cnpj ? cnpj[0] : null;
       cols = null;
       continue;
