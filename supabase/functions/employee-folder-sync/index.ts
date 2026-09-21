@@ -725,9 +725,10 @@ Deno.serve(async (req) => {
         // Cada linha pode indicar a própria empresa (coluna CNPJ/empresa/código).
         // Quando a planilha tem coluna de empresa, a linha só é gravada se a
         // empresa for identificada — nunca cai numa empresa "padrão".
-        const perRowCompany = csvParsed?.hasCompanyColumn === true;
+        const perRowCompany = csvParsed?.hasCompanyColumn === true || (sciParsed?.employees.length ?? 0) > 0;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
         const companiesSeen = new Set<string>();
+        const perCompanyCount: Record<string, number> = {};
         for (const pe of parsedEmployees) {
           let rowClient: any = null;
           if (pe.company_document) rowClient = resolveClientFrom(pe.company_document, false);
@@ -739,9 +740,20 @@ Deno.serve(async (req) => {
           if (!rowClient && !perRowCompany) rowClient = client;
           if (!rowClient) { stats.linhas_sem_empresa++; continue; }
           companiesSeen.add(rowClient.id);
+          perCompanyCount[rowClient.company_name ?? rowClient.id] =
+            (perCompanyCount[rowClient.company_name ?? rowClient.id] ?? 0) + 1;
           entries.push({ pe, client: rowClient });
         }
         stats.empresas_atendidas = Math.max(stats.empresas_atendidas, companiesSeen.size);
+        // Conferência: fichas lidas x funcionários vinculados por empresa
+        console.log("conferencia", f.name, {
+          fichas: sciParsed?.forms ?? parsedEmployees.length,
+          extraidos: parsedEmployees.length,
+          empresas: companiesSeen.size,
+          sem_empresa: parsedEmployees.length - entries.length,
+          por_empresa: perCompanyCount,
+        });
+
 
         if (entries.length === 0) {
           await markPending(
