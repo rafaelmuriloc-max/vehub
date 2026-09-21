@@ -594,6 +594,7 @@ export default function Personnel() {
                               {visibleEmployees(c.id).map(e => {
                                 return (
                                   <TableRow key={e.id}>
+                                    <TableCell className="text-sm text-muted-foreground tabular-nums">{e.employee_code ?? '—'}</TableCell>
                                     <TableCell className="font-medium text-sm">{e.full_name}</TableCell>
                                     <TableCell className="hidden md:table-cell text-sm">{e.cpf ?? '—'}</TableCell>
                                     <TableCell className="hidden sm:table-cell text-sm">{e.position ?? '—'}</TableCell>
