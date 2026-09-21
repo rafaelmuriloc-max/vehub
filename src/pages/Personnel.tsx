@@ -536,7 +536,10 @@ export default function Personnel() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-accent/40"
+          onClick={() => setTrialDialogOpen(true)}
+        >
           <CardContent className="p-4 flex items-start justify-between gap-3">
             <div className="space-y-1">
               <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
