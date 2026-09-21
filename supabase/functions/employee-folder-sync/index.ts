@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
 import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
+import { looksLikeTrialHtml, parseTrialHtml } from "./sciTrial.ts";
 
 
 const corsHeaders = {
@@ -116,6 +117,10 @@ interface ParsedEmployee {
   company_code?: string | null;
   company_document?: string | null;
   company_name?: string | null;
+  trial_end_1?: string | null;
+  trial_days_1?: number | null;
+  trial_end_2?: string | null;
+  trial_days_2?: number | null;
 }
 
 // ---------- Leitura de planilhas .csv ----------
