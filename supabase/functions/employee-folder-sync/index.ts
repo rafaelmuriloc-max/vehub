@@ -647,22 +647,47 @@ Deno.serve(async (req) => {
             if (hit) { client = hit; break; }
           }
         }
-        // Planilhas podem reunir várias empresas: o nome encontrado no conteúdo
-        // não pode virar empresa padrão do arquivo. PDFs continuam usando o texto.
-        if (!client) client = isCsvFile ? resolveClientFrom(haystack, false) : resolveClientFrom(searchSpace, false);
+        // Relatórios e planilhas podem reunir várias empresas: o nome encontrado no
+        // conteúdo não pode virar empresa padrão do arquivo. PDFs continuam usando o texto.
+        if (!client) {
+          client = (isCsvFile || isHtmlFile)
+            ? resolveClientFrom(haystack, false)
+            : resolveClientFrom(searchSpace, false);
+        }
 
         if (isPdf && docText.trim().length < 40) {
           await markPending("PDF sem texto legível (documento escaneado)", client?.id ?? null);
           continue;
         }
 
+        // Relatório HTML do SCI: leitura estrutural por ficha (sem IA)
+        const sciParsed = isHtmlFile && looksLikeSciHtml(rawText) ? parseSciHtml(rawText) : null;
         // Planilha .csv: colunas reconhecidas pelo cabeçalho
         const csvParsed = isCsvFile ? csvToEmployees(docText) : null;
         let parsedEmployees: ParsedEmployee[] = [];
         let partial = false;
         let chunksRead = 0;
 
-        if (csvParsed) {
+        if (sciParsed && sciParsed.employees.length > 0) {
+          parsedEmployees = sciParsed.employees.map((e) => ({
+            full_name: e.full_name,
+            cpf: e.cpf,
+            position: e.position,
+            admission_date: e.admission_date,
+            salary: e.salary,
+            termination_date: e.termination_date,
+            company_code: e.company_code,
+            company_document: e.company_document,
+            company_name: e.company_name,
+          }));
+          stats.fichas_html += sciParsed.forms;
+          stats.linhas_ignoradas += sciParsed.incomplete;
+          console.log("sci-html", f.name, {
+            fichas: sciParsed.forms,
+            extraidos: parsedEmployees.length,
+            incompletas: sciParsed.incomplete,
+          });
+        } else if (csvParsed) {
           parsedEmployees = csvParsed.employees;
           stats.linhas_ignoradas += csvParsed.skipped;
           console.log("csv", f.name, {
@@ -671,9 +696,10 @@ Deno.serve(async (req) => {
             coluna_empresa: csvParsed.hasCompanyColumn,
           });
         } else {
-          // PDF ou .csv sem cabeçalho reconhecido: leitura automática do texto
+          // PDF, .csv ou HTML sem estrutura reconhecida: leitura automática do texto
           const extraction = await aiExtractEmployees(haystack, docText);
           parsedEmployees = extraction.employees;
+
           partial = extraction.failed || extraction.truncated;
           chunksRead = extraction.chunks;
           console.log("extracao", f.name, {
