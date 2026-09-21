@@ -62,9 +62,9 @@ function stripNoise(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
 }
 
-interface Cell { text: string; width: number }
+export interface Cell { text: string; width: number }
 
-function htmlToRows(html: string): Cell[][] {
+export function htmlToRows(html: string): Cell[][] {
   const body = stripNoise(html);
   const rows: Cell[][] = [];
   for (const tr of body.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
@@ -92,7 +92,7 @@ export function htmlToCells(html: string): string[] {
   return cells;
 }
 
-function norm(s: string): string {
+export function norm(s: string): string {
   return s
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -140,7 +140,7 @@ function fieldOf(text: string): { field: string; inline: string | null } | null 
 
 // A linha de valores costuma repetir as larguras da linha de rótulos, às vezes
 // omitindo a primeira célula vazia. O casamento é feito por colspan, em ordem.
-function alignRows(labels: Cell[], values: Cell[]): [string, string][] {
+export function alignRows(labels: Cell[], values: Cell[]): [string, string][] {
   const out: [string, string][] = [];
   let j = 0;
   for (const label of labels) {
@@ -154,7 +154,7 @@ function alignRows(labels: Cell[], values: Cell[]): [string, string][] {
   return out;
 }
 
-function parseDate(v: string | null | undefined): string | null {
+export function parseDate(v: string | null | undefined): string | null {
   if (!v) return null;
   const s = v.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
