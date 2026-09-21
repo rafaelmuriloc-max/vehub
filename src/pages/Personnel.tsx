@@ -245,7 +245,7 @@ export default function Personnel() {
         || (e.employee_code ?? '').toLowerCase() === q,
       ),
     );
-  }, [clients, activeEmployees, search]);
+  }, [clients, activeEmployees, employeesByClient, search]);
 
   const totalPages = pageSize === 'all'
     ? 1
