@@ -26,12 +26,22 @@ const ENTITIES: Record<string, string> = {
   nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", ordf: "ª", ordm: "º",
 };
 
+const DIACRITICS: Record<string, string> = {
+  acute: "\u0301", grave: "\u0300", circ: "\u0302", tilde: "\u0303",
+  uml: "\u0308", ring: "\u030a", cedil: "\u0327",
+};
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(
+      /&([a-zA-Z])(acute|grave|circ|tilde|uml|ring|cedil);/g,
+      (_, letter, mark) => (letter + DIACRITICS[mark]).normalize("NFC"),
+    )
     .replace(/&([a-z]+);/gi, (m, name) => ENTITIES[String(name).toLowerCase()] ?? m);
 }
+
 
 function cleanCell(html: string): string {
   return decodeEntities(
