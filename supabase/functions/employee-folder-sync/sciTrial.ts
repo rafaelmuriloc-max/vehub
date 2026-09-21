@@ -99,7 +99,7 @@ function valuesByColumn(cols: Column[], row: Cell[]): Record<string, string> {
   const out: Record<string, string> = {};
   let start = 0;
   for (const c of row) {
-    const hit = cols.find((s) => Math.abs(s.start - start) <= 1);
+    const hit = cols.find((s) => s.start === start);
     if (hit && c.text && !out[hit.field]) out[hit.field] = c.text;
     start += c.width;
   }
