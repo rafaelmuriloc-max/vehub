@@ -159,7 +159,6 @@ export default function Personnel() {
     return map;
   }, [employees]);
 
-  const pendingDocs = useMemo(() => docs.filter(d => d.status !== 'imported'), [docs]);
 
   const activeEmployees = useMemo(() => employees.filter(e => e.status === 'active'), [employees]);
   const totalSalaries = useMemo(
@@ -556,39 +555,6 @@ export default function Personnel() {
         </CardContent>
       </Card>
 
-      {pendingDocs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Arquivos aguardando revisão</CardTitle>
-            <CardDescription>Não foi possível identificar a empresa ou o funcionário destes arquivos.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 sm:p-6 sm:pt-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Arquivo</TableHead>
-                  <TableHead className="hidden sm:table-cell">Motivo</TableHead>
-                  <TableHead className="hidden md:table-cell">Atualizado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingDocs.slice(0, 50).map(d => (
-                  <TableRow key={d.id}>
-                    <TableCell className="max-w-[240px]">
-                      <div className="truncate text-sm font-medium">{d.file_name}</div>
-                      {d.drive_path && <div className="truncate text-xs text-muted-foreground">{d.drive_path}</div>}
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">{d.error ?? '—'}</TableCell>
-                    <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                      {format(new Date(d.updated_at), 'dd/MM/yyyy HH:mm')}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
 
       <Dialog open={folderDialog} onOpenChange={setFolderDialog}>
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg">
