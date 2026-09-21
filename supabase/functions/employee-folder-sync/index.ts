@@ -602,7 +602,13 @@ Deno.serve(async (req) => {
         const bytes = new Uint8Array(await r.arrayBuffer());
 
         const isPdf = f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name);
-        const docText = isPdf ? await pdfToText(bytes) : isCsvFile ? decodeBytes(bytes) : "";
+        const rawText = isPdf ? "" : (isCsvFile || isHtmlFile) ? decodeBytes(bytes) : "";
+        const docText = isPdf
+          ? await pdfToText(bytes)
+          : isHtmlFile
+            ? htmlToCells(rawText).join("\n")
+            : rawText;
+
         const searchSpace = `${haystack}\n${docText}`;
 
         // Empresa: CNPJ (caminho/conteúdo) → código SCI (nome/caminho) → razão social (caminho/conteúdo)
