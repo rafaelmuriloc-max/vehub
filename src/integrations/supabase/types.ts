@@ -662,6 +662,10 @@ export type Database = {
           source: string
           status: string
           termination_date: string | null
+          trial_days_1: number | null
+          trial_days_2: number | null
+          trial_end_1: string | null
+          trial_end_2: string | null
           updated_at: string
         }
         Insert: {
@@ -677,6 +681,10 @@ export type Database = {
           source?: string
           status?: string
           termination_date?: string | null
+          trial_days_1?: number | null
+          trial_days_2?: number | null
+          trial_end_1?: string | null
+          trial_end_2?: string | null
           updated_at?: string
         }
         Update: {
@@ -692,6 +700,10 @@ export type Database = {
           source?: string
           status?: string
           termination_date?: string | null
+          trial_days_1?: number | null
+          trial_days_2?: number | null
+          trial_end_1?: string | null
+          trial_end_2?: string | null
           updated_at?: string
         }
         Relationships: [
