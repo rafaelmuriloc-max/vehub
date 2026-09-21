@@ -659,6 +659,7 @@ Deno.serve(async (req) => {
           console.log("csv", f.name, {
             linhas: parsedEmployees.length,
             ignoradas: csvParsed.skipped,
+            coluna_empresa: csvParsed.hasCompanyColumn,
           });
         } else {
           // PDF ou .csv sem cabeçalho reconhecido: leitura automática do texto
