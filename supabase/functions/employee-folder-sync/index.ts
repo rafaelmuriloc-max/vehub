@@ -852,7 +852,8 @@ Deno.serve(async (req) => {
         // empresa for identificada — nunca cai numa empresa "padrão".
         const perRowCompany = csvParsed?.hasCompanyColumn === true
           || (sciParsed?.employees.length ?? 0) > 0
-          || (trialParsed?.employees.length ?? 0) > 0;
+          || (trialParsed?.employees.length ?? 0) > 0
+          || (vacationParsed?.periods.length ?? 0) > 0;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
         const companiesSeen = new Set<string>();
         const perCompanyCount: Record<string, number> = {};
@@ -985,6 +986,28 @@ Deno.serve(async (req) => {
           } else {
             // Funcionário já cadastrado e sem rescisão na ficha: desconsidera por completo.
             stats.funcionarios_ignorados++;
+          }
+
+          // Férias: o relatório é sempre a foto atual — limpa os períodos do
+          // funcionário na primeira linha dele e grava os períodos lidos.
+          if (pe.vacation) {
+            if (!vacationCleared.has(employee.id)) {
+              vacationCleared.add(employee.id);
+              await supabase.from("employee_vacation_periods").delete().eq("employee_id", employee.id);
+              stats.ferias_funcionarios++;
+            }
+            const { error: vacErr } = await supabase.from("employee_vacation_periods").insert({
+              employee_id: employee.id,
+              client_id: rowClient.id,
+              acquisition_start: pe.vacation.acquisition_start,
+              acquisition_end: pe.vacation.acquisition_end,
+              days_right: pe.vacation.days_right,
+              enjoy_start: pe.vacation.enjoy_start,
+              enjoy_end: pe.vacation.enjoy_end,
+              deadline_date: pe.vacation.deadline_date,
+              source_file: f.name,
+            } as any);
+            if (!vacErr) stats.ferias_periodos++;
           }
 
           if (linkedIds.has(employee.id)) continue;
