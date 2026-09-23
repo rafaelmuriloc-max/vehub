@@ -449,6 +449,30 @@ export default function Personnel() {
     }
   }
 
+  // Lê somente o relatório de acompanhamento de vencimento de férias.
+  async function syncVacations() {
+    if (!config) { setFolderDialog(true); return; }
+    setSyncingVacation(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('employee-folder-sync', {
+        body: { only: 'ferias', force_reprocess: true },
+      });
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error);
+      const s = data?.stats ?? {};
+      toast({
+        title: 'Relatório de férias sincronizado',
+        description: `${s.fichas_lidas ?? 0} arquivo(s) lido(s), ${s.ferias_periodos ?? 0} período(s) de férias de ${s.ferias_funcionarios ?? 0} funcionário(s)${(s.funcionarios_criados ?? 0) > 0 ? `, ${s.funcionarios_criados} funcionário(s) cadastrado(s)` : ''}.`,
+      });
+    } catch (e) {
+      toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setSyncingVacation(false);
+      loadAll();
+    }
+  }
+
+
 
   async function saveFolder() {
     if (!folder) return;
