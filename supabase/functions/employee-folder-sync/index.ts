@@ -587,6 +587,7 @@ Deno.serve(async (req) => {
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
       linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0, fichas_html: 0,
       experiencias_atualizadas: 0, fora_do_padrao: 0,
+      ferias_periodos: 0, ferias_funcionarios: 0,
     };
 
     let processed = 0;
@@ -718,10 +719,17 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Relatório "Acompanhamento de vencimento de férias" do SCI (sem IA)
+        const vacationParsed = isHtmlFile && looksLikeVacationHtml(rawText)
+          ? parseVacationHtml(rawText)
+          : null;
         // Relatório "Previsão contrato de experiência" do SCI (sem IA)
-        const trialParsed = isHtmlFile && looksLikeTrialHtml(rawText) ? parseTrialHtml(rawText) : null;
+        const trialParsed = isHtmlFile && !vacationParsed?.periods.length && looksLikeTrialHtml(rawText)
+          ? parseTrialHtml(rawText)
+          : null;
         // Relatório HTML do SCI: leitura estrutural por ficha (sem IA)
-        const sciParsed = isHtmlFile && !trialParsed?.employees.length && looksLikeSciHtml(rawText)
+        const sciParsed = isHtmlFile && !vacationParsed?.periods.length && !trialParsed?.employees.length &&
+            looksLikeSciHtml(rawText)
           ? parseSciHtml(rawText)
           : null;
         // Planilha .csv: colunas reconhecidas pelo cabeçalho
