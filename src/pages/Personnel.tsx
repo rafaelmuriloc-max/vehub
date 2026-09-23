@@ -311,6 +311,50 @@ export default function Personnel() {
     return { soon: byCompany(soon), overdue: byCompany(overdue) };
   }, [activeEmployees, clients]);
 
+  // Períodos de férias por funcionário, do mais antigo para o mais novo
+  const vacationsByEmployee = useMemo(() => {
+    const map = new Map<string, VacationPeriod[]>();
+    for (const p of vacations) {
+      const arr = map.get(p.employee_id) ?? [];
+      arr.push(p);
+      map.set(p.employee_id, arr);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (a.acquisition_start ?? '').localeCompare(b.acquisition_start ?? ''));
+    }
+    return map;
+  }, [vacations]);
+
+  // Férias a vencer em 60 dias (e já vencidas), por empresa
+  const vacationAlerts = useMemo(() => {
+    const soon: VacationAlert[] = [];
+    let overdue = 0;
+    const activeIds = new Map(activeEmployees.map(e => [e.id, e]));
+    for (const p of vacations) {
+      const emp = activeIds.get(p.employee_id);
+      if (!emp) continue;
+      const date = vacationDue(p);
+      const left = daysUntil(date);
+      if (date === null || left === null) continue;
+      if (left < 0) { overdue++; continue; }
+      if (left <= 60) soon.push({ employee: emp, period: p, date, left });
+    }
+    const map = new Map<string, { name: string; items: VacationAlert[] }>();
+    for (const a of soon) {
+      const entry = map.get(a.employee.client_id) ?? {
+        name: clients.find(c => c.id === a.employee.client_id)?.company_name ?? 'Empresa não identificada',
+        items: [],
+      };
+      entry.items.push(a);
+      map.set(a.employee.client_id, entry);
+    }
+    const groups = [...map.values()]
+      .map(g => ({ ...g, items: g.items.sort((x, y) => x.left - y.left) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    return { groups, count: soon.length, overdue };
+  }, [vacations, activeEmployees, clients]);
+
+
   const filteredClients = useMemo(() => {
     const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
     const base = clients.filter(c => idsWithActive.has(c.id));
