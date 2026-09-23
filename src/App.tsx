@@ -23,6 +23,7 @@ import Drive from "./pages/Drive";
 import Dashboard from "./pages/Dashboard";
 import Tickets from "./pages/Tickets";
 import Personnel from "./pages/Personnel";
+import Vacations from "./pages/Vacations";
 import ScheduledMessages from "./pages/ScheduledMessages";
 import NotFound from "./pages/NotFound";
 import DemoShowcase from "./pages/DemoShowcase";
