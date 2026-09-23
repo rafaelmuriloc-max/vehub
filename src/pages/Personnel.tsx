@@ -845,7 +845,7 @@ export default function Personnel() {
                                       <TableCell colSpan={13} className="p-3">
                                         {periods.length === 0 ? (
                                           <p className="text-sm text-muted-foreground">
-                                            Nenhum período de férias importado para este funcionário. Use o botão “Sincronizar férias”.
+Nenhum período de férias importado para este funcionário. Use o botão “Sincronizar” e escolha “Férias”.
                                           </p>
                                         ) : (
                                           <div className="rounded-md border bg-background overflow-x-auto">
