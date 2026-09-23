@@ -203,6 +203,10 @@ export default function Personnel() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncingTrial, setSyncingTrial] = useState(false);
+  const [syncingVacation, setSyncingVacation] = useState(false);
+  const [vacations, setVacations] = useState<VacationPeriod[]>([]);
+  const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
+  const [vacationDialogOpen, setVacationDialogOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('all');
@@ -221,15 +225,17 @@ export default function Personnel() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [cliRes, empRes, docRes, cfgRes] = await Promise.all([
+    const [cliRes, empRes, docRes, cfgRes, vacRes] = await Promise.all([
       supabase.from('clients').select('id, company_name, document, sci_code').eq('status', 'active').order('company_name'),
       supabase.from('client_employees').select('*').order('full_name'),
       supabase.from('employee_documents').select('*').order('updated_at', { ascending: false }).limit(500),
       supabase.from('employee_sync_config').select('*').order('created_at').limit(1),
+      supabase.from('employee_vacation_periods').select('*').order('acquisition_start'),
     ]);
     if (cliRes.data) setClients(cliRes.data as Client[]);
     if (empRes.data) setEmployees(empRes.data as Employee[]);
     if (docRes.data) setDocs(docRes.data as EmployeeDoc[]);
+    if (vacRes.data) setVacations(vacRes.data as unknown as VacationPeriod[]);
     setConfig((cfgRes.data?.[0] as SyncConfig) ?? null);
     setLoading(false);
   }, []);
