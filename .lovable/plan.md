@@ -14,9 +14,9 @@ Novo botão "Sincronizar férias" na página Pessoal, lendo o relatório "Acompa
 - Arquivo sem empresa reconhecida fica de fora, com aviso no resumo.
 
 **Na tela Pessoal**
-- Nova coluna "Férias" na lista de funcionários, mostrando o vencimento mais próximo (prazo final para iniciar, ou o fim do período para gozar quando o relatório não traz prazo final) e os dias de direito. Vermelho quando vencido, laranja quando faltam 60 dias ou menos.
+- Clicando no funcionário, a linha expande e mostra abaixo os períodos de férias dele, na mesma apresentação do relatório: Dias de direito | Referente Período Aquisitivo | Deverá gozar as férias entre o período | Prazo final p/ iniciar as férias sem gerar dobro. Um período por linha, do mais antigo para o mais novo.
+- Períodos já vencidos aparecem em vermelho e os que vencem em até 60 dias em laranja; funcionário sem férias importadas mostra um aviso curto.
 - Novo card "Férias a vencer em 60 dias", com contador de já vencidas, clicável: abre uma janela com os funcionários agrupados por empresa (código, nome, dias de direito, período aquisitivo, data limite e quantos dias faltam), no mesmo padrão da janela de experiências.
-- Ao abrir uma empresa, o funcionário pode ter mais de um período em aberto; a coluna mostra o mais urgente e a janela lista cada período.
 
 ## Detalhes técnicos
 
