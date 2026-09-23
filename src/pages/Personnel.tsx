@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Building2, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
-  Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
+  Loader2, Palmtree, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -586,7 +586,16 @@ export default function Personnel() {
             {syncingTrial ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarClock className="h-4 w-4 mr-1" />}
             Sincronizar experiência
           </Button>
-          <Button size="sm" onClick={() => syncNow()} disabled={syncing || syncingTrial}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={syncVacations}
+            disabled={syncing || syncingTrial || syncingVacation}
+          >
+            {syncingVacation ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Palmtree className="h-4 w-4 mr-1" />}
+            Sincronizar férias
+          </Button>
+          <Button size="sm" onClick={() => syncNow()} disabled={syncing || syncingTrial || syncingVacation}>
             {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}
             Sincronizar pasta
           </Button>
