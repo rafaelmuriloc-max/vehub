@@ -793,8 +793,14 @@ export default function Personnel() {
                             </TableHeader>
                             <TableBody>
                               {visibleEmployees(c.id).map(e => {
+                                const periods = vacationsByEmployee.get(e.id) ?? [];
+                                const openVac = expandedEmployee === e.id;
                                 return (
-                                  <TableRow key={e.id}>
+                                  <Fragment key={e.id}>
+                                  <TableRow
+                                    className="cursor-pointer"
+                                    onClick={() => setExpandedEmployee(openVac ? null : e.id)}
+                                  >
                                     <TableCell className="text-sm text-muted-foreground tabular-nums">{e.employee_code ?? '—'}</TableCell>
                                     <TableCell className="font-medium text-sm">{e.full_name}</TableCell>
                                     <TableCell className="hidden md:table-cell text-sm">{e.cpf ?? '—'}</TableCell>
