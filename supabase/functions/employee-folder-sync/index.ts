@@ -499,12 +499,14 @@ Deno.serve(async (req) => {
   try {
     let forceReprocess = false;
     let onlyTrial = false;
+    let onlyVacation = false;
     if (req.method === "POST") {
       try {
         const body = await req.json();
         forceReprocess = body?.force_reprocess === true;
         onlyTrial = body?.only === "experiencia";
-        if (onlyTrial) forceReprocess = true;
+        onlyVacation = body?.only === "ferias";
+        if (onlyTrial || onlyVacation) forceReprocess = true;
       } catch {
         // Chamadas automáticas podem não enviar corpo.
       }
@@ -514,6 +516,14 @@ Deno.serve(async (req) => {
     const isTrialFileName = (name: string) =>
       /\.(html?|xls)$/i.test(name) &&
       name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("experiencia");
+
+    // Só o relatório "Acompanhamento de vencimento de férias"
+    const isVacationFileName = (name: string) => {
+      const n = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+      return /\.(html?|xls)$/i.test(name) && n.includes("ferias") &&
+        (n.includes("vencimento") || n.includes("acompanhamento"));
+    };
 
     // Só as fichas de registro de colaboradores
     const isRegistrationFileName = (name: string) =>
@@ -585,8 +595,9 @@ Deno.serve(async (req) => {
 
     for (const f of files) {
       if (onlyTrial && !isTrialFileName(f.name)) continue;
-      // Fora do modo experiência, só as fichas de registro de colaboradores.
-      if (!onlyTrial && !isRegistrationFileName(f.name)) { stats.fora_do_padrao++; continue; }
+      if (onlyVacation && !isVacationFileName(f.name)) continue;
+      // Fora dos modos experiência/férias, só as fichas de registro de colaboradores.
+      if (!onlyTrial && !onlyVacation && !isRegistrationFileName(f.name)) { stats.fora_do_padrao++; continue; }
       const prev = knownById.get(f.id);
       // O botão manual força a releitura; o cron continua econômico e ignora arquivos inalterados.
       if (!forceReprocess && prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
