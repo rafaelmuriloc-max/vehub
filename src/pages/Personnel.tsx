@@ -671,6 +671,26 @@ export default function Personnel() {
             <CalendarClock className="h-8 w-8 text-muted-foreground/40 shrink-0" />
           </CardContent>
         </Card>
+
+        <Card
+          className="cursor-pointer transition-colors hover:bg-accent/40"
+          onClick={() => setVacationDialogOpen(true)}
+        >
+          <CardContent className="p-4 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Férias a vencer em 60 dias
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {vacationAlerts.count}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {vacationAlerts.overdue} período(s) já vencido(s)
+              </p>
+            </div>
+            <Palmtree className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
