@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -824,7 +824,7 @@ export default function Personnel() {
                                       </Badge>
                                     </TableCell>
                                     <TableCell>
-                                      <div className="flex gap-1 justify-end">
+                                      <div className="flex gap-1 justify-end" onClick={ev => ev.stopPropagation()}>
                                         <Button variant="ghost" size="icon" onClick={() => openEdit(e)}>
                                           <Pencil className="h-4 w-4" />
                                         </Button>
@@ -836,6 +836,41 @@ export default function Personnel() {
                                       </div>
                                     </TableCell>
                                   </TableRow>
+                                  {openVac && (
+                                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                                      <TableCell colSpan={13} className="p-3">
+                                        {periods.length === 0 ? (
+                                          <p className="text-sm text-muted-foreground">
+                                            Nenhum período de férias importado para este funcionário. Use o botão “Sincronizar férias”.
+                                          </p>
+                                        ) : (
+                                          <div className="rounded-md border bg-background overflow-x-auto">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow>
+                                                  <TableHead className="w-28">Dias de direito</TableHead>
+                                                  <TableHead>Referente Período Aquisitivo</TableHead>
+                                                  <TableHead>Deverá gozar as férias entre o período</TableHead>
+                                                  <TableHead>Prazo final p/ iniciar as férias sem gerar dobro</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {periods.map(p => (
+                                                  <TableRow key={p.id} className={vacationTone(p)}>
+                                                    <TableCell className="text-sm tabular-nums">{fmtDays(p.days_right)}</TableCell>
+                                                    <TableCell className="text-sm whitespace-nowrap">{fmtRange(p.acquisition_start, p.acquisition_end)}</TableCell>
+                                                    <TableCell className="text-sm whitespace-nowrap">{fmtRange(p.enjoy_start, p.enjoy_end)}</TableCell>
+                                                    <TableCell className="text-sm whitespace-nowrap">{fmtDate(p.deadline_date)}</TableCell>
+                                                  </TableRow>
+                                                ))}
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                  </Fragment>
                                 );
                               })}
                             </TableBody>
