@@ -1071,6 +1071,54 @@ export default function Personnel() {
 
         </DialogContent>
       </Dialog>
+
+      <Dialog open={vacationDialogOpen} onOpenChange={setVacationDialogOpen}>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[80dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Férias a vencer</DialogTitle>
+            <DialogDescription>
+              Funcionários ativos com férias vencendo nos próximos 60 dias, por empresa.
+            </DialogDescription>
+          </DialogHeader>
+
+          {vacationAlerts.groups.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Nenhuma férias a vencer nos próximos 60 dias.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {vacationAlerts.groups.map(g => (
+                <div key={g.name} className="border rounded-md overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-accent/40 border-b">
+                    <Building2 className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-sm font-medium truncate">{g.name}</span>
+                    <Badge variant="outline" className="ml-auto shrink-0">{g.items.length}</Badge>
+                  </div>
+                  <div className="divide-y">
+                    {g.items.map(a => (
+                      <div key={a.period.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                        <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0">
+                          {a.employee.employee_code ?? '—'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{a.employee.full_name}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {fmtDays(a.period.days_right)} dia(s) · {fmtRange(a.period.acquisition_start, a.period.acquisition_end)}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 text-amber-600">
+                          <div className="text-xs">{format(new Date(`${a.date}T12:00:00`), 'dd/MM/yyyy')}</div>
+                          <div className="text-xs text-muted-foreground">{trialLeftLabel(a.left)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
