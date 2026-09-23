@@ -19,7 +19,6 @@ const menuItems = [
   { title: 'Drive', icon: HardDrive, path: '/drive' },
   { title: 'Calendário', icon: Calendar, path: '/calendar' },
   { title: 'Pessoal', icon: Users, path: '/personnel' },
-  { title: 'Férias', icon: CalendarDays, path: '/ferias' },
 ];
 
 const cadastroSubItems = [
