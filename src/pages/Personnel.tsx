@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -195,6 +196,7 @@ function FolderPicker({ onPick, onClose }: { onPick: (f: { id: string; name: str
 }
 
 export default function Personnel() {
+  const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
@@ -578,6 +580,10 @@ export default function Personnel() {
               {config ? config.folder_name : 'Definir pasta'}
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => navigate('/ferias')}>
+            <Palmtree className="h-4 w-4 mr-1" />
+            Férias
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" disabled={syncing || syncingTrial || syncingVacation}>
