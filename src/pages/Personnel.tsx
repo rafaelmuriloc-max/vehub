@@ -578,28 +578,31 @@ export default function Personnel() {
               {config ? config.folder_name : 'Definir pasta'}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => syncNow(true)}
-            disabled={syncing || syncingTrial}
-          >
-            {syncingTrial ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarClock className="h-4 w-4 mr-1" />}
-            Sincronizar experiência
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={syncVacations}
-            disabled={syncing || syncingTrial || syncingVacation}
-          >
-            {syncingVacation ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Palmtree className="h-4 w-4 mr-1" />}
-            Sincronizar férias
-          </Button>
-          <Button size="sm" onClick={() => syncNow()} disabled={syncing || syncingTrial || syncingVacation}>
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}
-            Sincronizar pasta
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" disabled={syncing || syncingTrial || syncingVacation}>
+                {(syncing || syncingTrial || syncingVacation)
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  : <FolderSync className="h-4 w-4 mr-1" />}
+                Sincronizar
+                <ChevronDown className="h-4 w-4 ml-1 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => syncNow()} disabled={syncing}>
+                {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FolderSync className="h-4 w-4 mr-2" />}
+                Pasta (fichas de registro)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => syncNow(true)} disabled={syncingTrial}>
+                {syncingTrial ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CalendarClock className="h-4 w-4 mr-2" />}
+                Experiência
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={syncVacations} disabled={syncingVacation}>
+                {syncingVacation ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Palmtree className="h-4 w-4 mr-2" />}
+                Férias
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
