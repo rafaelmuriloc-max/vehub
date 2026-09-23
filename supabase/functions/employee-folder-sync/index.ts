@@ -738,7 +738,34 @@ Deno.serve(async (req) => {
         let partial = false;
         let chunksRead = 0;
 
-        if (trialParsed && trialParsed.employees.length > 0) {
+        if (vacationParsed && vacationParsed.periods.length > 0) {
+          parsedEmployees = vacationParsed.periods.map((p) => ({
+            full_name: p.full_name,
+            employee_code: p.employee_code,
+            cpf: null,
+            position: null,
+            admission_date: null,
+            salary: null,
+            termination_date: null,
+            company_code: p.company_code,
+            company_document: p.company_document,
+            company_name: p.company_name,
+            vacation: {
+              acquisition_start: p.acquisition_start,
+              acquisition_end: p.acquisition_end,
+              days_right: p.days_right,
+              enjoy_start: p.enjoy_start,
+              enjoy_end: p.enjoy_end,
+              deadline_date: p.deadline_date,
+            },
+          }));
+          stats.linhas_ignoradas += vacationParsed.incomplete;
+          console.log("ferias-html", f.name, {
+            linhas: vacationParsed.rows,
+            periodos: parsedEmployees.length,
+            incompletas: vacationParsed.incomplete,
+          });
+        } else if (trialParsed && trialParsed.employees.length > 0) {
           parsedEmployees = trialParsed.employees.map((e) => ({
             full_name: e.full_name,
             employee_code: e.employee_code,
