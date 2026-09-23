@@ -908,6 +908,7 @@ Deno.serve(async (req) => {
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
 
         const linkedIds = new Set<string>();
+        const vacationCleared = new Set<string>();
         for (const { pe, client: rowClient } of entries) {
           let employee: any = null;
           if (pe.cpf) {
