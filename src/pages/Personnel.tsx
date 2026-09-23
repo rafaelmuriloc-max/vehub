@@ -31,6 +31,12 @@ interface EmployeeDoc {
   status: string; error: string | null; updated_at: string;
 }
 interface DriveFolder { id: string; name: string; mimeType: string }
+interface VacationPeriod {
+  id: string; employee_id: string; client_id: string;
+  acquisition_start: string | null; acquisition_end: string | null; days_right: number | null;
+  enjoy_start: string | null; enjoy_end: string | null; deadline_date: string | null;
+}
+interface VacationAlert { employee: Employee; period: VacationPeriod; date: string; left: number }
 interface TrialAlert { employee: Employee; which: 1 | 2; date: string; days: number | null; left: number }
 interface SyncConfig { id: string; folder_id: string; folder_name: string; enabled: boolean; last_synced_at: string | null }
 
@@ -66,6 +72,33 @@ function trialLeftLabel(left: number): string {
   if (left < 0) return `venceu há ${Math.abs(left)} d`;
   if (left === 0) return 'vence hoje';
   return `faltam ${left} d`;
+}
+
+function fmtDate(d: string | null): string {
+  return d ? format(new Date(`${d}T12:00:00`), 'dd/MM/yyyy') : '—';
+}
+
+function fmtRange(a: string | null, b: string | null): string {
+  if (!a && !b) return '—';
+  return `${fmtDate(a)} a ${fmtDate(b)}`;
+}
+
+function fmtDays(v: number | null): string {
+  return v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Data que determina o vencimento das férias: prazo final para iniciar sem
+// dobro e, quando o relatório não traz, o fim do período para gozar.
+function vacationDue(p: VacationPeriod): string | null {
+  return p.deadline_date ?? p.enjoy_end ?? null;
+}
+
+function vacationTone(p: VacationPeriod): string {
+  const left = daysUntil(vacationDue(p));
+  if (left === null) return '';
+  if (left < 0) return 'text-destructive font-medium';
+  if (left <= 60) return 'text-amber-600 font-medium';
+  return '';
 }
 
 function TrialCells({ date, days }: { date: string | null; days: number | null }) {
