@@ -1598,6 +1598,66 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_vacation_periods: {
+        Row: {
+          acquisition_end: string | null
+          acquisition_start: string | null
+          client_id: string
+          created_at: string
+          days_right: number | null
+          deadline_date: string | null
+          employee_id: string
+          enjoy_end: string | null
+          enjoy_start: string | null
+          id: string
+          source_file: string | null
+          updated_at: string
+        }
+        Insert: {
+          acquisition_end?: string | null
+          acquisition_start?: string | null
+          client_id: string
+          created_at?: string
+          days_right?: number | null
+          deadline_date?: string | null
+          employee_id: string
+          enjoy_end?: string | null
+          enjoy_start?: string | null
+          id?: string
+          source_file?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acquisition_end?: string | null
+          acquisition_start?: string | null
+          client_id?: string
+          created_at?: string
+          days_right?: number | null
+          deadline_date?: string | null
+          employee_id?: string
+          enjoy_end?: string | null
+          enjoy_start?: string | null
+          id?: string
+          source_file?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_vacation_periods_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_vacation_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "client_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_categories: {
         Row: {
           created_at: string

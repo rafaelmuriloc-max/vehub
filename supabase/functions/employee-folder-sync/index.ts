@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.98.0";
 import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
 import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
 import { looksLikeTrialHtml, parseTrialHtml } from "./sciTrial.ts";
+import { looksLikeVacationHtml, parseVacationHtml } from "./sciVacation.ts";
 
 
 const corsHeaders = {
@@ -127,6 +128,14 @@ interface ParsedEmployee {
   trial_days_1?: number | null;
   trial_end_2?: string | null;
   trial_days_2?: number | null;
+  vacation?: {
+    acquisition_start: string | null;
+    acquisition_end: string | null;
+    days_right: number | null;
+    enjoy_start: string | null;
+    enjoy_end: string | null;
+    deadline_date: string | null;
+  } | null;
 }
 
 // ---------- Leitura de planilhas .csv ----------
@@ -490,12 +499,14 @@ Deno.serve(async (req) => {
   try {
     let forceReprocess = false;
     let onlyTrial = false;
+    let onlyVacation = false;
     if (req.method === "POST") {
       try {
         const body = await req.json();
         forceReprocess = body?.force_reprocess === true;
         onlyTrial = body?.only === "experiencia";
-        if (onlyTrial) forceReprocess = true;
+        onlyVacation = body?.only === "ferias";
+        if (onlyTrial || onlyVacation) forceReprocess = true;
       } catch {
         // Chamadas automáticas podem não enviar corpo.
       }
@@ -505,6 +516,14 @@ Deno.serve(async (req) => {
     const isTrialFileName = (name: string) =>
       /\.(html?|xls)$/i.test(name) &&
       name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("experiencia");
+
+    // Só o relatório "Acompanhamento de vencimento de férias"
+    const isVacationFileName = (name: string) => {
+      const n = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+      return /\.(html?|xls)$/i.test(name) && n.includes("ferias") &&
+        (n.includes("vencimento") || n.includes("acompanhamento"));
+    };
 
     // Só as fichas de registro de colaboradores
     const isRegistrationFileName = (name: string) =>
@@ -568,6 +587,7 @@ Deno.serve(async (req) => {
       parciais: 0, revisao: 0, erros: 0, ignorados: 0, restantes: 0,
       linhas_ignoradas: 0, linhas_sem_empresa: 0, empresas_atendidas: 0, fichas_html: 0,
       experiencias_atualizadas: 0, fora_do_padrao: 0,
+      ferias_periodos: 0, ferias_funcionarios: 0,
     };
 
     let processed = 0;
@@ -576,8 +596,9 @@ Deno.serve(async (req) => {
 
     for (const f of files) {
       if (onlyTrial && !isTrialFileName(f.name)) continue;
-      // Fora do modo experiência, só as fichas de registro de colaboradores.
-      if (!onlyTrial && !isRegistrationFileName(f.name)) { stats.fora_do_padrao++; continue; }
+      if (onlyVacation && !isVacationFileName(f.name)) continue;
+      // Fora dos modos experiência/férias, só as fichas de registro de colaboradores.
+      if (!onlyTrial && !onlyVacation && !isRegistrationFileName(f.name)) { stats.fora_do_padrao++; continue; }
       const prev = knownById.get(f.id);
       // O botão manual força a releitura; o cron continua econômico e ignora arquivos inalterados.
       if (!forceReprocess && prev && prev.status !== "pending_review" && f.modifiedTime && prev.drive_modified_time === f.modifiedTime) continue;
@@ -698,10 +719,17 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Relatório "Acompanhamento de vencimento de férias" do SCI (sem IA)
+        const vacationParsed = isHtmlFile && looksLikeVacationHtml(rawText)
+          ? parseVacationHtml(rawText)
+          : null;
         // Relatório "Previsão contrato de experiência" do SCI (sem IA)
-        const trialParsed = isHtmlFile && looksLikeTrialHtml(rawText) ? parseTrialHtml(rawText) : null;
+        const trialParsed = isHtmlFile && !vacationParsed?.periods.length && looksLikeTrialHtml(rawText)
+          ? parseTrialHtml(rawText)
+          : null;
         // Relatório HTML do SCI: leitura estrutural por ficha (sem IA)
-        const sciParsed = isHtmlFile && !trialParsed?.employees.length && looksLikeSciHtml(rawText)
+        const sciParsed = isHtmlFile && !vacationParsed?.periods.length && !trialParsed?.employees.length &&
+            looksLikeSciHtml(rawText)
           ? parseSciHtml(rawText)
           : null;
         // Planilha .csv: colunas reconhecidas pelo cabeçalho
@@ -710,7 +738,34 @@ Deno.serve(async (req) => {
         let partial = false;
         let chunksRead = 0;
 
-        if (trialParsed && trialParsed.employees.length > 0) {
+        if (vacationParsed && vacationParsed.periods.length > 0) {
+          parsedEmployees = vacationParsed.periods.map((p) => ({
+            full_name: p.full_name,
+            employee_code: p.employee_code,
+            cpf: null,
+            position: null,
+            admission_date: null,
+            salary: null,
+            termination_date: null,
+            company_code: p.company_code,
+            company_document: p.company_document,
+            company_name: p.company_name,
+            vacation: {
+              acquisition_start: p.acquisition_start,
+              acquisition_end: p.acquisition_end,
+              days_right: p.days_right,
+              enjoy_start: p.enjoy_start,
+              enjoy_end: p.enjoy_end,
+              deadline_date: p.deadline_date,
+            },
+          }));
+          stats.linhas_ignoradas += vacationParsed.incomplete;
+          console.log("ferias-html", f.name, {
+            linhas: vacationParsed.rows,
+            periodos: parsedEmployees.length,
+            incompletas: vacationParsed.incomplete,
+          });
+        } else if (trialParsed && trialParsed.employees.length > 0) {
           parsedEmployees = trialParsed.employees.map((e) => ({
             full_name: e.full_name,
             employee_code: e.employee_code,
@@ -797,7 +852,8 @@ Deno.serve(async (req) => {
         // empresa for identificada — nunca cai numa empresa "padrão".
         const perRowCompany = csvParsed?.hasCompanyColumn === true
           || (sciParsed?.employees.length ?? 0) > 0
-          || (trialParsed?.employees.length ?? 0) > 0;
+          || (trialParsed?.employees.length ?? 0) > 0
+          || (vacationParsed?.periods.length ?? 0) > 0;
         const entries: { pe: ParsedEmployee; client: any }[] = [];
         const companiesSeen = new Set<string>();
         const perCompanyCount: Record<string, number> = {};
@@ -852,6 +908,7 @@ Deno.serve(async (req) => {
         await supabase.from("employee_documents").delete().eq("drive_file_id", f.id);
 
         const linkedIds = new Set<string>();
+        const vacationCleared = new Set<string>();
         for (const { pe, client: rowClient } of entries) {
           let employee: any = null;
           if (pe.cpf) {
@@ -930,6 +987,28 @@ Deno.serve(async (req) => {
           } else {
             // Funcionário já cadastrado e sem rescisão na ficha: desconsidera por completo.
             stats.funcionarios_ignorados++;
+          }
+
+          // Férias: o relatório é sempre a foto atual — limpa os períodos do
+          // funcionário na primeira linha dele e grava os períodos lidos.
+          if (pe.vacation) {
+            if (!vacationCleared.has(employee.id)) {
+              vacationCleared.add(employee.id);
+              await supabase.from("employee_vacation_periods").delete().eq("employee_id", employee.id);
+              stats.ferias_funcionarios++;
+            }
+            const { error: vacErr } = await supabase.from("employee_vacation_periods").insert({
+              employee_id: employee.id,
+              client_id: rowClient.id,
+              acquisition_start: pe.vacation.acquisition_start,
+              acquisition_end: pe.vacation.acquisition_end,
+              days_right: pe.vacation.days_right,
+              enjoy_start: pe.vacation.enjoy_start,
+              enjoy_end: pe.vacation.enjoy_end,
+              deadline_date: pe.vacation.deadline_date,
+              source_file: f.name,
+            } as any);
+            if (!vacErr) stats.ferias_periodos++;
           }
 
           if (linkedIds.has(employee.id)) continue;

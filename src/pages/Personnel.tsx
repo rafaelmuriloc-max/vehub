@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Building2, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, FolderOpen, FolderSync,
-  Loader2, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
+  Loader2, Palmtree, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,12 @@ interface EmployeeDoc {
   status: string; error: string | null; updated_at: string;
 }
 interface DriveFolder { id: string; name: string; mimeType: string }
+interface VacationPeriod {
+  id: string; employee_id: string; client_id: string;
+  acquisition_start: string | null; acquisition_end: string | null; days_right: number | null;
+  enjoy_start: string | null; enjoy_end: string | null; deadline_date: string | null;
+}
+interface VacationAlert { employee: Employee; period: VacationPeriod; date: string; left: number }
 interface TrialAlert { employee: Employee; which: 1 | 2; date: string; days: number | null; left: number }
 interface SyncConfig { id: string; folder_id: string; folder_name: string; enabled: boolean; last_synced_at: string | null }
 
@@ -66,6 +72,33 @@ function trialLeftLabel(left: number): string {
   if (left < 0) return `venceu há ${Math.abs(left)} d`;
   if (left === 0) return 'vence hoje';
   return `faltam ${left} d`;
+}
+
+function fmtDate(d: string | null): string {
+  return d ? format(new Date(`${d}T12:00:00`), 'dd/MM/yyyy') : '—';
+}
+
+function fmtRange(a: string | null, b: string | null): string {
+  if (!a && !b) return '—';
+  return `${fmtDate(a)} a ${fmtDate(b)}`;
+}
+
+function fmtDays(v: number | null): string {
+  return v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Data que determina o vencimento das férias: prazo final para iniciar sem
+// dobro e, quando o relatório não traz, o fim do período para gozar.
+function vacationDue(p: VacationPeriod): string | null {
+  return p.deadline_date ?? p.enjoy_end ?? null;
+}
+
+function vacationTone(p: VacationPeriod): string {
+  const left = daysUntil(vacationDue(p));
+  if (left === null) return '';
+  if (left < 0) return 'text-destructive font-medium';
+  if (left <= 60) return 'text-amber-600 font-medium';
+  return '';
 }
 
 function TrialCells({ date, days }: { date: string | null; days: number | null }) {
@@ -170,6 +203,10 @@ export default function Personnel() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncingTrial, setSyncingTrial] = useState(false);
+  const [syncingVacation, setSyncingVacation] = useState(false);
+  const [vacations, setVacations] = useState<VacationPeriod[]>([]);
+  const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
+  const [vacationDialogOpen, setVacationDialogOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('all');
@@ -188,15 +225,17 @@ export default function Personnel() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [cliRes, empRes, docRes, cfgRes] = await Promise.all([
+    const [cliRes, empRes, docRes, cfgRes, vacRes] = await Promise.all([
       supabase.from('clients').select('id, company_name, document, sci_code').eq('status', 'active').order('company_name'),
       supabase.from('client_employees').select('*').order('full_name'),
       supabase.from('employee_documents').select('*').order('updated_at', { ascending: false }).limit(500),
       supabase.from('employee_sync_config').select('*').order('created_at').limit(1),
+      supabase.from('employee_vacation_periods').select('*').order('acquisition_start'),
     ]);
     if (cliRes.data) setClients(cliRes.data as Client[]);
     if (empRes.data) setEmployees(empRes.data as Employee[]);
     if (docRes.data) setDocs(docRes.data as EmployeeDoc[]);
+    if (vacRes.data) setVacations(vacRes.data as unknown as VacationPeriod[]);
     setConfig((cfgRes.data?.[0] as SyncConfig) ?? null);
     setLoading(false);
   }, []);
@@ -271,6 +310,50 @@ export default function Personnel() {
     };
     return { soon: byCompany(soon), overdue: byCompany(overdue) };
   }, [activeEmployees, clients]);
+
+  // Períodos de férias por funcionário, do mais antigo para o mais novo
+  const vacationsByEmployee = useMemo(() => {
+    const map = new Map<string, VacationPeriod[]>();
+    for (const p of vacations) {
+      const arr = map.get(p.employee_id) ?? [];
+      arr.push(p);
+      map.set(p.employee_id, arr);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (a.acquisition_start ?? '').localeCompare(b.acquisition_start ?? ''));
+    }
+    return map;
+  }, [vacations]);
+
+  // Férias a vencer em 60 dias (e já vencidas), por empresa
+  const vacationAlerts = useMemo(() => {
+    const soon: VacationAlert[] = [];
+    let overdue = 0;
+    const activeIds = new Map(activeEmployees.map(e => [e.id, e]));
+    for (const p of vacations) {
+      const emp = activeIds.get(p.employee_id);
+      if (!emp) continue;
+      const date = vacationDue(p);
+      const left = daysUntil(date);
+      if (date === null || left === null) continue;
+      if (left < 0) { overdue++; continue; }
+      if (left <= 60) soon.push({ employee: emp, period: p, date, left });
+    }
+    const map = new Map<string, { name: string; items: VacationAlert[] }>();
+    for (const a of soon) {
+      const entry = map.get(a.employee.client_id) ?? {
+        name: clients.find(c => c.id === a.employee.client_id)?.company_name ?? 'Empresa não identificada',
+        items: [],
+      };
+      entry.items.push(a);
+      map.set(a.employee.client_id, entry);
+    }
+    const groups = [...map.values()]
+      .map(g => ({ ...g, items: g.items.sort((x, y) => x.left - y.left) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    return { groups, count: soon.length, overdue };
+  }, [vacations, activeEmployees, clients]);
+
 
   const filteredClients = useMemo(() => {
     const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
@@ -365,6 +448,30 @@ export default function Personnel() {
       loadAll();
     }
   }
+
+  // Lê somente o relatório de acompanhamento de vencimento de férias.
+  async function syncVacations() {
+    if (!config) { setFolderDialog(true); return; }
+    setSyncingVacation(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('employee-folder-sync', {
+        body: { only: 'ferias', force_reprocess: true },
+      });
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error);
+      const s = data?.stats ?? {};
+      toast({
+        title: 'Relatório de férias sincronizado',
+        description: `${s.fichas_lidas ?? 0} arquivo(s) lido(s), ${s.ferias_periodos ?? 0} período(s) de férias de ${s.ferias_funcionarios ?? 0} funcionário(s)${(s.funcionarios_criados ?? 0) > 0 ? `, ${s.funcionarios_criados} funcionário(s) cadastrado(s)` : ''}.`,
+      });
+    } catch (e) {
+      toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setSyncingVacation(false);
+      loadAll();
+    }
+  }
+
 
 
   async function saveFolder() {
@@ -479,7 +586,16 @@ export default function Personnel() {
             {syncingTrial ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarClock className="h-4 w-4 mr-1" />}
             Sincronizar experiência
           </Button>
-          <Button size="sm" onClick={() => syncNow()} disabled={syncing || syncingTrial}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={syncVacations}
+            disabled={syncing || syncingTrial || syncingVacation}
+          >
+            {syncingVacation ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Palmtree className="h-4 w-4 mr-1" />}
+            Sincronizar férias
+          </Button>
+          <Button size="sm" onClick={() => syncNow()} disabled={syncing || syncingTrial || syncingVacation}>
             {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}
             Sincronizar pasta
           </Button>
@@ -553,6 +669,26 @@ export default function Personnel() {
               </p>
             </div>
             <CalendarClock className="h-8 w-8 text-muted-foreground/40 shrink-0" />
+          </CardContent>
+        </Card>
+
+        <Card
+          className="cursor-pointer transition-colors hover:bg-accent/40"
+          onClick={() => setVacationDialogOpen(true)}
+        >
+          <CardContent className="p-4 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                Férias a vencer em 60 dias
+              </span>
+              <div className="text-4xl font-bold tabular-nums leading-none text-foreground">
+                {vacationAlerts.count}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {vacationAlerts.overdue} período(s) já vencido(s)
+              </p>
+            </div>
+            <Palmtree className="h-8 w-8 text-muted-foreground/40 shrink-0" />
           </CardContent>
         </Card>
       </div>
@@ -657,8 +793,14 @@ export default function Personnel() {
                             </TableHeader>
                             <TableBody>
                               {visibleEmployees(c.id).map(e => {
+                                const periods = vacationsByEmployee.get(e.id) ?? [];
+                                const openVac = expandedEmployee === e.id;
                                 return (
-                                  <TableRow key={e.id}>
+                                  <Fragment key={e.id}>
+                                  <TableRow
+                                    className="cursor-pointer"
+                                    onClick={() => setExpandedEmployee(openVac ? null : e.id)}
+                                  >
                                     <TableCell className="text-sm text-muted-foreground tabular-nums">{e.employee_code ?? '—'}</TableCell>
                                     <TableCell className="font-medium text-sm">{e.full_name}</TableCell>
                                     <TableCell className="hidden md:table-cell text-sm">{e.cpf ?? '—'}</TableCell>
@@ -682,7 +824,7 @@ export default function Personnel() {
                                       </Badge>
                                     </TableCell>
                                     <TableCell>
-                                      <div className="flex gap-1 justify-end">
+                                      <div className="flex gap-1 justify-end" onClick={ev => ev.stopPropagation()}>
                                         <Button variant="ghost" size="icon" onClick={() => openEdit(e)}>
                                           <Pencil className="h-4 w-4" />
                                         </Button>
@@ -694,6 +836,41 @@ export default function Personnel() {
                                       </div>
                                     </TableCell>
                                   </TableRow>
+                                  {openVac && (
+                                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                                      <TableCell colSpan={13} className="p-3">
+                                        {periods.length === 0 ? (
+                                          <p className="text-sm text-muted-foreground">
+                                            Nenhum período de férias importado para este funcionário. Use o botão “Sincronizar férias”.
+                                          </p>
+                                        ) : (
+                                          <div className="rounded-md border bg-background overflow-x-auto">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow>
+                                                  <TableHead className="w-28">Dias de direito</TableHead>
+                                                  <TableHead>Referente Período Aquisitivo</TableHead>
+                                                  <TableHead>Deverá gozar as férias entre o período</TableHead>
+                                                  <TableHead>Prazo final p/ iniciar as férias sem gerar dobro</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {periods.map(p => (
+                                                  <TableRow key={p.id} className={vacationTone(p)}>
+                                                    <TableCell className="text-sm tabular-nums">{fmtDays(p.days_right)}</TableCell>
+                                                    <TableCell className="text-sm whitespace-nowrap">{fmtRange(p.acquisition_start, p.acquisition_end)}</TableCell>
+                                                    <TableCell className="text-sm whitespace-nowrap">{fmtRange(p.enjoy_start, p.enjoy_end)}</TableCell>
+                                                    <TableCell className="text-sm whitespace-nowrap">{fmtDate(p.deadline_date)}</TableCell>
+                                                  </TableRow>
+                                                ))}
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                  </Fragment>
                                 );
                               })}
                             </TableBody>
@@ -892,6 +1069,54 @@ export default function Personnel() {
             </div>
           )}
 
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={vacationDialogOpen} onOpenChange={setVacationDialogOpen}>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[80dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Férias a vencer</DialogTitle>
+            <DialogDescription>
+              Funcionários ativos com férias vencendo nos próximos 60 dias, por empresa.
+            </DialogDescription>
+          </DialogHeader>
+
+          {vacationAlerts.groups.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Nenhuma férias a vencer nos próximos 60 dias.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {vacationAlerts.groups.map(g => (
+                <div key={g.name} className="border rounded-md overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-accent/40 border-b">
+                    <Building2 className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-sm font-medium truncate">{g.name}</span>
+                    <Badge variant="outline" className="ml-auto shrink-0">{g.items.length}</Badge>
+                  </div>
+                  <div className="divide-y">
+                    {g.items.map(a => (
+                      <div key={a.period.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                        <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0">
+                          {a.employee.employee_code ?? '—'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{a.employee.full_name}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {fmtDays(a.period.days_right)} dia(s) · {fmtRange(a.period.acquisition_start, a.period.acquisition_end)}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 text-amber-600">
+                          <div className="text-xs">{format(new Date(`${a.date}T12:00:00`), 'dd/MM/yyyy')}</div>
+                          <div className="text-xs text-muted-foreground">{trialLeftLabel(a.left)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
