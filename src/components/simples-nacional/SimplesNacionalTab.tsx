@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import PgdasdDeclaracaoForm from '@/components/integra-contador/PgdasdDeclaracaoForm';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatClientLabel, TAX_REGIME } from '@/lib/utils';
+import SimplesDashboard, { clientsByStatus, type StatusFilter } from './SimplesDashboard';
 
 type Client = {
   id: string;
@@ -137,25 +138,40 @@ export default function SimplesNacionalTab() {
 
   useEffect(() => { loadData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [year]);
 
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const statusSets = useMemo(
+    () => clientsByStatus(competencias, new Set(clients.map(c => c.id))),
+    [competencias, clients],
+  );
+
   const filtered = useMemo(() => {
+    const base = statusFilter === 'all' ? clients : clients.filter(c => statusSets[statusFilter].has(c.id));
     const q = search.trim();
-    if (!q) return clients;
+    if (!q) return base;
     const normalize = (s: string) =>
       s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
     const tokens = normalize(q).split(/\s+/).filter(Boolean);
     const digits = q.replace(/\D/g, '');
-    return clients.filter(c => {
+    return base.filter(c => {
       const name = normalize(formatClientLabel(c));
       const nameMatch = tokens.every(t => name.includes(t));
       const docMatch = digits.length > 0 &&
         (c.document || '').replace(/\D/g, '').includes(digits);
       return nameMatch || docMatch;
     });
-  }, [clients, search]);
+  }, [clients, search, statusFilter, statusSets]);
 
   const PAGE_SIZE = 15;
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [search, year]);
+  useEffect(() => { setPage(1); }, [search, year, statusFilter]);
+
+  function pickClient(id: string) {
+    const c = clients.find(x => x.id === id);
+    if (!c) return;
+    setStatusFilter('aberto');
+    setSearch((c.document || '').replace(/\D/g, '') || c.company_name);
+    setExpanded(id);
+  }
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
