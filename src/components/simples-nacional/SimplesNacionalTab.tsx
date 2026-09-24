@@ -174,23 +174,38 @@ export default function SimplesNacionalTab() {
   async function handleSync(clientId?: string, onlyPayments = false) {
     if (!isAdmin) return;
     setSyncing(true);
+    let pagos = 0;
+    const errs: { company: string }[] = [];
     try {
-      const { data, error } = await supabase.functions.invoke('simples-nacional-sync', {
-        body: { year, ...(clientId ? { client_id: clientId } : {}), ...(onlyPayments ? { only_payments: true } : {}) },
-      });
-      if (error) throw error;
-      const errs: { company: string }[] = data?.payment_errors ?? [];
+      let offset: number | null = 0;
+      const limit = onlyPayments ? 10 : 2;
+      let rounds = 0;
+      while (offset !== null && rounds < 200) {
+        rounds++;
+        const { data, error } = await supabase.functions.invoke('simples-nacional-sync', {
+          body: { year, offset, limit, ...(clientId ? { client_id: clientId } : {}), ...(onlyPayments ? { only_payments: true } : {}) },
+        });
+        if (error) throw error;
+        pagos += data?.pagos ?? 0;
+        errs.push(...(data?.payment_errors ?? []));
+        const next = data?.next_offset ?? null;
+        if (next !== null && data?.total) {
+          toast({ title: 'Consultando a Receita…', description: `${Math.min(next, data.total)} de ${data.total} empresas.` });
+        }
+        offset = next;
+      }
       const errTxt = errs.length
         ? ` Não foi possível consultar pagamentos de ${errs.length} empresa(s): ${errs.slice(0, 5).map(e => e.company).join(', ')}${errs.length > 5 ? '…' : ''}.`
         : '';
       toast({
         title: onlyPayments ? 'Situação atualizada' : 'Sincronização concluída',
-        description: `${data?.pagos ?? 0} guia(s) paga(s) encontrada(s).${errTxt}`,
-        variant: errs.length && !(data?.pagos) ? 'destructive' : undefined,
+        description: `${pagos} guia(s) paga(s) encontrada(s).${errTxt}`,
+        variant: errs.length && !pagos ? 'destructive' : undefined,
       });
       await loadData();
     } catch (err: any) {
       toast({ title: 'Erro ao sincronizar', description: err.message, variant: 'destructive' });
+      await loadData();
     } finally {
       setSyncing(false);
     }
