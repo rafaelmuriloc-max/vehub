@@ -56,6 +56,23 @@ function walkForPdf(o: any): string | null {
   return null;
 }
 
+// Procura, na resposta do CONSDECLARACAO13, o número do DAS do período AAAAMM
+function findDasNumber(o: any, periodo: string): string | null {
+  let found: string | null = null;
+  const visit = (node: any, inPeriod: boolean) => {
+    if (found || !node || typeof node !== 'object') return;
+    const pa = String(node.periodoApuracao ?? node.pa ?? '');
+    const here = inPeriod || pa === periodo;
+    if (here) {
+      const n = node.numeroDas ?? node.numeroDAS ?? node.numeroDocumento;
+      if (n) { found = String(n); return; }
+    }
+    for (const v of Object.values(node)) visit(v, here);
+  };
+  visit(o, false);
+  return found;
+}
+
 type Props = {
   clientId: string;
   year: number;
