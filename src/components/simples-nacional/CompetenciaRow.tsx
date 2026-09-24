@@ -91,14 +91,32 @@ export default function CompetenciaRow({ clientId, year, month, competencia, onC
         case 'ultima_declaracao':
           body = { idSistema: 'PGDASD', idServico: 'CONSULTIMADECREC14', tipo: 'Consultar', dados: JSON.stringify({ periodoApuracao: periodo }) };
           break;
-        case 'comprovante':
-          if (!competencia?.numero_das) {
-            toast({ title: 'Sem número do DAS', description: 'Não foi possível localizar o número do DAS pago.', variant: 'destructive' });
+        case 'comprovante': {
+          if (competencia?.comprovante_pdf_base64) {
+            openBase64Pdf(competencia.comprovante_pdf_base64, `Extrato_PGDAS_${periodo}.pdf`);
             return;
           }
-          body = { idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', tipo: 'Consultar', dados: JSON.stringify({ numeroDas: competencia.numero_das }) };
+          let numeroDas = competencia?.numero_das ?? null;
+          if (!numeroDas) {
+            const { data: lst, error: lerr } = await supabase.functions.invoke('integra-contador', {
+              body: { client_id: clientId, idSistema: 'PGDASD', idServico: 'CONSDECLARACAO13', tipo: 'Consultar', dados: JSON.stringify({ anoCalendario: String(year) }) },
+            });
+            if (lerr) throw lerr;
+            const raw = lst?.data?.dados ?? lst?.dados;
+            const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+            numeroDas = findDasNumber(parsed, periodo);
+            if (!numeroDas) {
+              toast({ title: 'Extrato indisponível', description: 'Nenhuma declaração/DAS encontrada para este mês.', variant: 'destructive' });
+              return;
+            }
+          }
+          body = { idSistema: 'PGDASD', idServico: 'CONSEXTRATO16', tipo: 'Consultar', dados: JSON.stringify({ numeroDas }) };
+          body._numeroDas = numeroDas;
           break;
+        }
       }
+      const numeroDasFound = body._numeroDas as string | undefined;
+      delete body._numeroDas;
 
       const { data, error } = await supabase.functions.invoke('integra-contador', {
         body: { client_id: clientId, ...body },
@@ -120,7 +138,7 @@ export default function CompetenciaRow({ clientId, year, month, competencia, onC
         const filename =
           action === 'gerar_guia' || action === 'recalcular' ? `DAS_${periodo}.pdf` :
           action === 'ultima_declaracao' ? `Declaracao_${periodo}.pdf` :
-          `Comprovante_${periodo}.pdf`;
+          `Extrato_PGDAS_${periodo}.pdf`;
         openBase64Pdf(pdf, filename);
 
         // Persistir na tabela
@@ -135,6 +153,7 @@ export default function CompetenciaRow({ clientId, year, month, competencia, onC
           updates.numero_declaracao = arr?.numeroDeclaracao ?? competencia?.numero_declaracao ?? null;
         } else if (action === 'comprovante') {
           updates.comprovante_pdf_base64 = pdf;
+          if (numeroDasFound) updates.numero_das = numeroDasFound;
         }
 
         await supabase.from('simples_nacional_competencias' as any).upsert({
@@ -184,12 +203,10 @@ export default function CompetenciaRow({ clientId, year, month, competencia, onC
           {busy === 'ultima_declaracao' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FileText className="h-3 w-3 mr-1" />}
           Declaração
         </Button>
-        {isPago && (
-          <Button size="sm" variant="outline" disabled={!!busy} onClick={() => runAction('comprovante')}>
-            {busy === 'comprovante' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
-            Comprovante
-          </Button>
-        )}
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => runAction('comprovante')}>
+          {busy === 'comprovante' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FileDown className="h-3 w-3 mr-1" />}
+          Extrato
+        </Button>
       </div>
     </div>
   );
