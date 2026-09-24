@@ -53,7 +53,6 @@ function parseDadosJson(raw: unknown): any {
   return raw;
 }
 
-const debugTexts: string[] = [];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function findKeyNumber(o: any, re: RegExp, depth = 0): number | null {
@@ -323,7 +322,6 @@ async function syncCompetencia(
       if ((rbt12 === null || rba === null) && declaracaoPdf) {
         try {
           const txt = await pdfText(declaracaoPdf);
-          debugTexts.push(txt.slice(0, 4000));
           if (rbt12 === null) rbt12 = moneyAfter(txt, /RBT12\)?|Receita\s+bruta\s+acumulada\s+nos\s+doze/i);
           if (rba === null) rba = moneyAfter(txt, /\(RBA\)|Receita\s+bruta\s+acumulada\s+no\s+ano\s+calend/i);
         } catch (e) {
@@ -474,5 +472,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ success: true, debug: body?.debug ? debugTexts.splice(0) : undefined, count: results.length, pagos, payment_errors: paymentErrors, results });
+  return jsonResponse({ success: true, count: results.length, pagos, payment_errors: paymentErrors, results });
 });
