@@ -603,7 +603,9 @@ Deno.serve(async (req) => {
 
     // Modo exclusivo: relatório "Espelho e resumo da folha" (um registro por empresa e mês)
     if (onlyPayroll) {
-      const ps = { arquivos: 0, empresas_gravadas: 0, sem_empresa: 0, meses: [] as string[], erros: 0 };
+      const ps = { arquivos: 0, empresas_gravadas: 0, sem_empresa: 0, meses: [] as string[], erros: 0, salarios_atualizados: 0, nao_localizados: 0 };
+      // Salário base por funcionário: vale sempre o mês mais recente.
+      const latest = new Map<string, { client_id: string; code: string; name: string; salary: number; comp: string }>();
       for (const f of files) {
         if (!isPayrollFileName(f.name) || Number(f.size ?? 0) > MAX_FILE_BYTES) continue;
         try {
@@ -619,7 +621,13 @@ Deno.serve(async (req) => {
           for (const s of parsed.summaries) {
             const c = s.company_document ? clientsByCnpj.get(s.company_document.replace(/\D/g, "")) : null;
             if (!c) { ps.sem_empresa++; continue; }
-            const { company_document: _d, company_code: _c, company_name: _n, ...vals } = s;
+            const { company_document: _d, company_code: _c, company_name: _n, employees, ...vals } = s;
+            for (const e of employees) {
+              if (!e.base_salary) continue;
+              const k = `${c.id}|${normalizeCode(e.code)}|${normalizeText(e.name)}`;
+              const old = latest.get(k);
+              if (!old || old.comp < parsed.competence) latest.set(k, { client_id: c.id, code: e.code, name: e.name, salary: e.base_salary, comp: parsed.competence });
+            }
             rows.push({ ...vals, client_id: c.id, source_file: f.name, synced_at: new Date().toISOString() });
           }
           if (rows.length) {
@@ -630,6 +638,28 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.error("folha", f.name, e);
           ps.erros++;
+        }
+      }
+      if (latest.size) {
+        const clientIds = [...new Set([...latest.values()].map((v) => v.client_id))];
+        const emps: any[] = [];
+        for (let i = 0; i < clientIds.length; i += 100) {
+          const { data } = await supabase.from("client_employees").select("id, client_id, employee_code, full_name, salary")
+            .in("client_id", clientIds.slice(i, i + 100)).limit(10000);
+          emps.push(...(data ?? []));
+        }
+        const done = new Set<string>();
+        for (const v of latest.values()) {
+          const list = emps.filter((e) => e.client_id === v.client_id);
+          const nc = normalizeCode(v.code), nn = normalizeText(v.name);
+          const hit = list.find((e) => e.employee_code && normalizeCode(e.employee_code) === nc)
+            ?? list.find((e) => normalizeText(e.full_name || "") === nn);
+          if (!hit) { ps.nao_localizados++; continue; }
+          if (done.has(hit.id)) continue;
+          done.add(hit.id);
+          if (Number(hit.salary) === v.salary) continue;
+          const { error } = await supabase.from("client_employees").update({ salary: v.salary }).eq("id", hit.id);
+          if (!error) ps.salarios_atualizados++;
         }
       }
       return new Response(JSON.stringify({ ok: true, stats: ps }), {

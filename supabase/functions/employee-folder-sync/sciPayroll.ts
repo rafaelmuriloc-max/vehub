@@ -14,7 +14,10 @@ export interface PayrollSummary {
   fgts_base: number; fgts_value: number;
   irrf_base: number;
   active_count: number; admitted_count: number; dismissed_count: number;
+  employees: PayrollEmployee[];
 }
+
+export interface PayrollEmployee { code: string; name: string; admission_date: string | null; base_salary: number }
 
 const MONTHS: Record<string, number> = {
   janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7,
@@ -46,11 +49,18 @@ export function parsePayrollHtml(html: string): { competence: string | null; sum
 
   const out: PayrollSummary[] = [];
   let doc: string | null = null, code: string | null = null, name: string | null = null;
+  let emps: PayrollEmployee[] = [];
 
   for (let i = 0; i < cells.length; i++) {
     const c = cells[i];
     const emp = c.match(/^Empresa:\s*(\d+)\s*-\s*(.+)$/i);
-    if (emp) { code = emp[1]; name = emp[2].trim(); doc = null; continue; }
+    if (emp) { code = emp[1]; name = emp[2].trim(); doc = null; emps = []; continue; }
+    const adm = c.match(/Admiss\S*o em\s*(\d{2})\/(\d{2})\/(\d{4}).*?Sal\S*rio base\s*([\d.,]+)/i);
+    if (adm && /^\d+$/.test(cells[i - 4] ?? "") && cells[i - 3]) {
+      const ec = cells[i - 4], en = cells[i - 3];
+      if (!emps.some((e) => e.code === ec)) emps.push({ code: ec, name: en, admission_date: `${adm[3]}-${adm[2]}-${adm[1]}`, base_salary: num(adm[4]) });
+      continue;
+    }
     const cn = c.match(/CNPJ:\s*([\d./-]{14,18})/i);
     if (cn) { doc = cn[1]; continue; }
     if (c !== "RESUMO GERAL") continue;
@@ -86,7 +96,9 @@ export function parsePayrollHtml(html: string): { competence: string | null; sum
       fgts_value: (rows["valor gfd mensal 8"] ?? rows["valor fgts"] ?? [0])[0],
       irrf_base: r("base irrf")[0],
       active_count: flags["ativos"] ?? 0, admitted_count: flags["admitidos"] ?? 0, dismissed_count: flags["demitidos"] ?? 0,
+      employees: emps,
     });
+    emps = [];
   }
   return { competence, summaries: out };
 }
