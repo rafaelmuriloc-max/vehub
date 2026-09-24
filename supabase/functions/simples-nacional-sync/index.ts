@@ -465,7 +465,14 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    let skip = new Set<number>();
+    if (body?.only_missing === true) {
+      const { data: done } = await supabase.from("simples_nacional_competencias")
+        .select("competencia").eq("client_id", c.id).eq("ano", year).not("rbt12", "is", null);
+      skip = new Set((done ?? []).map((r: any) => Number(String(r.competencia).slice(5, 7))));
+    }
     for (const month of requestedMonths) {
+      if (skip.has(month)) continue;
       const r = await syncCompetencia(supabase, c.id, year, month, pErr ? undefined : map);
       if (r.status === "pago") pagos++;
       results.push({ client_id: c.id, company: c.company_name, year, month, ...r });
