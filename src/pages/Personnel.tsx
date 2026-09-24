@@ -738,7 +738,6 @@ export default function Personnel() {
           <DropdownMenuItem onClick={() => syncNow(true)} disabled={syncingAny}><CalendarClock className="h-4 w-4 mr-2" />Experiência</DropdownMenuItem>
           <DropdownMenuItem onClick={syncVacations} disabled={syncingAny}><Palmtree className="h-4 w-4 mr-2" />Férias</DropdownMenuItem>
         </DropdownMenuContent></DropdownMenu>
-        <Button variant="outline" className="h-10 shrink-0" onClick={() => navigate('/clients?new=1')}><Plus className="h-4 w-4 mr-1" />Nova empresa</Button>
       </div>
 
       {config?.last_synced_at && <p className="text-xs text-muted-foreground">Última sincronização: {format(new Date(config.last_synced_at), 'dd/MM/yyyy HH:mm')}</p>}
