@@ -101,8 +101,12 @@ Deno.serve(async (req) => {
     let keepGoing = true;
     let lastStatus = "";
     let lastMotivo = "";
+    const startedAt = Date.now();
+    let more = false;
 
     while (keepGoing && loops < (consChave ? 1 : MAX_LOOPS)) {
+      // Evita estourar o limite de 150s do servidor: devolve parcial e a tela continua.
+      if (Date.now() - startedAt > 100_000) { more = true; break; }
       loops++;
       const cert = certs[certIdx];
       console.log(`[NFC-e] Loop ${loops}, ultNuNSU=${lastNsu}, CNPJ=${cnpj}, cert=${cert.label}`);
@@ -198,9 +202,11 @@ Deno.serve(async (req) => {
         keepGoing = false;
       }
     }
+    if (keepGoing && !consChave && loops >= MAX_LOOPS) more = true;
 
     return jsonResponse({
       success: true,
+      more,
       invoices_saved: invoicesSaved,
       events_saved: eventsSaved,
       next_query_at: nextQueryAt,
