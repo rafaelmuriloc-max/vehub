@@ -440,6 +440,13 @@ export default function Clients() {
 
   useEffect(() => { loadClients(); }, []);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('new') === '1') {
+      openNew();
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   // Auto-classify segments and backfill business_segment
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
