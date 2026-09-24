@@ -20,3 +20,7 @@ Página `/personnel` (`src/pages/Personnel.tsx`, item "Pessoal" no menu) lista e
 - O relatório "Previsão contrato de experiência" (HTML do SCI) é lido por `sciTrial.ts` (sem IA), em formato grade ou ficha; a empresa vem do CNPJ do grupo/linha.
 - Prazos são sempre atualizados no cadastro existente (diferente dos demais campos, que são ignorados); rescisão continua atualizando situação.
 - Tela Pessoal: colunas Prazo 1 / Dias / Prazo 2 / Dias (vermelho vencido, laranja ≤7 dias) e card "Experiências a vencer em 15 dias".
+
+## Folha
+- Botão "Folha" na Pessoal abre `/folha` (Payroll.tsx): totais do mês, evolução mensal e ranking de empresas.
+- Sincronizar → Folha (`only: "folha"`) lê "RELATORIO_ESPELHO_RESUMO" via `sciPayroll.ts` (sem IA), só o bloco RESUMO GERAL por empresa (CNPJ). Tabela `payroll_summaries`, única por (client_id, competence): mês reimportado é substituído, meses anteriores ficam. INSS = GPS bruto; FGTS = Valor GFD Mensal 8%.
