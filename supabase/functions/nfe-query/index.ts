@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import forge from "https://esm.sh/node-forge@1.3.1";
+import { parsePfx } from "../_shared/certificate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,17 +102,20 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { client_id, date_from, date_to } = await req.json();
-    if (!client_id) {
+    const reqBody = await req.json().catch(() => ({}));
+    const client_id = reqBody?.client_id;
+    if (!client_id || typeof client_id !== "string") {
       return jsonResponse({ error: "client_id é obrigatório" }, 400);
     }
-    const dateFrom: string | null = typeof date_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_from) ? date_from : null;
-    const dateTo: string | null = typeof date_to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date_to) ? date_to : null;
-    const periodFilter = !!(dateFrom || dateTo);
+    const rawKey = typeof reqBody?.access_key === "string" ? reqBody.access_key.replace(/\D/g, "") : "";
+    if (reqBody?.access_key && rawKey.length !== 44) {
+      return jsonResponse({ error: "Chave de acesso deve ter 44 dígitos" }, 400);
+    }
+    const consChave: string | null = rawKey.length === 44 ? rawKey : null;
 
     const { data: client, error: clientError } = await adminClient
       .from("clients")
-      .select("id, company_name, document, last_nfe_nsu, digital_certificate_url, digital_certificate_password")
+      .select("id, company_name, document, last_nfe_nsu, nfe_next_query_at, digital_certificate_url, digital_certificate_password")
       .eq("id", client_id)
       .single();
 
@@ -127,6 +130,10 @@ Deno.serve(async (req) => {
     if (!client.digital_certificate_url) {
       return jsonResponse({ error: "Cliente sem certificado digital cadastrado" }, 400);
     }
+    if (client.nfe_next_query_at && new Date(client.nfe_next_query_at).getTime() > Date.now()) {
+      console.log(`[NF-e] CNPJ bloqueado até ${client.nfe_next_query_at} — SEFAZ não consultada.`);
+      return jsonResponse({ success: true, skipped: true, next_query_at: client.nfe_next_query_at, invoices_saved: 0, xml_completos: 0 });
+    }
     const certPath: string = client.digital_certificate_url;
     const certPassword: string = client.digital_certificate_password || "";
 
@@ -139,22 +146,24 @@ Deno.serve(async (req) => {
 
     const pfxBytes = new Uint8Array(await certData.arrayBuffer());
     const password = certPassword;
-    const { certPem, keyPem } = await parsePfx(pfxBytes, password);
+    const { chainPem: certPem, keyPem } = parsePfx(pfxBytes, password);
 
     const cnpj = client.document.replace(/\D/g, "");
 
-    // When a period filter is requested, scan from NSU 0 to ensure full coverage within the date range.
-    let lastNsu = periodFilter ? "0" : (client.last_nfe_nsu || "0");
+    // Sempre incremental pelo last_nfe_nsu (ou consulta pontual por chave).
+    let lastNsu = client.last_nfe_nsu || "0";
+    let nextQueryAt: string | null = null;
+    let eventsSaved = 0;
     let totalSaved = 0;
     let xmlCompletos = 0;
     let loops = 0;
     let keepGoing = true;
 
-    while (keepGoing && loops < MAX_LOOPS) {
+    while (keepGoing && loops < (consChave ? 1 : MAX_LOOPS)) {
       loops++;
       console.log(`[NF-e] Loop ${loops}, ultNuNSU=${lastNsu}, CNPJ=${cnpj}`);
 
-      const soapBody = buildSoapRequest(cnpj, lastNsu);
+      const soapBody = buildSoapRequest(cnpj, lastNsu, consChave);
       const response = await requestTextWithMTLS(
         new URL(AN_URL),
         {
@@ -193,7 +202,11 @@ Deno.serve(async (req) => {
       // Ambos são respostas esperadas quando não há (mais) documentos para baixar.
       // Tratamos como fim do loop deste CNPJ, sem propagar erro para o cliente.
       if (cStat === "137" || cStat === "656") {
-        console.log(`[NF-e] cStat=${cStat} (${xMotivo}) — encerrando loop deste CNPJ.`);
+        console.log(`[NF-e] cStat=${cStat} (${xMotivo}) — bloqueando CNPJ por 1h.`);
+        nextQueryAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        const upd: Record<string, unknown> = { nfe_next_query_at: nextQueryAt };
+        if (!consChave && ultNSURet && ultNSURet !== "0") { upd.last_nfe_nsu = ultNSURet; lastNsu = ultNSURet; }
+        await adminClient.from("clients").update(upd).eq("id", client_id);
         keepGoing = false;
         break;
       }
@@ -223,6 +236,7 @@ Deno.serve(async (req) => {
       }
 
       const invoicesToSave: Array<Record<string, unknown>> = [];
+      const eventsToSave: Array<Record<string, unknown>> = [];
       for (const entry of entries) {
         // Decompress docZip content
         if (entry.xmlContent?.startsWith("__BASE64__")) {
@@ -230,32 +244,30 @@ Deno.serve(async (req) => {
           try {
             const decompressed = await decompressGzip(b64);
             entry.xmlContent = decompressed;
-            entry.isEvent = /<procEventoNFe/i.test(decompressed);
+            entry.isEvent = entry.isEvent || /<(resEvento|procEventoNFe)[\s>]/i.test(decompressed);
             entry.chAcesso = extractAccessKeyFromXml(decompressed) || extractTagContent(decompressed, "chNFe");
           } catch (e) {
             console.warn(`[NF-e] Failed to decompress docZip NSU=${entry.nsu}:`, (e as Error).message);
             continue;
           }
         }
+        if (entry.isEvent) {
+          const ev = parseEventEntry(entry, client_id);
+          if (ev) eventsToSave.push(ev);
+          continue;
+        }
         const parsed = parseNfeEntry(entry, client_id, {
           document: client.document,
           company_name: client.company_name,
         });
         if (!parsed) continue;
-        if (periodFilter) {
-          const issue = parsed.issue_date as string | null;
-          // Skip events without issue_date when filtering by period (they don't carry a date).
-          if (!issue) continue;
-          if (dateFrom && issue < dateFrom) continue;
-          if (dateTo && issue > dateTo) continue;
-        }
         invoicesToSave.push(parsed);
       }
 
       if (invoicesToSave.length > 0) {
         // Notes we would regress: incoming only-summary rows for keys already holding the full XML.
         const summaryKeys = invoicesToSave
-          .filter((inv) => !inv.__isFullXml && !inv.__isEvent)
+          .filter((inv) => !inv.__isFullXml)
           .map((inv) => inv.access_key as string);
         const alreadyComplete = new Set<string>();
         if (summaryKeys.length > 0) {
@@ -277,7 +289,6 @@ Deno.serve(async (req) => {
           const accessKey = inv.access_key as string;
           const row = { ...inv };
           delete row.__isFullXml;
-          delete row.__isEvent;
 
           if (isFullXml) {
             // Store the complete NFe XML in storage and mark it as downloaded.
@@ -358,15 +369,15 @@ Deno.serve(async (req) => {
 
       }
 
+      eventsSaved += await saveEvents(adminClient, eventsToSave);
+
       const newLastNsu = ultNSURet || lastNsu;
-      if (!periodFilter && newLastNsu && newLastNsu !== "0") {
+      if (!consChave && newLastNsu && newLastNsu !== "0") {
         lastNsu = newLastNsu;
         await adminClient
           .from("clients")
           .update({ last_nfe_nsu: lastNsu })
           .eq("id", client_id);
-      } else if (periodFilter && newLastNsu) {
-        lastNsu = newLastNsu;
       }
 
       // Continue if ultNSU < maxNSU
@@ -392,6 +403,8 @@ Deno.serve(async (req) => {
     return jsonResponse({
       success: true,
       invoices_saved: totalSaved,
+      events_saved: eventsSaved,
+      next_query_at: nextQueryAt,
       last_nsu: lastNsu,
       loops,
       pending_ciencia: pendingCiencia,
@@ -410,8 +423,11 @@ Deno.serve(async (req) => {
   }
 });
 
-function buildSoapRequest(cnpj: string, ultNSU: string): string {
+function buildSoapRequest(cnpj: string, ultNSU: string, chave: string | null = null): string {
   const nsuPadded = ultNSU.padStart(15, "0");
+  const query = chave
+    ? `<consChNFe><chNFe>${chave}</chNFe></consChNFe>`
+    : `<distNSU><ultNSU>${nsuPadded}</ultNSU></distNSU>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${AN_NS}">
   <soap:Body>
@@ -421,9 +437,7 @@ function buildSoapRequest(cnpj: string, ultNSU: string): string {
           <tpAmb>1</tpAmb>
           <cUFAutor>42</cUFAutor>
           <CNPJ>${cnpj}</CNPJ>
-          <distNSU>
-            <ultNSU>${nsuPadded}</ultNSU>
-          </distNSU>
+          ${query}
         </distDFeInt>
       </ns:nfeDadosMsg>
     </ns:nfeDistDFeInteresse>
@@ -504,7 +518,7 @@ function parseDocZipEntries(loteXml: string): DistEntry[] {
       xmlContent = null;
     }
 
-    const isEvent = schema.includes("procEventoNFe") || schema.includes("evento");
+    const isEvent = /evento/i.test(schema);
 
     entries.push({
       nsu: nsuMatch ? nsuMatch[1] : null,
@@ -532,7 +546,7 @@ function parseNfeEntry(
 
   const xml = entry.xmlContent || "";
   const isResumo = /<resNFe[\s>]/i.test(xml);
-  const isFullXml = !entry.isEvent && /<nfeProc[\s>]/i.test(xml);
+  const isFullXml = /<nfeProc[\s>]/i.test(xml);
 
   // Fallback: derive invoice number from access key (positions 26..34, 9 digits)
   const invoiceNumberFromKey = entry.chAcesso.length === 44
@@ -563,12 +577,7 @@ function parseNfeEntry(
     extractInnerTag(xml, "ICMSTot", "vNF") || extractTagContent(xml, "vNF") || "0",
   );
 
-  let status = "autorizada";
-  if (entry.isEvent) {
-    const tpEvento = extractTagContent(xml, "tpEvento");
-    if (tpEvento === "110111") status = "cancelada";
-    else status = `evento_${tpEvento || "desconhecido"}`;
-  }
+  const status = "autorizada";
 
   // Determine direction: if emitter CNPJ matches the client's CNPJ, it's an outgoing NF-e (saída).
   const clientDocDigits = (clientInfo?.document || "").replace(/\D/g, "");
@@ -591,7 +600,6 @@ function parseNfeEntry(
     nsu: entry.nsu,
     raw_xml: entry.xmlContent,
     direction,
-    __isEvent: entry.isEvent,
     __isFullXml: isFullXml,
   };
 }
@@ -848,57 +856,48 @@ function decodeChunkedBody(rawBody: string): string {
   return decoded;
 }
 
-type ParsedCertificate = { issuer: string; localKeyId: string | null; pem: string; subject: string };
 
-async function parsePfx(pfxBytes: Uint8Array, password: string): Promise<{ certPem: string; keyPem: string }> {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < pfxBytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...pfxBytes.subarray(i, i + chunkSize));
+export function parseEventXml(xml: string): { access_key: string; descricao: string | null; dh_evento: string | null; n_seq_evento: number; tp_evento: string } | null {
+  const chave = extractTagContent(xml, "chNFe");
+  const tp = extractTagContent(xml, "tpEvento");
+  if (!chave || !tp) return null;
+  const seq = parseInt(extractTagContent(xml, "nSeqEvento") || "1", 10);
+  const dh = extractTagContent(xml, "dhEvento");
+  return {
+    access_key: chave,
+    descricao: extractTagContent(xml, "descEvento") || extractTagContent(xml, "xEvento"),
+    dh_evento: dh && !isNaN(Date.parse(dh)) ? new Date(dh).toISOString() : null,
+    n_seq_evento: isNaN(seq) ? 1 : seq,
+    tp_evento: tp,
+  };
+}
+
+function parseEventEntry(entry: DistEntry, clientId: string): Record<string, unknown> | null {
+  const xml = entry.xmlContent || "";
+  const ev = parseEventXml(xml);
+  if (!ev) return null;
+  return { ...ev, client_id: clientId, nsu: entry.nsu, raw_xml: xml };
+}
+
+// Eventos vão só para nfe_events. Na nfe_invoices, apenas cancelamento (110111) altera o status.
+async function saveEvents(adminClient: any, events: Array<Record<string, unknown>>): Promise<number> {
+  if (events.length === 0) return 0;
+  const m = new Map<string, Record<string, unknown>>();
+  for (const e of events) m.set(`${e.access_key}|${e.tp_evento}|${e.n_seq_evento}`, e);
+  const rows = [...m.values()];
+  let saved = 0;
+  for (let i = 0; i < rows.length; i += 50) {
+    const batch = rows.slice(i, i + 50);
+    const { error } = await adminClient.from("nfe_events")
+      .upsert(batch, { onConflict: "access_key,tp_evento,n_seq_evento" });
+    if (error) console.error("[NF-e] Erro ao gravar eventos:", error.message);
+    else saved += batch.length;
   }
-
-  const asn1 = forge.asn1.fromDer(binary);
-  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
-
-  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-  const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
-  if (!keyBag?.key) throw new Error("Chave privada não encontrada no certificado");
-
-  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
-  const keyLocalKeyId = normalizeLocalKeyId(keyBag.attributes?.localKeyId?.[0]);
-
-  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const parsedCerts: ParsedCertificate[] = ((certBags[forge.pki.oids.certBag] || []) as Array<any>)
-    .filter((bag) => bag?.cert)
-    .map((bag) => ({
-      issuer: stringifyDN(bag.cert.issuer),
-      localKeyId: normalizeLocalKeyId(bag.attributes?.localKeyId?.[0]),
-      pem: forge.pki.certificateToPem(bag.cert),
-      subject: stringifyDN(bag.cert.subject),
-    }));
-
-  if (parsedCerts.length === 0) throw new Error("Certificado não encontrado no PFX");
-
-  const leafCert = parsedCerts.find((c) => keyLocalKeyId && c.localKeyId === keyLocalKeyId)
-    || parsedCerts.find((c) => c.subject !== c.issuer)
-    || parsedCerts[0];
-
-  const chainCerts = parsedCerts.filter((c) => c !== leafCert);
-  const fullCertPem = [leafCert.pem.trim(), ...chainCerts.map((c) => c.pem.trim())].join("\n");
-
-  console.log(`[NF-e] PFX carregado com ${parsedCerts.length} certificado(s), enviando cadeia completa.`);
-
-  return { certPem: fullCertPem, keyPem };
-}
-
-function normalizeLocalKeyId(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "string") return forge.util.bytesToHex(value);
-  if (value instanceof Uint8Array) return Array.from(value).map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (Array.isArray(value)) return value.map((b) => Number(b).toString(16).padStart(2, "0")).join("");
-  return null;
-}
-
-function stringifyDN(dn: { attributes?: Array<{ shortName?: string; name?: string; value?: string }> }): string {
-  return (dn.attributes || []).map((a) => `${a.shortName || a.name || "attr"}=${a.value || ""}`).join(",");
+  const cancelKeys = [...new Set(rows.filter((r) => r.tp_evento === "110111").map((r) => r.access_key as string))];
+  for (let i = 0; i < cancelKeys.length; i += 100) {
+    const { error } = await adminClient.from("nfe_invoices")
+      .update({ status: "cancelada" }).in("access_key", cancelKeys.slice(i, i + 100));
+    if (error) console.error("[NF-e] Erro ao marcar cancelamento:", error.message);
+  }
+  return saved;
 }
