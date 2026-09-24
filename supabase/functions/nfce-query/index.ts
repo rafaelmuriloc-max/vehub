@@ -270,7 +270,7 @@ async function saveEvents(adminClient: any, rows: Array<Record<string, unknown>>
 function buildSoapRequest(cnpj: string, ultNSU: string, chave: string | null): string {
   const filtro = chave
     ? `<solDFe><chAcesso>${chave}</chAcesso></solDFe>`
-    : `<solRel><indXML>1</indXML><indAtor>9</indAtor><ultNuNSU>${ultNSU || "0"}</ultNuNSU></solRel>`;
+    : `<solRel><indXML>1</indXML><indAtor>3</indAtor><ultNuNSU>${ultNSU || "0"}</ultNuNSU></solRel>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
