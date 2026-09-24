@@ -167,10 +167,10 @@ export default function NfceTab() {
     const today = new Date().toISOString().slice(0, 10);
     const targets = selectedClient !== 'all'
       ? clients.filter((c) => c.id === selectedClient)
-      : clients.filter((c) => c.document && c.digital_certificate_url && c.digital_certificate_expiry && c.digital_certificate_expiry >= today);
+      : clients.filter((c) => c.document);
 
     if (targets.length === 0) {
-      toast({ title: 'Nenhuma empresa com CNPJ e certificado digital válido', variant: 'destructive' });
+      toast({ title: 'Nenhuma empresa com CNPJ', variant: 'destructive' });
       return;
     }
 
