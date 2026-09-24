@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Loader2, RefreshCw, ChevronRight, Search, Calculator } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronRight, ChevronLeft, Search, Calculator } from 'lucide-react';
 import CompetenciaRow from './CompetenciaRow';
 import ReprocessChainDialog from './ReprocessChainDialog';
 import { FileText } from 'lucide-react';
@@ -153,6 +153,13 @@ export default function SimplesNacionalTab() {
     });
   }, [clients, search]);
 
+  const PAGE_SIZE = 15;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [search, year]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   const byClient = useMemo(() => {
     const map = new Map<string, Competencia[]>();
     for (const c of competencias) {
@@ -296,7 +303,7 @@ export default function SimplesNacionalTab() {
           <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />Carregando…</div>
         ) : filtered.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">Nenhuma empresa do Simples Nacional encontrada.</div>
-        ) : filtered.map(client => {
+        ) : paginated.map(client => {
           const { rbt12, pct1, pct2 } = rowMetrics(client.id);
           const isOpen = expanded === client.id;
           const comps = byClient.get(client.id) ?? [];
@@ -371,6 +378,22 @@ export default function SimplesNacionalTab() {
           );
         })}
       </Card>
+
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">
+            Página {currentPage} de {totalPages} ({filtered.length} empresas)
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+              <ChevronLeft className="h-4 w-4 mr-1" />Anterior
+            </Button>
+            <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+              Próxima<ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={declOpen} onOpenChange={setDeclOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
