@@ -300,18 +300,25 @@ Deno.serve(async (req) => {
   // Buscar clientes do Simples ativos
   const query = supabase.from("clients").select("id, company_name, document, tax_regime, status")
     .ilike("tax_regime", "%simples%")
-    .eq("status", "active");
+    .eq("status", "active")
+    .order("id");
   if (clientId) query.eq("id", clientId);
 
-  const { data: clients, error } = await query;
+  const { data: allClients, error } = await query;
   if (error) return jsonResponse({ error: error.message }, 500);
+
+  const offset = Math.max(0, Number(body?.offset) || 0);
+  const limit = Number(body?.limit) > 0 ? Number(body.limit) : (allClients?.length ?? 0);
+  const clients = (allClients ?? []).slice(offset, offset + limit);
+  const total = allClients?.length ?? 0;
+  const nextOffset = offset + limit < total ? offset + limit : null;
 
   const results: any[] = [];
   const paymentErrors: { company: string; error: string }[] = [];
   let pagos = 0;
   const onlyPayments = body?.only_payments === true;
 
-  for (const c of clients ?? []) {
+  for (const c of clients) {
     const { map, error: pErr } = await fetchPayments(supabase, c.id, year);
     if (pErr) paymentErrors.push({ company: c.company_name, error: pErr });
 
