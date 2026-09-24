@@ -216,7 +216,6 @@ export default function Personnel() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('all');
-  const [companyStatusFilter, setCompanyStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => (sessionStorage.getItem('personnel-view') === 'cards' ? 'cards' : 'table'));
   const [systemSearch, setSystemSearch] = useState('');
   const [pageSize, setPageSize] = useState<number | 'all'>(10);
@@ -262,7 +261,11 @@ export default function Personnel() {
   }, [employees]);
 
 
-  const activeEmployees = useMemo(() => employees.filter(e => e.status === 'active'), [employees]);
+  // Somente empresas ativas entram nos números e na lista
+  const activeClients = useMemo(() => clients.filter(c => c.status === 'active'), [clients]);
+  const activeClientIds = useMemo(() => new Set(activeClients.map(c => c.id)), [activeClients]);
+  const scopedEmployees = useMemo(() => employees.filter(e => activeClientIds.has(e.client_id)), [employees, activeClientIds]);
+  const activeEmployees = useMemo(() => scopedEmployees.filter(e => e.status === 'active'), [scopedEmployees]);
   const totalSalaries = useMemo(
     () => activeEmployees.reduce((sum, e) => sum + (e.salary ?? 0), 0),
     [activeEmployees],
@@ -366,7 +369,7 @@ export default function Personnel() {
 
   const filteredClients = useMemo(() => {
     const idsWithActive = new Set(activeEmployees.map(e => e.client_id));
-    const base = clients.filter(c => idsWithActive.has(c.id) && (companyStatusFilter === 'all' || c.status === companyStatusFilter));
+    const base = activeClients.filter(c => idsWithActive.has(c.id));
     const q = search.trim().toLowerCase();
     if (!q) return base;
     return base.filter(c =>
@@ -380,7 +383,7 @@ export default function Personnel() {
         || (e.employee_code ?? '').toLowerCase() === q,
       ),
     );
-  }, [clients, activeEmployees, employeesByClient, search, companyStatusFilter]);
+  }, [activeClients, activeEmployees, employeesByClient, search]);
 
   const totalPages = pageSize === 'all'
     ? 1
@@ -570,7 +573,7 @@ export default function Personnel() {
 
   const companyMetrics = useMemo(() => {
     const map = new Map<string, { total: number; active: number; terminated: number; salaries: number; vacations: number; trials: number }>();
-    for (const c of clients) map.set(c.id, { total: 0, active: 0, terminated: 0, salaries: 0, vacations: 0, trials: 0 });
+    for (const c of activeClients) map.set(c.id, { total: 0, active: 0, terminated: 0, salaries: 0, vacations: 0, trials: 0 });
     for (const e of employees) {
       const metric = map.get(e.client_id);
       if (!metric) continue;
@@ -594,7 +597,7 @@ export default function Personnel() {
       }
     }
     return map;
-  }, [clients, employees, vacations]);
+  }, [activeClients, employees, vacations]);
 
   function selectView(mode: 'table' | 'cards') {
     setViewMode(mode);
@@ -616,9 +619,9 @@ export default function Personnel() {
   function exportCompanies() {
     const rows = filteredClients.map(c => {
       const m = companyMetrics.get(c.id) ?? { total: 0, active: 0, terminated: 0, salaries: 0, vacations: 0, trials: 0 };
-      return [c.sci_code ?? '', c.company_name, c.document ?? '', m.total, m.active, m.terminated, m.salaries.toFixed(2).replace('.', ','), m.vacations, m.trials, c.status === 'active' ? 'Ativa' : 'Inativa'];
+      return [c.sci_code ?? '', c.company_name, c.document ?? '', m.total, m.active, m.terminated, m.salaries.toFixed(2).replace('.', ','), m.vacations, m.trials];
     });
-    const csv = '\ufeff' + [['Código SCI', 'Empresa', 'CNPJ', 'Funcionários', 'Ativos', 'Desligados', 'Salários (R$)', 'Férias a vencer', 'Experiências a vencer', 'Status'], ...rows]
+    const csv = '\ufeff' + [['Código SCI', 'Empresa', 'CNPJ', 'Funcionários', 'Ativos', 'Desligados', 'Salários (R$)', 'Férias a vencer', 'Experiências a vencer'], ...rows]
       .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
@@ -709,9 +712,9 @@ export default function Personnel() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { label: 'Funcionários ativos', value: activeEmployees.length.toLocaleString('pt-BR'), hint: `${employees.length - activeEmployees.length} desligado(s)`, Icon: Users, tone: 'primary', bars: [4,7,11,9,8,12,10,15] },
+          { label: 'Funcionários ativos', value: activeEmployees.length.toLocaleString('pt-BR'), hint: `${scopedEmployees.length - activeEmployees.length} desligado(s)`, Icon: Users, tone: 'primary', bars: [4,7,11,9,8,12,10,15] },
           { label: 'Total de salários', value: totalSalaries.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), hint: `Folha dos ${activeEmployees.length} funcionários ativos`, Icon: Wallet, tone: 'success', bars: [3,5,8,7,9,8,10,12] },
-          { label: 'Empresas com funcionários', value: clientsWithActive.toLocaleString('pt-BR'), hint: `${clients.length - clientsWithActive} empresa(s) sem funcionário(s)`, Icon: Building2, tone: 'violet', bars: [4,9,6,13,10,15,12,18] },
+          { label: 'Empresas com funcionários', value: clientsWithActive.toLocaleString('pt-BR'), hint: `${activeClients.length - clientsWithActive} empresa(s) sem funcionário(s)`, Icon: Building2, tone: 'violet', bars: [4,9,6,13,10,15,12,18] },
           { label: 'Experiências a vencer (15 dias)', value: trialSoon.toLocaleString('pt-BR'), hint: `${trialOverdue} prazo(s) já vencido(s)`, Icon: CalendarClock, tone: 'danger', bars: [7,4,10,6,12,8,5,9], action: () => setTrialDialogOpen(true) },
           { label: 'Férias a vencer (60 dias)', value: vacationAlerts.count.toLocaleString('pt-BR'), hint: `${vacationAlerts.overdue} período(s) já vencido(s)`, Icon: Palmtree, tone: 'warning', bars: [3,5,8,7,5,8,10,12], action: () => setVacationDialogOpen(true) },
         ].map(({ label, value, hint, Icon, tone, bars, action }) => (
@@ -727,7 +730,6 @@ export default function Personnel() {
 
       <div className="rounded-lg border bg-card p-3 shadow-sm flex flex-col xl:flex-row gap-2 xl:items-center">
         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9 h-10" placeholder="Buscar empresa por nome, CNPJ, código SCI ou funcionário..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
-        <Select value={companyStatusFilter} onValueChange={v => { setCompanyStatusFilter(v as typeof companyStatusFilter); setPage(1); }}><SelectTrigger className="h-10 w-full xl:w-36"><div className="text-left"><span className="block text-[10px] leading-none text-muted-foreground">Status</span><SelectValue /></div></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Ativas</SelectItem><SelectItem value="inactive">Inativas</SelectItem></SelectContent></Select>
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}><SelectTrigger className="h-10 w-full xl:w-36"><div className="text-left"><span className="block text-[10px] leading-none text-muted-foreground">Situação</span><SelectValue /></div></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Ativos</SelectItem><SelectItem value="terminated">Desligados</SelectItem></SelectContent></Select>
         <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={loadAll} aria-label="Recarregar"><RefreshCw className="h-4 w-4" /></Button>
         <Button className="h-10 shrink-0" onClick={() => navigate('/clients?new=1')}><Plus className="h-4 w-4 mr-1" />Nova empresa</Button>
@@ -754,7 +756,7 @@ export default function Personnel() {
 
         {filteredClients.length === 0 ? <p className="text-sm text-muted-foreground p-8 text-center">Nenhuma empresa encontrada.</p> : viewMode === 'table' ? (
           <div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-10">#</TableHead><TableHead>Empresa</TableHead><TableHead>CNPJ / Código SCI</TableHead><TableHead className="text-center">Funcionários</TableHead><TableHead className="text-center">Ativos</TableHead><TableHead className="text-center">Desligados</TableHead><TableHead>Salários (R$)</TableHead><TableHead className="text-center">Férias a vencer<br /><span className="text-[10px]">(60 dias)</span></TableHead><TableHead className="text-center">Experiências a vencer<br /><span className="text-[10px]">(15 dias)</span></TableHead><TableHead>Status</TableHead><TableHead className="w-12">Ações</TableHead>
+            <TableHead className="w-10">#</TableHead><TableHead>Empresa</TableHead><TableHead>CNPJ / Código SCI</TableHead><TableHead className="text-center">Funcionários</TableHead><TableHead className="text-center">Ativos</TableHead><TableHead className="text-center">Desligados</TableHead><TableHead>Salários (R$)</TableHead><TableHead className="text-center">Férias a vencer<br /><span className="text-[10px]">(60 dias)</span></TableHead><TableHead className="text-center">Experiências a vencer<br /><span className="text-[10px]">(15 dias)</span></TableHead><TableHead className="w-12">Ações</TableHead>
           </TableRow></TableHeader><TableBody>{paginatedClients.map(c => {
             const m = companyMetrics.get(c.id) ?? { total: 0, active: 0, terminated: 0, salaries: 0, vacations: 0, trials: 0 };
             const isOpen = expanded === c.id;
@@ -764,8 +766,8 @@ export default function Personnel() {
               <TableCell><div className="text-xs">{c.document ?? '—'}</div><div className="text-[11px] text-muted-foreground">SCI {c.sci_code ?? '—'}</div></TableCell>
               <TableCell className="text-center"><Badge variant="secondary">{m.total}</Badge></TableCell><TableCell className="text-center"><Badge className="bg-success/10 text-success border-success/20">{m.active}</Badge></TableCell><TableCell className="text-center"><Badge className={m.terminated ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-muted text-muted-foreground'}>{m.terminated}</Badge></TableCell>
               <TableCell className="text-sm tabular-nums">{m.salaries.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell><TableCell className="text-center"><Badge className={m.vacations ? 'bg-warning/10 text-warning border-warning/20' : 'bg-muted text-muted-foreground'}>{m.vacations}</Badge></TableCell><TableCell className="text-center"><Badge className={m.trials ? 'bg-warning/10 text-warning border-warning/20' : 'bg-muted text-muted-foreground'}>{m.trials}</Badge></TableCell>
-              <TableCell><Badge className={c.status === 'active' ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground'}>{c.status === 'active' ? 'Ativa' : 'Inativa'}</Badge></TableCell><TableCell><Button variant="ghost" size="icon" onClick={event => { event.stopPropagation(); setExpanded(isOpen ? null : c.id); }}><MoreVertical className="h-4 w-4" /></Button></TableCell>
-            </TableRow>{isOpen && <TableRow><TableCell colSpan={11} className="p-0">{renderEmployeeDetails(c)}</TableCell></TableRow>}</Fragment>;
+              <TableCell><Button variant="ghost" size="icon" onClick={event => { event.stopPropagation(); setExpanded(isOpen ? null : c.id); }}><MoreVertical className="h-4 w-4" /></Button></TableCell>
+            </TableRow>{isOpen && <TableRow><TableCell colSpan={10} className="p-0">{renderEmployeeDetails(c)}</TableCell></TableRow>}</Fragment>;
           })}</TableBody></Table></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-3">{paginatedClients.map(c => {
