@@ -82,11 +82,21 @@ function moneyAfter(txt: string, label: RegExp): number | null {
 }
 
 async function inflate(bytes: Uint8Array): Promise<Uint8Array | null> {
-  try {
-    const ds = new DecompressionStream("deflate");
-    const out = new Response(new Blob([bytes]).stream().pipeThrough(ds));
-    return new Uint8Array(await out.arrayBuffer());
-  } catch { return null; }
+  // Lê em partes e aproveita o que foi descompactado mesmo se o fim do fluxo der erro
+  const run = async (fmt: CompressionFormat, data: Uint8Array) => {
+    const parts: Uint8Array[] = [];
+    try {
+      const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream(fmt)).getReader();
+      while (true) { const { done, value } = await reader.read(); if (done) break; parts.push(value); }
+    } catch { /* fluxo truncado */ }
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    const out = new Uint8Array(total); let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+  };
+  let out = await run("deflate", bytes);
+  if (!out.length && bytes.length > 2) out = await run("deflate-raw", bytes.subarray(2));
+  return out.length ? out : null;
 }
 
 /** Extrai texto simples (operadores Tj/TJ) de um PDF em base64. */
@@ -103,7 +113,11 @@ async function pdfText(b64: string): Promise<string> {
     const end = bin.indexOf("endstream", start);
     if (end < 0) break;
     const dict = bin.slice(Math.max(0, m.index - 300), m.index);
-    let chunk = bytes.subarray(start, end);
+    const lenM = dict.slice(dict.lastIndexOf("<<")).match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
+    let stop = end;
+    if (lenM && start + Number(lenM[1]) <= end) stop = start + Number(lenM[1]);
+    else while (stop > start && (bytes[stop - 1] === 10 || bytes[stop - 1] === 13)) stop--;
+    let chunk = bytes.subarray(start, stop);
     if (/FlateDecode/.test(dict.slice(dict.lastIndexOf("<<")))) {
       const inf = await inflate(chunk);
       if (!inf) continue;
@@ -270,16 +284,39 @@ async function syncCompetencia(
       numeroDeclaracao = pickString(dadosDec?.numeroDeclaracao, dadosDec?.numeroDeclaracaoTransmitida);
       rbt12 = pickNumber(dadosDec?.rbt12, dadosDec?.RBT12, dadosDec?.receitaBrutaTotal12meses);
       rba = pickNumber(dadosDec?.rba, dadosDec?.RBA, dadosDec?.receitaBrutaAcumuladaAno, dadosDec?.receitaBrutaAcumulada);
-      const walkPdf = (o: any): string | null => {
-        if (!o || typeof o !== "object") return null;
+      // Coleta todos os PDFs com o caminho/nome do arquivo, para escolher a declaração (não o recibo)
+      const collectPdfs = (o: any, path: string, acc: { path: string; pdf: string }[]) => {
+        if (!o || typeof o !== "object") return acc;
+        const nome = typeof o.nomeArquivo === "string" ? o.nomeArquivo : "";
         for (const [k, v] of Object.entries(o)) {
-          if (k === "pdf" && typeof v === "string" && v.length > 100) return v as string;
-          if (typeof v === "string" && (v as string).startsWith("JVBERi0") && (v as string).length > 100) return v as string;
-          if (typeof v === "object") { const f = walkPdf(v); if (f) return f; }
+          if (typeof v === "string" && v.length > 100 && (k === "pdf" || v.startsWith("JVBERi0"))) {
+            acc.push({ path: `${path}.${k} ${nome}`.toLowerCase(), pdf: v });
+          } else if (v && typeof v === "object") collectPdfs(v, `${path}.${k}`, acc);
         }
-        return null;
+        return acc;
       };
-      declaracaoPdf = walkPdf(dadosDec) || walkPdf(dec?.data);
+      const pickDeclPdf = (root: any): string | null => {
+        const all = collectPdfs(root, "", []);
+        console.log(`[sync] PDFs ${clientId} ${periodo}: ${all.map((p) => `${p.path}=${p.pdf.length}`).join(" | ")}`);
+        const decl = all.find((p) => /declara/.test(p.path) && !/recibo/.test(p.path));
+        if (decl) return decl.pdf;
+        const nonRecibo = all.filter((p) => !/recibo/.test(p.path)).sort((a, b) => b.pdf.length - a.pdf.length);
+        return nonRecibo[0]?.pdf ?? null;
+      };
+      declaracaoPdf = pickDeclPdf(dadosDec) || pickDeclPdf(dec?.data);
+      if (!declaracaoPdf && numeroDeclaracao) {
+        try {
+          const d2 = await callIntegraContador(supabase, clientId, {
+            idSistema: "PGDASD",
+            idServico: "CONSDECREC15",
+            tipo: "Consultar",
+            dados: JSON.stringify({ numeroDeclaracao }),
+          });
+          declaracaoPdf = pickDeclPdf(parseDadosJson(d2?.data?.dados ?? d2?.dados)) || pickDeclPdf(d2?.data);
+        } catch (e) {
+          console.warn(`[sync] CONSDECREC15 falhou ${clientId} ${periodo}: ${(e as Error).message}`);
+        }
+      }
       if (rbt12 === null) rbt12 = findKeyNumber(dadosDec, /^(rbt12|receitaBrutaTotal12|rbt12Total|valorRbt12)/i);
       if (rba === null) rba = findKeyNumber(dadosDec, /^(rba|receitaBrutaAcumulada)/i);
       if ((rbt12 === null || rba === null) && declaracaoPdf) {
