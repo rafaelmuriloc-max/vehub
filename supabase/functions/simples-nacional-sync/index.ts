@@ -270,16 +270,39 @@ async function syncCompetencia(
       numeroDeclaracao = pickString(dadosDec?.numeroDeclaracao, dadosDec?.numeroDeclaracaoTransmitida);
       rbt12 = pickNumber(dadosDec?.rbt12, dadosDec?.RBT12, dadosDec?.receitaBrutaTotal12meses);
       rba = pickNumber(dadosDec?.rba, dadosDec?.RBA, dadosDec?.receitaBrutaAcumuladaAno, dadosDec?.receitaBrutaAcumulada);
-      const walkPdf = (o: any): string | null => {
-        if (!o || typeof o !== "object") return null;
+      // Coleta todos os PDFs com o caminho/nome do arquivo, para escolher a declaração (não o recibo)
+      const collectPdfs = (o: any, path: string, acc: { path: string; pdf: string }[]) => {
+        if (!o || typeof o !== "object") return acc;
+        const nome = typeof o.nomeArquivo === "string" ? o.nomeArquivo : "";
         for (const [k, v] of Object.entries(o)) {
-          if (k === "pdf" && typeof v === "string" && v.length > 100) return v as string;
-          if (typeof v === "string" && (v as string).startsWith("JVBERi0") && (v as string).length > 100) return v as string;
-          if (typeof v === "object") { const f = walkPdf(v); if (f) return f; }
+          if (typeof v === "string" && v.length > 100 && (k === "pdf" || v.startsWith("JVBERi0"))) {
+            acc.push({ path: `${path}.${k} ${nome}`.toLowerCase(), pdf: v });
+          } else if (v && typeof v === "object") collectPdfs(v, `${path}.${k}`, acc);
         }
-        return null;
+        return acc;
       };
-      declaracaoPdf = walkPdf(dadosDec) || walkPdf(dec?.data);
+      const pickDeclPdf = (root: any): string | null => {
+        const all = collectPdfs(root, "", []);
+        console.log(`[sync] PDFs ${clientId} ${periodo}: ${all.map((p) => `${p.path}=${p.pdf.length}`).join(" | ")}`);
+        const decl = all.find((p) => /declara/.test(p.path) && !/recibo/.test(p.path));
+        if (decl) return decl.pdf;
+        const nonRecibo = all.filter((p) => !/recibo/.test(p.path)).sort((a, b) => b.pdf.length - a.pdf.length);
+        return nonRecibo[0]?.pdf ?? null;
+      };
+      declaracaoPdf = pickDeclPdf(dadosDec) || pickDeclPdf(dec?.data);
+      if (!declaracaoPdf && numeroDeclaracao) {
+        try {
+          const d2 = await callIntegraContador(supabase, clientId, {
+            idSistema: "PGDASD",
+            idServico: "CONSDECREC15",
+            tipo: "Consultar",
+            dados: JSON.stringify({ numeroDeclaracao }),
+          });
+          declaracaoPdf = pickDeclPdf(parseDadosJson(d2?.data?.dados ?? d2?.dados)) || pickDeclPdf(d2?.data);
+        } catch (e) {
+          console.warn(`[sync] CONSDECREC15 falhou ${clientId} ${periodo}: ${(e as Error).message}`);
+        }
+      }
       if (rbt12 === null) rbt12 = findKeyNumber(dadosDec, /^(rbt12|receitaBrutaTotal12|rbt12Total|valorRbt12)/i);
       if (rba === null) rba = findKeyNumber(dadosDec, /^(rba|receitaBrutaAcumulada)/i);
       if ((rbt12 === null || rba === null) && declaracaoPdf) {
