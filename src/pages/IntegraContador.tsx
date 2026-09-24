@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ClientCombobox } from '@/components/ClientCombobox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -661,18 +662,7 @@ export default function IntegraContador() {
               <CardDescription>Selecione o contribuinte (requer certificado digital)</CardDescription>
             </CardHeader>
             <CardContent>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o cliente..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {formatClientLabel(c)} — {c.document}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ClientCombobox clients={clients} value={selectedClientId} onChange={setSelectedClientId} placeholder="Selecione o cliente..." showDocument />
               {clients.length === 0 && (
                 <p className="text-sm text-muted-foreground mt-2">
                   Nenhum cliente com certificado digital configurado.
