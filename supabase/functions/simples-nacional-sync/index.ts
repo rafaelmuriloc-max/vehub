@@ -104,7 +104,11 @@ async function pdfText(b64: string): Promise<string> {
     const end = bin.indexOf("endstream", start);
     if (end < 0) break;
     const dict = bin.slice(Math.max(0, m.index - 300), m.index);
-    let chunk = bytes.subarray(start, end);
+    const lenM = dict.slice(dict.lastIndexOf("<<")).match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
+    let stop = end;
+    if (lenM && start + Number(lenM[1]) <= end) stop = start + Number(lenM[1]);
+    else while (stop > start && (bytes[stop - 1] === 10 || bytes[stop - 1] === 13)) stop--;
+    let chunk = bytes.subarray(start, stop);
     if (/FlateDecode/.test(dict.slice(dict.lastIndexOf("<<")))) {
       const inf = await inflate(chunk);
       if (!inf) continue;
