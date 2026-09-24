@@ -305,6 +305,17 @@ export default function SimplesNacionalTab() {
       </div>
       <ReprocessChainDialog open={reprocessOpen} onOpenChange={setReprocessOpen} />
 
+      {!loading && (
+        <SimplesDashboard
+          clients={clients}
+          competencias={competencias}
+          year={year}
+          statusFilter={statusFilter}
+          onFilter={setStatusFilter}
+          onPickClient={pickClient}
+        />
+      )}
+
       <Card className="overflow-hidden">
         <div className="hidden md:grid grid-cols-[1fr_180px_140px_180px_180px_40px] gap-3 px-4 py-3 bg-muted/40 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Empresa</div>
