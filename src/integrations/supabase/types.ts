@@ -783,11 +783,13 @@ export type Database = {
           foundation_date: string | null
           from_another_office: boolean
           id: string
+          last_nfce_nsu: string | null
           last_nfe_nsu: string | null
           last_nsu: string | null
           main_activity: string | null
           monthly_value: number | null
           municipal_registration: string | null
+          nfce_next_query_at: string | null
           nfe_next_query_at: string | null
           notes: string | null
           opening_date: string | null
@@ -835,11 +837,13 @@ export type Database = {
           foundation_date?: string | null
           from_another_office?: boolean
           id?: string
+          last_nfce_nsu?: string | null
           last_nfe_nsu?: string | null
           last_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
+          nfce_next_query_at?: string | null
           nfe_next_query_at?: string | null
           notes?: string | null
           opening_date?: string | null
@@ -887,11 +891,13 @@ export type Database = {
           foundation_date?: string | null
           from_another_office?: boolean
           id?: string
+          last_nfce_nsu?: string | null
           last_nfe_nsu?: string | null
           last_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
+          nfce_next_query_at?: string | null
           nfe_next_query_at?: string | null
           notes?: string | null
           opening_date?: string | null
@@ -1874,6 +1880,124 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfce_events: {
+        Row: {
+          access_key: string
+          client_id: string
+          created_at: string
+          descricao: string | null
+          dh_evento: string | null
+          id: string
+          n_seq_evento: number
+          nsu: string | null
+          raw_xml: string | null
+          tp_evento: string
+        }
+        Insert: {
+          access_key: string
+          client_id: string
+          created_at?: string
+          descricao?: string | null
+          dh_evento?: string | null
+          id?: string
+          n_seq_evento?: number
+          nsu?: string | null
+          raw_xml?: string | null
+          tp_evento: string
+        }
+        Update: {
+          access_key?: string
+          client_id?: string
+          created_at?: string
+          descricao?: string | null
+          dh_evento?: string | null
+          id?: string
+          n_seq_evento?: number
+          nsu?: string | null
+          raw_xml?: string | null
+          tp_evento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfce_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfce_invoices: {
+        Row: {
+          access_key: string
+          client_id: string
+          consumer_document: string | null
+          consumer_name: string | null
+          created_at: string
+          direction: string
+          emitter_cnpj: string | null
+          emitter_name: string | null
+          id: string
+          invoice_number: string | null
+          issue_date: string | null
+          nsu: string | null
+          raw_xml: string | null
+          series: string | null
+          status: string
+          total_value: number
+          updated_at: string
+          xml_url: string | null
+        }
+        Insert: {
+          access_key: string
+          client_id: string
+          consumer_document?: string | null
+          consumer_name?: string | null
+          created_at?: string
+          direction?: string
+          emitter_cnpj?: string | null
+          emitter_name?: string | null
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          nsu?: string | null
+          raw_xml?: string | null
+          series?: string | null
+          status?: string
+          total_value?: number
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Update: {
+          access_key?: string
+          client_id?: string
+          consumer_document?: string | null
+          consumer_name?: string | null
+          created_at?: string
+          direction?: string
+          emitter_cnpj?: string | null
+          emitter_name?: string | null
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          nsu?: string | null
+          raw_xml?: string | null
+          series?: string | null
+          status?: string
+          total_value?: number
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfce_invoices_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
