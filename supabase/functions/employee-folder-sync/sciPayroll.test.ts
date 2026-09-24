@@ -27,3 +27,15 @@ Deno.test("lê o resumo geral por empresa", () => {
   assertEquals(s.active_count, 2);
   assertEquals(s.admitted_count, 1);
 });
+
+Deno.test("lê salário base dos funcionários no arquivo real", () => {
+  let real: string;
+  try { real = Deno.readTextFileSync("/mnt/user-uploads/RELATORIO_ESPELHO_RESUMO.html"); } catch { return; }
+  const r = parsePayrollHtml(real);
+  const all = r.summaries.flatMap((s) => s.employees);
+  const joao = all.find((e) => e.name === "JOAO VITOR PALMEIRA");
+  assertEquals(joao?.base_salary, 1621);
+  assertEquals(joao?.code, "1");
+  assertEquals(joao?.admission_date, "2024-11-01");
+  console.log("funcionários lidos:", all.length, "sem salário:", all.filter((e) => !e.base_salary).length);
+});
