@@ -39,3 +39,16 @@ Deno.test("lê salário base dos funcionários no arquivo real", () => {
   assertEquals(joao?.admission_date, "2024-11-01");
   console.log("funcionários lidos:", all.length, "sem salário:", all.filter((e) => !e.base_salary).length);
 });
+
+Deno.test("lê todos os funcionários do bloco, inclusive os que vêm após totais", () => {
+  const h = `<html><body><table>
+<tr><td>Espelho e resumo da folha mensal referente ao mês de AGOSTO/2026</td></tr>
+<tr><td>Empresa: 9 - X LTDA</td></tr><tr><td>Penha/SC - CNPJ:48.423.731/0001-76</td></tr>
+<tr><td>1</td><td>ANA</td><td>0</td><td>0</td><td>Admissão em 01/01/2025 Salário base 1.621,00</td></tr>
+<tr><td>1.930,00</td><td>1.930,00</td><td>84</td><td>VALMIR VENANCIO RODRIGUES</td><td>0</td><td>0</td><td>Admissão em 09/03/2026 Salário base 2.661,00</td></tr>
+<tr><td>RESUMO GERAL</td></tr><tr><td>Ativos: 2</td></tr><tr><td>GPS - &gt;</td><td>1,00 (Bruto)</td></tr>
+</table></body></html>`;
+  const e = parsePayrollHtml(h).summaries[0].employees;
+  assertEquals(e.length, 2);
+  assertEquals(e[1], { code: "84", name: "VALMIR VENANCIO RODRIGUES", admission_date: "2026-03-09", base_salary: 2661 });
+});
