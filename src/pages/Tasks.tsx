@@ -13,7 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon, BarChart3, Wallet, ClipboardList, User, Building2, FileText, Users, Tag, Filter, MoreHorizontal, Clock, CalendarDays, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon, BarChart3, Wallet, ClipboardList, User, Building2, FileText, Users, Tag, Filter, MoreHorizontal, Clock, CalendarDays, CheckCircle2, ArrowLeft, ArrowRight, Bell, SlidersHorizontal, ChevronDown, Flag, MoreVertical, FolderOpen, Hourglass } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useNavigate } from 'react-router-dom';
+import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
@@ -75,24 +78,30 @@ type TaskTemplate = {
 type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null; direction?: 'input' | 'output' };
 
 const statusLabels: Record<string, string> = { todo: 'A Fazer', in_progress: 'Aguardando', done: 'Concluído' };
-const COLUMN_META: Record<string, { Icon: typeof LayoutGrid; iconClass: string; subtitle: string; emptyTitle: string; emptyHint: string }> = {
+const COLUMN_META: Record<string, { Icon: typeof LayoutGrid; iconClass: string; countClass: string; plusClass: string; subtitle: string; emptyTitle: string; emptyHint: string }> = {
   todo: {
-    Icon: LayoutGrid,
+    Icon: ClipboardList,
     iconClass: 'bg-primary text-primary-foreground',
-    subtitle: 'Tarefas pendentes para execução',
+    countClass: 'bg-foreground text-background',
+    plusClass: 'text-primary',
+    subtitle: 'Tarefas aguardando para execução',
     emptyTitle: 'Nenhuma tarefa a fazer',
     emptyHint: 'Quando uma tarefa for criada, ela aparecerá aqui.',
   },
   in_progress: {
-    Icon: Clock,
-    iconClass: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
+    Icon: Hourglass,
+    iconClass: 'bg-warning text-warning-foreground',
+    countClass: 'bg-muted-foreground/70 text-background',
+    plusClass: 'text-foreground',
     subtitle: 'Tarefas em espera, aguardando retorno',
     emptyTitle: 'Nenhuma tarefa aguardando',
     emptyHint: 'Quando uma tarefa estiver em espera, ela aparecerá aqui.',
   },
   done: {
-    Icon: CheckCircle2,
-    iconClass: 'bg-emerald-500 text-white',
+    Icon: Check,
+    iconClass: 'bg-success text-success-foreground',
+    countClass: 'bg-success text-success-foreground',
+    plusClass: 'text-success',
     subtitle: 'Tarefas finalizadas',
     emptyTitle: 'Nenhuma tarefa concluída',
     emptyHint: 'As tarefas finalizadas aparecerão aqui.',
@@ -100,7 +109,7 @@ const COLUMN_META: Record<string, { Icon: typeof LayoutGrid; iconClass: string; 
 };
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
 const KANBAN_PAGE_SIZE = 10;
-const priorityColors: Record<string, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-blue-100 text-blue-800', high: 'bg-orange-100 text-orange-800', urgent: 'bg-red-100 text-red-800' };
+const priorityColors: Record<string, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-info/10 text-info', high: 'bg-primary/10 text-primary', urgent: 'bg-destructive/10 text-destructive' };
 const priorityLabels: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
 
 export default function Tasks() {
@@ -118,11 +127,16 @@ export default function Tasks() {
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterTemplate, setFilterTemplate] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
-  const [kanbanPage, setKanbanPage] = useState<Record<string, number>>({});
+  const [kanbanLimit, setKanbanLimit] = useState<Record<string, number>>({});
+  const [filterDue, setFilterDue] = useState<string>('all');
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<Task['status']>('todo');
   const [search, setSearch] = useState('');
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const unread = useUnreadCount();
 
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as Task['status'], priority: 'medium' as Task['priority'],
@@ -204,7 +218,8 @@ export default function Tasks() {
     setAttachmentCounts(cMap);
   }
 
-  function openNew() {
+  function openNew(status: Task['status'] = 'todo') {
+    setRequestStatus(status);
     setRequestTemplate(null);
     setRequestCustomTitle('');
     const due = new Date(); due.setDate(due.getDate() + 7);
@@ -452,7 +467,7 @@ export default function Tasks() {
     const { data, error } = await supabase.from('tasks').insert({
       title: requestTemplate ? requestTemplate.name : requestCustomTitle.trim(),
       description: requestForm.description || null,
-      status: 'todo',
+      status: requestStatus,
       priority: requestForm.priority,
       due_date: requestForm.due_date || null,
       client_id: requestForm.client_id,
@@ -502,6 +517,7 @@ export default function Tasks() {
   const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const searchTerm = normalize(search.trim());
 
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
   const filteredTasks = tasks.filter(t => {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
     if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
@@ -512,161 +528,189 @@ export default function Tasks() {
       const list = assignments[t.id] ?? [];
       if (filterAssignee === 'none' ? list.length > 0 : !list.includes(filterAssignee)) return false;
     }
+    if (filterDue !== 'all') {
+      if (filterDue === 'none') { if (t.due_date) return false; }
+      else {
+        if (!t.due_date) return false;
+        const diff = Math.round((new Date(t.due_date + 'T00:00:00').getTime() - today0.getTime()) / 86400000);
+        if (filterDue === 'overdue' && !(diff < 0 && t.status !== 'done')) return false;
+        if (filterDue === 'today' && diff !== 0) return false;
+        if (filterDue === 'week' && !(diff >= 0 && diff <= 7)) return false;
+      }
+    }
     if (searchTerm) {
-      const haystack = normalize([t.title, t.description ?? '', formatTaskNumber(t.task_number)].join(' '));
+      const names = (assignments[t.id] ?? []).map(uid => getProfileName(uid)).join(' ');
+      const haystack = normalize([t.title, t.description ?? '', formatTaskNumber(t.task_number), t.client_id ? getClientName(t.client_id) : '', names].join(' '));
       if (!haystack.includes(searchTerm)) return false;
     }
     return true;
   });
 
   useEffect(() => {
-    setKanbanPage({});
-  }, [filterStatus, filterPriority, filterClient, filterDepartment, filterTemplate, filterAssignee, search]);
+    setKanbanLimit({});
+  }, [filterStatus, filterPriority, filterClient, filterDepartment, filterTemplate, filterAssignee, filterDue, search]);
 
 
   const filtersActive =
-    filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all' ||
+    filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all' || filterDue !== 'all' ||
     filterDepartment !== 'all' || filterTemplate !== 'all' || filterAssignee !== 'all' || search.trim() !== '';
 
   const clearFilters = () => {
-    setFilterStatus('all'); setFilterPriority('all'); setFilterClient('all');
+    setFilterStatus('all'); setFilterPriority('all'); setFilterClient('all'); setFilterDue('all');
     setFilterDepartment('all'); setFilterTemplate('all'); setFilterAssignee('all'); setSearch('');
   };
 
+  const pill = 'h-11 w-full rounded-xl bg-card shadow-sm sm:w-auto sm:min-w-[190px]';
   const filterBar = (
-    <Card className="mb-4 rounded-xl border-border/60 shadow-sm">
-      <CardContent className="p-4 space-y-3">
-        <div className="flex flex-wrap gap-3">
-          <Popover open={clientPickerOpen} onOpenChange={setClientPickerOpen}>
+    <div className="mb-4 space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Popover open={clientPickerOpen} onOpenChange={setClientPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" className={`${pill} justify-between font-normal sm:min-w-[220px]`}>
+              <span className="flex min-w-0 items-center gap-2">
+                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{filterClient === 'all' ? 'Todos os clientes' : getClientName(filterClient)}</span>
+              </span>
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[320px] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Digite nome, código ou CNPJ..." />
+              <CommandList>
+                <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem value="Todos os clientes" onSelect={() => { setFilterClient('all'); setClientPickerOpen(false); }}>
+                    <Check className={`mr-2 h-4 w-4 ${filterClient === 'all' ? 'opacity-100' : 'opacity-0'}`} />
+                    Todos os clientes
+                  </CommandItem>
+                  {clients.map(c => (
+                    <CommandItem key={c.id} value={`${c.sci_code ?? ''} ${c.company_name} ${c.id}`} onSelect={() => { setFilterClient(c.id); setClientPickerOpen(false); }}>
+                      <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
+                      <span className="truncate">{formatClientLabel(c)}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+          <SelectTrigger className={pill}><span className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Responsável" /></span></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os responsáveis</SelectItem>
+            <SelectItem value="none">Sem responsável</SelectItem>
+            {profiles.map(p => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || 'Sem nome'}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterTemplate} onValueChange={setFilterTemplate}>
+          <SelectTrigger className={pill}><span className="flex items-center gap-2"><ListIcon className="h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Tarefa" /></span></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as tarefas</SelectItem>
+            {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterDue} onValueChange={setFilterDue}>
+          <SelectTrigger className={pill}><span className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Prazo" /></span></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os prazos</SelectItem>
+            <SelectItem value="overdue">Vencidas</SelectItem>
+            <SelectItem value="today">Vencem hoje</SelectItem>
+            <SelectItem value="week">Próximos 7 dias</SelectItem>
+            <SelectItem value="none">Sem prazo</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterPriority} onValueChange={setFilterPriority}>
+          <SelectTrigger className={pill}><span className="flex items-center gap-2"><Flag className="h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Prioridade" /></span></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as prioridades</SelectItem>
+            <SelectItem value="low">Baixa</SelectItem>
+            <SelectItem value="medium">Média</SelectItem>
+            <SelectItem value="high">Alta</SelectItem>
+            <SelectItem value="urgent">Urgente</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="ml-auto flex items-center gap-3">
+          <button className="text-sm font-medium text-info hover:underline disabled:opacity-50" onClick={clearFilters} disabled={!filtersActive}>Limpar filtros</button>
+          <Popover open={moreFiltersOpen} onOpenChange={setMoreFiltersOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" role="combobox" className="w-full sm:w-64 justify-between font-normal">
-                <span className="flex min-w-0 items-center gap-2">
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">
-                    {filterClient === 'all' ? 'Todos os clientes' : getClientName(filterClient)}
-                  </span>
-                </span>
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              <Button variant="outline" className="h-11 rounded-xl bg-card font-semibold shadow-sm">
+                <SlidersHorizontal className="mr-2 h-4 w-4" />Filtros
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Buscar empresa..." />
-                <CommandList>
-                  <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem value="Todos os clientes" onSelect={() => { setFilterClient('all'); setClientPickerOpen(false); }}>
-                      <Check className={`mr-2 h-4 w-4 ${filterClient === 'all' ? 'opacity-100' : 'opacity-0'}`} />
-                      Todos os clientes
-                    </CommandItem>
-                    {clients.map(c => (
-                      <CommandItem
-                        key={c.id}
-                        value={`${c.sci_code ?? ''} ${c.company_name}`}
-                        onSelect={() => { setFilterClient(c.id); setClientPickerOpen(false); }}
-                      >
-                        <Check className={`mr-2 h-4 w-4 ${filterClient === c.id ? 'opacity-100' : 'opacity-0'}`} />
-                        <span className="truncate">{formatClientLabel(c)}</span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
+            <PopoverContent align="end" className="w-72 space-y-3">
+              <div className="space-y-1">
+                <Label>Departamento</Label>
+                <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os departamentos</SelectItem>
+                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os status</SelectItem>
+                    {statusColumns.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </PopoverContent>
           </Popover>
-
-          <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-            <SelectTrigger className="w-full sm:w-52">
-              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <SelectValue placeholder="Departamento" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os departamentos</SelectItem>
-              {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          <Select value={filterTemplate} onValueChange={setFilterTemplate}>
-            <SelectTrigger className="w-full sm:w-52">
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <SelectValue placeholder="Tarefa" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as tarefas</SelectItem>
-              {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-            <SelectTrigger className="w-full sm:w-52">
-              <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <SelectValue placeholder="Responsável" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os responsáveis</SelectItem>
-              <SelectItem value="none">Sem responsável</SelectItem>
-              {profiles.map(p => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || 'Sem nome'}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-40">
-              <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              {statusColumns.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="w-full sm:w-40">
-              <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <SelectValue placeholder="Prioridade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as prioridades</SelectItem>
-              <SelectItem value="low">Baixa</SelectItem>
-              <SelectItem value="medium">Média</SelectItem>
-              <SelectItem value="high">Alta</SelectItem>
-              <SelectItem value="urgent">Urgente</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Buscar título ou nº" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
         </div>
-        {filtersActive && (
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}
-            </span>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearFilters}>
-              <X className="mr-1 h-3 w-3" />Limpar filtros
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+      {filtersActive && (
+        <p className="text-xs text-muted-foreground">
+          {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}
+        </p>
+      )}
+    </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-5">
+      <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+        <button onClick={() => navigate(-1)} className="hover:text-foreground" aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></button>
+        <span>Tarefas</span>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="font-medium text-foreground">Kanban</span>
+      </nav>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Tarefas</h1>
           <p className="mt-1 text-sm text-muted-foreground">Organize e acompanhe todas as tarefas da sua equipe.</p>
         </div>
-        <Button onClick={openNew} size="lg" className="rounded-lg self-start sm:self-auto">
-          <Plus className="mr-2 h-5 w-5" />Nova Tarefa
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-[360px]">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input className="h-11 rounded-xl bg-card pl-10 shadow-sm" placeholder="Buscar tarefas, clientes, responsáveis..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl bg-card shadow-sm" onClick={() => setMoreFiltersOpen(true)} aria-label="Ajustes">
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="relative h-11 w-11 rounded-full bg-card shadow-sm" onClick={() => navigate('/chat')} aria-label="Notificações">
+            <Bell className="h-4 w-4" />
+            {unread > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">{unread > 99 ? '99+' : unread}</span>
+            )}
+          </Button>
+          <Button onClick={() => openNew()} className="h-11 rounded-xl px-5 font-semibold shadow-md">
+            <Plus className="mr-2 h-5 w-5" />Nova Tarefa
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="kanban">
-        <TabsList className="h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-b bg-transparent p-0">
+        <TabsList className="h-auto w-full justify-start gap-8 overflow-x-auto rounded-none border-b bg-transparent p-0">
           {[
             { value: 'kanban', label: 'Kanban', Icon: LayoutGrid, show: true },
             { value: 'list', label: 'Lista', Icon: ListIcon, show: true },
@@ -677,14 +721,14 @@ export default function Tasks() {
             <TabsTrigger
               key={value}
               value={value}
-              className="gap-2 whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 pt-2 text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+              className="gap-2 whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-2 pb-3 pt-2 text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none"
             >
               <Icon className="h-4 w-4" />{label}
             </TabsTrigger>
           ))}
         </TabsList>
 
-        <TabsContent value="kanban">
+        <TabsContent value="kanban" className="mt-5">
           {filterBar}
           <div className="grid gap-4 md:grid-cols-3">
             {statusColumns.map(col => {
@@ -696,146 +740,111 @@ export default function Tasks() {
                   const db = b.due_date ? new Date(b.due_date + 'T00:00:00').getTime() : Infinity;
                   return da - db;
                 });
-              const totalPages = Math.max(1, Math.ceil(colTasks.length / KANBAN_PAGE_SIZE));
-              const page = Math.min(kanbanPage[col] ?? 1, totalPages);
-              const pageTasks = colTasks.slice((page - 1) * KANBAN_PAGE_SIZE, page * KANBAN_PAGE_SIZE);
+              const limit = kanbanLimit[col] ?? KANBAN_PAGE_SIZE;
+              const pageTasks = colTasks.slice(0, limit);
               const meta = COLUMN_META[col];
               const ColIcon = meta.Icon;
               return (
-              <div key={col} className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-3">
-                <div className="flex items-start gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${meta.iconClass}`}>
+              <div key={col} className={`flex flex-col rounded-2xl border border-border/60 p-3 shadow-sm ${col === 'done' ? 'bg-success/5' : 'bg-card'}`}>
+                <div className="mb-3 flex items-center gap-3 px-1 pt-1">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${meta.iconClass}`}>
                     <ColIcon className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold uppercase tracking-wide text-foreground">{statusLabels[col]}</h3>
-                      <Badge className="bg-foreground text-background hover:bg-foreground">{colTasks.length}</Badge>
+                      <h3 className="text-base font-bold text-foreground">{statusLabels[col]}</h3>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${meta.countClass}`}>{colTasks.length}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">{meta.subtitle}</p>
+                    <p className="truncate text-xs text-muted-foreground">{meta.subtitle}</p>
                   </div>
                   <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg bg-card" onClick={() => openNew(col as Task['status'])} aria-label="Nova tarefa">
+                    <Plus className={`h-4 w-4 ${meta.plusClass}`} />
+                  </Button>
                 </div>
-                <div className="space-y-2 min-h-[200px]">
-                  {pageTasks.map(task => (
-                    <Card key={task.id} className={`cursor-pointer rounded-lg border-border/70 shadow-sm hover:shadow-md transition-shadow ${isCompletedOnTime(task) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}`} onClick={() => openEdit(task)}>
-                      <CardContent className="p-3 space-y-1">
+                <div className="flex-1 space-y-3 min-h-[200px]">
+                  {pageTasks.map(task => {
+                    const firstAssignee = assignments[task.id]?.[0];
+                    const pending = task.status === 'done' && (task.notify_whatsapp || task.notify_email) && !task.notify_sent_at;
+                    return (
+                    <Card key={task.id} className="cursor-pointer rounded-xl border-border/60 bg-card shadow-sm transition-shadow hover:shadow-md" onClick={() => openEdit(task)}>
+                      <CardContent className="space-y-0.5 p-4">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="text-[11px] font-mono text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
-                          <Badge className={`rounded-full px-2 py-0 text-[10px] font-medium ${priorityColors[task.priority]}`} variant="secondary">{priorityLabels[task.priority]}</Badge>
+                          <span className="text-[11px] text-muted-foreground">{formatTaskNumber(task.task_number)}</span>
+                          <div className="flex items-center gap-1">
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${priorityColors[task.priority]}`}>{priorityLabels[task.priority]}</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-4 w-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                {task.status !== 'done' && (
+                                  <DropdownMenuItem onClick={() => moveTask(task.id, 'done')}><CheckCircle2 className="mr-2 h-4 w-4" />Concluir</DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); document.getElementById(`out-${task.id}`)?.click(); }}>
+                                  <Upload className="mr-2 h-4 w-4" />Enviar para o cliente
+                                </DropdownMenuItem>
+                                {pending && (
+                                  <DropdownMenuItem onClick={async () => { await triggerNotify(task.id); loadData(); }}><Send className="mr-2 h-4 w-4" />Reenviar envio pendente</DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem className="text-destructive" onClick={() => deleteTask(task.id)}><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <input id={`out-${task.id}`} type="file" multiple className="hidden" onClick={(e) => e.stopPropagation()} onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
+                          </div>
                         </div>
                         <p className="text-sm font-bold leading-snug text-foreground">{task.title}</p>
-                        {task.client_id && (
-                          <p className="text-xs text-muted-foreground">{getClientName(task.client_id)}</p>
-                        )}
-                        {task.department_id && (
-                          <p className="text-xs text-muted-foreground">{getDepartmentName(task.department_id)}</p>
-                        )}
-                        <p className="flex items-center gap-1 pt-0.5 text-[11px] text-muted-foreground">
-                          <CalendarDays className="h-3 w-3 shrink-0" />
-                          <span>
-                            Solicitado em {formatDateTime(task.created_at)}
-                            {task.created_by && <> por {getProfileName(task.created_by)}</>}
+                        {task.client_id && <p className="truncate text-xs uppercase text-muted-foreground">{getClientName(task.client_id)}</p>}
+                        {task.department_id && <p className="text-xs text-muted-foreground">{getDepartmentName(task.department_id)}</p>}
+                        {pending && <p className="pt-1 text-[11px] font-medium text-warning">Envio pendente</p>}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3" onClick={(e) => e.stopPropagation()}>
+                          {firstAssignee ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold" style={{ backgroundColor: getProfileColor(firstAssignee) || 'hsl(var(--primary))', color: getProfileColor(firstAssignee) ? getReadableTextColor(getProfileColor(firstAssignee)!) : 'hsl(var(--primary-foreground))' }}>
+                                {getInitials(getProfileName(firstAssignee))}
+                              </span>
+                              <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-foreground">
+                                {getProfileName(firstAssignee)}{assignments[task.id].length > 1 && ` +${assignments[task.id].length - 1}`}
+                              </span>
+                            </span>
+                          ) : <span className="text-[11px] text-muted-foreground">Sem responsável</span>}
+                          {task.status === 'done' ? (
+                            task.completed_at && (
+                              <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" />{formatDateTime(task.completed_at)}</span>
+                            )
+                          ) : task.due_date && (
+                            <span className={`flex items-center gap-1 text-[11px] font-medium ${getDueDateColor(task.due_date)}`}>
+                              <CalendarDays className="h-3.5 w-3.5" />{new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                          <span className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="flex items-center gap-0.5"><Paperclip className="h-3.5 w-3.5" />{(attachmentCounts[task.id]?.input || 0) + (attachmentCounts[task.id]?.output || 0)}</span>
+                            <span className={task.status === 'done' ? 'rounded-full bg-success/10 px-1.5 text-success' : ''}><TimeTracker taskId={task.id} /></span>
                           </span>
-                        </p>
-                        {task.status === 'done' && task.completed_at && (
-                          <p className="flex items-center gap-1 text-[11px] text-emerald-600">
-                            <CheckCircle2 className="h-3 w-3 shrink-0" />
-                            Concluído em {formatDateTime(task.completed_at)}
-                          </p>
-                        )}
-                        {assignments[task.id]?.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                            {assignments[task.id].map(uid => (
-                              <AssigneeBadge key={uid} name={getProfileName(uid)} color={getProfileColor(uid)} />
-                            ))}
-                          </div>
-                        )}
-                        {task.due_date && (
-                          <p className={`flex items-center gap-1 pt-0.5 text-[11px] font-medium ${getDueDateColor(task.due_date)}`}>
-                            <CalendarDays className="h-3 w-3 shrink-0" />
-                            Prazo: {new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}
-                          </p>
-                        )}
-                        {task.status === 'done' && (task.notify_whatsapp || task.notify_email) && !task.notify_sent_at && (
-                          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 dark:border-amber-800 dark:bg-amber-900/20">
-                            <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">Envio pendente</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 px-2 text-[11px] text-amber-700 hover:bg-amber-100 dark:text-amber-400"
-                              onClick={async (e) => { e.stopPropagation(); await triggerNotify(task.id); loadData(); }}
-                            >
-                              Reenviar
-                            </Button>
-                          </div>
-                        )}
-                        <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
-
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <TimeTracker taskId={task.id} />
-                            {(attachmentCounts[task.id]?.input || 0) > 0 && (
-                              <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{attachmentCounts[task.id].input}</span>
-                            )}
-                            {(attachmentCounts[task.id]?.output || 0) > 0 && (
-                              <span className="flex items-center gap-0.5 text-primary"><Upload className="h-3 w-3" />{attachmentCounts[task.id].output}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {task.status !== 'done' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-[11px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                                onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'done'); }}
-                              >
-                                <CheckCircle2 className="h-3 w-3 mr-1" />Concluir
-                              </Button>
-                            )}
-                            <label className="cursor-pointer text-[11px] flex items-center gap-1 text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
-                              <Upload className="h-3 w-3" />Para o cliente
-                              <input type="file" multiple className="hidden" onChange={(e) => { uploadCardOutputFiles(task.id, e.target.files); e.target.value = ''; }} />
-                            </label>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
                         </div>
                       </CardContent>
-
                     </Card>
-                  ))}
+                    );
+                  })}
                   {pageTasks.length === 0 && (
-                    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                        <Clock className="h-7 w-7 text-muted-foreground" />
+                    <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+                      <div className="relative flex h-28 w-28 items-center justify-center rounded-full bg-muted">
+                        <FolderOpen className="h-12 w-12 text-info/70" />
+                        <Clock className="absolute bottom-7 right-7 h-5 w-5 rounded-full bg-card text-info" />
                       </div>
-                      <p className="text-sm font-semibold text-foreground">{meta.emptyTitle}</p>
-                      <p className="max-w-[230px] text-xs text-muted-foreground">{meta.emptyHint}</p>
+                      <p className="text-base font-semibold text-foreground">{meta.emptyTitle}</p>
+                      <p className="max-w-[260px] text-sm text-muted-foreground">{meta.emptyHint}</p>
                     </div>
                   )}
                 </div>
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between gap-2 pt-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      disabled={page <= 1}
-                      onClick={() => setKanbanPage(p => ({ ...p, [col]: page - 1 }))}
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5" /> Anterior
-                    </Button>
-                    <span className="text-xs text-muted-foreground">Página {page} de {totalPages}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      disabled={page >= totalPages}
-                      onClick={() => setKanbanPage(p => ({ ...p, [col]: page + 1 }))}
-                    >
-                      Próxima <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
+                {colTasks.length > 0 && (
+                  <div className="mt-3 flex items-center justify-between px-1 pb-1 text-xs">
+                    <span className="text-muted-foreground">Mostrando {pageTasks.length} de {colTasks.length} tarefas</span>
+                    {pageTasks.length < colTasks.length && (
+                      <button className="flex items-center gap-1 font-medium text-info hover:underline" onClick={() => setKanbanLimit(p => ({ ...p, [col]: limit + KANBAN_PAGE_SIZE }))}>
+                        Ver todas <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

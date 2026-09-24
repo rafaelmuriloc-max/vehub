@@ -187,8 +187,18 @@ export default function NfceTab() {
         const nome = formatClientLabel(targets[i]);
         setSyncProgress(targets.length > 1 ? `Consultando ${i + 1}/${targets.length} — ${nome}` : `Consultando ${nome}`);
         try {
-          const { data, error } = await supabase.functions.invoke('nfce-query', { body: { client_id: targets[i].id } });
-          const res = (data ?? null) as NfceQueryResponse | null;
+          let res: (NfceQueryResponse & { more?: boolean }) | null = null;
+          let error: unknown = null;
+          for (let round = 0; round < 10; round++) {
+            const r = await supabase.functions.invoke('nfce-query', { body: { client_id: targets[i].id } });
+            res = (r.data ?? null) as any;
+            error = r.error;
+            if (error || res?.error || res?.not_accountant) break;
+            notas += Number(res?.invoices_saved || 0);
+            eventos += Number(res?.events_saved || 0);
+            if (!res?.more) break;
+            setSyncProgress(`Consultando ${nome} — ${notas} nota(s) baixada(s), continuando...`);
+          }
           if (res?.not_accountant) {
             semVinculo.push(nome);
             continue;
@@ -197,8 +207,6 @@ export default function NfceTab() {
             erros++;
             continue;
           }
-          notas += Number(res?.invoices_saved || 0);
-          eventos += Number(res?.events_saved || 0);
           if (res?.next_query_at) {
             const hhmm = new Date(res.next_query_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
             bloqueadas.push(`${nome}: próxima consulta liberada em ${hhmm}`);
