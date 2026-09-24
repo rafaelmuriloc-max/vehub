@@ -171,15 +171,23 @@ export default function SimplesNacionalTab() {
     return max;
   }, [competencias]);
 
-  async function handleSync(clientId?: string) {
+  async function handleSync(clientId?: string, onlyPayments = false) {
     if (!isAdmin) return;
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('simples-nacional-sync', {
-        body: { year, ...(clientId ? { client_id: clientId } : {}) },
+        body: { year, ...(clientId ? { client_id: clientId } : {}), ...(onlyPayments ? { only_payments: true } : {}) },
       });
       if (error) throw error;
-      toast({ title: 'Sincronização concluída', description: `${data?.count ?? 0} competências processadas.` });
+      const errs: { company: string }[] = data?.payment_errors ?? [];
+      const errTxt = errs.length
+        ? ` Não foi possível consultar pagamentos de ${errs.length} empresa(s): ${errs.slice(0, 5).map(e => e.company).join(', ')}${errs.length > 5 ? '…' : ''}.`
+        : '';
+      toast({
+        title: onlyPayments ? 'Situação atualizada' : 'Sincronização concluída',
+        description: `${data?.pagos ?? 0} guia(s) paga(s) encontrada(s).${errTxt}`,
+        variant: errs.length && !(data?.pagos) ? 'destructive' : undefined,
+      });
       await loadData();
     } catch (err: any) {
       toast({ title: 'Erro ao sincronizar', description: err.message, variant: 'destructive' });
@@ -242,6 +250,12 @@ export default function SimplesNacionalTab() {
           <Button onClick={() => handleSync()} disabled={syncing} size="sm">
             {syncing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <RefreshCw className="h-4 w-4 sm:mr-2" />}
             <span className="hidden sm:inline">Sincronizar agora</span>
+          </Button>
+        )}
+        {isAdmin && (
+          <Button variant="outline" onClick={() => handleSync(undefined, true)} disabled={syncing} size="sm">
+            {syncing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <RefreshCw className="h-4 w-4 sm:mr-2" />}
+            <span className="hidden sm:inline">Atualizar situação</span>
           </Button>
         )}
         {isAdmin && (
