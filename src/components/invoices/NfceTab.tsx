@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ClientCombobox } from '@/components/ClientCombobox';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -269,15 +270,7 @@ export default function NfceTab() {
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Empresa</Label>
-            <Select value={selectedClient} onValueChange={setSelectedClient}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as empresas</SelectItem>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ClientCombobox clients={clients} value={selectedClient} onChange={setSelectedClient} allowAll />
           </div>
           <div className="space-y-1">
             <Label>De</Label>
