@@ -29,9 +29,12 @@ export default function Payroll() {
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<Client[]>([]);
   const [rows, setRows] = useState<Summary[]>([]);
-  const [clientId, setClientId] = useState<string>('all');
-  const [month, setMonth] = useState<string>('');
+  const [clientIds, setClientIds] = useState<string[]>([]);
+  const [selMonths, setSelMonths] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const toggleClient = (id: string) => setClientIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+  const toggleMonth = (m: string) => setSelMonths((p) => p.includes(m) ? (p.length > 1 ? p.filter((x) => x !== m) : p) : [...p, m].sort());
   const [rankBy, setRankBy] = useState<RankKey>('gross');
 
   const { toast } = useToast();
@@ -51,7 +54,7 @@ export default function Payroll() {
       setClients(act);
       setRows(data);
       const months = [...new Set(data.map((r) => r.competence))].sort();
-      setMonth(months[months.length - 1] ?? '');
+      setSelMonths(months.length ? [months[months.length - 1]] : []);
       setLoading(false);
     }
   }, []);
@@ -84,16 +87,21 @@ export default function Payroll() {
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const months = useMemo(() => [...new Set(rows.map((r) => r.competence))].sort(), [rows]);
-  const scoped = useMemo(() => (clientId === 'all' ? rows : rows.filter((r) => r.client_id === clientId)), [rows, clientId]);
-  const current = useMemo(() => scoped.filter((r) => r.competence === month), [scoped, month]);
+  const clientSet = useMemo(() => new Set(clientIds), [clientIds]);
+  const scoped = useMemo(() => (!clientIds.length ? rows : rows.filter((r) => clientSet.has(r.client_id))), [rows, clientIds, clientSet]);
+  const monthSet = useMemo(() => new Set(selMonths), [selMonths]);
+  const lastMonth = selMonths[selMonths.length - 1] ?? '';
+  const current = useMemo(() => scoped.filter((r) => monthSet.has(r.competence)), [scoped, monthSet]);
+  const periodLabel = !selMonths.length ? '' : selMonths.length === 1 ? monthLabel(selMonths[0]) : `${monthLabel(selMonths[0])} a ${monthLabel(lastMonth)}`;
 
   const totals = useMemo(() => current.reduce((a, r) => ({
     gross: a.gross + r.gross, discounts: a.discounts + r.discounts, net: a.net + r.net,
     inss: a.inss + r.inss_value, fgts: a.fgts + r.fgts_value,
-    active: a.active + r.active_count, admitted: a.admitted + r.admitted_count, dismissed: a.dismissed + r.dismissed_count,
-  }), { gross: 0, discounts: 0, net: 0, inss: 0, fgts: 0, active: 0, admitted: 0, dismissed: 0 }), [current]);
+    active: a.active + (r.competence === lastMonth ? r.active_count : 0), admitted: a.admitted + r.admitted_count, dismissed: a.dismissed + r.dismissed_count,
+  }), { gross: 0, discounts: 0, net: 0, inss: 0, fgts: 0, active: 0, admitted: 0, dismissed: 0 }), [current, lastMonth]);
 
-  const evolution = useMemo(() => months.map((m) => {
+  const evoMonths = selMonths.length > 1 ? selMonths : months;
+  const evolution = useMemo(() => evoMonths.map((m) => {
     const list = scoped.filter((r) => r.competence === m);
     const sum = (f: (r: Summary) => number) => list.reduce((a, r) => a + f(r), 0);
     return {
@@ -103,14 +111,22 @@ export default function Payroll() {
       Encargos: +sum((r) => r.inss_value + r.fgts_value).toFixed(2),
       Colaboradores: sum((r) => r.active_count),
     };
-  }), [months, scoped]);
+  }), [evoMonths, scoped]);
 
   const ranking = useMemo(() => {
     const val = (r: Summary) => rankBy === 'gross' ? r.gross : rankBy === 'active_count' ? r.active_count : r.inss_value + r.fgts_value;
-    return rows.filter((r) => r.competence === month)
+    const agg = new Map<string, Summary>();
+    for (const r of rows) {
+      if (!monthSet.has(r.competence)) continue;
+      const o = agg.get(r.client_id);
+      if (!o) { agg.set(r.client_id, { ...r, active_count: r.competence === lastMonth ? r.active_count : 0 }); continue; }
+      o.gross += r.gross; o.net += r.net; o.discounts += r.discounts; o.inss_value += r.inss_value; o.fgts_value += r.fgts_value;
+      if (r.competence === lastMonth) o.active_count = r.active_count;
+    }
+    return [...agg.values()]
       .map((r) => ({ id: r.client_id, name: formatClientLabel(clientById.get(r.client_id)), value: val(r), r }))
       .sort((a, b) => b.value - a.value).slice(0, 15);
-  }, [rows, month, rankBy, clientById]);
+  }, [rows, monthSet, lastMonth, rankBy, clientById]);
 
   const cards = [
     { label: 'Proventos', value: brl(totals.gross), Icon: Wallet },
@@ -123,7 +139,8 @@ export default function Payroll() {
     { label: 'Demitidos', value: totals.dismissed.toLocaleString('pt-BR'), Icon: UserMinus },
   ];
 
-  const selectedClient = clientId === 'all' ? null : clientById.get(clientId);
+  const clientBtn = !clientIds.length ? 'Todas as empresas' : clientIds.length === 1 ? formatClientLabel(clientById.get(clientIds[0])) : `${clientIds.length} empresas`;
+  const monthBtn = !selMonths.length ? 'Competência' : selMonths.length === 1 ? monthLabel(selMonths[0]) : `${selMonths.length} competências`;
 
   return (
     <div className="space-y-5">
@@ -139,7 +156,7 @@ export default function Payroll() {
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full sm:w-72 justify-between">
-                <span className="truncate">{selectedClient ? formatClientLabel(selectedClient) : 'Todas as empresas'}</span>
+                <span className="truncate">{clientBtn}</span>
                 <ChevronsUpDown className="h-4 w-4 opacity-50" />
               </Button>
             </PopoverTrigger>
@@ -149,12 +166,12 @@ export default function Payroll() {
                 <CommandList>
                   <CommandEmpty>Nenhuma empresa.</CommandEmpty>
                   <CommandGroup>
-                    <CommandItem value="todas as empresas" onSelect={() => { setClientId('all'); setPickerOpen(false); }}>
-                      <Check className={cn('h-4 w-4 mr-2', clientId === 'all' ? 'opacity-100' : 'opacity-0')} />Todas as empresas
+                    <CommandItem value="todas as empresas limpar selecao" onSelect={() => setClientIds([])}>
+                      <Check className={cn('h-4 w-4 mr-2', !clientIds.length ? 'opacity-100' : 'opacity-0')} />Todas as empresas (limpar seleção)
                     </CommandItem>
                     {clients.map((c) => (
-                      <CommandItem key={c.id} value={`${c.sci_code ?? ''} ${c.company_name} ${c.document ?? ''}`} onSelect={() => { setClientId(c.id); setPickerOpen(false); }}>
-                        <Check className={cn('h-4 w-4 mr-2', clientId === c.id ? 'opacity-100' : 'opacity-0')} />
+                      <CommandItem key={c.id} value={`${c.sci_code ?? ''} ${c.company_name} ${c.document ?? ''}`} onSelect={() => toggleClient(c.id)}>
+                        <Check className={cn('h-4 w-4 mr-2', clientSet.has(c.id) ? 'opacity-100' : 'opacity-0')} />
                         <span className="truncate">{formatClientLabel(c)}</span>
                       </CommandItem>
                     ))}
@@ -163,10 +180,30 @@ export default function Payroll() {
               </Command>
             </PopoverContent>
           </Popover>
-          <Select value={month} onValueChange={setMonth} disabled={!months.length}>
-            <SelectTrigger className="w-full sm:w-36"><SelectValue placeholder="Mês" /></SelectTrigger>
-            <SelectContent>{[...months].reverse().map((m) => <SelectItem key={m} value={m}>{monthLabel(m)}</SelectItem>)}</SelectContent>
-          </Select>
+          <Popover open={monthOpen} onOpenChange={setMonthOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full sm:w-44 justify-between" disabled={!months.length}>
+                <span className="truncate">{monthBtn}</span><ChevronsUpDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0" align="end">
+              <Command>
+                <CommandList>
+                  <CommandGroup>
+                    <CommandItem value="ultimo mes" onSelect={() => setSelMonths(months.length ? [months[months.length - 1]] : [])}>Último mês</CommandItem>
+                    <CommandItem value="todos" onSelect={() => setSelMonths([...months])}>Todos</CommandItem>
+                  </CommandGroup>
+                  <CommandGroup>
+                    {[...months].reverse().map((m) => (
+                      <CommandItem key={m} value={m} onSelect={() => toggleMonth(m)}>
+                        <Check className={cn('h-4 w-4 mr-2', monthSet.has(m) ? 'opacity-100' : 'opacity-0')} />{monthLabel(m)}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
           <Button onClick={syncPayroll} disabled={syncing} className="w-full sm:w-auto">
             {syncing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FolderSync className="h-4 w-4 mr-1" />}Sincronizar
           </Button>
@@ -189,7 +226,7 @@ export default function Payroll() {
               </Card>
             ))}
           </div>
-          {!current.length && <p className="text-sm text-muted-foreground">Informação não disponível para esta empresa em {monthLabel(month)}.</p>}
+          {!current.length && <p className="text-sm text-muted-foreground">Informação não disponível para esta empresa em {periodLabel}.</p>}
 
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Evolução mensal</CardTitle></CardHeader>
@@ -214,7 +251,7 @@ export default function Payroll() {
 
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base">Ranking de empresas · {monthLabel(month)}</CardTitle>
+              <CardTitle className="text-base">Ranking de empresas · {periodLabel}</CardTitle>
               <Select value={rankBy} onValueChange={(v) => setRankBy(v as RankKey)}>
                 <SelectTrigger className="w-44 h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -232,7 +269,7 @@ export default function Payroll() {
                     <YAxis type="category" dataKey="name" width={240} fontSize={11} />
                     <Tooltip formatter={(v: number) => (rankBy === 'active_count' ? v : brl(v))} />
                     <Bar dataKey="value" name="Valor" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} cursor="pointer"
-                      onClick={(d: { id?: string }) => d?.id && setClientId(d.id)} />
+                      onClick={(d: { id?: string }) => d?.id && toggleClient(d.id)} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -246,7 +283,7 @@ export default function Payroll() {
                 </TableRow></TableHeader>
                 <TableBody>
                   {ranking.map((x, i) => (
-                    <TableRow key={x.id} className="cursor-pointer" onClick={() => setClientId(x.id)}>
+                    <TableRow key={x.id} className="cursor-pointer" onClick={() => toggleClient(x.id)}>
                       <TableCell>{i + 1}</TableCell>
                       <TableCell className="max-w-[260px] truncate">{x.name}</TableCell>
                       <TableCell className="text-right tabular-nums">{x.r.active_count}</TableCell>
