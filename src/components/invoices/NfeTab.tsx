@@ -55,6 +55,8 @@ type NfeQueryResponse = {
   manifestadas?: number;
   xml_completos?: number;
   pendentes?: number;
+  skipped?: boolean;
+  next_query_at?: string | null;
   error?: string;
   infrastructure?: boolean;
   invoices_saved?: number;
@@ -183,6 +185,8 @@ export default function NfeTab() {
   const [page, setPage] = useState(0);
   const [bulkRunning, setBulkRunning] = useState<null | 'xml' | 'pdf'>(null);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+  const [keyQuery, setKeyQuery] = useState('');
+  const [keyQuerying, setKeyQuerying] = useState(false);
   const [directionTab, setDirectionTab] = useState<'entrada' | 'saida'>('entrada');
 
 
@@ -290,6 +294,7 @@ export default function NfeTab() {
     let errorCount = 0;
     let infrastructureMessage = '';
     const totals = { capturadas: 0, manifestadas: 0, xmlCompletos: 0 };
+    const blocked: string[] = [];
 
     try {
       for (let i = 0; i < clientIds.length; i++) {
@@ -298,7 +303,7 @@ export default function NfeTab() {
 
         try {
           const { data, error } = await supabase.functions.invoke('nfe-auto-complete', {
-            body: { client_id: clientIds[i], wait_seconds: 10 },
+            body: { client_id: clientIds[i] },
           });
 
           const response = (data ?? null) as NfeQueryResponse | null;
@@ -310,6 +315,10 @@ export default function NfeTab() {
             }
           } else {
             successCount++;
+            if (response?.next_query_at) {
+              const hhmm = new Date(response.next_query_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+              blocked.push(`${clientName}: próxima consulta liberada às ${hhmm}`);
+            }
             totals.capturadas += Number(response?.capturadas || 0);
             totals.manifestadas += Number(response?.manifestadas || 0);
             totals.xmlCompletos += Number(response?.xml_completos || 0);
@@ -332,6 +341,13 @@ export default function NfeTab() {
         return;
       }
 
+      if (blocked.length > 0) {
+        toast({
+          title: 'SEFAZ: consulta temporariamente bloqueada',
+          description: blocked.slice(0, 5).join('\n') + (blocked.length > 5 ? `\n+${blocked.length - 5} empresa(s)` : ''),
+        });
+      }
+
       const totalsText = `${totals.capturadas} capturada(s), ${totals.manifestadas} manifestada(s), ${totals.xmlCompletos} XML completo(s)`;
       if (clientIds.length === 1) {
         toast({
@@ -351,6 +367,37 @@ export default function NfeTab() {
     } finally {
       setSyncing(false);
       setSyncProgress('');
+    }
+  }
+
+  async function handleQueryByKey() {
+    const chave = keyQuery.replace(/\D/g, '');
+    if (chave.length !== 44) {
+      toast({ title: 'Chave inválida', description: 'A chave de acesso deve ter 44 dígitos.', variant: 'destructive' });
+      return;
+    }
+    if (!selectedClient || selectedClient === 'all') {
+      toast({ title: 'Selecione a empresa', description: 'Escolha a empresa destinatária antes de buscar pela chave.', variant: 'destructive' });
+      return;
+    }
+    setKeyQuerying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('nfe-query', { body: { client_id: selectedClient, access_key: chave } });
+      const r = (data ?? null) as NfeQueryResponse | null;
+      if (r?.skipped && r.next_query_at) {
+        const hhmm = new Date(r.next_query_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        toast({ title: 'Consulta bloqueada pela SEFAZ', description: `Próxima consulta liberada às ${hhmm}.` });
+      } else if (error || r?.error) {
+        toast({ title: 'Erro na consulta por chave', description: r?.error || error?.message, variant: 'destructive' });
+      } else {
+        toast({ title: 'Consulta por chave concluída', description: `${r?.invoices_saved || 0} nota(s) gravada(s).` });
+        setKeyQuery('');
+      }
+      await loadInvoices();
+    } catch (e) {
+      toast({ title: 'Erro na consulta por chave', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setKeyQuerying(false);
     }
   }
 
@@ -633,6 +680,18 @@ export default function NfeTab() {
               <Button onClick={handleSync} disabled={syncing} className="ml-auto">
                 {syncing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
                 {syncing ? (syncProgress || 'Consultando...') : 'Buscar NF-e'}
+              </Button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 mt-3">
+              <Input
+                placeholder="Buscar por chave de acesso (44 dígitos)"
+                value={keyQuery}
+                onChange={(e) => setKeyQuery(e.target.value)}
+                className="sm:max-w-md"
+              />
+              <Button variant="outline" onClick={handleQueryByKey} disabled={keyQuerying || syncing}>
+                {keyQuerying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                Buscar por chave
               </Button>
             </div>
           </CardContent>

@@ -22,7 +22,6 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function callFunction(name: string, body: Record<string, unknown>): Promise<any> {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
@@ -60,7 +59,6 @@ Deno.serve(async (req) => {
     const clientId: string | undefined = body?.client_id;
     if (!clientId) return jsonResponse({ error: "client_id é obrigatório" }, 400);
 
-    const waitSeconds = Number.isFinite(body?.wait_seconds) ? Number(body.wait_seconds) : 10;
     const maxManifest = Number.isFinite(body?.max_manifest) ? Number(body.max_manifest) : 200;
 
     const errors: string[] = [];
@@ -69,10 +67,14 @@ Deno.serve(async (req) => {
     let manifestadas = 0;
     let manifestErros = 0;
     let rateLimited = false;
+    let skipped = false;
+    let nextQueryAt: string | null = null;
 
     // a) Distribuição incremental
     try {
       const { data } = await callFunction("nfe-query", { client_id: clientId });
+      if (data?.next_query_at) nextQueryAt = data.next_query_at;
+      if (data?.skipped) skipped = true;
       if (data?.error) {
         errors.push(`nfe-query: ${data.error}`);
       } else {
@@ -131,21 +133,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // d) Nova distribuição para colher os procNFe liberados
-    if (manifestadas > 0) {
-      try {
-        if (waitSeconds > 0) await sleep(waitSeconds * 1000);
-        const { data } = await callFunction("nfe-query", { client_id: clientId });
-        if (data?.error) {
-          errors.push(`nfe-query (pós-manifestação): ${data.error}`);
-        } else {
-          capturadas += Number(data?.invoices_saved || 0);
-          xmlCompletos += Number(data?.xml_completos || 0);
-        }
-      } catch (e) {
-        errors.push(`nfe-query (pós-manifestação): ${(e as Error).message}`);
-      }
-    }
+    // d) Sem reconsulta imediata: o procNFe liberado vem na próxima rodada (respeitando nfe_next_query_at).
 
     // e) Pendentes
     let pendentes = 0;
@@ -167,7 +155,9 @@ Deno.serve(async (req) => {
       errors,
       manifest_erros: manifestErros,
       manifestadas,
+      next_query_at: nextQueryAt,
       pendentes,
+      skipped,
       rate_limited: rateLimited,
       success: true,
       xml_completos: xmlCompletos,
