@@ -499,7 +499,7 @@ export default function Personnel() {
       const meses = (s.meses ?? []).map((m: string) => `${m.slice(5, 7)}/${m.slice(0, 4)}`).join(', ');
       toast({
         title: 'Resumo da folha sincronizado',
-        description: `${s.arquivos ?? 0} arquivo(s) lido(s)${meses ? ` (${meses})` : ''}, ${s.empresas_gravadas ?? 0} empresa(s) gravada(s)${(s.sem_empresa ?? 0) > 0 ? `, ${s.sem_empresa} sem empresa cadastrada` : ''}.`,
+        description: `${s.arquivos ?? 0} arquivo(s) lido(s)${meses ? ` (${meses})` : ''}, ${s.empresas_gravadas ?? 0} empresa(s) gravada(s)${(s.sem_empresa ?? 0) > 0 ? `, ${s.sem_empresa} sem empresa cadastrada` : ''}. ${s.salarios_atualizados ?? 0} salário(s) atualizado(s)${(s.nao_localizados ?? 0) > 0 ? `, ${s.nao_localizados} funcionário(s) não localizado(s)` : ''}.`,
       });
     } catch (e) {
       toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });

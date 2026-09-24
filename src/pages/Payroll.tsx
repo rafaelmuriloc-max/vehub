@@ -72,7 +72,7 @@ export default function Payroll() {
       const meses = (st.meses ?? []).map((m: string) => monthLabel(m)).join(', ');
       toast({
         title: 'Resumo da folha sincronizado',
-        description: `${st.arquivos ?? 0} arquivo(s) lido(s)${meses ? ` (${meses})` : ''}, ${st.empresas_gravadas ?? 0} empresa(s) gravada(s)${(st.sem_empresa ?? 0) > 0 ? `, ${st.sem_empresa} sem empresa cadastrada` : ''}.`,
+        description: `${st.arquivos ?? 0} arquivo(s) lido(s)${meses ? ` (${meses})` : ''}, ${st.empresas_gravadas ?? 0} empresa(s) gravada(s)${(st.sem_empresa ?? 0) > 0 ? `, ${st.sem_empresa} sem empresa cadastrada` : ''}. ${st.salarios_atualizados ?? 0} salário(s) atualizado(s)${(st.nao_localizados ?? 0) > 0 ? `, ${st.nao_localizados} funcionário(s) não localizado(s)` : ''}.`,
       });
       await load();
     } catch (e) {
