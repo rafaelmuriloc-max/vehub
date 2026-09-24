@@ -308,6 +308,7 @@ async function syncCompetencia(
       if ((rbt12 === null || rba === null) && declaracaoPdf) {
         try {
           const txt = await pdfText(declaracaoPdf);
+          console.log(`[sync] texto decl ${clientId} ${periodo} (${txt.length}): ${txt.slice(0, 2500)}`);
           if (rbt12 === null) rbt12 = moneyAfter(txt, /RBT12\)?|Receita\s+bruta\s+acumulada\s+nos\s+doze/i);
           if (rba === null) rba = moneyAfter(txt, /\(RBA\)|Receita\s+bruta\s+acumulada\s+no\s+ano\s+calend/i);
         } catch (e) {
