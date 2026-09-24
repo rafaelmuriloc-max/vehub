@@ -175,11 +175,11 @@ Deno.serve(async (req) => {
       .not("digital_certificate_url", "is", null)
       .gte("digital_certificate_expiry", today);
 
-  let sliceQuery = baseFilter().order("company_name").limit(MAX_CLIENTS_PER_RUN);
+  let sliceQuery = baseFilter().order("id").limit(MAX_CLIENTS_PER_RUN);
   if (singleClientId) {
     sliceQuery = sliceQuery.eq("id", singleClientId);
-  } else if (run.cursor_client_id) {
-    sliceQuery = sliceQuery.gt("company_name", run.cursor_client_id);
+  } else if (run.cursor_client_id && /^[0-9a-f-]{36}$/i.test(run.cursor_client_id)) {
+    sliceQuery = sliceQuery.gt("id", run.cursor_client_id);
   }
 
   const { data: clients, error: clientsError } = await sliceQuery;
@@ -214,7 +214,6 @@ Deno.serve(async (req) => {
     try {
       const auto = await callFunction("nfe-auto-complete", {
         client_id: c.id,
-        wait_seconds: 5,
       });
       nfeOk++;
       entry.nfe = "ok";
@@ -222,6 +221,7 @@ Deno.serve(async (req) => {
       entry.manifestadas = auto?.manifestadas ?? 0;
       entry.xml_completos = auto?.xml_completos ?? 0;
       entry.pendentes = auto?.pendentes ?? 0;
+      if (auto?.skipped) entry.skipped_until = auto?.next_query_at;
       nfeManifestadas += Number(auto?.manifestadas || 0);
       nfeXmlCompletos += Number(auto?.xml_completos || 0);
     } catch (e) {
@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
     }
 
     processed++;
-    cursor = c.company_name;
+    cursor = c.id;
     details.push(entry);
 
     await sleep(DELAY_BETWEEN_CLIENTS_MS);
