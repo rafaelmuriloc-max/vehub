@@ -61,21 +61,35 @@ Deno.serve(async (req) => {
 
     if (clientError || !client) return jsonResponse({ error: "Cliente não encontrado" }, 404);
     if (!client.document) return jsonResponse({ error: "Cliente sem CNPJ cadastrado" }, 400);
-    if (!client.digital_certificate_url) return jsonResponse({ error: "Cliente sem certificado digital cadastrado" }, 400);
-
     if (!consChave && client.nfce_next_query_at && new Date(client.nfce_next_query_at).getTime() > Date.now()) {
       console.log(`[NFC-e] CNPJ bloqueado até ${client.nfce_next_query_at}`);
       return jsonResponse({ success: true, skipped: true, next_query_at: client.nfce_next_query_at, invoices_saved: 0, events_saved: 0 });
     }
 
-    const { data: certData, error: certError } = await adminClient.storage
-      .from("certificates")
-      .download(client.digital_certificate_url);
-    if (certError || !certData) {
-      return jsonResponse({ error: "Erro ao baixar certificado: " + (certError?.message || "desconhecido") }, 500);
+    // SEF-SC exige que o requisitante seja contabilista do CNPJ no SAT:
+    // tenta o e-CPF do contador e depois o e-CNPJ do escritório.
+    const { data: company } = await adminClient
+      .from("company_settings")
+      .select("digital_certificate_url, digital_certificate_password, accountant_certificate_url, accountant_certificate_password")
+      .limit(1)
+      .maybeSingle();
+    const candidates: Array<{ label: string; url: string; pwd: string }> = [];
+    if (company?.accountant_certificate_url) candidates.push({ label: "e-CPF do contador", url: company.accountant_certificate_url, pwd: company.accountant_certificate_password || "" });
+    if (company?.digital_certificate_url) candidates.push({ label: "e-CNPJ do escritório", url: company.digital_certificate_url, pwd: company.digital_certificate_password || "" });
+    if (candidates.length === 0) return jsonResponse({ error: "Certificado do escritório/contador não configurado em Meu Escritório" }, 400);
+    const certs: Array<{ label: string; certPem: string; keyPem: string }> = [];
+    for (const c of candidates) {
+      try {
+        const { data: f, error: e } = await adminClient.storage.from("certificates").download(c.url);
+        if (e || !f) { console.error(`[NFC-e] Falha ao baixar ${c.label}:`, e?.message); continue; }
+        const { chainPem, keyPem } = parsePfx(new Uint8Array(await f.arrayBuffer()), c.pwd);
+        certs.push({ label: c.label, certPem: chainPem, keyPem });
+      } catch (err) {
+        console.error(`[NFC-e] Falha ao abrir ${c.label}:`, err instanceof Error ? err.message : err);
+      }
     }
-    const pfxBytes = new Uint8Array(await certData.arrayBuffer());
-    const { chainPem: certPem, keyPem } = parsePfx(pfxBytes, client.digital_certificate_password || "");
+    if (certs.length === 0) return jsonResponse({ error: "Não foi possível abrir o certificado do escritório/contador" }, 500);
+    let certIdx = 0;
 
     const cnpj = client.document.replace(/\D/g, "");
 
@@ -90,10 +104,11 @@ Deno.serve(async (req) => {
 
     while (keepGoing && loops < (consChave ? 1 : MAX_LOOPS)) {
       loops++;
-      console.log(`[NFC-e] Loop ${loops}, ultNuNSU=${lastNsu}, CNPJ=${cnpj}`);
+      const cert = certs[certIdx];
+      console.log(`[NFC-e] Loop ${loops}, ultNuNSU=${lastNsu}, CNPJ=${cnpj}, cert=${cert.label}`);
 
       const soapBody = buildSoapRequest(cnpj, lastNsu, consChave);
-      const response = await requestTextWithMTLS(new URL(SC_URL), soapBody, certPem, keyPem);
+      const response = await requestTextWithMTLS(new URL(SC_URL), soapBody, cert.certPem, cert.keyPem);
       console.log(`[NFC-e] status=${response.status}, bodyLen=${response.bodyText.length}`);
 
       const retBody = extractTagContent(response.bodyText, "retDistNFCeSC") || response.bodyText;
@@ -104,6 +119,11 @@ Deno.serve(async (req) => {
       lastStatus = cStat;
       lastMotivo = xMotivo;
       console.log(`[NFC-e] cStat=${cStat} ${xMotivo} ultNuNSURet=${ultNSURet} qtDfeRet=${qtDfeRet}`);
+
+      if (cStat === "8002") {
+        if (certIdx + 1 < certs.length) { certIdx++; loops--; continue; }
+        return jsonResponse({ success: false, not_accountant: true, cStat, xMotivo, company_name: client.company_name, invoices_saved: invoicesSaved, events_saved: eventsSaved });
+      }
 
       if (cStat === "110") {
         if (ultNSURet) lastNsu = ultNSURet;
