@@ -53,16 +53,44 @@ function parseDadosJson(raw: unknown): any {
   return raw;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function callIntegraContador(
-  supabase: ReturnType<typeof createClient>,
+  _supabase: ReturnType<typeof createClient>,
   clientId: string,
   payload: { idSistema: string; idServico: string; tipo: string; dados: string; versaoSistema?: string },
 ): Promise<any> {
-  const { data, error } = await supabase.functions.invoke("integra-contador", {
-    body: { client_id: clientId, ...payload },
-  });
-  if (error) throw new Error(error.message || "Falha ao chamar integra-contador");
-  return data;
+  let lastErr = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await sleep(attempt === 0 ? 300 : 1500);
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/integra-contador`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          apikey: SERVICE_KEY,
+        },
+        body: JSON.stringify({ client_id: clientId, ...payload }),
+      });
+      const text = await res.text();
+      let json: any = null;
+      try { json = JSON.parse(text); } catch { /* texto puro */ }
+      if (!res.ok && !json) {
+        lastErr = `HTTP ${res.status}: ${text.slice(0, 300)}`;
+        console.warn(`[sync] ${payload.idServico} ${clientId} → ${lastErr}`);
+        if (res.status >= 500 && attempt === 0) continue;
+        throw new Error(lastErr);
+      }
+      if (!res.ok) console.warn(`[sync] ${payload.idServico} ${clientId} → HTTP ${res.status}: ${text.slice(0, 500)}`);
+      return json;
+    } catch (e) {
+      lastErr = (e as Error).message;
+      console.warn(`[sync] ${payload.idServico} ${clientId} tentativa ${attempt + 1} falhou: ${lastErr}`);
+      if (attempt === 1) break;
+    }
+  }
+  throw new Error(lastErr || "Falha ao chamar integra-contador");
 }
 
 /**
