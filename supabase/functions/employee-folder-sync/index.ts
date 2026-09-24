@@ -4,6 +4,7 @@ import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
 import { htmlToCells, looksLikeSciHtml, parseSciHtml } from "./sciHtml.ts";
 import { looksLikeTrialHtml, parseTrialHtml } from "./sciTrial.ts";
 import { looksLikeVacationHtml, parseVacationHtml } from "./sciVacation.ts";
+import { looksLikePayrollHtml, parsePayrollHtml } from "./sciPayroll.ts";
 
 
 const corsHeaders = {
