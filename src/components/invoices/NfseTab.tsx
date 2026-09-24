@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { ClientCombobox } from '@/components/ClientCombobox';
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchInChunks } from "@/lib/fetchInChunks";
 import { supabase } from "@/integrations/supabase/client";
@@ -919,24 +920,7 @@ export default function NfseTab() {
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex-1 min-w-[200px] space-y-2">
                 <Label>Cliente</Label>
-                <Select
-                  value={selectedClient}
-                  onValueChange={setSelectedClient}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos os clientes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os clientes</SelectItem>
-                    {clients
-                      .filter((c) => c.document)
-                      .map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {formatClientLabel(c)}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <ClientCombobox clients={clients.filter((c) => c.document)} value={selectedClient} onChange={setSelectedClient} allowAll allLabel="Todos os clientes" />
               </div>
               <div className="w-[200px] space-y-2">
                 <Label>Mês de Referência</Label>

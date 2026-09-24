@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ClientCombobox } from '@/components/ClientCombobox';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -399,16 +400,7 @@ export default function InvoiceEmit() {
           <CardContent className="space-y-4">
             <div>
               <Label>Cliente (Prestador)</Label>
-              <Select value={selectedClient} onValueChange={setSelectedClient}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o cliente prestador" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.filter(c => c.document).map(c => (
-                    <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ClientCombobox clients={clients.filter(c => c.document)} value={selectedClient} onChange={setSelectedClient} placeholder="Selecione o cliente prestador" />
             </div>
             {selectedClientData && (
               <>
