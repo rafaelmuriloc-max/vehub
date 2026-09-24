@@ -2,6 +2,7 @@
 // AN endpoint: NFeRecepcaoEvento4
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import forge from "https://esm.sh/node-forge@1.3.1";
+import { parsePfx } from "../_shared/certificate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -361,32 +362,3 @@ async function requestTextWithMTLS(
   } finally { httpClient.close(); }
 }
 
-function parsePfx(pfxBytes: Uint8Array, password: string): { certPem: string; keyPem: string; privateKey: any } {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < pfxBytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...pfxBytes.subarray(i, i + chunkSize));
-  }
-  const asn1 = forge.asn1.fromDer(binary);
-  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
-
-  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-  const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
-  if (!keyBag?.key) throw new Error("Chave privada não encontrada");
-  const privateKey = keyBag.key;
-  const keyPem = forge.pki.privateKeyToPem(privateKey);
-
-  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const certs = ((certBags[forge.pki.oids.certBag] || []) as Array<any>).filter((b) => b?.cert);
-  if (certs.length === 0) throw new Error("Certificado não encontrado no PFX");
-  const leaf = certs.find((c: any) => {
-    const s = stringifyDN(c.cert.subject); const i = stringifyDN(c.cert.issuer);
-    return s !== i;
-  }) || certs[0];
-  const certPem = forge.pki.certificateToPem(leaf.cert);
-  return { certPem, keyPem, privateKey };
-}
-
-function stringifyDN(dn: { attributes?: Array<{ shortName?: string; name?: string; value?: string }> }): string {
-  return (dn.attributes || []).map((a) => `${a.shortName || a.name || "attr"}=${a.value || ""}`).join(",");
-}
