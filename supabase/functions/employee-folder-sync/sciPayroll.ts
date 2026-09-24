@@ -47,6 +47,25 @@ export function parsePayrollHtml(html: string): { competence: string | null; sum
   }
   if (!competence) return { competence: null, summaries: [] };
 
+  // Passo 1: funcionários por CNPJ (independente do bloco RESUMO GERAL).
+  const empsByDoc = new Map<string, PayrollEmployee[]>();
+  {
+    let d: string | null = null;
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i];
+      if (/^Empresa:/i.test(c)) { d = null; continue; }
+      const cn = c.match(/CNPJ:\s*([\d./-]{14,18})/i);
+      if (cn) { d = cn[1]; continue; }
+      const adm = c.match(/Admiss\S*o em\s*(\d{2})\/(\d{2})\/(\d{4}).*?Sal\S*rio base\s*([\d.,]+)/i);
+      if (!adm || !d) continue;
+      const ec = cells[i - 4] ?? "", en = cells[i - 3] ?? "";
+      if (!/^\d+$/.test(ec) || !en || isNum(en)) continue;
+      const list = empsByDoc.get(d) ?? [];
+      if (!list.some((e) => e.code === ec)) list.push({ code: ec, name: en, admission_date: `${adm[3]}-${adm[2]}-${adm[1]}`, base_salary: num(adm[4]) });
+      empsByDoc.set(d, list);
+    }
+  }
+
   const out: PayrollSummary[] = [];
   let doc: string | null = null, code: string | null = null, name: string | null = null;
   let emps: PayrollEmployee[] = [];
@@ -96,7 +115,7 @@ export function parsePayrollHtml(html: string): { competence: string | null; sum
       fgts_value: (rows["valor gfd mensal 8"] ?? rows["valor fgts"] ?? [0])[0],
       irrf_base: r("base irrf")[0],
       active_count: flags["ativos"] ?? 0, admitted_count: flags["admitidos"] ?? 0, dismissed_count: flags["demitidos"] ?? 0,
-      employees: emps,
+      employees: doc ? (empsByDoc.get(doc) ?? []) : emps,
     });
     emps = [];
   }
