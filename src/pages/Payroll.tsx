@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Check, ChevronsUpDown, Loader2, UserMinus, UserPlus, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, Check, FolderSync, ChevronsUpDown, Loader2, UserMinus, UserPlus, Users, Wallet } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Legend, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { cn, formatClientLabel } from '@/lib/utils';
 
@@ -33,8 +34,11 @@ export default function Payroll() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [rankBy, setRankBy] = useState<RankKey>('gross');
 
-  useEffect(() => {
-    (async () => {
+  const { toast } = useToast();
+  const [syncing, setSyncing] = useState(false);
+
+  const load = useCallback(async () => {
+    {
       const [c, s] = await Promise.all([
         supabase.from('clients').select('id, company_name, document, sci_code, status').order('company_name'),
         supabase.from('payroll_summaries' as any).select('client_id, competence, qty_total, gross, discounts, net, inss_value, fgts_value, inss_base, fgts_base, active_count, admitted_count, dismissed_count').limit(10000),
@@ -49,8 +53,34 @@ export default function Payroll() {
       const months = [...new Set(data.map((r) => r.competence))].sort();
       setMonth(months[months.length - 1] ?? '');
       setLoading(false);
-    })();
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function syncPayroll() {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('employee-folder-sync', { body: { only: 'folha' } });
+      if (error) throw error;
+      if (data?.ok === false) {
+        throw new Error(data.error === 'Nenhuma pasta configurada'
+          ? 'Nenhuma pasta definida. Defina a pasta pelo botão Funcionários, na página Pessoal.'
+          : data.error);
+      }
+      const st = data?.stats ?? {};
+      const meses = (st.meses ?? []).map((m: string) => monthLabel(m)).join(', ');
+      toast({
+        title: 'Resumo da folha sincronizado',
+        description: `${st.arquivos ?? 0} arquivo(s) lido(s)${meses ? ` (${meses})` : ''}, ${st.empresas_gravadas ?? 0} empresa(s) gravada(s)${(st.sem_empresa ?? 0) > 0 ? `, ${st.sem_empresa} sem empresa cadastrada` : ''}.`,
+      });
+      await load();
+    } catch (e) {
+      toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const months = useMemo(() => [...new Set(rows.map((r) => r.competence))].sort(), [rows]);
@@ -137,6 +167,9 @@ export default function Payroll() {
             <SelectTrigger className="w-full sm:w-36"><SelectValue placeholder="Mês" /></SelectTrigger>
             <SelectContent>{[...months].reverse().map((m) => <SelectItem key={m} value={m}>{monthLabel(m)}</SelectItem>)}</SelectContent>
           </Select>
+          <Button onClick={syncPayroll} disabled={syncing} className="w-full sm:w-auto">
+            {syncing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FolderSync className="h-4 w-4 mr-1" />}Sincronizar
+          </Button>
         </div>
       </div>
 
