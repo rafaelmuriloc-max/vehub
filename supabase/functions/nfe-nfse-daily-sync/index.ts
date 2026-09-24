@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
 
     try {
       const nfce = await callFunction("nfce-query", { client_id: c.id });
-      entry.nfce = nfce?.skipped ? "bloqueada" : "ok";
+      entry.nfce = nfce?.not_accountant ? "sem_vinculo_sat" : nfce?.skipped ? "bloqueada" : "ok";
       entry.nfce_notas = nfce?.invoices_saved ?? 0;
       if (nfce?.next_query_at) entry.nfce_skipped_until = nfce.next_query_at;
     } catch (e) {
