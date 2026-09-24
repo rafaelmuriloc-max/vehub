@@ -316,6 +316,15 @@ Deno.serve(async (req) => {
         const batchSize = 20;
         // PostgREST requires every row of a batch to share the exact same keys,
         // so rows are grouped by their key signature before upserting.
+        const dedupe = (rows: Array<Record<string, unknown>>) => {
+          const m = new Map<string, Record<string, unknown>>();
+          for (const r of rows) m.set(String(r.access_key), r);
+          return m;
+        };
+        const fullMap = dedupe(fullRows);
+        const reducedMap = dedupe(reducedRows);
+        for (const k of fullMap.keys()) reducedMap.delete(k);
+
         const upsertRows = async (rows: Array<Record<string, unknown>>) => {
           const groups = new Map<string, Array<Record<string, unknown>>>();
           for (const row of rows) {
@@ -326,21 +335,25 @@ Deno.serve(async (req) => {
           }
           for (const group of groups.values()) {
             for (let i = 0; i < group.length; i += batchSize) {
+              const batch = group.slice(i, i + batchSize);
               const { error: upsertError } = await adminClient
                 .from("nfe_invoices")
-                .upsert(group.slice(i, i + batchSize), {
-                  onConflict: "access_key",
-                  ignoreDuplicates: false,
-                });
+                .upsert(batch, { onConflict: "access_key", ignoreDuplicates: false });
               if (upsertError) {
-                console.error("[NF-e] Upsert error:", upsertError.message);
+                console.error("[NF-e] Upsert error (retrying one by one):", upsertError.message);
+                for (const one of batch) {
+                  const { error: e1 } = await adminClient
+                    .from("nfe_invoices")
+                    .upsert(one, { onConflict: "access_key", ignoreDuplicates: false });
+                  if (e1) console.error("[NF-e] Row upsert error:", one.access_key, e1.message);
+                }
               }
             }
           }
         };
 
-        await upsertRows(fullRows);
-        await upsertRows(reducedRows);
+        await upsertRows([...fullMap.values()]);
+        await upsertRows([...reducedMap.values()]);
         totalSaved += fullRows.length + reducedRows.length;
 
       }
