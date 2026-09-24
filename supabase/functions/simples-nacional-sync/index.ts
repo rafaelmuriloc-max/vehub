@@ -69,11 +69,87 @@ async function callIntegraContador(
  * For a single client and competence, calls PGDASD to fetch declaration info and DAS PDF,
  * then upserts the row into simples_nacional_competencias.
  */
+type PaymentMap = Map<string, { data: string | null; valor: number | null }>;
+
+function toYM(v: unknown): string | null {
+  if (!v) return null;
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-?(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}`;
+  m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}`;
+  m = s.match(/^(\d{2})\/(\d{4})/);
+  if (m) return `${m[2]}-${m[1]}`;
+  return null;
+}
+
+function toISODate(v: unknown): string | null {
+  if (!v) return null;
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+
+/** Consulta PAGTOWEB/PAGAMENTOS71 e devolve os DAS arrecadados por período (yyyy-MM). */
+async function fetchPayments(
+  supabase: ReturnType<typeof createClient>,
+  clientId: string,
+  year: number,
+): Promise<{ map: PaymentMap; error?: string }> {
+  const map: PaymentMap = new Map();
+  try {
+    const res = await callIntegraContador(supabase, clientId, {
+      idSistema: "PAGTOWEB",
+      idServico: "PAGAMENTOS71",
+      tipo: "Consultar",
+      dados: JSON.stringify({
+        intervaloDataArrecadacao: { dataInicial: `${year}-01-01`, dataFinal: `${year + 1}-03-31` },
+        primeiroDaPagina: 0,
+        tamanhoDaPagina: 100,
+      }),
+    });
+    if (res?.success === false) {
+      const msgs = res?.data?.mensagens;
+      const err = msgs?.map((m: any) => m.texto).join("; ") || res?.error || "Falha na consulta de pagamentos";
+      console.warn(`[sync] PAGAMENTOS71 recusado ${clientId}: ${err}`);
+      return { map, error: err };
+    }
+    const dados = parseDadosJson(res?.data?.dados ?? res?.dados);
+    console.log(`[sync] PAGAMENTOS71 ${clientId} amostra: ${JSON.stringify(dados)?.slice(0, 1500)}`);
+    const list: any[] = Array.isArray(dados) ? dados
+      : Array.isArray(dados?.pagamentos) ? dados.pagamentos
+      : Array.isArray(dados?.documentos) ? dados.documentos
+      : Array.isArray(dados?.lista) ? dados.lista : [];
+    for (const it of list) {
+      const tipoTxt = `${it?.tipo?.codigo ?? it?.tipoDocumento ?? it?.tipo ?? ""} ${it?.tipo?.descricao ?? ""}`;
+      const isDas = /DAS|simples/i.test(tipoTxt) || String(it?.numeroDocumento ?? "").startsWith("07");
+      if (!isDas) continue;
+      const ym = toYM(it?.periodoApuracao ?? it?.periodo ?? it?.desmembramentos?.[0]?.periodoApuracao);
+      if (!ym || !ym.startsWith(String(year))) continue;
+      const data = toISODate(it?.dataArrecadacao ?? it?.dataPagamento);
+      const valor = pickNumber(it?.valorTotal, it?.valor, it?.valorPrincipal);
+      const prev = map.get(ym);
+      map.set(ym, { data: prev?.data && data && prev.data < data ? prev.data : (data ?? prev?.data ?? null), valor: (prev?.valor ?? 0) + (valor ?? 0) || null });
+    }
+  } catch (e) {
+    const msg = (e as Error).message;
+    console.warn(`[sync] PAGAMENTOS71 falhou ${clientId}: ${msg}`);
+    return { map, error: msg };
+  }
+  return { map };
+}
+
 async function syncCompetencia(
   supabase: ReturnType<typeof createClient>,
   clientId: string,
   year: number,
   month: number,
+  payments?: PaymentMap,
 ): Promise<{ ok: boolean; status: string; error?: string }> {
   const competencia = firstDayOfMonth(year, month);
   const periodo = periodoAAAAMM(year, month);
@@ -140,31 +216,15 @@ async function syncCompetencia(
       console.warn(`[sync] GERARDAS12 falhou para ${clientId} ${periodo}: ${(e as Error).message}`);
     }
 
-    // 3) Status: se valor 0 ou nada, marcar sem_movimento; senão aberto
+    // 3) Status: pagamento vem do PAGTOWEB (mapa por período)
     let status: "pago" | "aberto" | "sem_movimento" = "aberto";
     let dataPagamento: string | null = null;
-    if (valorDas !== null && valorDas <= 0) {
+    const pg = payments?.get(`${year}-${String(month).padStart(2, "0")}`);
+    if (pg) {
+      status = "pago";
+      dataPagamento = pg.data;
+    } else if (valorDas !== null && valorDas <= 0) {
       status = "sem_movimento";
-    }
-
-    // 4) Se houver numeroDas, consultar extrato para checar pagamento
-    if (numeroDas) {
-      try {
-        const ext = await callIntegraContador(supabase, clientId, {
-          idSistema: "PGDASD",
-          idServico: "CONSEXTRATO16",
-          tipo: "Consultar",
-          dados: JSON.stringify({ numeroDas }),
-        });
-        const dadosExt = parseDadosJson(ext?.data?.dados ?? ext?.dados);
-        const pago = pickString(dadosExt?.dataPagamento, dadosExt?.dataArrecadacao);
-        if (pago) {
-          status = "pago";
-          dataPagamento = pago.length >= 10 ? pago.substring(0, 10) : null;
-        }
-      } catch (e) {
-        console.warn(`[sync] CONSEXTRATO16 falhou: ${(e as Error).message}`);
-      }
     }
 
     await supabase.from("simples_nacional_competencias").upsert({
@@ -219,12 +279,44 @@ Deno.serve(async (req) => {
   if (error) return jsonResponse({ error: error.message }, 500);
 
   const results: any[] = [];
+  const paymentErrors: { company: string; error: string }[] = [];
+  let pagos = 0;
+  const onlyPayments = body?.only_payments === true;
+
   for (const c of clients ?? []) {
+    const { map, error: pErr } = await fetchPayments(supabase, c.id, year);
+    if (pErr) paymentErrors.push({ company: c.company_name, error: pErr });
+
+    if (onlyPayments) {
+      if (pErr) continue;
+      const { data: existing } = await supabase.from("simples_nacional_competencias")
+        .select("competencia, status").eq("client_id", c.id).eq("ano", year);
+      const ex = new Map((existing ?? []).map((r: any) => [String(r.competencia).slice(0, 7), r.status]));
+      for (const month of requestedMonths) {
+        const ym = `${year}-${String(month).padStart(2, "0")}`;
+        const pg = map.get(ym);
+        if (pg) {
+          pagos++;
+          await supabase.from("simples_nacional_competencias").upsert({
+            client_id: c.id, competencia: `${ym}-01`, ano: year,
+            status: "pago", data_pagamento: pg.data, last_synced_at: new Date().toISOString(),
+          }, { onConflict: "client_id,competencia" });
+        } else if (ex.get(ym) === "pago") {
+          await supabase.from("simples_nacional_competencias")
+            .update({ status: "aberto", data_pagamento: null })
+            .eq("client_id", c.id).eq("competencia", `${ym}-01`);
+        }
+        results.push({ client_id: c.id, month, status: pg ? "pago" : "aberto" });
+      }
+      continue;
+    }
+
     for (const month of requestedMonths) {
-      const r = await syncCompetencia(supabase, c.id, year, month);
+      const r = await syncCompetencia(supabase, c.id, year, month, pErr ? undefined : map);
+      if (r.status === "pago") pagos++;
       results.push({ client_id: c.id, company: c.company_name, year, month, ...r });
     }
   }
 
-  return jsonResponse({ success: true, count: results.length, results });
+  return jsonResponse({ success: true, count: results.length, pagos, payment_errors: paymentErrors, results });
 });

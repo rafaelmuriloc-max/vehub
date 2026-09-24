@@ -198,6 +198,11 @@ export default function CompetenciaRow({ clientId, year, month, competencia, onC
         {isPago ? (
           <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20">
             <CheckCircle2 className="h-3 w-3 mr-1" /> Pago
+            {(competencia as any)?.data_pagamento && (
+              <span className="ml-1 font-normal">
+                {String((competencia as any).data_pagamento).slice(0, 10).split('-').reverse().join('/')}
+              </span>
+            )}
           </Badge>
         ) : isSemMov ? (
           <Badge variant="secondary">Sem movimento</Badge>
