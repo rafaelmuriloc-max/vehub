@@ -2393,6 +2393,92 @@ export type Database = {
         }
         Relationships: []
       }
+      payroll_summaries: {
+        Row: {
+          active_count: number
+          admitted_count: number
+          client_id: string
+          competence: string
+          created_at: string
+          discounts: number
+          dismissed_count: number
+          fgts_base: number
+          fgts_value: number
+          gross: number
+          id: string
+          inss_base: number
+          inss_value: number
+          irrf_base: number
+          net: number
+          qty_autonomous: number
+          qty_employees: number
+          qty_employers: number
+          qty_interns: number
+          qty_total: number
+          source_file: string | null
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          active_count?: number
+          admitted_count?: number
+          client_id: string
+          competence: string
+          created_at?: string
+          discounts?: number
+          dismissed_count?: number
+          fgts_base?: number
+          fgts_value?: number
+          gross?: number
+          id?: string
+          inss_base?: number
+          inss_value?: number
+          irrf_base?: number
+          net?: number
+          qty_autonomous?: number
+          qty_employees?: number
+          qty_employers?: number
+          qty_interns?: number
+          qty_total?: number
+          source_file?: string | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          active_count?: number
+          admitted_count?: number
+          client_id?: string
+          competence?: string
+          created_at?: string
+          discounts?: number
+          dismissed_count?: number
+          fgts_base?: number
+          fgts_value?: number
+          gross?: number
+          id?: string
+          inss_base?: number
+          inss_value?: number
+          irrf_base?: number
+          net?: number
+          qty_autonomous?: number
+          qty_employees?: number
+          qty_employers?: number
+          qty_interns?: number
+          qty_total?: number
+          source_file?: string | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_summaries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procurador_tokens: {
         Row: {
           client_cnpj: string
