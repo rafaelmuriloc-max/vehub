@@ -619,7 +619,7 @@ export default function Personnel() {
       return [c.sci_code ?? '', c.company_name, c.document ?? '', m.total, m.active, m.terminated, m.salaries.toFixed(2).replace('.', ','), m.vacations, m.trials, c.status === 'active' ? 'Ativa' : 'Inativa'];
     });
     const csv = '\ufeff' + [['Código SCI', 'Empresa', 'CNPJ', 'Funcionários', 'Ativos', 'Desligados', 'Salários (R$)', 'Férias a vencer', 'Experiências a vencer', 'Status'], ...rows]
-      .map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
+      .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
     anchor.href = url;

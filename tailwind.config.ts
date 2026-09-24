@@ -47,6 +47,8 @@ export default {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
   			},
+			success: 'hsl(var(--success))',
+			warning: 'hsl(var(--warning))',
 			calendar: {
 				blue: 'hsl(var(--calendar-blue))',
 				'blue-soft': 'hsl(var(--calendar-blue-soft))',
