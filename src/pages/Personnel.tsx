@@ -712,16 +712,15 @@ export default function Personnel() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { label: 'Funcionários ativos', value: activeEmployees.length.toLocaleString('pt-BR'), hint: `${scopedEmployees.length - activeEmployees.length} desligado(s)`, Icon: Users, tone: 'primary', bars: [4,7,11,9,8,12,10,15] },
+          { label: 'Funcionários ativos', value: activeEmployees.length.toLocaleString('pt-BR'), hint: `${scopedEmployees.length - activeEmployees.length} desligado(s)`, hint2: `${clientsWithActive} empresa(s) com funcionários · ${activeClients.length - clientsWithActive} sem funcionário(s)`, Icon: Users, tone: 'primary', bars: [4,7,11,9,8,12,10,15] },
           { label: 'Total de salários', value: totalSalaries.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), hint: `Folha dos ${activeEmployees.length} funcionários ativos`, Icon: Wallet, tone: 'success', bars: [3,5,8,7,9,8,10,12] },
-          { label: 'Empresas com funcionários', value: clientsWithActive.toLocaleString('pt-BR'), hint: `${activeClients.length - clientsWithActive} empresa(s) sem funcionário(s)`, Icon: Building2, tone: 'violet', bars: [4,9,6,13,10,15,12,18] },
           { label: 'Experiências a vencer (15 dias)', value: trialSoon.toLocaleString('pt-BR'), hint: `${trialOverdue} prazo(s) já vencido(s)`, Icon: CalendarClock, tone: 'danger', bars: [7,4,10,6,12,8,5,9], action: () => setTrialDialogOpen(true) },
           { label: 'Férias a vencer (60 dias)', value: vacationAlerts.count.toLocaleString('pt-BR'), hint: `${vacationAlerts.overdue} período(s) já vencido(s)`, Icon: Palmtree, tone: 'warning', bars: [3,5,8,7,5,8,10,12], action: () => setVacationDialogOpen(true) },
-        ].map(({ label, value, hint, Icon, tone, bars, action }) => (
+        ].map(({ label, value, hint, hint2, Icon, tone, bars, action }) => (
           <Card key={label} className={cn('overflow-hidden border-border/70 shadow-sm', action && 'cursor-pointer hover:border-primary/30 transition-colors')} onClick={action}>
             <CardContent className="p-4 min-h-[118px] flex gap-3">
               <div className={cn('h-10 w-10 rounded-full shrink-0 flex items-center justify-center', tone === 'primary' && 'bg-primary/10 text-primary', tone === 'success' && 'bg-success/10 text-success', tone === 'violet' && 'bg-accent text-accent-foreground', tone === 'danger' && 'bg-destructive/10 text-destructive', tone === 'warning' && 'bg-warning/10 text-warning')}><Icon className="h-5 w-5" /></div>
-              <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground leading-tight min-h-7">{label}</p><p className="text-2xl font-bold tabular-nums truncate">{value}</p><p className="text-[11px] text-muted-foreground truncate">{hint}</p></div>
+              <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground leading-tight min-h-7">{label}</p><p className="text-2xl font-bold tabular-nums truncate">{value}</p><p className="text-[11px] text-muted-foreground truncate">{hint}</p>{hint2 && <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1"><Building2 className="h-3 w-3 shrink-0" />{hint2}</p>}</div>
               <div className="self-end h-10 w-16 flex items-end gap-1 opacity-60" aria-hidden="true">{bars.map((height, index) => <span key={index} className="flex-1 rounded-t-sm bg-primary/50" style={{ height: `${height * 2}px` }} />)}</div>
             </CardContent>
           </Card>
