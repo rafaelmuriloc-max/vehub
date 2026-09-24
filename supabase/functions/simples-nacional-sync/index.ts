@@ -53,16 +53,44 @@ function parseDadosJson(raw: unknown): any {
   return raw;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function callIntegraContador(
-  supabase: ReturnType<typeof createClient>,
+  _supabase: ReturnType<typeof createClient>,
   clientId: string,
   payload: { idSistema: string; idServico: string; tipo: string; dados: string; versaoSistema?: string },
 ): Promise<any> {
-  const { data, error } = await supabase.functions.invoke("integra-contador", {
-    body: { client_id: clientId, ...payload },
-  });
-  if (error) throw new Error(error.message || "Falha ao chamar integra-contador");
-  return data;
+  let lastErr = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await sleep(attempt === 0 ? 300 : 1500);
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/integra-contador`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          apikey: SERVICE_KEY,
+        },
+        body: JSON.stringify({ client_id: clientId, ...payload }),
+      });
+      const text = await res.text();
+      let json: any = null;
+      try { json = JSON.parse(text); } catch { /* texto puro */ }
+      if (!res.ok && !json) {
+        lastErr = `HTTP ${res.status}: ${text.slice(0, 300)}`;
+        console.warn(`[sync] ${payload.idServico} ${clientId} → ${lastErr}`);
+        if (res.status >= 500 && attempt === 0) continue;
+        throw new Error(lastErr);
+      }
+      if (!res.ok) console.warn(`[sync] ${payload.idServico} ${clientId} → HTTP ${res.status}: ${text.slice(0, 500)}`);
+      return json;
+    } catch (e) {
+      lastErr = (e as Error).message;
+      console.warn(`[sync] ${payload.idServico} ${clientId} tentativa ${attempt + 1} falhou: ${lastErr}`);
+      if (attempt === 1) break;
+    }
+  }
+  throw new Error(lastErr || "Falha ao chamar integra-contador");
 }
 
 /**
@@ -127,7 +155,7 @@ async function fetchPayments(
       : Array.isArray(dados?.lista) ? dados.lista : [];
     for (const it of list) {
       const tipoTxt = `${it?.tipo?.codigo ?? it?.tipoDocumento ?? it?.tipo ?? ""} ${it?.tipo?.descricao ?? ""}`;
-      const isDas = /DAS|simples/i.test(tipoTxt) || String(it?.numeroDocumento ?? "").startsWith("07");
+      const isDas = String(it?.tipo?.codigo ?? "") === "9" || /simples nacional/i.test(tipoTxt);
       if (!isDas) continue;
       const ym = toYM(it?.periodoApuracao ?? it?.periodo ?? it?.desmembramentos?.[0]?.periodoApuracao);
       if (!ym || !ym.startsWith(String(year))) continue;
@@ -272,18 +300,25 @@ Deno.serve(async (req) => {
   // Buscar clientes do Simples ativos
   const query = supabase.from("clients").select("id, company_name, document, tax_regime, status")
     .ilike("tax_regime", "%simples%")
-    .eq("status", "active");
+    .eq("status", "active")
+    .order("id");
   if (clientId) query.eq("id", clientId);
 
-  const { data: clients, error } = await query;
+  const { data: allClients, error } = await query;
   if (error) return jsonResponse({ error: error.message }, 500);
+
+  const offset = Math.max(0, Number(body?.offset) || 0);
+  const limit = Number(body?.limit) > 0 ? Number(body.limit) : (allClients?.length ?? 0);
+  const clients = (allClients ?? []).slice(offset, offset + limit);
+  const total = allClients?.length ?? 0;
+  const nextOffset = offset + limit < total ? offset + limit : null;
 
   const results: any[] = [];
   const paymentErrors: { company: string; error: string }[] = [];
   let pagos = 0;
   const onlyPayments = body?.only_payments === true;
 
-  for (const c of clients ?? []) {
+  for (const c of clients) {
     const { map, error: pErr } = await fetchPayments(supabase, c.id, year);
     if (pErr) paymentErrors.push({ company: c.company_name, error: pErr });
 
