@@ -83,11 +83,21 @@ function moneyAfter(txt: string, label: RegExp): number | null {
 }
 
 async function inflate(bytes: Uint8Array): Promise<Uint8Array | null> {
-  try {
-    const ds = new DecompressionStream("deflate");
-    const out = new Response(new Blob([bytes]).stream().pipeThrough(ds));
-    return new Uint8Array(await out.arrayBuffer());
-  } catch { return null; }
+  // Lê em partes e aproveita o que foi descompactado mesmo se o fim do fluxo der erro
+  const run = async (fmt: CompressionFormat, data: Uint8Array) => {
+    const parts: Uint8Array[] = [];
+    try {
+      const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream(fmt)).getReader();
+      while (true) { const { done, value } = await reader.read(); if (done) break; parts.push(value); }
+    } catch { /* fluxo truncado */ }
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    const out = new Uint8Array(total); let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+  };
+  let out = await run("deflate", bytes);
+  if (!out.length && bytes.length > 2) out = await run("deflate-raw", bytes.subarray(2));
+  return out.length ? out : null;
 }
 
 /** Extrai texto simples (operadores Tj/TJ) de um PDF em base64. */
