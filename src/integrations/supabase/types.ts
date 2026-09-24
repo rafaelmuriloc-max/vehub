@@ -788,6 +788,7 @@ export type Database = {
           main_activity: string | null
           monthly_value: number | null
           municipal_registration: string | null
+          nfe_next_query_at: string | null
           notes: string | null
           opening_date: string | null
           partners_info: string | null
@@ -839,6 +840,7 @@ export type Database = {
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
+          nfe_next_query_at?: string | null
           notes?: string | null
           opening_date?: string | null
           partners_info?: string | null
@@ -890,6 +892,7 @@ export type Database = {
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
+          nfe_next_query_at?: string | null
           notes?: string | null
           opening_date?: string | null
           partners_info?: string | null
@@ -1871,6 +1874,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfe_events: {
+        Row: {
+          access_key: string
+          client_id: string | null
+          created_at: string
+          descricao: string | null
+          dh_evento: string | null
+          id: string
+          n_seq_evento: number
+          nsu: string | null
+          raw_xml: string | null
+          tp_evento: string
+        }
+        Insert: {
+          access_key: string
+          client_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          dh_evento?: string | null
+          id?: string
+          n_seq_evento?: number
+          nsu?: string | null
+          raw_xml?: string | null
+          tp_evento: string
+        }
+        Update: {
+          access_key?: string
+          client_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          dh_evento?: string | null
+          id?: string
+          n_seq_evento?: number
+          nsu?: string | null
+          raw_xml?: string | null
+          tp_evento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_events_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
