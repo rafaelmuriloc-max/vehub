@@ -731,15 +731,14 @@ export default function Personnel() {
         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9 h-10" placeholder="Buscar empresa por nome, CNPJ, código SCI ou funcionário..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}><SelectTrigger className="h-10 w-full xl:w-36"><div className="text-left"><span className="block text-[10px] leading-none text-muted-foreground">Situação</span><SelectValue /></div></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Ativos</SelectItem><SelectItem value="terminated">Desligados</SelectItem></SelectContent></Select>
         <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={loadAll} aria-label="Recarregar"><RefreshCw className="h-4 w-4" /></Button>
-        <Button className="h-10 shrink-0" onClick={() => navigate('/clients?new=1')}><Plus className="h-4 w-4 mr-1" />Nova empresa</Button>
-        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="Mais ações"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuItem onClick={() => navigate('/ferias')}><Palmtree className="h-4 w-4 mr-2" />Gestão de férias</DropdownMenuItem>
-          {isAdmin && <DropdownMenuItem onClick={() => { setFolder(null); setFolderDialog(true); }}><FolderOpen className="h-4 w-4 mr-2" />{config ? `Pasta: ${config.folder_name}` : 'Definir pasta'}</DropdownMenuItem>}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => syncNow()} disabled={syncingAny}>{syncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FolderSync className="h-4 w-4 mr-2" />}Sincronizar fichas</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => syncNow(true)} disabled={syncingAny}>{syncingTrial ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CalendarClock className="h-4 w-4 mr-2" />}Sincronizar experiência</DropdownMenuItem>
-          <DropdownMenuItem onClick={syncVacations} disabled={syncingAny}>{syncingVacation ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Palmtree className="h-4 w-4 mr-2" />}Sincronizar férias</DropdownMenuItem>
+        {isAdmin && <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => { setFolder(null); setFolderDialog(true); }} title={config ? `Pasta: ${config.folder_name}` : 'Definir pasta'}><FolderOpen className="h-4 w-4 mr-1" />Funcionários</Button>}
+        <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/ferias')}><Palmtree className="h-4 w-4 mr-1" />Férias</Button>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button className="h-10 shrink-0 rounded-full" disabled={syncingAny}>{syncingAny ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}Sincronizar<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onClick={() => syncNow()} disabled={syncingAny}><FolderSync className="h-4 w-4 mr-2" />Pasta (fichas)</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => syncNow(true)} disabled={syncingAny}><CalendarClock className="h-4 w-4 mr-2" />Experiência</DropdownMenuItem>
+          <DropdownMenuItem onClick={syncVacations} disabled={syncingAny}><Palmtree className="h-4 w-4 mr-2" />Férias</DropdownMenuItem>
         </DropdownMenuContent></DropdownMenu>
+        <Button variant="outline" className="h-10 shrink-0" onClick={() => navigate('/clients?new=1')}><Plus className="h-4 w-4 mr-1" />Nova empresa</Button>
       </div>
 
       {config?.last_synced_at && <p className="text-xs text-muted-foreground">Última sincronização: {format(new Date(config.last_synced_at), 'dd/MM/yyyy HH:mm')}</p>}
