@@ -55,6 +55,77 @@ function parseDadosJson(raw: unknown): any {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function findKeyNumber(o: any, re: RegExp, depth = 0): number | null {
+  if (!o || typeof o !== "object" || depth > 6) return null;
+  for (const [k, v] of Object.entries(o)) {
+    if (re.test(k) && (typeof v === "number" || typeof v === "string")) {
+      const n = pickNumber(v);
+      if (n !== null) return n;
+    }
+    if (v && typeof v === "object") { const f = findKeyNumber(v, re, depth + 1); if (f !== null) return f; }
+  }
+  return null;
+}
+
+function parseBRL(s: string): number | null {
+  const n = Number(s.replace(/\./g, "").replace(",", "."));
+  return Number.isNaN(n) ? null : n;
+}
+
+/** Primeiro valor em reais (1.234,56) que aparece logo depois do rótulo. */
+function moneyAfter(txt: string, label: RegExp): number | null {
+  const m = label.exec(txt);
+  if (!m) return null;
+  const rest = txt.slice(m.index + m[0].length, m.index + m[0].length + 400);
+  const v = rest.match(/\d{1,3}(?:\.\d{3})*,\d{2}/);
+  return v ? parseBRL(v[0]) : null;
+}
+
+async function inflate(bytes: Uint8Array): Promise<Uint8Array | null> {
+  try {
+    const ds = new DecompressionStream("deflate");
+    const out = new Response(new Blob([bytes]).stream().pipeThrough(ds));
+    return new Uint8Array(await out.arrayBuffer());
+  } catch { return null; }
+}
+
+/** Extrai texto simples (operadores Tj/TJ) de um PDF em base64. */
+async function pdfText(b64: string): Promise<string> {
+  const bin = atob(b64.replace(/\s/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const latin = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return s; };
+  const re = /stream\r?\n/g;
+  const parts: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(bin))) {
+    const start = m.index + m[0].length;
+    const end = bin.indexOf("endstream", start);
+    if (end < 0) break;
+    const dict = bin.slice(Math.max(0, m.index - 300), m.index);
+    let chunk = bytes.subarray(start, end);
+    if (/FlateDecode/.test(dict.slice(dict.lastIndexOf("<<")))) {
+      const inf = await inflate(chunk);
+      if (!inf) continue;
+      chunk = inf;
+    }
+    const s = latin(chunk);
+    if (!/T[Jj]/.test(s)) continue;
+    const tokens = s.match(/\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f\s]+>|T[Jj*]|Td|TD|T\*|ET/g) || [];
+    let line = "";
+    for (const t of tokens) {
+      if (t.startsWith("(")) {
+        line += t.slice(1, -1).replace(/\\(\d{1,3})/g, (_, o) => String.fromCharCode(parseInt(o, 8))).replace(/\\(.)/g, "$1");
+      } else if (t.startsWith("<")) {
+        const h = t.slice(1, -1).replace(/\s/g, "");
+        for (let i = 0; i + 1 < h.length; i += 2) { const c = parseInt(h.slice(i, i + 2), 16); if (c >= 32) line += String.fromCharCode(c); }
+      } else if (t !== "TJ" && t !== "Tj") line += " ";
+    }
+    parts.push(line);
+  }
+  return parts.join(" ").replace(/\s+/g, " ");
+}
+
 async function callIntegraContador(
   _supabase: ReturnType<typeof createClient>,
   clientId: string,
@@ -209,6 +280,17 @@ async function syncCompetencia(
         return null;
       };
       declaracaoPdf = walkPdf(dadosDec) || walkPdf(dec?.data);
+      if (rbt12 === null) rbt12 = findKeyNumber(dadosDec, /^(rbt12|receitaBrutaTotal12|rbt12Total|valorRbt12)/i);
+      if (rba === null) rba = findKeyNumber(dadosDec, /^(rba|receitaBrutaAcumulada)/i);
+      if ((rbt12 === null || rba === null) && declaracaoPdf) {
+        try {
+          const txt = await pdfText(declaracaoPdf);
+          if (rbt12 === null) rbt12 = moneyAfter(txt, /RBT12\)?|Receita\s+bruta\s+acumulada\s+nos\s+doze/i);
+          if (rba === null) rba = moneyAfter(txt, /\(RBA\)|Receita\s+bruta\s+acumulada\s+no\s+ano\s+calend/i);
+        } catch (e) {
+          console.warn(`[sync] leitura do PDF falhou ${clientId} ${periodo}: ${(e as Error).message}`);
+        }
+      }
     } catch (e) {
       console.warn(`[sync] CONSULTIMADECREC14 falhou para ${clientId} ${periodo}: ${(e as Error).message}`);
     }
