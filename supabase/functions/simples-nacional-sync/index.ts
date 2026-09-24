@@ -155,7 +155,7 @@ async function fetchPayments(
       : Array.isArray(dados?.lista) ? dados.lista : [];
     for (const it of list) {
       const tipoTxt = `${it?.tipo?.codigo ?? it?.tipoDocumento ?? it?.tipo ?? ""} ${it?.tipo?.descricao ?? ""}`;
-      const isDas = /DAS|simples/i.test(tipoTxt) || String(it?.numeroDocumento ?? "").startsWith("07");
+      const isDas = String(it?.tipo?.codigo ?? "") === "9" || /simples nacional/i.test(tipoTxt);
       if (!isDas) continue;
       const ym = toYM(it?.periodoApuracao ?? it?.periodo ?? it?.desmembramentos?.[0]?.periodoApuracao);
       if (!ym || !ym.startsWith(String(year))) continue;

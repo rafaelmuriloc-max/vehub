@@ -178,7 +178,7 @@ export default function SimplesNacionalTab() {
     const errs: { company: string }[] = [];
     try {
       let offset: number | null = 0;
-      const limit = onlyPayments ? 10 : 2;
+      const limit = onlyPayments ? 5 : 1;
       let rounds = 0;
       while (offset !== null && rounds < 200) {
         rounds++;
