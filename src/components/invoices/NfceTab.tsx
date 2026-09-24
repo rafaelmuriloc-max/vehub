@@ -47,6 +47,7 @@ type NfceQueryResponse = {
   invoices_saved?: number;
   next_query_at?: string | null;
   skipped?: boolean;
+  not_accountant?: boolean;
   success?: boolean;
 };
 
@@ -178,6 +179,7 @@ export default function NfceTab() {
     let eventos = 0;
     let erros = 0;
     const bloqueadas: string[] = [];
+    const semVinculo: string[] = [];
 
     try {
       for (let i = 0; i < targets.length; i++) {
@@ -186,6 +188,10 @@ export default function NfceTab() {
         try {
           const { data, error } = await supabase.functions.invoke('nfce-query', { body: { client_id: targets[i].id } });
           const res = (data ?? null) as NfceQueryResponse | null;
+          if (res?.not_accountant) {
+            semVinculo.push(nome);
+            continue;
+          }
           if (error || res?.error) {
             erros++;
             continue;
@@ -205,6 +211,7 @@ export default function NfceTab() {
 
       const partes = [`${notas} nota(s)`, `${eventos} evento(s)`];
       if (erros) partes.push(`${erros} empresa(s) com erro`);
+      if (semVinculo.length) partes.push(`${semVinculo.length} empresa(s) sem o escritório como contabilista no SAT: ${semVinculo.slice(0, 5).join(', ')}${semVinculo.length > 5 ? '…' : ''}`);
       toast({
         title: 'Busca de NFC-e concluída',
         description: `${partes.join(', ')}.${bloqueadas.length ? ` ${bloqueadas.slice(0, 3).join(' · ')}` : ''}`,
