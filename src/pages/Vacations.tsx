@@ -24,7 +24,7 @@ import {
   totalsByCompany, type EmployeeAnalysis, type PeriodStatus, type VacationPeriodRow,
 } from '@/lib/vacations';
 
-interface Client { id: string; company_name: string; document: string | null; sci_code: string | null }
+interface Client { id: string; company_name: string; document: string | null; sci_code: string | null; status: string }
 interface Employee { id: string; client_id: string; full_name: string; employee_code: string | null; status: string }
 
 type SortKey = 'overdue' | 'total' | 'due' | 'name';
@@ -56,11 +56,11 @@ export default function Vacations() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     const [cliRes, empRes, vacRes] = await Promise.all([
-      supabase.from('clients').select('id, company_name, document, sci_code').order('company_name'),
+      supabase.from('clients').select('id, company_name, document, sci_code, status').order('company_name'),
       supabase.from('client_employees').select('id, client_id, full_name, employee_code, status'),
       supabase.from('employee_vacation_periods').select('*'),
     ]);
-    if (cliRes.data) setClients(cliRes.data as Client[]);
+    if (cliRes.data) setClients((cliRes.data as Client[]).filter(c => c.status === 'active'));
     if (empRes.data) setEmployees(empRes.data as Employee[]);
     if (vacRes.data) setPeriods(vacRes.data as unknown as VacationPeriodRow[]);
     setLoading(false);
@@ -89,7 +89,12 @@ export default function Vacations() {
     }
   }
 
-  const activeEmployees = useMemo(() => employees.filter(e => e.status === 'active'), [employees]);
+  // Colaboradores ativos de empresas ativas apenas
+  const activeClientIds = useMemo(() => new Set(clients.map(c => c.id)), [clients]);
+  const activeEmployees = useMemo(
+    () => employees.filter(e => e.status === 'active' && activeClientIds.has(e.client_id)),
+    [employees, activeClientIds],
+  );
 
   const allAnalysis = useMemo(
     () => analyzeEmployees(periods, activeEmployees, clients, reference),
