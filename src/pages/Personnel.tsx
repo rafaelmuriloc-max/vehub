@@ -210,6 +210,7 @@ export default function Personnel() {
   const [syncing, setSyncing] = useState(false);
   const [syncingTrial, setSyncingTrial] = useState(false);
   const [syncingVacation, setSyncingVacation] = useState(false);
+  const [syncingPayroll, setSyncingPayroll] = useState(false);
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
   const [vacationDialogOpen, setVacationDialogOpen] = useState(false);
@@ -486,6 +487,27 @@ export default function Personnel() {
 
 
 
+  // Lê somente o relatório "Espelho e resumo da folha".
+  async function syncPayroll() {
+    if (!config) { setFolderDialog(true); return; }
+    setSyncingPayroll(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('employee-folder-sync', { body: { only: 'folha' } });
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error);
+      const s = data?.stats ?? {};
+      const meses = (s.meses ?? []).map((m: string) => `${m.slice(5, 7)}/${m.slice(0, 4)}`).join(', ');
+      toast({
+        title: 'Resumo da folha sincronizado',
+        description: `${s.arquivos ?? 0} arquivo(s) lido(s)${meses ? ` (${meses})` : ''}, ${s.empresas_gravadas ?? 0} empresa(s) gravada(s)${(s.sem_empresa ?? 0) > 0 ? `, ${s.sem_empresa} sem empresa cadastrada` : ''}.`,
+      });
+    } catch (e) {
+      toast({ title: 'Erro na sincronização', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setSyncingPayroll(false);
+    }
+  }
+
   async function saveFolder() {
     if (!folder) return;
     if (config) {
@@ -689,7 +711,7 @@ export default function Personnel() {
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin" /></div>;
 
   const initials = (profile?.full_name || 'Usuário').split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-  const syncingAny = syncing || syncingTrial || syncingVacation;
+  const syncingAny = syncing || syncingTrial || syncingVacation || syncingPayroll;
 
   return (
     <div className="space-y-4 pb-6">
@@ -733,10 +755,12 @@ export default function Personnel() {
         <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={loadAll} aria-label="Recarregar"><RefreshCw className="h-4 w-4" /></Button>
         {isAdmin && <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => { setFolder(null); setFolderDialog(true); }} title={config ? `Pasta: ${config.folder_name}` : 'Definir pasta'}><FolderOpen className="h-4 w-4 mr-1" />Funcionários</Button>}
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/ferias')}><Palmtree className="h-4 w-4 mr-1" />Férias</Button>
+        <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/folha')}><Wallet className="h-4 w-4 mr-1" />Folha</Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button className="h-10 shrink-0 rounded-full" disabled={syncingAny}>{syncingAny ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}Sincronizar<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => syncNow()} disabled={syncingAny}><FolderSync className="h-4 w-4 mr-2" />Pasta (fichas)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => syncNow(true)} disabled={syncingAny}><CalendarClock className="h-4 w-4 mr-2" />Experiência</DropdownMenuItem>
           <DropdownMenuItem onClick={syncVacations} disabled={syncingAny}><Palmtree className="h-4 w-4 mr-2" />Férias</DropdownMenuItem>
+          <DropdownMenuItem onClick={syncPayroll} disabled={syncingAny}><Wallet className="h-4 w-4 mr-2" />Folha</DropdownMenuItem>
         </DropdownMenuContent></DropdownMenu>
       </div>
 

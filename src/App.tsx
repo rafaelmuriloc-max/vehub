@@ -24,6 +24,7 @@ import Dashboard from "./pages/Dashboard";
 import Tickets from "./pages/Tickets";
 import Personnel from "./pages/Personnel";
 import Vacations from "./pages/Vacations";
+import Payroll from "./pages/Payroll";
 import ScheduledMessages from "./pages/ScheduledMessages";
 import NotFound from "./pages/NotFound";
 import DemoShowcase from "./pages/DemoShowcase";
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/tickets" element={<Tickets />} />
               <Route path="/personnel" element={<Personnel />} />
               <Route path="/ferias" element={<Vacations />} />
+              <Route path="/folha" element={<Payroll />} />
               <Route path="/scheduled-messages" element={<ScheduledMessages />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/document-types" element={<DocumentTypes />} />
