@@ -500,12 +500,14 @@ Deno.serve(async (req) => {
     let forceReprocess = false;
     let onlyTrial = false;
     let onlyVacation = false;
+    let onlyPayroll = false;
     if (req.method === "POST") {
       try {
         const body = await req.json();
         forceReprocess = body?.force_reprocess === true;
         onlyTrial = body?.only === "experiencia";
         onlyVacation = body?.only === "ferias";
+        onlyPayroll = body?.only === "folha";
         if (onlyTrial || onlyVacation) forceReprocess = true;
       } catch {
         // Chamadas automáticas podem não enviar corpo.
@@ -523,6 +525,14 @@ Deno.serve(async (req) => {
         .replace(/[^a-z0-9]/g, "");
       return /\.(html?|xls)$/i.test(name) && n.includes("ferias") &&
         (n.includes("vencimento") || n.includes("acompanhamento"));
+    };
+
+    // Só o relatório "Espelho e resumo da folha"
+    const isPayrollFileName = (name: string) => {
+      const n = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+      return /\.(html?|xls)$/i.test(name) &&
+        (n.includes("espelho") || (n.includes("resumo") && n.includes("folha")));
     };
 
     // Só as fichas de registro de colaboradores
@@ -589,6 +599,42 @@ Deno.serve(async (req) => {
       experiencias_atualizadas: 0, fora_do_padrao: 0,
       ferias_periodos: 0, ferias_funcionarios: 0,
     };
+
+    // Modo exclusivo: relatório "Espelho e resumo da folha" (um registro por empresa e mês)
+    if (onlyPayroll) {
+      const ps = { arquivos: 0, empresas_gravadas: 0, sem_empresa: 0, meses: [] as string[], erros: 0 };
+      for (const f of files) {
+        if (!isPayrollFileName(f.name) || Number(f.size ?? 0) > MAX_FILE_BYTES) continue;
+        try {
+          const r = await fetch(`${DRIVE_GATEWAY}/files/${f.id}?alt=media`, { headers: ghHeaders() });
+          if (!r.ok) throw new Error(`download [${r.status}]: ${await r.text()}`);
+          const html = decodeBytes(new Uint8Array(await r.arrayBuffer()));
+          if (!looksLikePayrollHtml(html)) continue;
+          const parsed = parsePayrollHtml(html);
+          if (!parsed.competence) continue;
+          ps.arquivos++;
+          if (!ps.meses.includes(parsed.competence)) ps.meses.push(parsed.competence);
+          const rows: any[] = [];
+          for (const s of parsed.summaries) {
+            const c = s.company_document ? clientsByCnpj.get(s.company_document.replace(/\D/g, "")) : null;
+            if (!c) { ps.sem_empresa++; continue; }
+            const { company_document: _d, company_code: _c, company_name: _n, ...vals } = s;
+            rows.push({ ...vals, client_id: c.id, source_file: f.name, synced_at: new Date().toISOString() });
+          }
+          if (rows.length) {
+            const { error } = await supabase.from("payroll_summaries").upsert(rows, { onConflict: "client_id,competence" });
+            if (error) throw error;
+            ps.empresas_gravadas += rows.length;
+          }
+        } catch (e) {
+          console.error("folha", f.name, e);
+          ps.erros++;
+        }
+      }
+      return new Response(JSON.stringify({ ok: true, stats: ps }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     let processed = 0;
     const startedAt = Date.now();
