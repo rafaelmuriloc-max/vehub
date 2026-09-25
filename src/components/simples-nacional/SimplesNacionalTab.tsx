@@ -67,8 +67,8 @@ const SUBLIMITE_1 = 3_600_000;
 const SUBLIMITE_2 = 4_800_000;
 
 function pctColor(pct: number): string {
-  if (pct < 80) return 'bg-emerald-500';
-  if (pct < 100) return 'bg-amber-500';
+  if (pct < 80) return 'bg-success';
+  if (pct < 100) return 'bg-warning';
   return 'bg-destructive';
 }
 
