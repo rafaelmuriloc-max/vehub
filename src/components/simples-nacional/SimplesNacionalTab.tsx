@@ -279,11 +279,6 @@ export default function SimplesNacionalTab() {
           onChange={e => setYear(Number(e.target.value) || new Date().getFullYear())}
           className="w-28"
         />
-        {lastSync && (
-          <Badge variant="secondary" className="text-xs whitespace-nowrap">
-            Última sync: {formatDate(lastSync)}
-          </Badge>
-        )}
         {isAdmin && (
           <Button onClick={() => handleSync()} disabled={syncing} size="sm">
             {syncing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <RefreshCw className="h-4 w-4 sm:mr-2" />}
