@@ -3455,8 +3455,115 @@ export type Database = {
           },
         ]
       }
+      time_batch_pauses: {
+        Row: {
+          batch_id: string
+          created_at: string
+          id: string
+          paused_at: string
+          resumed_at: string | null
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          id?: string
+          paused_at?: string
+          resumed_at?: string | null
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          id?: string
+          paused_at?: string
+          resumed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_batch_pauses_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "time_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_batch_split_history: {
+        Row: {
+          batch_id: string
+          changed_at: string
+          changed_by: string
+          id: string
+          new: Json
+          previous: Json
+        }
+        Insert: {
+          batch_id: string
+          changed_at?: string
+          changed_by: string
+          id?: string
+          new: Json
+          previous: Json
+        }
+        Update: {
+          batch_id?: string
+          changed_at?: string
+          changed_by?: string
+          id?: string
+          new?: Json
+          previous?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_batch_split_history_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "time_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_batches: {
+        Row: {
+          created_at: string
+          finished_at: string | null
+          id: string
+          label: string
+          split_mode: string
+          started_at: string
+          status: string
+          updated_at: string
+          user_id: string
+          worked_seconds: number
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          label: string
+          split_mode?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          worked_seconds?: number
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          label?: string
+          split_mode?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          worked_seconds?: number
+        }
+        Relationships: []
+      }
       time_entries: {
         Row: {
+          batch_id: string | null
           created_at: string
           duration_seconds: number
           ended_at: string | null
@@ -3469,6 +3576,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          batch_id?: string | null
           created_at?: string
           duration_seconds?: number
           ended_at?: string | null
@@ -3481,6 +3589,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          batch_id?: string | null
           created_at?: string
           duration_seconds?: number
           ended_at?: string | null
@@ -3493,6 +3602,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "time_entries_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "time_batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "time_entries_instance_id_fkey"
             columns: ["instance_id"]
@@ -3655,6 +3771,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _time_batch_owner_check: {
+        Args: { _id: string; _status: string[] }
+        Returns: {
+          created_at: string
+          finished_at: string | null
+          id: string
+          label: string
+          split_mode: string
+          started_at: string
+          status: string
+          updated_at: string
+          user_id: string
+          worked_seconds: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "time_batches"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _time_batch_worked: {
+        Args: { _id: string; _until: string }
+        Returns: number
+      }
       dashboard_client_counts: {
         Args: { p_end: string; p_start: string }
         Returns: {
@@ -3686,6 +3827,7 @@ export type Database = {
         Args: { p_id: string }
         Returns: undefined
       }
+      finish_time_batch: { Args: { _id: string }; Returns: number }
       get_calendar_month_completions: {
         Args: { p_end: string; p_start: string }
         Returns: {
@@ -3729,11 +3871,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      pause_time_batch: { Args: { _id: string }; Returns: undefined }
       recalc_obligation_instance_status: {
         Args: { _instance_id: string }
         Returns: undefined
       }
       resolve_client_by_phone: { Args: { _phone: string }; Returns: string }
+      resplit_time_batch: {
+        Args: { _id: string; _split: Json }
+        Returns: undefined
+      }
+      resume_time_batch: { Args: { _id: string }; Returns: undefined }
+      start_time_batch: {
+        Args: { _instance_ids: string[]; _label: string }
+        Returns: string
+      }
       user_can_access_department: {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean

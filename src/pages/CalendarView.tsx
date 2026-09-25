@@ -29,6 +29,7 @@ import { getHolidays, getHolidayMap, previousBusinessDay } from '@/lib/holidays'
 import { sanitizeStorageName, formatClientLabel, normalizeTaxRegime, localDateKey, todayKey } from '@/lib/utils';
 import { TaskEditDialog } from '@/components/tasks/TaskEditDialog';
 import { TimeTracker } from '@/components/time-tracking/TimeTracker';
+import { BatchStartDialog, BatchPanel, type BatchItem } from '@/components/time-tracking/BatchTimer';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchAllPaged } from '@/lib/fetchInChunks';
 import { DepartmentGauge, OfficeGauge } from '@/components/performance/gauges';
@@ -195,6 +196,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
   const [emailAttachments, setEmailAttachments] = useState<{ fileUrl: string; fileName: string }[]>([]);
   const [deleteInstanceId, setDeleteInstanceId] = useState<string | null>(null);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
+  const [batchStartOpen, setBatchStartOpen] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [showBulkCompleteConfirm, setShowBulkCompleteConfirm] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
@@ -832,8 +834,8 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     await loadData();
   }
 
-  async function quickCompleteSelectedInstances() {
-    const ids = Array.from(selectedInstanceIds);
+  async function quickCompleteSelectedInstances(explicitIds?: string[]) {
+    const ids = Array.isArray(explicitIds) ? explicitIds : Array.from(selectedInstanceIds);
     const allInstances = [...instances, ...deletedInstances];
     const nowIso = new Date().toISOString();
     let done = 0, already = 0, skippedDeleted = 0, errors = 0;
@@ -866,6 +868,46 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     clearSelection();
     setShowBulkCompleteConfirm(false);
     await loadData();
+  }
+
+  function describeInstance(instanceId: string) {
+    const inst = instances.find(i => i.id === instanceId);
+    if (!inst) return null;
+    const cli = clientMap.get(inst.client_id);
+    return {
+      clientId: inst.client_id,
+      clientLabel: cli ? formatClientLabel(cli as any) : 'Empresa',
+      completable: !inst.deleted_at && !isInstanceCompleted(inst.id, inst.obligation_id),
+    };
+  }
+
+  const batchItems: BatchItem[] = useMemo(() => {
+    if (!batchStartOpen) return [];
+    return Array.from(selectedInstanceIds).map(id => {
+      const inst = instances.find(i => i.id === id);
+      const cli = inst ? clientMap.get(inst.client_id) : null;
+      const obl = inst ? oblMap.get(inst.obligation_id) : null;
+      let reason: string | undefined;
+      if (!inst || inst.deleted_at) reason = 'excluída';
+      else if (isInstanceCompleted(inst.id, inst.obligation_id)) reason = 'já concluída';
+      else if ((cli as any)?.services_suspended) reason = 'empresa com serviços suspensos';
+      else if (inst.on_hold) reason = 'em "Aguardando"';
+      return {
+        instanceId: id,
+        clientId: inst?.client_id || id,
+        clientLabel: cli ? formatClientLabel(cli as any) : 'Empresa',
+        obligationName: (obl as any)?.name || 'Obrigação',
+        referenceMonth: (inst as any)?.reference_month ?? null,
+        eligible: !reason,
+        reason,
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchStartOpen, selectedInstanceIds, instances, clientMap, oblMap]);
+
+  async function completeInstancesFromBatch(ids: string[]) {
+    setSelectedInstanceIds(new Set(ids));
+    await quickCompleteSelectedInstances(ids);
   }
 
   async function restoreInstance(instanceId: string) {
@@ -2692,6 +2734,9 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         </AlertDialogContent>
       </AlertDialog>
 
+      <BatchStartDialog open={batchStartOpen} onOpenChange={setBatchStartOpen} items={batchItems} onStarted={clearSelection} />
+      <BatchPanel describe={describeInstance} onCompleteInstances={completeInstancesFromBatch} />
+
       {/* Bulk Action Bar */}
       {selectedInstanceIds.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-card border rounded-lg shadow-lg px-4 py-3 flex items-center gap-3">
@@ -2703,6 +2748,10 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           <Button variant="destructive" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Excluir selecionados
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setBatchStartOpen(true)}>
+            <Clock className="h-3.5 w-3.5 mr-1" />
+            Iniciar cronômetro em lote ({selectedInstanceIds.size})
           </Button>
           <Button variant="outline" size="sm" onClick={() => { setHoldReason(''); setHoldTarget(Array.from(selectedInstanceIds)); }}>
             <PauseCircle className="h-3.5 w-3.5 mr-1" />
@@ -2744,7 +2793,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={quickCompleteSelectedInstances} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <AlertDialogAction onClick={() => quickCompleteSelectedInstances()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               Concluir {selectedInstanceIds.size}
             </AlertDialogAction>
           </AlertDialogFooter>
