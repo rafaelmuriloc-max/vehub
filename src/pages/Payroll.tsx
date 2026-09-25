@@ -194,16 +194,9 @@ export default function Payroll() {
             <span>Departamento pessoal</span><span className="mx-2">/</span><span className="text-pr-text font-medium">Folha de pagamento</span>
           </nav>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Folha de pagamento</h1>
-            <p className="text-sm text-pr-muted mt-1">Uma visão clara dos valores e das movimentações da sua carteira.</p>
-          </div>
-          <Button onClick={syncPayroll} disabled={syncing} aria-busy={syncing}
-            className="bg-pr-orange text-pr-navy-fg hover:bg-pr-orange/90 focus-visible:ring-2 focus-visible:ring-pr-orange focus-visible:ring-offset-2 self-start">
-            <RefreshCw className={cn('h-4 w-4 mr-2', syncing && 'animate-spin motion-reduce:animate-none')} />
-            {syncing ? 'Sincronizando...' : 'Sincronizar'}
-          </Button>
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Folha de pagamento</h1>
+          <p className="text-sm text-pr-muted mt-1">Uma visão clara dos valores e das movimentações da sua carteira.</p>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-end gap-3">
@@ -263,6 +256,11 @@ export default function Payroll() {
               </PopoverContent>
             </Popover>
           </div>
+          <Button onClick={syncPayroll} disabled={syncing} aria-busy={syncing} size="icon"
+            aria-label="Sincronizar folha" title="Sincronizar folha"
+            className="shrink-0 bg-pr-orange text-pr-navy-fg hover:bg-pr-orange/90 focus-visible:ring-2 focus-visible:ring-pr-orange focus-visible:ring-offset-2">
+            <RefreshCw className={cn('h-4 w-4', syncing && 'animate-spin motion-reduce:animate-none')} />
+          </Button>
           {periodLabel && <span className="sm:ml-auto text-xs text-pr-muted pb-2">{selMonths.length > 1 ? 'Resumo do período' : 'Resumo mensal'} · {periodLabel}</span>}
         </div>
       </div>
