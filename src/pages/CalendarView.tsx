@@ -2793,7 +2793,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={quickCompleteSelectedInstances} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <AlertDialogAction onClick={() => quickCompleteSelectedInstances()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               Concluir {selectedInstanceIds.size}
             </AlertDialogAction>
           </AlertDialogFooter>
