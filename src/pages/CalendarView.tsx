@@ -832,8 +832,8 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     await loadData();
   }
 
-  async function quickCompleteSelectedInstances() {
-    const ids = Array.from(selectedInstanceIds);
+  async function quickCompleteSelectedInstances(explicitIds?: string[]) {
+    const ids = Array.isArray(explicitIds) ? explicitIds : Array.from(selectedInstanceIds);
     const allInstances = [...instances, ...deletedInstances];
     const nowIso = new Date().toISOString();
     let done = 0, already = 0, skippedDeleted = 0, errors = 0;
@@ -866,6 +866,46 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     clearSelection();
     setShowBulkCompleteConfirm(false);
     await loadData();
+  }
+
+  function describeInstance(instanceId: string) {
+    const inst = instances.find(i => i.id === instanceId);
+    if (!inst) return null;
+    const cli = clientMap.get(inst.client_id);
+    return {
+      clientId: inst.client_id,
+      clientLabel: cli ? formatClientLabel(cli as any) : 'Empresa',
+      completable: !inst.deleted_at && !isInstanceCompleted(inst.id, inst.obligation_id),
+    };
+  }
+
+  const batchItems: BatchItem[] = useMemo(() => {
+    if (!batchStartOpen) return [];
+    return Array.from(selectedInstanceIds).map(id => {
+      const inst = instances.find(i => i.id === id);
+      const cli = inst ? clientMap.get(inst.client_id) : null;
+      const obl = inst ? oblMap.get(inst.obligation_id) : null;
+      let reason: string | undefined;
+      if (!inst || inst.deleted_at) reason = 'excluída';
+      else if (isInstanceCompleted(inst.id, inst.obligation_id)) reason = 'já concluída';
+      else if ((cli as any)?.services_suspended) reason = 'empresa com serviços suspensos';
+      else if (inst.on_hold) reason = 'em "Aguardando"';
+      return {
+        instanceId: id,
+        clientId: inst?.client_id || id,
+        clientLabel: cli ? formatClientLabel(cli as any) : 'Empresa',
+        obligationName: (obl as any)?.name || 'Obrigação',
+        referenceMonth: (inst as any)?.reference_month ?? null,
+        eligible: !reason,
+        reason,
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchStartOpen, selectedInstanceIds, instances, clientMap, oblMap]);
+
+  async function completeInstancesFromBatch(ids: string[]) {
+    setSelectedInstanceIds(new Set(ids));
+    await quickCompleteSelectedInstances(ids);
   }
 
   async function restoreInstance(instanceId: string) {
