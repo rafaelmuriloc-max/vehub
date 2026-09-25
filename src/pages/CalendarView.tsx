@@ -266,7 +266,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols)
         .gte('due_date', monthStart).lt('due_date', monthEnd)
         .order('id').range(from, to) as any),
-      fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
+      fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id, completed_at')
         .gte('due_date', monthStart).lt('due_date', monthEnd)
         .order('id').range(from, to) as any),
     ]);
