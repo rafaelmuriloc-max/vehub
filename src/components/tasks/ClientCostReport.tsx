@@ -96,6 +96,8 @@ export function ClientCostReport() {
     for (const e of entries) {
       const started = new Date(e.started_at);
       if (started < range.start || started > range.end) continue;
+      // Lote em andamento: o tempo só é rateado ao finalizar (evita contar o total em cada empresa).
+      if (!e.ended_at && (e as any).batch_id) continue;
       const secs = e.ended_at ? (e.duration_seconds || 0) : Math.max(0, Math.floor((Date.now() - started.getTime()) / 1000));
       if (secs <= 0) continue;
 
