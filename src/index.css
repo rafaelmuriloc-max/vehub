@@ -38,6 +38,17 @@
     --warning: 28 90% 48%;
     --success-foreground: 0 0% 100%;
     --warning-foreground: 0 0% 100%;
+    --pr-bg: 220 14% 96%;
+    --pr-surface: 0 0% 100%;
+    --pr-text: 218 40% 15%;
+    --pr-muted: 218 13% 46%;
+    --pr-border: 220 20% 92%;
+    --pr-navy: 215 44% 17%;
+    --pr-navy-fg: 0 0% 100%;
+    --pr-orange: 27 84% 55%;
+    --pr-orange-soft: 27 84% 78%;
+    --pr-green: 163 75% 29%;
+    --pr-red: 0 65% 45%;
     --info: 217 91% 55%;
     --info-foreground: 0 0% 100%;
 
@@ -119,6 +130,17 @@
     --warning: 28 90% 58%;
     --success-foreground: 0 0% 100%;
     --warning-foreground: 0 0% 100%;
+    --pr-bg: 222 30% 8%;
+    --pr-surface: 220 25% 12%;
+    --pr-text: 210 20% 94%;
+    --pr-muted: 215 15% 65%;
+    --pr-border: 218 20% 22%;
+    --pr-navy: 215 44% 22%;
+    --pr-navy-fg: 0 0% 100%;
+    --pr-orange: 27 84% 58%;
+    --pr-orange-soft: 27 60% 40%;
+    --pr-green: 160 55% 48%;
+    --pr-red: 0 70% 62%;
     --info: 217 91% 65%;
     --info-foreground: 0 0% 100%;
 
