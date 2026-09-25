@@ -201,7 +201,7 @@ export default function Vacations() {
   ];
 
   return (
-    <div className="-m-4 sm:-m-6 min-h-full bg-pr-bg text-pr-text p-4 sm:p-6 lg:p-8 space-y-5">
+    <div className="-m-6 min-h-full bg-pr-bg text-pr-text p-4 sm:p-6 lg:p-8 space-y-5">
       <div className="flex items-center gap-2 text-sm text-pr-muted">
         <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Voltar para Pessoal" onClick={() => navigate('/personnel')}>
           <ArrowLeft className="h-4 w-4" />
