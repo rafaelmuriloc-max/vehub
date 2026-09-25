@@ -31,8 +31,6 @@ interface Employee { id: string; client_id: string; full_name: string; employee_
 type SortKey = 'overdue' | 'total' | 'due' | 'name';
 type CardKey = 'people' | 'overduePeople' | 'overdueDays' | 'acquired' | 'accruing' | 'soon' | 'total' | 'companies';
 
-const CHART_COLORS = ['hsl(var(--destructive))', 'hsl(38 92% 50%)', 'hsl(142 71% 40%)', 'hsl(217 91% 60%)'];
-
 export default function Vacations() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -134,12 +132,6 @@ export default function Vacations() {
 
   const companyTotals = useMemo(() => totalsByCompany(analysis), [analysis]);
   const monthly = useMemo(() => dueByMonth(analysis, reference), [analysis, reference]);
-
-  const pieData = useMemo(() => [
-    { key: 'overdue', name: 'Vencidas', value: kpis.overdueDays },
-    { key: 'acquired', name: 'Adquiridas no prazo', value: kpis.acquiredDays },
-    { key: 'accruing', name: 'Em formação', value: kpis.accruingDays },
-  ].filter(d => d.value > 0), [kpis]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
