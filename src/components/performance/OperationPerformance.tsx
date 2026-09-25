@@ -15,7 +15,7 @@ type Obligation = { id: string; department_id: string; alert_day: number | null;
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; completed_at: string | null };
-type TaskRow = { id: string; status: string | null; due_date: string | null; client_id: string | null; department_id: string | null };
+type TaskRow = { id: string; status: string | null; due_date: string | null; client_id: string | null; department_id: string | null; completed_at: string | null };
 
 
 const monthKey = (year: number, month: number) => `${year}-${String(month + 1).padStart(2, '0')}-`;
@@ -44,7 +44,7 @@ export function OperationPerformance() {
         fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols).gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
         fetchAllPaged<Completion>((from, to) => supabase.rpc('get_calendar_month_completions', { p_start: rangeStart, p_end: rangeEnd }).range(from, to) as any),
         supabase.from('clients').select('id, services_suspended'),
-        fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, status, due_date, client_id, department_id').gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
+        fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, status, due_date, client_id, department_id, completed_at').gte('due_date', rangeStart).lt('due_date', rangeEnd).order('id').range(from, to) as any),
       ]);
       const firstErr = oblRes.error || deptRes.error || actRes.error || byRefRes.error || byDueRes.error || complRes.error || cliRes.error || taskRes.error;
       if (firstErr) throw new Error(firstErr.message);
@@ -74,7 +74,7 @@ export function OperationPerformance() {
 
   const computed = useMemo(() => {
     const empty = {
-      stats: { current: { toDo: 0, overdue: 0, completed: 0, doneLate: 0, dueToday: 0, total: 0, performance: 0 }, change: 0 },
+      stats: { current: { toDo: 0, overdue: 0, completed: 0, doneLate: 0, dueToday: 0, total: 0, tasks: { toDo: 0, overdue: 0, completed: 0, doneLate: 0, total: 0 }, performance: 0 }, change: 0 },
       departments: [] as { id: string; name: string; value: number; change: number }[],
     };
     if (!data) return empty;
@@ -184,8 +184,16 @@ export function OperationPerformance() {
       const total = toDo + overdue + completed;
       const mTasks = monthTasks(targetYear, targetMonth);
       const perfTotal = total + mTasks.length;
-      const perfDone = completed + mTasks.filter(t => t.status === 'done').length;
-      return { toDo, overdue, completed, doneOnTime, doneLate, dueToday, total, performance: perfTotal > 0 ? Math.round((perfDone / perfTotal) * 100) : 0 };
+      const tDone = mTasks.filter(t => t.status === 'done').length;
+      const perfDone = completed + tDone;
+      const taskStats = { toDo: 0, overdue: 0, completed: tDone, doneLate: 0, total: mTasks.length };
+      for (const t of mTasks) {
+        if (t.status === 'done') {
+          if (t.completed_at && localDateKey(t.completed_at) > (t.due_date as string)) taskStats.doneLate++;
+        } else if (todayStr > (t.due_date as string)) taskStats.overdue++;
+        else taskStats.toDo++;
+      }
+      return { toDo, overdue, completed, doneOnTime, doneLate, dueToday, total, tasks: taskStats, performance: perfTotal > 0 ? Math.round((perfDone / perfTotal) * 100) : 0 };
     };
 
 
@@ -253,11 +261,15 @@ export function OperationPerformance() {
   }
 
   const stats = computed.stats.current;
+  const t = stats.tasks;
+  const grand = stats.total + t.total;
+  const pct = (n: number) => (grand ? Math.round((n / grand) * 100) : 0);
+  const split = (o: number, k: number) => `${o} obrigaç${o === 1 ? 'ão' : 'ões'} • ${k} tarefa${k === 1 ? '' : 's'}`;
   const cards = [
-    { label: 'A fazer', value: stats.toDo, detail: stats.dueToday > 0 ? `${stats.dueToday} vencem hoje` : 'Em andamento', progress: stats.total ? Math.round((stats.toDo / stats.total) * 100) : 0, icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft border-calendar-blue/20', iconBg: 'bg-calendar-blue', progressTone: '[&>div]:bg-calendar-blue', showPercent: true },
-    { label: 'Atrasadas', value: stats.overdue, detail: `Crítico • ${stats.overdue} vencida${stats.overdue === 1 ? '' : 's'}`, progress: stats.total ? Math.round((stats.overdue / stats.total) * 100) : 0, icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft border-calendar-red/20', iconBg: 'bg-calendar-red', progressTone: '[&>div]:bg-calendar-red', showPercent: false },
-    { label: 'Concluídas', value: stats.completed, detail: `de ${stats.total} no período`, progress: stats.total ? Math.round((stats.completed / stats.total) * 100) : 0, icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft border-calendar-green/20', iconBg: 'bg-calendar-green', progressTone: '[&>div]:bg-calendar-green', showPercent: true },
-    { label: 'Fora do prazo', value: stats.doneLate, detail: 'Revisar e regularizar', progress: stats.total ? Math.round((stats.doneLate / stats.total) * 100) : 0, icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted/40 border-border', iconBg: 'bg-muted-foreground/70', progressTone: '[&>div]:bg-muted-foreground/60', showPercent: false },
+    { label: 'A fazer', value: stats.toDo + t.toDo, split: split(stats.toDo, t.toDo), detail: stats.dueToday > 0 ? `${stats.dueToday} vencem hoje` : 'Em andamento', progress: pct(stats.toDo + t.toDo), icon: ListChecks, tone: 'text-calendar-blue', surface: 'bg-calendar-blue-soft border-calendar-blue/20', iconBg: 'bg-calendar-blue', progressTone: '[&>div]:bg-calendar-blue', showPercent: true },
+    { label: 'Atrasadas', value: stats.overdue + t.overdue, split: split(stats.overdue, t.overdue), detail: 'Crítico • vencidas', progress: pct(stats.overdue + t.overdue), icon: AlertTriangle, tone: 'text-calendar-red', surface: 'bg-calendar-red-soft border-calendar-red/20', iconBg: 'bg-calendar-red', progressTone: '[&>div]:bg-calendar-red', showPercent: false },
+    { label: 'Concluídas', value: stats.completed + t.completed, split: split(stats.completed, t.completed), detail: `de ${grand} no período`, progress: pct(stats.completed + t.completed), icon: CheckSquare, tone: 'text-calendar-green', surface: 'bg-calendar-green-soft border-calendar-green/20', iconBg: 'bg-calendar-green', progressTone: '[&>div]:bg-calendar-green', showPercent: true },
+    { label: 'Fora do prazo', value: stats.doneLate + t.doneLate, split: split(stats.doneLate, t.doneLate), detail: 'Revisar e regularizar', progress: pct(stats.doneLate + t.doneLate), icon: Clock, tone: 'text-muted-foreground', surface: 'bg-muted/40 border-border', iconBg: 'bg-muted-foreground/70', progressTone: '[&>div]:bg-muted-foreground/60', showPercent: false },
   ];
 
   return (
@@ -274,7 +286,8 @@ export function OperationPerformance() {
                   <div className="min-w-0">
                     <p className={`truncate font-calendarHeading text-base font-bold ${item.tone}`}>{item.label}</p>
                     <p className="font-calendarHeading text-3xl font-extrabold leading-tight text-calendar-navy">{item.value}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.detail}</p>
+                    <p className="mt-0.5 truncate text-xs font-medium text-foreground/80">{item.split}</p>
+                    <p className="truncate text-xs text-muted-foreground">{item.detail}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">

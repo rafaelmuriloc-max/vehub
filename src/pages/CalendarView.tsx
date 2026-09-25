@@ -64,7 +64,7 @@ type Client = { id: string; sci_code?: string | null; company_name: string; serv
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null; completed_at: string | null };
-type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null };
+type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null; completed_at?: string | null };
 
 type CalendarEvent = {
   clientId: string; clientName: string; obligationName: string; deptName: string;
@@ -266,7 +266,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       fetchAllPaged<Instance>((from, to) => supabase.from('obligation_instances').select(instCols)
         .gte('due_date', monthStart).lt('due_date', monthEnd)
         .order('id').range(from, to) as any),
-      fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id')
+      fetchAllPaged<TaskRow>((from, to) => supabase.from('tasks').select('id, task_number, title, status, priority, due_date, client_id, department_id, completed_at')
         .gte('due_date', monthStart).lt('due_date', monthEnd)
         .order('id').range(from, to) as any),
     ]);
@@ -1097,6 +1097,14 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
       const total = toDo + overdue + completed;
       const monthTasks = monthTasksFor(targetYear, targetMonth);
       const tasksDone = monthTasks.filter(t => t.status === 'done').length;
+      const taskStats = { toDo: 0, overdue: 0, completed: tasksDone, doneLate: 0, total: monthTasks.length };
+      for (const t of monthTasks) {
+        if (t.status === 'done') {
+          const doneAt = t.completed_at ? localDateKey(t.completed_at) : null;
+          if (doneAt && doneAt > t.due_date) taskStats.doneLate++;
+        } else if (todayStr > t.due_date) taskStats.overdue++;
+        else taskStats.toDo++;
+      }
       const perfTotal = total + monthTasks.length;
       const perfDone = completed + tasksDone;
       return {
@@ -1107,6 +1115,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
         doneLate,
         dueToday,
         total,
+        tasks: taskStats,
         performance: perfTotal > 0 ? Math.round((perfDone / perfTotal) * 100) : 0,
       };
 
@@ -1331,12 +1340,19 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
 
         <div className="mt-1 grid grid-cols-1 items-center gap-3 xl:grid-cols-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
-            {[
-              { label: 'A fazer', value: dashboardStats.current.toDo, detail: dashboardStats.current.dueToday > 0 ? `${dashboardStats.current.dueToday} vencem hoje` : 'Em andamento', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.toDo / dashboardStats.current.total) * 100) : 0, icon: ListChecks, surface: 'bg-calendar-blue shadow-calendar-blue/40', showPercent: true },
-              { label: 'Atrasadas', value: dashboardStats.current.overdue, detail: `Crítico • ${dashboardStats.current.overdue} vencida${dashboardStats.current.overdue === 1 ? '' : 's'}`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.overdue / dashboardStats.current.total) * 100) : 0, icon: AlertTriangle, surface: 'bg-calendar-red shadow-calendar-red/40', showPercent: false },
-              { label: 'Concluídas', value: dashboardStats.current.completed, detail: `de ${dashboardStats.current.total} no período`, progress: dashboardStats.current.total ? Math.round((dashboardStats.current.completed / dashboardStats.current.total) * 100) : 0, icon: CheckSquare, surface: 'bg-calendar-green shadow-calendar-green/40', showPercent: true },
-              { label: 'Fora do prazo', value: dashboardStats.current.doneLate, detail: 'Revisar e regularizar', progress: dashboardStats.current.total ? Math.round((dashboardStats.current.doneLate / dashboardStats.current.total) * 100) : 0, icon: Clock, surface: 'bg-slate-600 shadow-slate-600/40', showPercent: false },
-            ].map(item => (
+            {(() => {
+              const s = dashboardStats.current;
+              const t = s.tasks;
+              const grand = s.total + t.total;
+              const pct = (n: number) => (grand ? Math.round((n / grand) * 100) : 0);
+              const split = (o: number, k: number) => `${o} obrigaç${o === 1 ? 'ão' : 'ões'} • ${k} tarefa${k === 1 ? '' : 's'}`;
+              return [
+                { label: 'A fazer', value: s.toDo + t.toDo, split: split(s.toDo, t.toDo), detail: s.dueToday > 0 ? `${s.dueToday} vencem hoje` : 'Em andamento', progress: pct(s.toDo + t.toDo), icon: ListChecks, surface: 'bg-calendar-blue shadow-calendar-blue/40', showPercent: true },
+                { label: 'Atrasadas', value: s.overdue + t.overdue, split: split(s.overdue, t.overdue), detail: 'Crítico • vencidas', progress: pct(s.overdue + t.overdue), icon: AlertTriangle, surface: 'bg-calendar-red shadow-calendar-red/40', showPercent: false },
+                { label: 'Concluídas', value: s.completed + t.completed, split: split(s.completed, t.completed), detail: `de ${grand} no período`, progress: pct(s.completed + t.completed), icon: CheckSquare, surface: 'bg-calendar-green shadow-calendar-green/40', showPercent: true },
+                { label: 'Fora do prazo', value: s.doneLate + t.doneLate, split: split(s.doneLate, t.doneLate), detail: 'Revisar e regularizar', progress: pct(s.doneLate + t.doneLate), icon: Clock, surface: 'bg-slate-600 shadow-slate-600/40', showPercent: false },
+              ];
+            })().map(item => (
               <Card key={item.label} className={`rounded-2xl border-0 text-white shadow-lg ${item.surface}`}>
                 <CardContent className="flex h-full flex-col justify-between p-5">
                   <div className="flex items-start justify-between gap-3">
@@ -1349,6 +1365,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
                     </div>
                   </div>
                   <div className="mt-3">
+                    <p className="truncate text-xs font-semibold text-white">{item.split}</p>
                     <p className="mb-2 truncate text-xs font-medium text-white/80">{item.detail}</p>
                     <div className="flex items-center gap-3">
                       <Progress value={item.progress} className="h-2 flex-1 rounded-full bg-white/20 [&>div]:bg-white" />
