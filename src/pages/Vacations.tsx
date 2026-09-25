@@ -12,11 +12,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  AlertTriangle, Building2, Calendar as CalendarIcon, Check, ChevronsUpDown, Clock,
-  FolderSync, Loader2, Palmtree, Search, Users,
+  AlertTriangle, ArrowLeft, Building2, CalendarX, Check, ChevronsUpDown, Clock,
+  Loader2, MoreVertical, RefreshCw, Search, Users, X,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import {
@@ -52,6 +53,11 @@ export default function Vacations() {
 
   const [detail, setDetail] = useState<EmployeeAnalysis | null>(null);
   const [cardDialog, setCardDialog] = useState<CardKey | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [showAllCompanies, setShowAllCompanies] = useState(false);
+  const navigate = useNavigate();
+  useEffect(() => { setPage(0); }, [search, statusFilter, sortKey, companyId, reference, pageSize]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -138,7 +144,8 @@ export default function Vacations() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = analysis.filter(a =>
-      (!q || a.name.toLowerCase().includes(q) || (a.code ?? '').toLowerCase() === q)
+      (!q || a.name.toLowerCase().includes(q) || a.companyName.toLowerCase().includes(q)
+        || (a.code ?? '').replace(/^0+/, '') === q.replace(/^0+/, ''))
       && (statusFilter === 'all' || a.status === statusFilter),
     );
     list = [...list].sort((a, b) => {
