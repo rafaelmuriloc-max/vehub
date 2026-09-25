@@ -232,6 +232,8 @@ export function TimeTracker({ taskId, instanceId, compact = true }: { taskId?: s
 
   return (
     <div className="flex items-center gap-3 rounded-md border border-border p-3">
+      {pauseDialog}
+      {batchBadge}
       <Button
         variant={myRunning ? 'destructive' : 'default'}
         size="sm"
