@@ -645,16 +645,6 @@ export default function Tasks() {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 space-y-3">
               <div className="space-y-1">
-                <Label>Departamento</Label>
-                <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os departamentos</SelectItem>
-                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
                 <Label>Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
