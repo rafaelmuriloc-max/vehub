@@ -522,7 +522,7 @@ export default function Tasks() {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
     if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
     if (filterClient !== 'all' && t.client_id !== filterClient) return false;
-    if (filterDepartment !== 'all' && t.department_id !== filterDepartment) return false;
+    if (filterDepartment === 'none' ? !!t.department_id : (filterDepartment !== 'all' && t.department_id !== filterDepartment)) return false;
     if (filterTemplate !== 'all' && t.template_id !== filterTemplate) return false;
     if (filterAssignee !== 'all') {
       const list = assignments[t.id] ?? [];
@@ -596,6 +596,15 @@ export default function Tasks() {
           </PopoverContent>
         </Popover>
 
+        <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+          <SelectTrigger className={pill}><span className="flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Departamento" /></span></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os departamentos</SelectItem>
+            <SelectItem value="none">Sem departamento</SelectItem>
+            {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
         <Select value={filterAssignee} onValueChange={setFilterAssignee}>
           <SelectTrigger className={pill}><span className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Responsável" /></span></SelectTrigger>
           <SelectContent>
@@ -644,16 +653,6 @@ export default function Tasks() {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 space-y-3">
-              <div className="space-y-1">
-                <Label>Departamento</Label>
-                <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os departamentos</SelectItem>
-                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-1">
                 <Label>Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
