@@ -49,6 +49,12 @@ export default {
   			},
 			success: { DEFAULT: 'hsl(var(--success))', foreground: 'hsl(var(--success-foreground))' },
 			warning: { DEFAULT: 'hsl(var(--warning))', foreground: 'hsl(var(--warning-foreground))' },
+			pr: {
+				bg: 'hsl(var(--pr-bg))', surface: 'hsl(var(--pr-surface))', text: 'hsl(var(--pr-text))',
+				muted: 'hsl(var(--pr-muted))', border: 'hsl(var(--pr-border))', navy: 'hsl(var(--pr-navy))',
+				'navy-fg': 'hsl(var(--pr-navy-fg))', orange: 'hsl(var(--pr-orange))', 'orange-soft': 'hsl(var(--pr-orange-soft))',
+				green: 'hsl(var(--pr-green))', red: 'hsl(var(--pr-red))',
+			},
 			info: { DEFAULT: 'hsl(var(--info))', foreground: 'hsl(var(--info-foreground))' },
 			calendar: {
 				blue: 'hsl(var(--calendar-blue))',
