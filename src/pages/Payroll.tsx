@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,7 @@ type SortKey = 'gross' | 'active_count' | 'net' | 'charges';
 type ChartMode = 'folha' | 'encargos' | 'colaboradores';
 
 export default function Payroll() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
@@ -183,9 +186,14 @@ export default function Payroll() {
     <div className="-m-6 min-h-[100dvh] bg-pr-bg text-pr-text p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Cabeçalho */}
       <div className="space-y-4">
-        <nav aria-label="Caminho" className="text-sm text-pr-muted">
-          <span>Departamento pessoal</span><span className="mx-2">/</span><span className="text-pr-text font-medium">Folha de pagamento</span>
-        </nav>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-pr-text" aria-label="Voltar para Pessoal" onClick={() => navigate('/personnel')}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <nav aria-label="Caminho" className="text-sm text-pr-muted">
+            <span>Departamento pessoal</span><span className="mx-2">/</span><span className="text-pr-text font-medium">Folha de pagamento</span>
+          </nav>
+        </div>
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Folha de pagamento</h1>
