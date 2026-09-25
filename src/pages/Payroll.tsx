@@ -180,7 +180,7 @@ export default function Payroll() {
   const toggleSeries = (o: { dataKey?: unknown }) => { const k = String(o.dataKey ?? ''); setHidden((h) => ({ ...h, [k]: !h[k] })); };
 
   return (
-    <div className="-m-4 sm:-m-6 min-h-full bg-pr-bg text-pr-text p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="-m-6 min-h-[100dvh] bg-pr-bg text-pr-text p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Cabeçalho */}
       <div className="space-y-4">
         <nav aria-label="Caminho" className="text-sm text-pr-muted">
