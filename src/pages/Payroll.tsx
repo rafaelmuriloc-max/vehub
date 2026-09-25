@@ -237,10 +237,9 @@ export default function Payroll() {
             </Popover>
           </div>
           <div className="space-y-1.5">
-            <span id="lbl-comp" className="text-xs font-medium text-pr-muted">Competência</span>
             <Popover open={monthOpen} onOpenChange={setMonthOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" aria-labelledby="lbl-comp" className="w-full sm:w-56 justify-between bg-pr-surface border-pr-border text-pr-text" disabled={!months.length}>
+                <Button variant="outline" aria-label={`Competência: ${monthBtn}`} className="w-full sm:w-56 justify-between bg-pr-surface border-pr-border text-pr-text" disabled={!months.length}>
                   <span className="flex items-center gap-2 truncate"><CalendarDays className="h-4 w-4 text-pr-muted shrink-0" />{monthBtn}</span>
                   <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
                 </Button>
