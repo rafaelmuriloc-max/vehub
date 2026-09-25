@@ -117,8 +117,11 @@ export function TimeTracker({ taskId, instanceId, compact = true }: { taskId?: s
   useEffect(() => subscribe(targetKey, setEntries), [targetKey]);
 
 
-  const running = entries.find(e => !e.ended_at) || null;
+  // Entradas de lote em aberto não contam "ao vivo" no card (o tempo é rateado ao finalizar).
+  const openBatch = entries.find(e => !e.ended_at && (e as any).batch_id) || null;
+  const running = entries.find(e => !e.ended_at && !(e as any).batch_id) || null;
   const myRunning = running && running.user_id === user?.id ? running : null;
+  const [askPause, setAskPause] = useState<string | null>(null);
 
   useEffect(() => {
     if (!running) return;
@@ -135,18 +138,28 @@ export function TimeTracker({ taskId, instanceId, compact = true }: { taskId?: s
   async function toggle(e: React.MouseEvent) {
     e.stopPropagation();
     if (!user || busyRef.current) return;
+    if (!myRunning) {
+      const { data: b } = await supabase.from('time_batches' as any).select('id').eq('user_id', user.id).eq('status', 'running').maybeSingle();
+      if (b) { setAskPause((b as any).id); return; }
+    }
+    await doToggle();
+  }
+
+  async function doToggle() {
+    if (!user || busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     try {
       if (myRunning) {
         await stopEntry(myRunning);
       } else {
-        // Garante um único cronômetro ativo por usuário: pausa qualquer outro.
+        // Garante um único cronômetro ativo por usuário: pausa qualquer outro individual.
         const { data: others } = await supabase
           .from('time_entries' as any)
           .select('*')
           .eq('user_id', user.id)
-          .is('ended_at', null);
+          .is('ended_at', null)
+          .is('batch_id', null);
         for (const o of (others as any[]) || []) await stopEntry(o as TimeEntry);
         const payload: any = { user_id: user.id, task_id: taskId || null, instance_id: instanceId || null };
         const { error } = await supabase.from('time_entries' as any).insert(payload);
@@ -161,11 +174,44 @@ export function TimeTracker({ taskId, instanceId, compact = true }: { taskId?: s
     }
   }
 
-  const total = totalSeconds(entries, nowMs);
+  async function pauseBatchThenStart() {
+    const id = askPause;
+    setAskPause(null);
+    if (!id) return;
+    const { error } = await (supabase.rpc as any)('pause_time_batch', { _id: id });
+    if (error) { toast({ title: 'Não foi possível pausar o lote', description: error.message, variant: 'destructive' }); return; }
+    await doToggle();
+  }
+
+  const total = totalSeconds(entries.filter(e => e.ended_at || !(e as any).batch_id), nowMs);
+
+  const pauseDialog = (
+    <AlertDialog open={!!askPause} onOpenChange={o => { if (!o) setAskPause(null); }}>
+      <AlertDialogContent onClick={e => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cronômetro em lote ativo</AlertDialogTitle>
+          <AlertDialogDescription>Você possui um cronômetro em lote ativo. Deseja pausá-lo antes de iniciar esta atividade?</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={pauseBatchThenStart}>Pausar lote e iniciar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  const batchBadge = openBatch ? (
+    <span className="inline-flex items-center gap-0.5 rounded bg-primary/15 text-primary px-1.5 py-0.5 text-[10px] font-medium"
+      title="Esta obrigação está num cronômetro em lote. O tempo é dividido entre as obrigações ao finalizar.">
+      <Layers className="h-3 w-3" />Em lote
+    </span>
+  ) : null;
 
   if (compact) {
     return (
       <span className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+        {pauseDialog}
+        {batchBadge}
         <Button
           variant="ghost"
           size="icon"
