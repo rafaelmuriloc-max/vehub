@@ -64,7 +64,7 @@ type Client = { id: string; sci_code?: string | null; company_name: string; serv
 type Department = { id: string; name: string };
 type Activity = { id: string; obligation_id: string; title: string; type: string; description: string | null; document_type_id: string | null; order: number; auto_start: boolean; email_department_id: string | null; email_subject: string | null; email_body: string | null; whatsapp_template_name: string | null; whatsapp_message_body: string | null; whatsapp_button_url: string | null; whatsapp_has_document_header: boolean };
 type Completion = { id: string; instance_id: string; activity_id: string; completed: boolean; file_url: string | null; notes: string | null; completed_at: string | null };
-type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null };
+type TaskRow = { id: string; task_number: number; title: string; status: string; priority: string; due_date: string; client_id: string | null; department_id: string | null; completed_at?: string | null };
 
 type CalendarEvent = {
   clientId: string; clientName: string; obligationName: string; deptName: string;
@@ -1365,6 +1365,7 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
                     </div>
                   </div>
                   <div className="mt-3">
+                    <p className="truncate text-xs font-semibold text-white">{item.split}</p>
                     <p className="mb-2 truncate text-xs font-medium text-white/80">{item.detail}</p>
                     <div className="flex items-center gap-3">
                       <Progress value={item.progress} className="h-2 flex-1 rounded-full bg-white/20 [&>div]:bg-white" />
