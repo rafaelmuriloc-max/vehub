@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Loader2, RefreshCw, ChevronRight, ChevronLeft, Search, Calculator } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronRight, ChevronLeft, Search, Calculator, CalendarDays, RotateCw, Workflow, Building2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import CompetenciaRow from './CompetenciaRow';
 import ReprocessChainDialog from './ReprocessChainDialog';
 import { FileText } from 'lucide-react';
@@ -250,57 +251,76 @@ export default function SimplesNacionalTab() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+    <div className="space-y-5">
+      <div className="flex items-start gap-4">
+        <div className="h-14 w-14 shrink-0 rounded-2xl bg-primary/10 flex items-center justify-center">
           <Calculator className="h-7 w-7 text-primary" />
-          Simples Nacional
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Controle de RBT12, sublimites e DAS por competência das empresas optantes.
-        </p>
+        </div>
+        <div>
+          <h1 className="text-[28px] font-bold text-foreground leading-tight">Simples Nacional</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Controle de RBT12, sublimites e DAS por competência das empresas optantes.
+          </p>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nome ou CNPJ..."
+            placeholder="Buscar por nome ou CNPJ da empresa..."
+            aria-label="Buscar empresa"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-10 rounded-xl bg-card"
           />
         </div>
-        <Input
-          type="number"
-          min={2020}
-          max={2099}
-          value={year}
-          onChange={e => setYear(Number(e.target.value) || new Date().getFullYear())}
-          className="w-28"
-        />
-        {isAdmin && (
-          <Button onClick={() => handleSync()} disabled={syncing} size="sm">
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <RefreshCw className="h-4 w-4 sm:mr-2" />}
-            <span className="hidden sm:inline">Sincronizar agora</span>
-          </Button>
-        )}
-        {isAdmin && (
-          <Button variant="outline" onClick={() => handleSync(undefined, true)} disabled={syncing} size="sm">
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin sm:mr-2" /> : <RefreshCw className="h-4 w-4 sm:mr-2" />}
-            <span className="hidden sm:inline">Atualizar situação</span>
-          </Button>
-        )}
-        {isAdmin && (
-          <Button variant="outline" size="sm" onClick={() => setReprocessOpen(true)}>
-            <RefreshCw className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Reprocessar fluxo</span>
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <div className="relative">
+            <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="number"
+              min={2020}
+              max={2099}
+              aria-label="Ano"
+              value={year}
+              onChange={e => setYear(Number(e.target.value) || new Date().getFullYear())}
+              className="w-32 h-10 pl-9 rounded-xl bg-card"
+            />
+          </div>
+          {isAdmin && (
+            <Button onClick={() => handleSync()} disabled={syncing} className="h-10 rounded-xl">
+              <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sincronizar agora</span>
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" onClick={() => handleSync(undefined, true)} disabled={syncing} className="h-10 rounded-xl bg-card">
+              <RotateCw className={`h-4 w-4 sm:mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Atualizar situação</span>
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setReprocessOpen(true)} className="h-10 rounded-xl bg-card">
+              <Workflow className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Reprocessar fluxo</span>
+            </Button>
+          )}
+        </div>
       </div>
       <ReprocessChainDialog open={reprocessOpen} onOpenChange={setReprocessOpen} />
 
-      {!loading && (
+      {loading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Skeleton className="h-80 rounded-2xl lg:col-span-2" />
+            <Skeleton className="h-80 rounded-2xl" />
+          </div>
+        </div>
+      ) : (
         <SimplesDashboard
           clients={clients}
           competencias={competencias}
@@ -311,8 +331,15 @@ export default function SimplesNacionalTab() {
         />
       )}
 
-      <Card className="overflow-hidden">
-        <div className="hidden md:grid grid-cols-[1fr_180px_140px_180px_180px_40px] gap-3 px-4 py-3 bg-muted/40 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <Card className="overflow-hidden rounded-2xl shadow-sm">
+        <div className="flex items-center gap-3 px-5 py-4 border-b">
+          <Building2 className="h-5 w-5 text-foreground" />
+          <h2 className="text-lg font-semibold text-foreground">Empresas</h2>
+          {!loading && <span className="text-xs text-muted-foreground">({filtered.length})</span>}
+        </div>
+        <div className="overflow-x-auto">
+        <div className="min-w-[860px]">
+        <div className="grid grid-cols-[1fr_170px_140px_190px_190px_40px] gap-3 px-5 py-3 bg-muted/40 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Empresa</div>
           <div>CNPJ</div>
           <div className="text-right">RBT12</div>
@@ -322,9 +349,9 @@ export default function SimplesNacionalTab() {
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />Carregando…</div>
+          <div className="p-4 space-y-2">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-9" />)}</div>
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">Nenhuma empresa do Simples Nacional encontrada.</div>
+          <div className="p-10 text-center text-muted-foreground">Nenhuma empresa do Simples Nacional encontrada para {year}.</div>
         ) : paginated.map(client => {
           const { rbt12, pct1, pct2 } = rowMetrics(client.id);
           const isOpen = expanded === client.id;
@@ -333,9 +360,10 @@ export default function SimplesNacionalTab() {
             <div key={client.id} className="border-b last:border-b-0">
               <button
                 onClick={() => setExpanded(isOpen ? null : client.id)}
-                className="w-full grid md:grid-cols-[1fr_180px_140px_180px_180px_40px] grid-cols-1 gap-3 px-4 py-3 hover:bg-accent/30 transition-colors text-left"
+                aria-expanded={isOpen}
+                className="w-full grid grid-cols-[1fr_170px_140px_190px_190px_40px] items-center gap-3 px-5 py-3.5 hover:bg-muted/40 transition-colors text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <div className="font-medium text-foreground truncate">{formatClientLabel(client)}</div>
+                <div className="font-medium text-foreground truncate" title={formatClientLabel(client)}>{formatClientLabel(client)}</div>
                 <div className="text-sm text-muted-foreground font-mono">{formatCnpj(client.document)}</div>
                 <div className="text-sm text-right tabular-nums">{formatBRL(rbt12)}</div>
                 <div className="flex items-center gap-2">
