@@ -208,10 +208,9 @@ export default function Payroll() {
 
         <div className="flex flex-col sm:flex-row sm:items-end gap-3">
           <div className="space-y-1.5">
-            <span id="lbl-empresa" className="text-xs font-medium text-pr-muted">Empresa</span>
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" aria-labelledby="lbl-empresa" className="w-full sm:w-72 justify-between bg-pr-surface border-pr-border text-pr-text">
+                <Button variant="outline" aria-label={`Empresa: ${clientBtn}`} className="w-full sm:w-72 justify-between bg-pr-surface border-pr-border text-pr-text">
                   <span className="flex items-center gap-2 truncate"><Building2 className="h-4 w-4 text-pr-muted shrink-0" /><span className="truncate">{clientBtn}</span></span>
                   <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
                 </Button>
