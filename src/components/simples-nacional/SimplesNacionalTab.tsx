@@ -427,23 +427,24 @@ export default function SimplesNacionalTab() {
             </div>
           );
         })}
-      </Card>
-
-      {!loading && totalPages > 1 && (
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages} ({filtered.length} empresas)
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
-              <ChevronLeft className="h-4 w-4 mr-1" />Anterior
-            </Button>
-            <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
-              Próxima<ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
         </div>
-      )}
+        </div>
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between gap-2 px-5 py-3 border-t">
+            <span className="text-xs text-muted-foreground">
+              Página {currentPage} de {totalPages} ({filtered.length} empresas)
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="rounded-lg" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                <ChevronLeft className="h-4 w-4 mr-1" />Anterior
+              </Button>
+              <Button variant="outline" size="sm" className="rounded-lg" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                Próxima<ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Dialog open={declOpen} onOpenChange={setDeclOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
