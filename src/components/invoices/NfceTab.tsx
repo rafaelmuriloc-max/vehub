@@ -103,16 +103,29 @@ export default function NfceTab() {
   const { data: invoices = [], isFetching } = useQuery({
     queryKey: ['nfce-invoices', selectedClient, dateFrom, dateTo],
     queryFn: async () => {
-      let q = supabase
-        .from('nfce_invoices')
-        .select('id, client_id, access_key, invoice_number, series, issue_date, emitter_name, consumer_name, consumer_document, total_value, status, xml_url')
-        .order('issue_date', { ascending: false })
-        .limit(1000);
-      if (selectedClient !== 'all') q = q.eq('client_id', selectedClient);
-      if (dateFrom) q = q.gte('issue_date', `${dateFrom}T00:00:00`);
-      if (dateTo) q = q.lte('issue_date', `${dateTo}T23:59:59`);
-      const { data } = await q;
-      return (data || []) as NfceInvoice[];
+      const cols = 'id, client_id, access_key, invoice_number, series, issue_date, emitter_name, consumer_name, consumer_document, total_value, status, xml_url';
+      const applyFilters = (q: any) => {
+        if (selectedClient !== 'all') q = q.eq('client_id', selectedClient);
+        if (dateFrom) q = q.gte('issue_date', `${dateFrom}T00:00:00`);
+        if (dateTo) q = q.lte('issue_date', `${dateTo}T23:59:59`);
+        return q;
+      };
+      const { count } = await applyFilters(
+        supabase.from('nfce_invoices').select('id', { count: 'exact', head: true }),
+      );
+      const total = count || 0;
+      if (total === 0) return [] as NfceInvoice[];
+      const CHUNK = 1000;
+      const pages = Math.ceil(total / CHUNK);
+      const results = await Promise.all(
+        Array.from({ length: pages }, (_, i) =>
+          applyFilters(supabase.from('nfce_invoices').select(cols))
+            .order('issue_date', { ascending: false })
+            .order('id', { ascending: true })
+            .range(i * CHUNK, i * CHUNK + CHUNK - 1),
+        ),
+      );
+      return results.flatMap((r: any) => r.data || []) as NfceInvoice[];
     },
   });
 
