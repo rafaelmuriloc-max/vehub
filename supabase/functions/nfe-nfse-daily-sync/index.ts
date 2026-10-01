@@ -239,6 +239,15 @@ Deno.serve(async (req) => {
     }
 
     try {
+      const sc = await callFunction("nfe-sc-query", { client_id: c.id });
+      entry.nfe_sc = sc?.not_accountant ? "sem_vinculo_sat" : sc?.skipped ? "bloqueada" : "ok";
+      entry.nfe_sc_notas = sc?.invoices_saved ?? 0;
+    } catch (e) {
+      entry.nfe_sc = `erro: ${(e as Error).message}`.slice(0, 300);
+    }
+    await new Promise((r) => setTimeout(r, 200));
+
+    try {
       await callFunction("nfse-query", {
         client_id: c.id,
         reference_month: referenceMonth,

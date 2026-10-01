@@ -329,6 +329,21 @@ export default function NfeTab() {
           infrastructureMessage = (e as Error).message;
           break;
         }
+
+        // Saídas: WS de download para contabilistas da SEF-SC.
+        try {
+          for (let round = 0; round < 10; round++) {
+            const { data: sc } = await supabase.functions.invoke('nfe-sc-query', { body: { client_id: clientIds[i] } });
+            const r = (sc ?? {}) as { more?: boolean; not_accountant?: boolean; skipped?: boolean; next_query_at?: string; invoices_saved?: number };
+            totals.capturadas += Number(r.invoices_saved || 0);
+            if (r.not_accountant) { blocked.push(`${clientName}: saídas sem vínculo de contabilista no SAT`); break; }
+            if (r.skipped && r.next_query_at) {
+              const hhmm = new Date(r.next_query_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+              blocked.push(`${clientName}: próxima busca de saídas às ${hhmm}`);
+            }
+            if (!r.more) break;
+          }
+        } catch { /* saídas não bloqueiam a busca de entradas */ }
       }
 
       await loadInvoices();
