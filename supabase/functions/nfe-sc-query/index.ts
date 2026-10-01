@@ -215,11 +215,10 @@ function buildSoapRequest(cnpj: string, ultNSU: string, chave: string | null): s
     ? `<solDFe><chAcesso>${chave}</chAcesso></solDFe>`
     : `<solRel><indXML>1</indXML><indAtor>3</indAtor><ultNuNSU>${ultNSU || "0"}</ultNuNSU></solRel>`;
   const dist = `<distNFeSC versao="2.00" xmlns="${SC_NS}"><tpAmb>1</tpAmb><verAplic>vehub 1.0</verAplic><cUF>42</cUF><CNPJ>${cnpj}</CNPJ>${filtro}</distNFeSC>`;
-  const esc = dist.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
-    <NfeDownloadContab xmlns="${SC_NS}"><pXml>${esc}</pXml></NfeDownloadContab>
+    <NfeDownloadContab xmlns="${SC_NS}"><pXml>${dist}</pXml></NfeDownloadContab>
   </soap:Body>
 </soap:Envelope>`;
 }
