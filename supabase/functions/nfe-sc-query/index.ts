@@ -95,7 +95,8 @@ Deno.serve(async (req) => {
       const cert = certs[certIdx];
       console.log(`[NF-e SC] Loop ${loops}, ultNuNSU=${lastNsu}, CNPJ=${cnpj}, cert=${cert.label}`);
       const res = await requestTextWithMTLS(new URL(SC_URL), buildSoapRequest(cnpj, lastNsu, consChave), cert.certPem, cert.keyPem);
-      const ret = extractTagContent(res.bodyText, "retDistNFeSC") || res.bodyText;
+      const unesc = res.bodyText.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+      const ret = extractTagContent(unesc, "retDistNFeSC") || unesc;
       const cStat = extractTagContent(ret, "cStat") || "";
       const xMotivo = extractTagContent(ret, "xMotivo") || "";
       const ultNSURet = extractTagContent(ret, "ultNuNSURet") || extractTagContent(ret, "ultNSU");
@@ -213,12 +214,12 @@ function buildSoapRequest(cnpj: string, ultNSU: string, chave: string | null): s
   const filtro = chave
     ? `<solDFe><chAcesso>${chave}</chAcesso></solDFe>`
     : `<solRel><indXML>1</indXML><indAtor>3</indAtor><ultNuNSU>${ultNSU || "0"}</ultNuNSU></solRel>`;
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  const dist = `<distNFeSC versao="2.00" xmlns="${SC_NS}"><tpAmb>1</tpAmb><verAplic>vehub 1.0</verAplic><cUF>42</cUF><CNPJ>${cnpj}</CNPJ>${filtro}</distNFeSC>`;
+  const esc = dist.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
-    <NfeDownloadContab xmlns="${SC_NS}">
-      <distNFeSC versao="1.00" xmlns="${SC_NS}"><tpAmb>1</tpAmb><verAplic>vehub 1.0</verAplic><cUF>42</cUF><CNPJ>${cnpj}</CNPJ>${filtro}</distNFeSC>
-    </NfeDownloadContab>
+    <NfeDownloadContab xmlns="${SC_NS}"><pXml>${esc}</pXml></NfeDownloadContab>
   </soap:Body>
 </soap:Envelope>`;
 }
