@@ -338,7 +338,7 @@ export default function Tasks() {
     const nextStatus = editing ? await guardStatus(editing.id, form.status) : form.status;
     const payload: any = {
       title: form.title, description: form.description || null, status: nextStatus,
-      priority: form.priority, due_date: form.due_date || null, client_id: form.is_internal ? null : (form.client_id || null),
+      priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
       department_id: form.department_id || null, is_internal: form.is_internal,
     };
     if (form.is_internal) { payload.notify_whatsapp = false; payload.notify_email = false; }
@@ -829,7 +829,8 @@ export default function Tasks() {
                           </div>
                         </div>
                         <p className="text-sm font-bold leading-snug text-foreground">{task.title}</p>
-                        {task.is_internal ? <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Interna</span> : task.client_id && <p className="truncate text-xs uppercase text-muted-foreground">{getClientName(task.client_id)}</p>}
+                        {task.is_internal && <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Interna</span>}
+                        {task.client_id && <p className="truncate text-xs uppercase text-muted-foreground">{getClientName(task.client_id)}</p>}
                         {task.department_id && <p className="text-xs text-muted-foreground">{getDepartmentName(task.department_id)}</p>}
                         {pending && <p className="pt-1 text-[11px] font-medium text-warning">Envio pendente</p>}
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3" onClick={(e) => e.stopPropagation()}>
@@ -900,7 +901,8 @@ export default function Tasks() {
                       <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority]}</Badge>
                       <Badge variant="outline">{statusLabels[task.status]}</Badge>
                       {task.due_date && <span className={`text-sm ${getDueDateColor(task.due_date)}`}>{new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
-                      {task.is_internal ? <Badge variant="secondary">Interna</Badge> : task.client_id && <span className="text-sm text-muted-foreground">{getClientName(task.client_id)}</span>}
+                      {task.is_internal && <Badge variant="secondary">Interna</Badge>}
+                      {task.client_id && <span className="text-sm text-muted-foreground">{getClientName(task.client_id)}</span>}
                     </div>
                   </div>
                   <div className="flex gap-1 items-center">
@@ -1022,17 +1024,15 @@ export default function Tasks() {
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <input type="checkbox" className="h-4 w-4 accent-primary" checked={form.is_internal}
-                    onChange={e => setForm({ ...form, is_internal: e.target.checked, client_id: e.target.checked ? '' : form.client_id })} />
+                    onChange={e => setForm({ ...form, is_internal: e.target.checked })} />
                   Tarefa interna
                 </label>
-                {!form.is_internal && (
-                  <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Cliente" /></SelectTrigger>
-                    <SelectContent>
-                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
+                <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
+                  <SelectTrigger><SelectValue placeholder={form.is_internal ? 'Cliente (opcional)' : 'Cliente'} /></SelectTrigger>
+                  <SelectContent>
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>Departamento</Label>

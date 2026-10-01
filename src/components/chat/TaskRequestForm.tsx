@@ -117,7 +117,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       status: 'todo',
       priority: requestForm.priority,
       due_date: requestForm.due_date || null,
-      client_id: isInternal ? null : requestForm.client_id,
+      client_id: requestForm.client_id || null,
       is_internal: isInternal,
       department_id: requestTemplate?.department_id || requestForm.department_id || null,
       template_id: requestTemplate?.id || null,
@@ -235,12 +235,11 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       )}
       <label className="flex items-center gap-2 text-sm font-medium">
         <input type="checkbox" className="h-4 w-4 accent-primary" checked={isInternal}
-          onChange={e => { setIsInternal(e.target.checked); if (e.target.checked) setRequestForm(f => ({ ...f, client_id: '' })); }} />
-        Tarefa interna (sem cliente)
+          onChange={e => setIsInternal(e.target.checked)} />
+        Tarefa interna
       </label>
-      {!isInternal && (
       <div className="space-y-2">
-        <Label>Cliente *</Label>
+        <Label>{isInternal ? 'Cliente (opcional)' : 'Cliente *'}</Label>
         {(() => {
           const list = linkedClientIds === null ? clients : clients.filter(c => linkedClientIds.includes(c.id));
           if (linkedClientIds !== null && list.length === 0) {
@@ -256,7 +255,6 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
           );
         })()}
       </div>
-      )}
       <div className="space-y-2">
         <Label>Descrição</Label>
         <Textarea value={requestForm.description} onChange={e => setRequestForm({ ...requestForm, description: e.target.value })} rows={3} placeholder="Detalhes da solicitação" />
