@@ -73,7 +73,7 @@ type Client = { id: string; sci_code?: string | null; company_name: string };
 type Department = { id: string; name: string };
 type TaskTemplate = {
   id: string; name: string; department_id: string; description: string | null; default_due_days: number;
-  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null;
+  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null; is_internal?: boolean | null;
 };
 type TaskAttachment = { id: string; file_name: string; file_url: string; file_type: string | null; file_size: number | null; uploaded_by: string | null; direction?: 'input' | 'output' };
 
@@ -178,7 +178,7 @@ export default function Tasks() {
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
   const [templateForm, setTemplateForm] = useState({
     name: '', department_id: '', description: '', default_due_days: '7',
-    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '',
+    notify_whatsapp: false, notify_email: false, notify_message: '', notify_email_subject: '', is_internal: false,
   });
   const [templateFilterDept, setTemplateFilterDept] = useState<string>('all');
 
@@ -423,7 +423,7 @@ export default function Tasks() {
   function openNewTemplate() {
     setEditingTemplate(null);
     setTemplateForm({ name: '', department_id: '', description: '', default_due_days: '7',
-      notify_whatsapp: true, notify_email: false, notify_message: '', notify_email_subject: '' });
+      notify_whatsapp: true, notify_email: false, notify_message: '', notify_email_subject: '', is_internal: false });
 
     setTemplateDialogOpen(true);
   }
@@ -433,6 +433,7 @@ export default function Tasks() {
       name: tpl.name, department_id: tpl.department_id, description: tpl.description || '',
       default_due_days: String(tpl.default_due_days),
       notify_whatsapp: !!tpl.notify_whatsapp,
+      is_internal: !!tpl.is_internal,
       notify_email: false,
       notify_message: tpl.notify_message || '',
       notify_email_subject: '',
@@ -450,7 +451,8 @@ export default function Tasks() {
       department_id: templateForm.department_id,
       description: templateForm.description || null,
       default_due_days: parseInt(templateForm.default_due_days) || 7,
-      notify_whatsapp: templateForm.notify_whatsapp,
+      notify_whatsapp: templateForm.is_internal ? false : templateForm.notify_whatsapp,
+      is_internal: templateForm.is_internal,
       notify_email: false,
       notify_message: templateForm.notify_message || null,
       notify_email_subject: null,
@@ -965,7 +967,7 @@ export default function Tasks() {
                 <TableBody>
                   {filteredTemplates.map(tpl => (
                     <TableRow key={tpl.id}>
-                      <TableCell className="font-medium">{tpl.name}</TableCell>
+                      <TableCell className="font-medium">{tpl.name}{tpl.is_internal && <Badge variant="secondary" className="ml-2">Interna</Badge>}</TableCell>
                       <TableCell>{getDeptName(tpl.department_id)}</TableCell>
                       <TableCell>{tpl.default_due_days}</TableCell>
                       <TableCell className="text-muted-foreground text-sm max-w-md truncate">{tpl.description}</TableCell>
@@ -1122,6 +1124,11 @@ export default function Tasks() {
             </div>
             <div className="space-y-2"><Label>Descrição</Label><Textarea value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} /></div>
             <div className="space-y-2"><Label>Prazo de entrega (dias)</Label><Input type="number" min="1" value={templateForm.default_due_days} onChange={e => setTemplateForm({ ...templateForm, default_due_days: e.target.value })} /></div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <Label htmlFor="tpl-internal" className="text-sm font-medium">Tarefa interna</Label>
+              <Switch id="tpl-internal" checked={templateForm.is_internal} onCheckedChange={v => setTemplateForm(f => ({ ...f, is_internal: v, notify_whatsapp: v ? false : f.notify_whatsapp }))} />
+            </div>
+            {!templateForm.is_internal && (
             <div className="space-y-3 border rounded-md p-3 bg-muted/30">
               <Label className="text-sm font-semibold">Notificar cliente ao concluir</Label>
               <div className="flex items-center justify-between">
@@ -1148,6 +1155,7 @@ export default function Tasks() {
                 </>
               )}
             </div>
+            )}
 
             <Button type="submit" className="w-full">{editingTemplate ? 'Salvar' : 'Cadastrar'}</Button>
           </form>
