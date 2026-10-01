@@ -814,9 +814,11 @@ export default function Tasks() {
                                 {task.status !== 'done' && (
                                   <DropdownMenuItem onClick={() => moveTask(task.id, 'done')}><CheckCircle2 className="mr-2 h-4 w-4" />Concluir</DropdownMenuItem>
                                 )}
+                                {!task.is_internal && (
                                 <DropdownMenuItem onSelect={(e) => { e.preventDefault(); document.getElementById(`out-${task.id}`)?.click(); }}>
                                   <Upload className="mr-2 h-4 w-4" />Enviar para o cliente
                                 </DropdownMenuItem>
+                                )}
                                 {pending && (
                                   <DropdownMenuItem onClick={async () => { await triggerNotify(task.id); loadData(); }}><Send className="mr-2 h-4 w-4" />Reenviar envio pendente</DropdownMenuItem>
                                 )}
