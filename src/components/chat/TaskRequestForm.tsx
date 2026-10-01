@@ -39,6 +39,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
 
   const [requestTemplate, setRequestTemplate] = useState<TaskTemplate | null>(null);
   const [requestCustomTitle, setRequestCustomTitle] = useState('');
+  const [isInternal, setIsInternal] = useState(false);
   const [requestForm, setRequestForm] = useState({
     client_id: defaultClientId || '',
     due_date: '',
@@ -103,7 +104,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!requestForm.client_id) {
+    if (!isInternal && !requestForm.client_id) {
       toast({ title: 'Selecione o cliente', variant: 'destructive' }); return;
     }
     if (!requestTemplate && !requestCustomTitle.trim()) {
@@ -116,11 +117,12 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       status: 'todo',
       priority: requestForm.priority,
       due_date: requestForm.due_date || null,
-      client_id: requestForm.client_id,
+      client_id: isInternal ? null : requestForm.client_id,
+      is_internal: isInternal,
       department_id: requestTemplate?.department_id || requestForm.department_id || null,
       template_id: requestTemplate?.id || null,
       created_by: user?.id,
-      notify_whatsapp: !!requestTemplate?.notify_whatsapp,
+      notify_whatsapp: !isInternal && !!requestTemplate?.notify_whatsapp,
       notify_email: false,
       notify_message: requestTemplate?.notify_message || null,
       notify_email_subject: null,
@@ -187,6 +189,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
     }
     setUploading(false);
     setRequestTemplate(null);
+    setIsInternal(false);
     setRequestCustomTitle('');
     setRequestForm({ client_id: defaultClientId || '', due_date: '', assigned_to: [], priority: 'medium', description: '', department_id: '' });
     setRequestFiles([]);
@@ -230,6 +233,12 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
           <Input value={requestCustomTitle} onChange={e => setRequestCustomTitle(e.target.value)} placeholder="Ex.: Enviar declaração para o cliente" />
         </div>
       )}
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <input type="checkbox" className="h-4 w-4 accent-primary" checked={isInternal}
+          onChange={e => { setIsInternal(e.target.checked); if (e.target.checked) setRequestForm(f => ({ ...f, client_id: '' })); }} />
+        Tarefa interna (sem cliente)
+      </label>
+      {!isInternal && (
       <div className="space-y-2">
         <Label>Cliente *</Label>
         {(() => {
@@ -247,6 +256,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
           );
         })()}
       </div>
+      )}
       <div className="space-y-2">
         <Label>Descrição</Label>
         <Textarea value={requestForm.description} onChange={e => setRequestForm({ ...requestForm, description: e.target.value })} rows={3} placeholder="Detalhes da solicitação" />
