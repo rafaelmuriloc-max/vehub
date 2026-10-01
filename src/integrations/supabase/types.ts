@@ -3344,6 +3344,7 @@ export type Database = {
           department_id: string
           description: string | null
           id: string
+          is_internal: boolean
           name: string
           notify_email: boolean
           notify_email_subject: string | null
@@ -3358,6 +3359,7 @@ export type Database = {
           department_id: string
           description?: string | null
           id?: string
+          is_internal?: boolean
           name: string
           notify_email?: boolean
           notify_email_subject?: string | null
@@ -3372,6 +3374,7 @@ export type Database = {
           department_id?: string
           description?: string | null
           id?: string
+          is_internal?: boolean
           name?: string
           notify_email?: boolean
           notify_email_subject?: string | null

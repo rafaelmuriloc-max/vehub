@@ -13,7 +13,7 @@ import { formatClientLabel } from '@/lib/utils';
 
 type TaskTemplate = {
   id: string; name: string; department_id: string; description: string | null; default_due_days: number;
-  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null;
+  notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null; notify_email_subject?: string | null; is_internal?: boolean | null;
 };
 type Client = { id: string; sci_code?: string | null; company_name: string };
 type Profile = { user_id: string; full_name: string | null; department_id: string | null };
@@ -96,6 +96,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
       const tpl = templates.find(t => t.id === defaultTemplateId) || null;
       if (tpl) {
         setRequestTemplate(tpl);
+        setIsInternal(!!tpl?.is_internal);
         const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
         setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0] }));
       }
@@ -210,6 +211,7 @@ export function TaskRequestForm({ defaultClientId, defaultTemplateId, restrictTo
             } else {
               const tpl = templates.find(t => t.id === v) || null;
               setRequestTemplate(tpl);
+              setIsInternal(!!tpl?.is_internal);
               if (tpl) {
                 const due = new Date(); due.setDate(due.getDate() + (tpl.default_due_days || 7));
                 setRequestForm(f => ({ ...f, description: tpl.description || '', due_date: due.toISOString().split('T')[0], assigned_to: [] }));
