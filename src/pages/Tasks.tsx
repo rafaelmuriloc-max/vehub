@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon, BarChart3, Wallet, ClipboardList, User, Building2, FileText, Users, Tag, Filter, MoreHorizontal, Clock, CalendarDays, CheckCircle2, ArrowLeft, ArrowRight, Bell, SlidersHorizontal, ChevronDown, Flag, MoreVertical, FolderOpen, Hourglass } from 'lucide-react';
+import { Plus, Pencil, Trash2, Send, Paperclip, X, Upload, Check, ChevronsUpDown, Search, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon, BarChart3, Wallet, ClipboardList, User, Building2, FileText, Users, Tag, Filter, MoreHorizontal, Clock, CalendarDays, CheckCircle2, ArrowLeft, ArrowRight, Bell, SlidersHorizontal, ChevronDown, Flag, MoreVertical, FolderOpen, Hourglass, Timer } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useNavigate } from 'react-router-dom';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
@@ -106,8 +106,18 @@ const COLUMN_META: Record<string, { Icon: typeof LayoutGrid; iconClass: string; 
     emptyTitle: 'Nenhuma tarefa concluída',
     emptyHint: 'As tarefas finalizadas aparecerão aqui.',
   },
+  doing: {
+    Icon: Timer,
+    iconClass: 'bg-info text-info-foreground',
+    countClass: 'bg-info text-info-foreground',
+    plusClass: 'text-info',
+    subtitle: 'Tarefas com cronômetro em andamento',
+    emptyTitle: 'Nenhuma tarefa em andamento',
+    emptyHint: 'Ao iniciar o cronômetro de uma tarefa, ela aparecerá aqui.',
+  },
 };
 const statusColumns: string[] = ['todo', 'in_progress', 'done'];
+const KANBAN_COLUMNS: string[] = ['todo', 'doing', 'in_progress', 'done'];
 const KANBAN_PAGE_SIZE = 10;
 const priorityColors: Record<string, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-info/10 text-info', high: 'bg-primary/10 text-primary', urgent: 'bg-destructive/10 text-destructive' };
 const priorityLabels: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
@@ -128,6 +138,26 @@ export default function Tasks() {
   const [filterTemplate, setFilterTemplate] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
   const [kanbanLimit, setKanbanLimit] = useState<Record<string, number>>({});
+  const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let active = true;
+    const loadRunning = async () => {
+      const { data } = await supabase
+        .from('time_entries' as any)
+        .select('task_id')
+        .is('ended_at', null)
+        .is('batch_id', null)
+        .not('task_id', 'is', null);
+      if (active) setRunningTaskIds(new Set(((data as any[]) || []).map(r => r.task_id as string)));
+    };
+    loadRunning();
+    const ch = supabase
+      .channel('tasks-running-timers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, () => loadRunning())
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
   const [filterDue, setFilterDue] = useState<string>('all');
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [requestStatus, setRequestStatus] = useState<Task['status']>('todo');
@@ -729,10 +759,11 @@ export default function Tasks() {
 
         <TabsContent value="kanban" className="mt-5">
           {filterBar}
-          <div className="grid gap-4 md:grid-cols-3">
-            {statusColumns.map(col => {
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {KANBAN_COLUMNS.map(col => {
+              const isDoing = (t: Task) => t.status !== 'done' && runningTaskIds.has(t.id);
               const colTasks = filteredTasks
-                .filter(t => t.status === col)
+                .filter(t => col === 'doing' ? isDoing(t) : t.status === col && !isDoing(t))
                 .sort((a, b) => {
                   if (col !== 'todo') return 0;
                   const da = a.due_date ? new Date(a.due_date + 'T00:00:00').getTime() : Infinity;
@@ -751,15 +782,17 @@ export default function Tasks() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-foreground">{statusLabels[col]}</h3>
+                      <h3 className="text-base font-bold text-foreground">{col === 'doing' ? 'Fazendo' : statusLabels[col]}</h3>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${meta.countClass}`}>{colTasks.length}</span>
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{meta.subtitle}</p>
                   </div>
                   <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  {col !== 'doing' && (
                   <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg bg-card" onClick={() => openNew(col as Task['status'])} aria-label="Nova tarefa">
                     <Plus className={`h-4 w-4 ${meta.plusClass}`} />
                   </Button>
+                  )}
                 </div>
                 <div className="flex-1 space-y-3 min-h-[200px]">
                   {pageTasks.map(task => {
