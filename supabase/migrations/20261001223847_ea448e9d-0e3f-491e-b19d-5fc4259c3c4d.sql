@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS last_nfe_sc_nsu text DEFAULT '0', ADD COLUMN IF NOT EXISTS nfe_sc_next_query_at timestamptz;

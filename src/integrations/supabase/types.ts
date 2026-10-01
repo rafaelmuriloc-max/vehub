@@ -785,12 +785,14 @@ export type Database = {
           id: string
           last_nfce_nsu: string | null
           last_nfe_nsu: string | null
+          last_nfe_sc_nsu: string | null
           last_nsu: string | null
           main_activity: string | null
           monthly_value: number | null
           municipal_registration: string | null
           nfce_next_query_at: string | null
           nfe_next_query_at: string | null
+          nfe_sc_next_query_at: string | null
           notes: string | null
           opening_date: string | null
           partners_info: string | null
@@ -839,12 +841,14 @@ export type Database = {
           id?: string
           last_nfce_nsu?: string | null
           last_nfe_nsu?: string | null
+          last_nfe_sc_nsu?: string | null
           last_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
           nfce_next_query_at?: string | null
           nfe_next_query_at?: string | null
+          nfe_sc_next_query_at?: string | null
           notes?: string | null
           opening_date?: string | null
           partners_info?: string | null
@@ -893,12 +897,14 @@ export type Database = {
           id?: string
           last_nfce_nsu?: string | null
           last_nfe_nsu?: string | null
+          last_nfe_sc_nsu?: string | null
           last_nsu?: string | null
           main_activity?: string | null
           monthly_value?: number | null
           municipal_registration?: string | null
           nfce_next_query_at?: string | null
           nfe_next_query_at?: string | null
+          nfe_sc_next_query_at?: string | null
           notes?: string | null
           opening_date?: string | null
           partners_info?: string | null
