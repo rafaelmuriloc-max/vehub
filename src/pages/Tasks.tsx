@@ -27,7 +27,7 @@ import { formatClientLabel, localDateKey, todayKey } from '@/lib/utils';
 
 type Task = {
   id: string; task_number?: number | null; title: string; description: string | null; status: 'todo' | 'in_progress' | 'done';
-  priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null;
+  priority: 'low' | 'medium' | 'high' | 'urgent'; due_date: string | null; client_id: string | null; is_internal?: boolean | null;
   created_by: string | null; created_at: string; department_id?: string | null; template_id?: string | null;
   notify_whatsapp?: boolean; notify_email?: boolean; notify_message?: string | null;
   notify_email_subject?: string | null; notify_sent_at?: string | null; completed_at?: string | null;
@@ -170,7 +170,7 @@ export default function Tasks() {
 
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo' as Task['status'], priority: 'medium' as Task['priority'],
-    due_date: '', client_id: '', department_id: '', assigned_to: [] as string[],
+    due_date: '', client_id: '', department_id: '', assigned_to: [] as string[], is_internal: false,
   });
 
   // Templates state
@@ -263,7 +263,7 @@ export default function Tasks() {
     setForm({
       title: task.title, description: task.description || '', status: task.status,
       priority: task.priority, due_date: task.due_date || '', client_id: task.client_id || '',
-      department_id: task.department_id || '',
+      department_id: task.department_id || '', is_internal: !!task.is_internal,
       assigned_to: assignments[task.id] || [],
     });
     setEditNewFiles([]);
@@ -336,11 +336,12 @@ export default function Tasks() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     const nextStatus = editing ? await guardStatus(editing.id, form.status) : form.status;
-    const payload = {
+    const payload: any = {
       title: form.title, description: form.description || null, status: nextStatus,
-      priority: form.priority, due_date: form.due_date || null, client_id: form.client_id || null,
-      department_id: form.department_id || null,
+      priority: form.priority, due_date: form.due_date || null, client_id: form.is_internal ? null : (form.client_id || null),
+      department_id: form.department_id || null, is_internal: form.is_internal,
     };
+    if (form.is_internal) { payload.notify_whatsapp = false; payload.notify_email = false; }
     let error;
     let taskId: string;
     const wasDone = editing?.status === 'done';
@@ -813,9 +814,11 @@ export default function Tasks() {
                                 {task.status !== 'done' && (
                                   <DropdownMenuItem onClick={() => moveTask(task.id, 'done')}><CheckCircle2 className="mr-2 h-4 w-4" />Concluir</DropdownMenuItem>
                                 )}
+                                {!task.is_internal && (
                                 <DropdownMenuItem onSelect={(e) => { e.preventDefault(); document.getElementById(`out-${task.id}`)?.click(); }}>
                                   <Upload className="mr-2 h-4 w-4" />Enviar para o cliente
                                 </DropdownMenuItem>
+                                )}
                                 {pending && (
                                   <DropdownMenuItem onClick={async () => { await triggerNotify(task.id); loadData(); }}><Send className="mr-2 h-4 w-4" />Reenviar envio pendente</DropdownMenuItem>
                                 )}
@@ -826,7 +829,7 @@ export default function Tasks() {
                           </div>
                         </div>
                         <p className="text-sm font-bold leading-snug text-foreground">{task.title}</p>
-                        {task.client_id && <p className="truncate text-xs uppercase text-muted-foreground">{getClientName(task.client_id)}</p>}
+                        {task.is_internal ? <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Interna</span> : task.client_id && <p className="truncate text-xs uppercase text-muted-foreground">{getClientName(task.client_id)}</p>}
                         {task.department_id && <p className="text-xs text-muted-foreground">{getDepartmentName(task.department_id)}</p>}
                         {pending && <p className="pt-1 text-[11px] font-medium text-warning">Envio pendente</p>}
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3" onClick={(e) => e.stopPropagation()}>
@@ -897,7 +900,7 @@ export default function Tasks() {
                       <Badge className={priorityColors[task.priority]} variant="secondary">{priorityLabels[task.priority]}</Badge>
                       <Badge variant="outline">{statusLabels[task.status]}</Badge>
                       {task.due_date && <span className={`text-sm ${getDueDateColor(task.due_date)}`}>{new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
-                      {task.client_id && <span className="text-sm text-muted-foreground">{getClientName(task.client_id)}</span>}
+                      {task.is_internal ? <Badge variant="secondary">Interna</Badge> : task.client_id && <span className="text-sm text-muted-foreground">{getClientName(task.client_id)}</span>}
                     </div>
                   </div>
                   <div className="flex gap-1 items-center">
@@ -1017,13 +1020,19 @@ export default function Tasks() {
               </div>
               <div className="space-y-2"><Label>Prazo</Label><Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div>
               <div className="space-y-2">
-                <Label>Cliente</Label>
-                <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" className="h-4 w-4 accent-primary" checked={form.is_internal}
+                    onChange={e => setForm({ ...form, is_internal: e.target.checked, client_id: e.target.checked ? '' : form.client_id })} />
+                  Tarefa interna
+                </label>
+                {!form.is_internal && (
+                  <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Cliente" /></SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{formatClientLabel(c)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>Departamento</Label>

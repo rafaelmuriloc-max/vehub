@@ -3391,6 +3391,7 @@ export type Database = {
           description: string | null
           due_date: string | null
           id: string
+          is_internal: boolean
           notify_email: boolean
           notify_email_subject: string | null
           notify_message: string | null
@@ -3412,6 +3413,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           id?: string
+          is_internal?: boolean
           notify_email?: boolean
           notify_email_subject?: string | null
           notify_message?: string | null
@@ -3433,6 +3435,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           id?: string
+          is_internal?: boolean
           notify_email?: boolean
           notify_email_subject?: string | null
           notify_message?: string | null
