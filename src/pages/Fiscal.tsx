@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Scale, Receipt, Plug, FolderOpen, Calculator } from 'lucide-react';
+import { Scale, Receipt, Plug, FolderOpen, Calculator, FileCheck } from 'lucide-react';
+import DctfwebTab from '@/components/dctfweb/DctfwebTab';
 import SituacaoFiscalTab from '@/components/integra-contador/SituacaoFiscalTab';
 import Invoices from './Invoices';
 import IntegraContador from './IntegraContador';
@@ -7,11 +8,12 @@ import ParcelamentosTab from '@/components/integra-contador/ParcelamentosTab';
 import SimplesNacionalTab from '@/components/simples-nacional/SimplesNacionalTab';
 import { cn } from '@/lib/utils';
 
-type View = 'situacao' | 'simples' | 'notas' | 'parcelamentos' | 'integra';
+type View = 'situacao' | 'simples' | 'dctfweb' | 'notas' | 'parcelamentos' | 'integra';
 
 const ITEMS: { key: View; label: string; icon: any }[] = [
   { key: 'situacao', label: 'Situação Fiscal', icon: Scale },
   { key: 'simples', label: 'Simples Nacional', icon: Calculator },
+  { key: 'dctfweb', label: 'DCTFWeb', icon: FileCheck },
   { key: 'notas', label: 'Notas Fiscais', icon: Receipt },
   { key: 'parcelamentos', label: 'Parcelamentos', icon: FolderOpen },
   { key: 'integra', label: 'Integra Contador', icon: Plug },
@@ -47,6 +49,7 @@ export default function Fiscal() {
 
       {view === 'situacao' && <SituacaoFiscalTab />}
       {view === 'simples' && <SimplesNacionalTab />}
+      {view === 'dctfweb' && <DctfwebTab />}
       {view === 'notas' && <Invoices />}
       {view === 'parcelamentos' && <ParcelamentosTab />}
       {view === 'integra' && <IntegraContador />}
