@@ -3376,6 +3376,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           category: string | null
+          clarity_score: number | null
           client_id: string | null
           closed_at: string | null
           contact_name: string | null
@@ -3383,11 +3384,21 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           department_id: string | null
+          empathy_score: number | null
+          evaluated_at: string | null
+          evaluation_status: string
+          feedback_improvements: string | null
+          feedback_strengths: string | null
           first_response_at: string | null
           handle_seconds: number | null
           id: string
           messages_count: number
+          nps_category: string | null
+          nps_score: number | null
           opened_at: string
+          resolution_score: number | null
+          sentiment_end: string | null
+          sentiment_start: string | null
           status: string
           subject: string | null
           summary: string | null
@@ -3399,6 +3410,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           category?: string | null
+          clarity_score?: number | null
           client_id?: string | null
           closed_at?: string | null
           contact_name?: string | null
@@ -3406,11 +3418,21 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           department_id?: string | null
+          empathy_score?: number | null
+          evaluated_at?: string | null
+          evaluation_status?: string
+          feedback_improvements?: string | null
+          feedback_strengths?: string | null
           first_response_at?: string | null
           handle_seconds?: number | null
           id?: string
           messages_count?: number
+          nps_category?: string | null
+          nps_score?: number | null
           opened_at?: string
+          resolution_score?: number | null
+          sentiment_end?: string | null
+          sentiment_start?: string | null
           status?: string
           subject?: string | null
           summary?: string | null
@@ -3422,6 +3444,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           category?: string | null
+          clarity_score?: number | null
           client_id?: string | null
           closed_at?: string | null
           contact_name?: string | null
@@ -3429,11 +3452,21 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           department_id?: string | null
+          empathy_score?: number | null
+          evaluated_at?: string | null
+          evaluation_status?: string
+          feedback_improvements?: string | null
+          feedback_strengths?: string | null
           first_response_at?: string | null
           handle_seconds?: number | null
           id?: string
           messages_count?: number
+          nps_category?: string | null
+          nps_score?: number | null
           opened_at?: string
+          resolution_score?: number | null
+          sentiment_end?: string | null
+          sentiment_start?: string | null
           status?: string
           subject?: string | null
           summary?: string | null
