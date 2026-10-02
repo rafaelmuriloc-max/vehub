@@ -103,6 +103,13 @@ export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMo
       empresas: Math.max(...ms.map(m => m.empresas)),
     }));
   }, [months, start, end, gran]);
+  const deltaOf = (k: 'funcionarios' | 'salarios') => {
+    if (data.length < 2) return null;
+    const a = data[0][k], b = data[data.length - 1][k];
+    return a ? ((b - a) / a) * 100 : null;
+  };
+  const salMax = Math.max(0, ...data.map(d => d.salarios));
+  const salTop = Math.max(250_000, Math.ceil((salMax * 1.1) / 250_000) * 250_000);
 
   return (
     <Card className="border-border/70 shadow-sm rounded-2xl">
