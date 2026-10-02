@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { PersonnelAlertsDialog } from '@/components/personnel/PersonnelAlertsDialog';
 
 interface Client { id: string; company_name: string; document: string | null; sci_code: string | null; status: string }
 interface Employee {
@@ -223,6 +224,7 @@ export default function Personnel() {
   const [page, setPage] = useState(1);
 
   const [trialDialogOpen, setTrialDialogOpen] = useState(false);
+  const [alertKind, setAlertKind] = useState<'experiencia' | 'ferias' | null>(null);
   const [folderDialog, setFolderDialog] = useState(false);
   const [picking, setPicking] = useState(false);
   const [folder, setFolder] = useState<{ id: string; name: string } | null>(null);
@@ -754,6 +756,7 @@ export default function Personnel() {
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}><SelectTrigger className="h-10 w-full xl:w-36"><div className="text-left"><span className="block text-[10px] leading-none text-muted-foreground">Situação</span><SelectValue /></div></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Ativos</SelectItem><SelectItem value="terminated">Desligados</SelectItem></SelectContent></Select>
         <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={loadAll} aria-label="Recarregar"><RefreshCw className="h-4 w-4" /></Button>
         {isAdmin && <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => { setFolder(null); setFolderDialog(true); }} title={config ? `Pasta: ${config.folder_name}` : 'Definir pasta'}><FolderOpen className="h-4 w-4 mr-1" />Funcionários</Button>}
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="h-10 shrink-0 rounded-full"><Bell className="h-4 w-4 mr-1" />Avisos<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setAlertKind('experiencia')}><CalendarClock className="h-4 w-4 mr-2" />Contratos de experiência</DropdownMenuItem><DropdownMenuItem onClick={() => setAlertKind('ferias')}><Palmtree className="h-4 w-4 mr-2" />Vencimento de férias</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/ferias')}><Palmtree className="h-4 w-4 mr-1" />Férias</Button>
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/folha')}><Wallet className="h-4 w-4 mr-1" />Folha</Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button className="h-10 shrink-0 rounded-full" disabled={syncingAny}>{syncingAny ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}Sincronizar<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
@@ -990,6 +993,7 @@ export default function Personnel() {
           )}
         </DialogContent>
       </Dialog>
+    <PersonnelAlertsDialog open={!!alertKind} onOpenChange={v => { if (!v) setAlertKind(null); }} kind={alertKind ?? 'experiencia'} />
     </div>
   );
 }

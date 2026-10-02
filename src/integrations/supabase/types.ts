@@ -2750,6 +2750,56 @@ export type Database = {
           },
         ]
       }
+      personnel_alert_logs: {
+        Row: {
+          client_id: string
+          created_at: string
+          employees_count: number
+          error: string | null
+          id: string
+          kind: string
+          message: string
+          recipient_name: string | null
+          recipient_phone: string | null
+          sent_by: string | null
+          status: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          employees_count?: number
+          error?: string | null
+          id?: string
+          kind: string
+          message: string
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          sent_by?: string | null
+          status?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          employees_count?: number
+          error?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          sent_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personnel_alert_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procurador_tokens: {
         Row: {
           client_cnpj: string
