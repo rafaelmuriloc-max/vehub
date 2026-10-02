@@ -486,8 +486,8 @@ export default function RfbParcelamentos() {
   }
 
   async function handleAtualizarTodas() {
-    const ids = Array.from(new Set(rows.filter(r => r.status === 'success').map(r => r.client_id)));
-    if (!ids.length) { toast({ title: 'Nenhuma empresa com parcelamento para atualizar' }); return; }
+    const ids = clients.map(c => c.id);
+    if (!ids.length) { toast({ title: 'Nenhuma empresa cadastrada para consultar' }); return; }
     cancelRef.current = false;
     setBatchRunning(true);
     setBatchProgress({ current: 0, total: ids.length });
