@@ -284,7 +284,19 @@ function CalendarMain({ view, onViewChange }: { view: 'calendar' | 'documents' |
     const monthDeleted = allMonthInstances.filter(i => !!i.deleted_at);
     setInstances(monthInstances);
     setDeletedInstances(monthDeleted);
-    setTasks((taskRes.data as TaskRow[]) || []);
+    // Tarefas em "Aguardando" (in_progress) têm o prazo considerado como hoje enquanto estiverem nessa situação.
+    const todayStrLoad = todayKey();
+    const taskById = new Map<string, TaskRow>();
+    for (const t of ((taskRes.data as TaskRow[]) || [])) taskById.set(t.id, t);
+    if (todayStrLoad >= monthStart && todayStrLoad < monthEnd) {
+      const { data: waiting } = await supabase.from('tasks')
+        .select('id, task_number, title, status, priority, due_date, client_id, department_id, completed_at')
+        .eq('status', 'in_progress').lt('due_date', todayStrLoad);
+      for (const t of ((waiting as TaskRow[]) || [])) taskById.set(t.id, t);
+    }
+    setTasks(Array.from(taskById.values()).map(t =>
+      t.status === 'in_progress' && t.due_date && t.due_date < todayStrLoad ? { ...t, due_date: todayStrLoad } : t
+    ));
     const holdUserIds = Array.from(new Set(allMonthInstances.map(i => i.hold_by).filter(Boolean))) as string[];
     if (holdUserIds.length > 0) {
       const { data: profs } = await supabase.from('profiles').select('user_id, full_name').in('user_id', holdUserIds);
