@@ -502,6 +502,8 @@ export default function RfbParcelamentos() {
       if (filterOrigem !== 'all') {
         if (!it.parc || (it.parc.origem || 'RFB') !== filterOrigem) return false;
       }
+      if (it.parc?.status === 'no_data') return false;
+      if (filterSituacao !== 'sem' && filterSituacao !== 'erro' && it.parc?.status !== 'success') return false;
       if (filterSituacao !== 'all') {
         if (filterSituacao === 'sem' && it.parc) return false;
         if (filterSituacao === 'com' && (!it.parc || it.parc.status !== 'success')) return false;
@@ -737,7 +739,6 @@ export default function RfbParcelamentos() {
                 <SelectItem value="ativo">Parcelamento ativo</SelectItem>
                 <SelectItem value="encerrado">Encerrado/liquidado</SelectItem>
                 <SelectItem value="com">Com parcelamento</SelectItem>
-                <SelectItem value="no_data">Sem parcelamentos</SelectItem>
                 <SelectItem value="sem">Não consultado</SelectItem>
                 <SelectItem value="erro">Com erro</SelectItem>
               </SelectContent>
