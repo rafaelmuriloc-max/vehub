@@ -16,8 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   Bell, Building2, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Download, FolderOpen, FolderSync,
-  LayoutGrid, List, Loader2, LogOut, MoreVertical, Palmtree, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,
-} from 'lucide-react';
+  LayoutGrid, List, Loader2, LogOut, MoreVertical, Palmtree, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,, FileCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PersonnelAlertsDialog } from '@/components/personnel/PersonnelAlertsDialog';
@@ -759,6 +758,7 @@ export default function Personnel() {
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="h-10 shrink-0 rounded-full"><Bell className="h-4 w-4 mr-1" />Avisos<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setAlertKind('experiencia')}><CalendarClock className="h-4 w-4 mr-2" />Contratos de experiência</DropdownMenuItem><DropdownMenuItem onClick={() => setAlertKind('ferias')}><Palmtree className="h-4 w-4 mr-2" />Vencimento de férias</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/ferias')}><Palmtree className="h-4 w-4 mr-1" />Férias</Button>
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/folha')}><Wallet className="h-4 w-4 mr-1" />Folha</Button>
+        <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/dctfweb')}><FileCheck className="h-4 w-4 mr-1" />DCTFWeb</Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button className="h-10 shrink-0 rounded-full" disabled={syncingAny}>{syncingAny ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}Sincronizar<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => syncNow()} disabled={syncingAny}><FolderSync className="h-4 w-4 mr-2" />Pasta (fichas)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => syncNow(true)} disabled={syncingAny}><CalendarClock className="h-4 w-4 mr-2" />Experiência</DropdownMenuItem>
