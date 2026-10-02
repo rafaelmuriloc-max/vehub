@@ -49,6 +49,39 @@ export default function UsageCostTab() {
     return () => { supabase.removeChannel(ch); };
   }, [offset]);
 
+  const [firstLog, setFirstLog] = useState<Date | null>(null);
+  const [estimado, setEstimado] = useState<{ consultas: number; emissoes: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data: f } = await supabase.from('integra_contador_usage' as any).select('created_at').order('created_at').limit(1);
+      const first = (f as any)?.[0]?.created_at ? new Date((f as any)[0].created_at) : null;
+      if (!alive) return;
+      setFirstLog(first);
+      setEstimado(null);
+      if (!first || first <= ciclo.inicio) return;
+      const ini = ciclo.inicio.toISOString();
+      const fim = (first < ciclo.fim ? first : ciclo.fim).toISOString();
+      const cnt = async (table: string, col: string, extra?: (q: any) => any) => {
+        let q: any = supabase.from(table as any).select('id', { count: 'exact', head: true }).gte(col, ini).lt(col, fim);
+        if (extra) q = extra(q);
+        const { count } = await q;
+        return count ?? 0;
+      };
+      const [sit, dctf, mei, parc, sn, snDas] = await Promise.all([
+        cnt('sitfis_results', 'consulted_at'),
+        cnt('dctfweb_competencias', 'updated_at'),
+        cnt('mei_competencias', 'updated_at'),
+        cnt('parcelamento_results', 'consulted_at'),
+        cnt('simples_nacional_competencias', 'updated_at'),
+        cnt('simples_nacional_competencias', 'updated_at', (q) => q.not('das_pdf_base64', 'is', null)),
+      ]);
+      if (alive) setEstimado({ consultas: sit + dctf + mei + parc + sn, emissoes: snDas });
+    })();
+    return () => { alive = false; };
+  }, [ciclo]);
+  const estimadoValor = estimado ? custoAcumulado('Consultar', estimado.consultas) + custoAcumulado('Emitir', estimado.emissoes) : 0;
+
   const stats = useMemo(() => {
     const count: Record<TipoCobranca, number> = { Consultar: 0, Emitir: 0, Declarar: 0 };
     const daily = new Map<string, { dia: string; req: number; custo: number }>();
@@ -56,7 +89,7 @@ export default function UsageCostTab() {
     const byClient = new Map<string, { nome: string; req: number; custo: number }>();
     let erros = 0;
     for (const r of rows) {
-      if (!r.sucesso) erros++;
+      if ((r.status_http ?? 0) >= 400) erros++;
       if (!r.cobrada) continue;
       const t = normalizeTipo(r.tipo);
       count[t]++;
@@ -79,7 +112,7 @@ export default function UsageCostTab() {
     TIPOS.forEach((t) => (proj[t] = Math.round((count[t] / diasPassados) * diasTotais)));
     const projecao = offset === 0 ? TIPOS.reduce((s, t) => s + custoAcumulado(t, proj[t]), 0) : total;
     return {
-      count, total, cobradas, erros, projecao,
+      count, total, cobradas, erros, projecao, naoCobradas: rows.filter((r) => !r.cobrada && (r.status_http ?? 0) < 400).length,
       daily: [...daily.values()].map((d) => ({ ...d, dia: d.dia.slice(8, 10) + '/' + d.dia.slice(5, 7), custo: +d.custo.toFixed(2) })),
       bySys: [...bySys.entries()].map(([name, value]) => ({ name, value: +value.toFixed(2) })).sort((a, b) => b.value - a.value),
       top: [...byClient.values()].sort((a, b) => b.custo - a.custo).slice(0, 10),
@@ -116,11 +149,21 @@ export default function UsageCostTab() {
 
       {loading ? <div className="p-10 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div> : (
         <>
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
-            <Kpi label="Fatura estimada" value={brl(stats.total)} />
+          {firstLog && firstLog > ciclo.inicio && firstLog < ciclo.fim && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+              Registro iniciado em {firstLog.toLocaleDateString('pt-BR')} às {firstLog.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
+              {estimado && (estimado.consultas + estimado.emissoes) > 0 && (
+                <> Estimado antes do registro: <b>{estimado.consultas.toLocaleString('pt-BR')}</b> consultas e <b>{estimado.emissoes.toLocaleString('pt-BR')}</b> emissões, cerca de <b>{brl(estimadoValor)}</b> (não entra no valor medido).</>
+              )}
+            </div>
+          )}
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            <Kpi label="Fatura medida" value={brl(stats.total)} />
+            <Kpi label="Medido + estimado" value={brl(stats.total + estimadoValor)} />
             <Kpi label={offset === 0 ? 'Projeção no dia 20' : 'Fatura do ciclo'} value={brl(stats.projecao)} />
+            <Kpi label="Chamadas registradas" value={rows.length.toLocaleString('pt-BR')} />
             <Kpi label="Requisições cobradas" value={stats.cobradas.toLocaleString('pt-BR')} />
-            <Kpi label="Custo médio" value={brl(stats.cobradas ? stats.total / stats.cobradas : 0)} />
+            <Kpi label="Não cobradas / reaproveitadas" value={stats.naoCobradas.toLocaleString('pt-BR')} />
             <Kpi label="Com erro" value={stats.erros.toLocaleString('pt-BR')} />
           </div>
 
