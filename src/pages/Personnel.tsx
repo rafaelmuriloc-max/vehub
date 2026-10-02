@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   Bell, Building2, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Download, FolderOpen, FolderSync,
-  LayoutGrid, List, Loader2, LogOut, MoreVertical, Palmtree, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet,, FileCheck } from 'lucide-react';
+  LayoutGrid, List, Loader2, LogOut, MoreVertical, Palmtree, Pencil, Plus, RefreshCw, Search, UserMinus, Users, Wallet, FileCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PersonnelAlertsDialog } from '@/components/personnel/PersonnelAlertsDialog';
