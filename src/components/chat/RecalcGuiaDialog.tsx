@@ -14,7 +14,16 @@ interface Props {
   onSend: (file: File, mensagem: string) => void | Promise<void>;
 }
 
-type Tipo = 'simples' | 'dctfweb';
+type Tipo = 'simples' | 'dctfweb' | 'mei';
+const tipoFor = (r: string | null): Tipo => {
+  const s = (r || '').trim().toLowerCase();
+  return s === 'mei' ? 'mei' : s.includes('simples') ? 'simples' : 'dctfweb';
+};
+const TIPO_INFO: Record<Tipo, { file: string; card: string; desc: string }> = {
+  simples: { file: 'DAS', card: 'DAS – Simples Nacional', desc: 'do Simples Nacional (DAS)' },
+  dctfweb: { file: 'DCTFWeb', card: 'DARF – DCTFWeb', desc: 'da DCTFWeb (DARF previdenciário)' },
+  mei: { file: 'DAS_MEI', card: 'DAS – MEI', desc: 'do MEI (DAS MEI)' },
+};
 const MONTHS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 
 function walkForPdf(o: any): string | null {
@@ -49,7 +58,7 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
         const list = (data || []) as any[];
         setClients(list);
         const first = list[0];
-        if (first) { setClientId(first.id); setTipo(first.tax_regime === 'Simples Nacional' ? 'simples' : 'dctfweb'); }
+        if (first) { setClientId(first.id); setTipo(tipoFor(first.tax_regime)); }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, key]);
@@ -64,6 +73,8 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
       let body: Record<string, unknown>;
       if (tipo === 'simples') {
         body = { client_id: client.id, idSistema: 'PGDASD', idServico: 'GERARDAS12', tipo: 'Emitir', dados: JSON.stringify({ periodoApuracao: `${ano}${mes}` }) };
+      } else if (tipo === 'mei') {
+        body = { client_id: client.id, idSistema: 'PGMEI', idServico: 'GERARDASPDF21', tipo: 'Emitir', dados: JSON.stringify({ periodoApuracao: `${ano}${mes}` }) };
       } else {
         const dados: Record<string, unknown> = { categoria, anoPA: ano };
         if (categoria === 'GERAL_MENSAL') dados.mesPA = mes;
@@ -79,11 +90,11 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
       const bin = atob(b64);
       const arr = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      const name = `Guia_${tipo === 'simples' ? 'DAS' : 'DCTFWeb'}_${ano}${mes}_${safeName(client.company_name)}.pdf`;
+      const name = `Guia_${TIPO_INFO[tipo].file}_${ano}${mes}_${safeName(client.company_name)}.pdf`;
       const file = new File([arr], name, { type: 'application/pdf' });
       setPdf({ url: URL.createObjectURL(file), file });
-      const comp = tipo === 'simples' || categoria === 'GERAL_MENSAL' ? `${mes}/${ano}` : `${categoria === '13_SALARIO' ? '13º salário ' : 'anual '}${ano}`;
-      const desc = tipo === 'simples' ? 'do Simples Nacional (DAS)' : 'da DCTFWeb (DARF previdenciário)';
+      const comp = tipo !== 'dctfweb' || categoria === 'GERAL_MENSAL' ? `${mes}/${ano}` : `${categoria === '13_SALARIO' ? '13º salário ' : 'anual '}${ano}`;
+      const desc = TIPO_INFO[tipo].desc;
       setMensagem(`Olá! Segue a guia ${desc} da competência ${comp} da empresa ${client.company_name}, recalculada com juros e multa até hoje. Qualquer dúvida, estamos à disposição.`);
     } catch (e) {
       toast({ title: 'Guia indisponível', description: (e as Error).message, variant: 'destructive' });
