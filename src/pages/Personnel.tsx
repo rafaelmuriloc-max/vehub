@@ -719,7 +719,10 @@ export default function Personnel() {
     <div className="space-y-4 pb-6">
       <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div><h1 className="text-2xl font-bold text-foreground">Pessoal</h1><p className="text-sm text-muted-foreground">Funcionários dos clientes do escritório.</p></div>
-        <div className="flex items-center gap-2 self-end lg:self-auto">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 w-full lg:w-auto lg:justify-end">
+          <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9 h-9 bg-card" placeholder="Buscar empresa, CNPJ, SCI ou funcionário..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
+          <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}><SelectTrigger className="h-9 w-full sm:w-36 bg-card"><div className="text-left"><span className="block text-[10px] leading-none text-muted-foreground">Situação</span><SelectValue /></div></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Ativos</SelectItem><SelectItem value="terminated">Desligados</SelectItem></SelectContent></Select>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
           <div className="relative hidden sm:block w-64">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={systemSearch} onChange={e => setSystemSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSystemSearch()} placeholder="Buscar no sistema..." className="h-9 pl-9 pr-12 bg-card" />
@@ -731,6 +734,7 @@ export default function Personnel() {
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-full h-9 w-9 p-0">
             <Avatar className="h-9 w-9"><AvatarImage src={profile?.avatar_url ?? undefined} /><AvatarFallback className="bg-primary text-primary-foreground text-xs">{initials}</AvatarFallback></Avatar>
           </Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('/settings')}>{profile?.full_name || 'Meu perfil'}</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem onClick={signOut}><LogOut className="h-4 w-4 mr-2" />Sair</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+          </div>
         </div>
       </header>
 
@@ -749,9 +753,7 @@ export default function Personnel() {
       />
 
 
-      <div className="rounded-lg border bg-card p-3 shadow-sm flex flex-col xl:flex-row gap-2 xl:items-center">
-        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9 h-10" placeholder="Buscar empresa por nome, CNPJ, código SCI ou funcionário..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
-        <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}><SelectTrigger className="h-10 w-full xl:w-36"><div className="text-left"><span className="block text-[10px] leading-none text-muted-foreground">Situação</span><SelectValue /></div></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Ativos</SelectItem><SelectItem value="terminated">Desligados</SelectItem></SelectContent></Select>
+      <div className="rounded-lg border bg-card p-3 shadow-sm flex flex-wrap gap-2 items-center xl:justify-end">
         <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={loadAll} aria-label="Recarregar"><RefreshCw className="h-4 w-4" /></Button>
         {isAdmin && <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => { setFolder(null); setFolderDialog(true); }} title={config ? `Pasta: ${config.folder_name}` : 'Definir pasta'}><FolderOpen className="h-4 w-4 mr-1" />Funcionários</Button>}
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="h-10 shrink-0 rounded-full"><Bell className="h-4 w-4 mr-1" />Avisos<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setAlertKind('experiencia')}><CalendarClock className="h-4 w-4 mr-2" />Contratos de experiência</DropdownMenuItem><DropdownMenuItem onClick={() => setAlertKind('ferias')}><Palmtree className="h-4 w-4 mr-2" />Vencimento de férias</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
