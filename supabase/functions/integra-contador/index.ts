@@ -864,7 +864,7 @@ Deno.serve(async (req) => {
         const st = res.status;
         serviceClient.from("integra_contador_usage").insert({
           client_id, id_sistema: idSistema, id_servico: idServico, tipo,
-          status_http: st, sucesso: st >= 200 && st < 300,
+          status_http: st, sucesso: st < 400,
           cobrada: st >= 200 && st < 300,
           duracao_ms: Date.now() - t0,
         }).then(({ error }: any) => { if (error) console.error("[usage] insert", error.message); });
