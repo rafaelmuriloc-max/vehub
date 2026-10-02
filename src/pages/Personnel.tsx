@@ -766,15 +766,17 @@ export default function Personnel() {
       </header>
 
       <PersonnelOverview
-        clientIds={activeClients.map(c => c.id)}
-        activeCount={activeEmployees.length}
-        terminatedCount={scopedEmployees.length - activeEmployees.length}
-        companiesWithActive={clientsWithActive}
-        totalSalaries={totalSalaries}
-        trialSoon={trialSoon}
-        trialOverdue={trialOverdue}
-        vacationSoon={vacationAlerts.count}
-        vacationOverdue={vacationAlerts.overdue}
+        clientIds={overview.ids}
+        activeCount={overview.activeCount}
+        terminatedCount={overview.terminatedCount}
+        companiesWithActive={overview.companies}
+        totalSalaries={overview.salaries}
+        trialSoon={overview.trialSoon}
+        trialOverdue={overview.trialOverdue}
+        vacationSoon={overview.vSoon}
+        vacationOverdue={overview.vOver}
+        showTerminated={statusFilter === 'terminated'}
+        filterNote={search.trim() ? `Filtrado: ${overview.ids.length} empresa(s)` : undefined}
         onTrial={() => setTrialDialogOpen(true)}
         onVacation={() => setVacationDialogOpen(true)}
       />
