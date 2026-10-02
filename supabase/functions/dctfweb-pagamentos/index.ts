@@ -15,7 +15,7 @@ const json = (p: unknown, status = 200) =>
 const DCTF_CODES = new Set([
   "1082", "1099", "1138", "1141", "1646", "1170", "1176", "1191", "1196", "1200", "1213", "1218", "1221",
   "1162", "1184", "1287", "1294", "1300", "1307", "1316", "1325", "1334", "1343", "1352", "1361", "1370",
-  "0561", "0588", "1708", "3208", "5952", "8045", "3280", "2985", "2991", "1146",
+  "0561", "0588", "3208", "3280", "2985", "2991", "1146",
 ]);
 
 function toYM(v: unknown): string | null {
@@ -118,18 +118,21 @@ Deno.serve(async (req) => {
       for (const it of list) {
         const tipoTxt = `${it?.tipo?.codigo ?? ""} ${it?.tipo?.descricao ?? it?.tipoDocumento ?? ""}`;
         if (String(it?.tipo?.codigo ?? "") === "9" || /simples nacional/i.test(tipoTxt)) continue;
-        const parts: any[] = Array.isArray(it?.desmembramentos) && it.desmembramentos.length ? it.desmembramentos : [it];
-        const match = parts.some((p) => {
-          const pYm = toYM(p?.periodoApuracao ?? it?.periodoApuracao ?? it?.periodo);
-          if (pYm !== ym) return false;
-          const code = String(p?.receitaPrincipal?.codigo ?? p?.codigoReceita ?? p?.receita?.codigo ?? it?.codigoReceita ?? "").padStart(4, "0");
-          const desc = `${p?.receitaPrincipal?.descricao ?? ""} ${p?.descricao ?? ""} ${tipoTxt}`;
-          return DCTF_CODES.has(code) || /previd|dctf|contribui[cç][aã]o|cp segurado|terceiros/i.test(desc);
+        // A guia da DCTFWeb é um DARF numerado (receita consolidada 4444) com desmembramentos.
+        const mainCode = String(it?.receitaPrincipal?.codigo ?? it?.codigoReceita ?? "").padStart(4, "0");
+        const parts: any[] = Array.isArray(it?.desmembramentos) ? it.desmembramentos : [];
+        if (mainCode !== "4444" || parts.length === 0) continue;
+        const matched = parts.filter((p) => {
+          if (toYM(p?.periodoApuracao) !== ym) return false;
+          const code = String(p?.receitaPrincipal?.codigo ?? p?.codigoReceita ?? "").padStart(4, "0");
+          const desc = String(p?.receitaPrincipal?.descricao ?? "");
+          return DCTF_CODES.has(code) || /contribui[cç][aã]o previdenci|cp segurado|cp patronal|outras entidades/i.test(desc);
         });
-        if (!match) continue;
+        if (matched.length === 0) continue;
         const d = toISO(it?.dataArrecadacao ?? it?.dataPagamento);
         if (d && (!data || d < data)) data = d;
-        valor = (valor ?? 0) + (num(it?.valorTotal, it?.valor, it?.valorPrincipal) ?? 0);
+        // Soma só as parcelas da competência consultada (a guia pode trazer meses atrasados juntos).
+        valor = (valor ?? 0) + matched.reduce((s, p) => s + (num(p?.valorTotal, p?.valorPrincipal) ?? 0), 0);
         status = "pago";
       }
     }
