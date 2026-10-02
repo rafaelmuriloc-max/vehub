@@ -20,6 +20,7 @@ import {
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PersonnelAlertsDialog } from '@/components/personnel/PersonnelAlertsDialog';
+import { PersonnelEvolutionChart } from '@/components/personnel/PersonnelEvolutionChart';
 
 interface Client { id: string; company_name: string; document: string | null; sci_code: string | null; status: string }
 interface Employee {
@@ -749,6 +750,9 @@ export default function Personnel() {
           </Card>
         ))}
       </div>
+
+      <PersonnelEvolutionChart clientIds={activeClients.map(c => c.id)} />
+
 
       <div className="rounded-lg border bg-card p-3 shadow-sm flex flex-col xl:flex-row gap-2 xl:items-center">
         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9 h-10" placeholder="Buscar empresa por nome, CNPJ, código SCI ou funcionário..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
