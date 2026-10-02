@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
-import { FileCheck, Loader2, Receipt, FileText, Banknote, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { FileCheck, Loader2, Receipt, FileText, Banknote, Search, ChevronLeft, ChevronRight, Download, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 
@@ -14,6 +16,7 @@ import { formatClientLabel } from '@/lib/utils';
 
 type Client = { id: string; company_name: string; sci_code: string | null; document: string | null };
 type Action = 'recibo' | 'declaracao' | 'guia';
+type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null };
 
 const ACTIONS: Record<Action, { label: string; idServico: string; tipo: string; icon: any }> = {
   recibo: { label: 'Recibo', idServico: 'CONSRECIBO32', tipo: 'Consultar', icon: Receipt },
@@ -81,16 +84,54 @@ export default function DctfwebTab() {
     return () => { cancel = true; };
   }, [ano, mes, categoria]);
 
-  const filtered = useMemo(() => {
+  const [pays, setPays] = useState<Record<string, Pay>>({});
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pago' | 'aberto'>('all');
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const comp = `${ano}-${categoria === 'GERAL_MENSAL' ? mes : '12'}-01`;
+      const { data } = await (supabase as any).from('dctfweb_competencias')
+        .select('client_id, status, valor_pago, data_pagamento, mensagem').eq('competencia', comp).eq('categoria', categoria);
+      if (cancel) return;
+      const m: Record<string, Pay> = {};
+      for (const r of (data || []) as Pay[]) m[r.client_id] = r;
+      setPays(m);
+    })();
+    return () => { cancel = true; };
+  }, [ano, mes, categoria]);
+
+  const dueTime = useMemo(() => {
+    const y = Number(ano), m = Number(mes);
+    return categoria === '13_SALARIO' ? new Date(y, 11, 20, 23, 59).getTime() : new Date(y, m, 20, 23, 59).getTime();
+  }, [ano, mes, categoria]);
+  const statusOf = (id: string): 'pago' | 'aberto' | 'vencido' => {
+    const p = pays[id];
+    if (p?.status === 'pago') return 'pago';
+    return Date.now() > dueTime ? 'vencido' : 'aberto';
+  };
+
+  const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     const qd = q.replace(/\D/g, '');
     if (!q) return clients;
     return clients.filter(c => c.company_name.toLowerCase().includes(q) || (c.sci_code || '').toLowerCase().includes(q)
       || (c.document || '').toLowerCase().includes(q) || (!!qd && (c.document || '').replace(/\D/g, '').includes(qd)));
   }, [clients, search]);
+  const filtered = useMemo(() => statusFilter === 'all' ? searched
+    : searched.filter(c => statusFilter === 'pago' ? statusOf(c.id) === 'pago' : statusOf(c.id) !== 'pago'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searched, statusFilter, pays, dueTime]);
+  const stats = useMemo(() => {
+    let pago = 0, aberto = 0, valor = 0;
+    for (const c of searched) {
+      if (statusOf(c.id) === 'pago') { pago++; valor += pays[c.id]?.valor_pago || 0; } else aberto++;
+    }
+    return { total: searched.length, pago, aberto, valor, pct: searched.length ? Math.round((pago / searched.length) * 100) : 0 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searched, pays, dueTime]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const rows = filtered.slice(page * PAGE, page * PAGE + PAGE);
-  useEffect(() => setPage(0), [search]);
+  useEffect(() => setPage(0), [search, statusFilter]);
 
   const years = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
@@ -162,6 +203,41 @@ export default function DctfwebTab() {
     }
     setBulk(b => ({ ...b, running: false }));
   };
+
+  const refreshOne = async (c: Client) => {
+    const { data, error } = await supabase.functions.invoke('dctfweb-pagamentos', { body: { client_id: c.id, ano, mes, categoria } });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    setPays(p => ({ ...p, [c.id]: data as Pay }));
+    return data as Pay;
+  };
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  const refreshClick = async (c: Client) => {
+    setStatusBusy(c.id);
+    try {
+      const p = await refreshOne(c);
+      if (p.mensagem && p.status !== 'pago') toast({ title: 'Aviso da Receita', description: p.mensagem });
+    } catch (e) { toast({ title: 'Falha ao atualizar', description: (e as Error).message, variant: 'destructive' }); }
+    finally { setStatusBusy(null); }
+  };
+  const [sync, setSync] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 });
+  const syncCancel = useRef(false);
+  const refreshAll = async () => {
+    const list = filtered.filter(c => c.document);
+    syncCancel.current = false;
+    setSync({ running: true, done: 0, total: list.length });
+    for (let i = 0; i < list.length; i++) {
+      if (syncCancel.current) break;
+      try { await refreshOne(list[i]); }
+      catch { await sleep(1500); try { await refreshOne(list[i]); } catch { /* segue */ } }
+      setSync(s => ({ ...s, done: i + 1 }));
+      await sleep(500);
+    }
+    setSync(s => ({ ...s, running: false }));
+  };
+
+  const fmtBRL = (v: number | null) => v == null ? '' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const fmtDate = (d: string | null) => d ? d.split('-').reverse().join('/') : '';
 
   return (
     <div className="space-y-4">
