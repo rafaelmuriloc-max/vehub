@@ -83,7 +83,7 @@ export function PersonnelAlertsDialog({ open, onOpenChange, kind }: Props) {
             }
           }
         } else {
-          const { data: vac } = await supabase.from('employee_vacation_periods').select('employee_id, client_id, days_right, deadline_date, enjoy_end, acquisition_end');
+          const { data: vac } = await supabase.from('employee_vacation_periods').select('employee_id, client_id, days_right, deadline_date, enjoy_end, acquisition_start, acquisition_end');
           const empMap = new Map((emps as any[]).map(e => [e.id, e]));
           for (const p of (vac ?? []) as any[]) {
             const e = empMap.get(p.employee_id); if (!e) continue;
@@ -92,7 +92,10 @@ export function PersonnelAlertsDialog({ open, onOpenChange, kind }: Props) {
             if (p.acquisition_end && diff(p.acquisition_end) > 0) continue;
             const left = diff(due);
             if (left > VAC_WINDOW) continue;
-            push(e.client_id, { name: e.full_name, line: `• Limite: *${br(due)}* (${leftTxt(left)})\n• Saldo: ${Number(p.days_right).toLocaleString('pt-BR')} dias${left < 0 ? '\n• ⚠️ Férias vencidas (risco de pagamento em dobro)' : ''}` });
+            const acq = p.acquisition_start
+              ? (p.acquisition_end ? `${br(p.acquisition_start)} a ${br(p.acquisition_end)}` : `a partir de ${br(p.acquisition_start)}`)
+              : null;
+            push(e.client_id, { name: e.full_name, line: `${acq ? `• Período aquisitivo: ${acq}\n` : ''}• Limite: *${br(due)}* (${leftTxt(left)})\n• Saldo: ${Number(p.days_right).toLocaleString('pt-BR')} dias${left < 0 ? '\n• ⚠️ Férias vencidas (risco de pagamento em dobro)' : ''}` });
           }
         }
 
