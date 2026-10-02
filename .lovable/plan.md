@@ -7,8 +7,8 @@
 - Se nenhuma empresa tiver a obrigação concluída no mês, aparece o aviso "Nenhuma empresa com DARF Previdenciário concluído neste mês".
 - Os botões Recibo, Declaração e Guia continuam iguais para as empresas listadas.
 
-## Ponto a confirmar
-- O mês escolhido é comparado com o **mês de referência** da obrigação no Calendário. Hoje, setembro/2026 tem 71 concluídas e agosto/2026 tem 55. Se o mês de referência do Calendário for o do vencimento, e não o da competência, ajusto para usar o mês seguinte.
+## Regra do mês
+- O mês escolhido no topo é a **competência**. Ele é comparado direto com a competência da obrigação no Calendário. Exemplo: competência 08/2026 mostra as empresas com o DARF que venceu em 09/2026 concluído.
 
 ## Detalhes técnicos
 - Em `src/components/dctfweb/DctfwebTab.tsx`, os clientes passam a vir de `obligation_instances` com `status='done'`, `deleted_at is null`, `reference_month = '{ano}-{mes}-01'` e a obrigação cujo nome é "Darf Previdenciário" (buscada por nome com `ilike '%darf previd%'`, sem id fixo), com join em `clients(id, company_name, sci_code, document, status)` filtrando os ativos. A lista é refeita quando `ano`/`mes` mudam e a página volta para a primeira.
