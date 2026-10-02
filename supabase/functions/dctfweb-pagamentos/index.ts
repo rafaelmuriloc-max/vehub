@@ -118,18 +118,21 @@ Deno.serve(async (req) => {
       for (const it of list) {
         const tipoTxt = `${it?.tipo?.codigo ?? ""} ${it?.tipo?.descricao ?? it?.tipoDocumento ?? ""}`;
         if (String(it?.tipo?.codigo ?? "") === "9" || /simples nacional/i.test(tipoTxt)) continue;
-        const parts: any[] = Array.isArray(it?.desmembramentos) && it.desmembramentos.length ? it.desmembramentos : [it];
-        const match = parts.some((p) => {
-          const pYm = toYM(p?.periodoApuracao ?? it?.periodoApuracao ?? it?.periodo);
-          if (pYm !== ym) return false;
-          const code = String(p?.receitaPrincipal?.codigo ?? p?.codigoReceita ?? p?.receita?.codigo ?? it?.codigoReceita ?? "").padStart(4, "0");
-          const desc = `${p?.receitaPrincipal?.descricao ?? ""} ${p?.descricao ?? ""} ${tipoTxt}`;
-          return DCTF_CODES.has(code) || /previd|dctf|contribui[cç][aã]o|cp segurado|terceiros/i.test(desc);
+        // A guia da DCTFWeb é um DARF numerado (receita consolidada 4444) com desmembramentos.
+        const mainCode = String(it?.receitaPrincipal?.codigo ?? it?.codigoReceita ?? "").padStart(4, "0");
+        const parts: any[] = Array.isArray(it?.desmembramentos) ? it.desmembramentos : [];
+        if (mainCode !== "4444" || parts.length === 0) continue;
+        const matched = parts.filter((p) => {
+          if (toYM(p?.periodoApuracao) !== ym) return false;
+          const code = String(p?.receitaPrincipal?.codigo ?? p?.codigoReceita ?? "").padStart(4, "0");
+          const desc = String(p?.receitaPrincipal?.descricao ?? "");
+          return DCTF_CODES.has(code) || /contribui[cç][aã]o previdenci|cp segurado|cp patronal|outras entidades/i.test(desc);
         });
-        if (!match) continue;
+        if (matched.length === 0) continue;
         const d = toISO(it?.dataArrecadacao ?? it?.dataPagamento);
         if (d && (!data || d < data)) data = d;
-        valor = (valor ?? 0) + (num(it?.valorTotal, it?.valor, it?.valorPrincipal) ?? 0);
+        // Soma só as parcelas da competência consultada (a guia pode trazer meses atrasados juntos).
+        valor = (valor ?? 0) + matched.reduce((s, p) => s + (num(p?.valorTotal, p?.valorPrincipal) ?? 0), 0);
         status = "pago";
       }
     }
