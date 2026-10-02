@@ -49,11 +49,12 @@ export default function FgtsDigital() {
   const [progress, setProgress] = useState<number | null>(null);
 
   const load = async () => {
-    const [{ data: c }, { data: g }] = await Promise.all([
-      supabase.from("clients").select("id, company_name, cnpj, sci_code").eq("status", "active").order("company_name"),
+    const [{ data: c, error: cErr }, { data: g }] = await Promise.all([
+      supabase.from("clients").select("id, company_name, document, sci_code").eq("status", "active").order("company_name"),
       (supabase as any).from("fgts_digital_guias").select("*").eq("competencia", comp),
     ]);
-    setClients((c as any) ?? []);
+    if (cErr) toast.error(`Erro ao carregar empresas: ${cErr.message}`);
+    setClients(((c as any[]) ?? []).map((x) => ({ ...x, cnpj: x.document })));
     setGuias(g ?? []);
   };
   useEffect(() => { load(); }, [comp]);
@@ -75,14 +76,17 @@ export default function FgtsDigital() {
   };
   const syncAll = async () => {
     const list = [...new Set(rows.map((r) => r.client.id))];
-    let fails = 0;
+    if (!list.length) { toast.warning("Nenhuma empresa para consultar."); return; }
+    let fails = 0; let firstErr = "";
     setProgress(0);
     for (let i = 0; i < list.length; i++) {
-      try { await sync(list[i]); } catch { fails++; }
+      try { await sync(list[i]); } catch (e: any) { fails++; if (!firstErr) firstErr = e.message; }
       setProgress(Math.round(((i + 1) / list.length) * 100));
     }
     setProgress(null);
-    toast.info(`Consulta concluída${fails ? ` — ${fails} com erro` : ""}`);
+    const ok = list.length - fails;
+    if (fails) toast.error(`${ok} consultadas, ${fails} com erro. Primeiro erro: ${firstErr}`, { duration: 15000 });
+    else toast.success(`${ok} empresas consultadas`);
     load();
   };
 

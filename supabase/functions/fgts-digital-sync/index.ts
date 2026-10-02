@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
     const competencia = `${periodo.slice(3)}-${periodo.slice(0, 2)}`;
 
     const svc = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: client } = await svc.from("clients").select("id, cnpj").eq("id", clientId).maybeSingle();
-    if (!client?.cnpj) return json({ error: "Empresa sem CNPJ." }, 400);
+    const { data: client } = await svc.from("clients").select("id, document").eq("id", clientId).maybeSingle();
+    if (!client?.document) return json({ error: "Empresa sem CNPJ." }, 400);
     const { data: company } = await svc.from("company_settings")
       .select("digital_certificate_url, digital_certificate_password").limit(1).maybeSingle();
     if (!company?.digital_certificate_url || !company?.digital_certificate_password) {
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     for (let pagina = 1; pagina <= 10; pagina++) {
       const form = new URLSearchParams({
         token, timeout: "300", pkcs12_cert: encCert, pkcs12_pass: encPass,
-        representado: String(client.cnpj).replace(/\D/g, ""),
+        representado: String(client.document).replace(/\D/g, ""),
         periodo: periodo.slice(3) + periodo.slice(0, 2), pagina: String(pagina),
       });
       const r = await fetch("https://api.infosimples.com/api/v2/consultas/fgts/guia", { method: "POST", body: form });
