@@ -110,8 +110,9 @@ export default function DctfwebTab() {
     return categoria === '13_SALARIO' ? new Date(y, 11, 20, 23, 59).getTime() : new Date(y, m, 20, 23, 59).getTime();
   }, [ano, mes, categoria]);
   const envioOf = (id: string): 'enviada' | 'nao_enviada' | 'nao_consultado' => {
-    const e = pays[id]?.enviada;
-    return e === true ? 'enviada' : e === false ? 'nao_enviada' : 'nao_consultado';
+    const p = pays[id];
+    if (!p) return 'nao_consultado';
+    return p.enviada === false ? 'nao_enviada' : 'enviada';
   };
   const statusOf = (id: string): 'pago' | 'aberto' | 'vencido' => {
     const p = pays[id];
@@ -354,6 +355,8 @@ export default function DctfwebTab() {
                   <Badge variant="outline" className="border-muted-foreground/40">Não enviado</Badge>
                 ) : env === 'nao_consultado' ? (
                   <Badge variant="outline">Não consultado</Badge>
+                ) : st !== 'pago' && p?.enviada == null ? (
+                  <Badge variant="outline" className="border-warning/40 text-warning">Envio não verificado</Badge>
                 ) : st === 'pago' ? (
                   <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/15">
                     Pago{p?.data_pagamento ? ` em ${fmtDate(p.data_pagamento)}` : ''}{p?.valor_pago ? ` • ${fmtBRL(p.valor_pago)}` : ''}
