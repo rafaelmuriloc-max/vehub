@@ -80,7 +80,12 @@ Deno.serve(async (req) => {
       case "list": {
         const params = new URLSearchParams();
         const folderId = body.folderId || "root";
-        const queryParts: string[] = [`'${folderId}' in parents`, "trashed=false"];
+        const filter = String(body.filter || "all");
+        const queryParts: string[] = ["trashed=false"];
+        if (filter === "shared") queryParts.push("sharedWithMe");
+        else if (filter !== "recent") queryParts.push(`'${folderId}' in parents`);
+        if (filter === "folders") queryParts.push("mimeType = 'application/vnd.google-apps.folder'");
+        if (filter === "files" || filter === "recent") queryParts.push("mimeType != 'application/vnd.google-apps.folder'");
         if (body.q) {
           const q = String(body.q).replace(/'/g, "\\'");
           queryParts.push(`name contains '${q}'`);
@@ -88,13 +93,27 @@ Deno.serve(async (req) => {
         params.set("q", queryParts.join(" and "));
         params.set(
           "fields",
-          "nextPageToken, files(id,name,mimeType,size,modifiedTime,iconLink,webViewLink,thumbnailLink,parents)",
+          "nextPageToken, files(id,name,mimeType,size,modifiedTime,iconLink,webViewLink,thumbnailLink,parents,shared,owners(displayName,photoLink))",
         );
         params.set("pageSize", String(body.pageSize || 100));
-        params.set("orderBy", body.orderBy || "folder,name");
+        params.set("orderBy", filter === "recent" ? "modifiedTime desc" : (body.orderBy || "folder,name"));
         if (body.pageToken) params.set("pageToken", body.pageToken);
         const r = await fetch(`${DRIVE_GATEWAY}/files?${params}`, { headers: ghHeaders() });
         data = await jsonOrThrow(r, "list");
+        break;
+      }
+      case "countChildren": {
+        const ids: string[] = Array.isArray(body.folderIds) ? body.folderIds.slice(0, 100) : [];
+        const counts: Record<string, number> = {};
+        await Promise.all(ids.map(async (id) => {
+          try {
+            const p = new URLSearchParams({ q: `'${id}' in parents and trashed=false`, fields: "files(id)", pageSize: "1000" });
+            const r = await fetch(`${DRIVE_GATEWAY}/files?${p}`, { headers: ghHeaders() });
+            const j = await r.json();
+            counts[id] = Array.isArray(j.files) ? j.files.length : 0;
+          } catch { /* ignore */ }
+        }));
+        data = { counts };
         break;
       }
 
