@@ -1729,6 +1729,68 @@ export type Database = {
           },
         ]
       }
+      fgts_digital_guias: {
+        Row: {
+          client_id: string
+          competencia: string
+          consultado_em: string
+          created_at: string
+          data_emissao: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          guia_pdf_url: string | null
+          id: string
+          numero_guia: string
+          raw: Json | null
+          situacao: string | null
+          tipo: string | null
+          updated_at: string
+          valor_total: number | null
+        }
+        Insert: {
+          client_id: string
+          competencia: string
+          consultado_em?: string
+          created_at?: string
+          data_emissao?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          guia_pdf_url?: string | null
+          id?: string
+          numero_guia?: string
+          raw?: Json | null
+          situacao?: string | null
+          tipo?: string | null
+          updated_at?: string
+          valor_total?: number | null
+        }
+        Update: {
+          client_id?: string
+          competencia?: string
+          consultado_em?: string
+          created_at?: string
+          data_emissao?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          guia_pdf_url?: string | null
+          id?: string
+          numero_guia?: string
+          raw?: Json | null
+          situacao?: string | null
+          tipo?: string | null
+          updated_at?: string
+          valor_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fgts_digital_guias_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_categories: {
         Row: {
           created_at: string
