@@ -174,13 +174,22 @@ export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMo
                     {showEmp && (
                       <Bar yAxisId="q" dataKey="funcionarios" name="Funcionários" fill="url(#pe-bar)" radius={[4, 4, 0, 0]} maxBarSize={110}>
                         <LabelList dataKey="funcionarios" position="top" fontSize={13} fontWeight={700} style={{ fill: 'hsl(var(--foreground))' }} formatter={(v: number) => v.toLocaleString('pt-BR')} />
+                        {showSal && (
+                          <LabelList dataKey="salarios" content={(props: any) => {
+                            const { x, y, width, height, value } = props;
+                            if (value == null || Number(height) < 22) return null;
+                            return (
+                              <text x={Number(x) + Number(width) / 2} y={Number(y) + Number(height) - 10} textAnchor="middle"
+                                fontSize={12} fontWeight={700} fill="hsl(var(--primary-foreground))">{brlMil(Number(value))}</text>
+                            );
+                          }} />
+                        )}
                       </Bar>
                     )}
                     {showSal && <Area yAxisId="v" dataKey="salarios" stroke="none" fill="url(#pe-area)" legendType="none" tooltipType="none" />}
                     {showSal && (
                       <Line yAxisId="v" dataKey="salarios" name="Salários (R$)" stroke="hsl(var(--success))" strokeWidth={2.5}
                         dot={{ r: 5, fill: 'hsl(var(--card))', stroke: 'hsl(var(--success))', strokeWidth: 2.5 }} activeDot={{ r: 6 }}>
-                        <LabelList dataKey="salarios" content={<SalaryPill />} />
                       </Line>
                     )}
                   </ComposedChart>
