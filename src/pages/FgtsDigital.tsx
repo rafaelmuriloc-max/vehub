@@ -66,7 +66,7 @@ export default function FgtsDigital() {
     setBusy(null); load();
   };
   const syncAll = async () => {
-    const list = rows.map((r) => r.client.id);
+    const list = [...new Set(rows.map((r) => r.client.id))];
     let fails = 0;
     setProgress(0);
     for (let i = 0; i < list.length; i++) {
