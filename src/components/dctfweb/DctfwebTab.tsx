@@ -189,7 +189,7 @@ export default function DctfwebTab() {
   const cancelRef = useRef(false);
 
   const runBulk = async () => {
-    const list = filtered.filter(c => c.document);
+    const list = guiaList;
     if (!list.length) return;
     cancelRef.current = false;
     setBulk({ open: true, running: true, done: 0, total: list.length, ok: 0, fails: [] });
@@ -297,22 +297,23 @@ export default function DctfwebTab() {
             <RefreshCw className={cn('h-4 w-4 mr-1', sync.running && 'animate-spin')} />
             {sync.running ? `Cancelar (${sync.done}/${sync.total})` : 'Atualizar situação'}
           </Button>
-          <Button onClick={runBulk} disabled={loading || bulk.running || filtered.filter(c => c.document).length === 0}>
-            <Download className="h-4 w-4 mr-1" /> Baixar todas as guias ({filtered.filter(c => c.document).length})
+          <Button onClick={runBulk} disabled={loading || bulk.running || guiaList.length === 0}>
+            <Download className="h-4 w-4 mr-1" /> Baixar todas as guias ({guiaList.length})
           </Button>
         </div>
       </div>
 
       {sync.running && <Progress value={sync.total ? (sync.done / sync.total) * 100 : 0} />}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {([
-          { key: 'all', label: 'Empresas com guia', value: String(stats.total), sub: 'Darf Previdenciário concluído' },
+          { key: 'all', label: 'Empresas com folha', value: String(stats.total), sub: 'Folha mensal ou pró-labore' },
+          { key: 'enviada', label: 'Enviadas', value: String(stats.enviada), sub: 'Confirmado na Receita' },
+          { key: 'nao_enviada', label: 'Não enviadas', value: String(stats.nao), sub: 'Inclui não consultadas' },
           { key: 'pago', label: 'Guias pagas', value: String(stats.pago), sub: fmtBRL(stats.valor) || '—' },
           { key: 'aberto', label: 'Em aberto / vencidas', value: String(stats.aberto), sub: Date.now() > dueTime ? 'Vencimento já passou' : 'Ainda no prazo' },
-          { key: 'pct', label: '% pagas', value: `${stats.pct}%`, sub: `${stats.pago} de ${stats.total}` },
         ] as const).map(card => {
-          const clickable = card.key !== 'pct';
+          const clickable = true;
           const active = clickable && statusFilter === card.key;
           return (
             <button key={card.key} type="button" disabled={!clickable}
@@ -326,10 +327,10 @@ export default function DctfwebTab() {
         })}
       </div>
 
-      <div className="flex gap-2">
-        {(['all', 'pago', 'aberto'] as const).map(f => (
+      <div className="flex flex-wrap gap-2">
+        {([['all', 'Todas'], ['enviada', 'Enviadas'], ['nao_enviada', 'Não enviadas'], ['pago', 'Pagas'], ['aberto', 'Em aberto']] as const).map(([f, l]) => (
           <Button key={f} size="sm" variant={statusFilter === f ? 'default' : 'outline'} onClick={() => setStatusFilter(f)}>
-            {f === 'all' ? 'Todas' : f === 'pago' ? 'Pagas' : 'Em aberto'}
+            {l}
           </Button>
         ))}
       </div>
@@ -342,13 +343,18 @@ export default function DctfwebTab() {
         ) : rows.map(c => {
           const st = statusOf(c.id);
           const p = pays[c.id];
+          const env = envioOf(c.id);
           return (
           <div key={c.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate font-medium">{formatClientLabel(c as any)}</p>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>{c.document || 'Sem CNPJ'}</span>
-                {st === 'pago' ? (
+                {env === 'nao_enviada' ? (
+                  <Badge variant="outline" className="border-muted-foreground/40">Não enviado</Badge>
+                ) : env === 'nao_consultado' ? (
+                  <Badge variant="outline">Não consultado</Badge>
+                ) : st === 'pago' ? (
                   <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/15">
                     Pago{p?.data_pagamento ? ` em ${fmtDate(p.data_pagamento)}` : ''}{p?.valor_pago ? ` • ${fmtBRL(p.valor_pago)}` : ''}
                   </Badge>
@@ -357,7 +363,6 @@ export default function DctfwebTab() {
                 ) : (
                   <Badge className="bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">Em aberto</Badge>
                 )}
-                {!p && <span>(não consultado)</span>}
                 {p?.mensagem && st !== 'pago' && (
                   <span className="inline-flex items-center gap-1 text-destructive" title={p.mensagem}>
                     <AlertTriangle className="h-3 w-3" /> Aviso da Receita
@@ -370,7 +375,7 @@ export default function DctfwebTab() {
                 disabled={!c.document || statusBusy === c.id || sync.running} onClick={() => refreshClick(c)}>
                 <RefreshCw className={cn('h-4 w-4', statusBusy === c.id && 'animate-spin')} />
               </Button>
-              {(Object.keys(ACTIONS) as Action[]).map(k => {
+              {env === 'enviada' && (Object.keys(ACTIONS) as Action[]).map(k => {
                 const A = ACTIONS[k];
                 const isBusy = busy?.id === c.id && busy.action === k;
                 return (
