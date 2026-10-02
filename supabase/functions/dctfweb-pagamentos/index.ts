@@ -17,6 +17,8 @@ const DCTF_CODES = new Set([
   "1162", "1184", "1287", "1294", "1300", "1307", "1316", "1325", "1334", "1343", "1352", "1361", "1370",
   "0561", "0588", "3208", "3280", "2985", "2991", "1146",
 ]);
+// PIS, COFINS, CSLL, IRPJ e retenções avulsas de notas — nunca contam como guia da DCTFWeb.
+const BLOCKED_CODES = new Set(["8109", "6912", "2172", "5856", "2372", "6012", "2089", "2362", "1708", "5952", "3373", "0220"]);
 
 function toYM(v: unknown): string | null {
   if (!v) return null;
@@ -118,21 +120,24 @@ Deno.serve(async (req) => {
       for (const it of list) {
         const tipoTxt = `${it?.tipo?.codigo ?? ""} ${it?.tipo?.descricao ?? it?.tipoDocumento ?? ""}`;
         if (String(it?.tipo?.codigo ?? "") === "9" || /simples nacional/i.test(tipoTxt)) continue;
-        // A guia da DCTFWeb é um DARF numerado (receita consolidada 4444) com desmembramentos.
-        const mainCode = String(it?.receitaPrincipal?.codigo ?? it?.codigoReceita ?? "").padStart(4, "0");
-        const parts: any[] = Array.isArray(it?.desmembramentos) ? it.desmembramentos : [];
-        if (mainCode !== "4444" || parts.length === 0) continue;
+        // Aceita DARF numerado (4444) com desmembramentos ou DARF de receita única previdenciária.
+        const hasParts = Array.isArray(it?.desmembramentos) && it.desmembramentos.length > 0;
+        const parts: any[] = hasParts ? it.desmembramentos : [it];
         const matched = parts.filter((p) => {
-          if (toYM(p?.periodoApuracao) !== ym) return false;
+          const pYm = toYM(p?.periodoApuracao) ?? toYM(it?.periodoApuracao);
+          if (pYm !== ym) return false;
           const code = String(p?.receitaPrincipal?.codigo ?? p?.codigoReceita ?? "").padStart(4, "0");
-          const desc = String(p?.receitaPrincipal?.descricao ?? "");
-          return DCTF_CODES.has(code) || /contribui[cç][aã]o previdenci|cp segurado|cp patronal|outras entidades/i.test(desc);
+          if (BLOCKED_CODES.has(code)) return false;
+          const desc = String(p?.receitaPrincipal?.descricao ?? "") + " " + String(p?.receitaPrincipal?.extensaoReceita?.descricao ?? "");
+          return DCTF_CODES.has(code) || /contribui[cç][aã]o previdenci|cp segurado|cp patronal|cp descontada|outras entidades|pr[oó]-?labore/i.test(desc);
         });
         if (matched.length === 0) continue;
         const d = toISO(it?.dataArrecadacao ?? it?.dataPagamento);
         if (d && (!data || d < data)) data = d;
         // Soma só as parcelas da competência consultada (a guia pode trazer meses atrasados juntos).
-        valor = (valor ?? 0) + matched.reduce((s, p) => s + (num(p?.valorTotal, p?.valorPrincipal) ?? 0), 0);
+        valor = (valor ?? 0) + (hasParts
+          ? matched.reduce((s, p) => s + (num(p?.valorTotal, p?.valorPrincipal) ?? 0), 0)
+          : (num(it?.valorTotal, it?.valor, it?.valorPrincipal) ?? 0));
         status = "pago";
       }
     }
