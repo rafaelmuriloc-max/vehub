@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Download, Send, Calculator } from 'lucide-react';
+import { Loader2, Download, Send, Calculator, FileText, ExternalLink, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -90,69 +90,121 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
     } finally { setBusy(false); }
   };
 
+  const showMes = tipo === 'simples' || categoria === 'GERAL_MENSAL';
+  const sizeKb = pdf ? Math.max(1, Math.round(pdf.file.size / 1024)) : 0;
+  const Label = ({ children }: { children: React.ReactNode }) => (
+    <span className="text-xs font-medium text-muted-foreground">{children}</span>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Calculator className="h-5 w-5" /> Recalcular guia</DialogTitle>
+      <DialogContent className="flex flex-col gap-0 p-0 w-full max-w-full h-[100dvh] max-h-[100dvh] rounded-none sm:h-auto sm:max-h-[90dvh] sm:max-w-xl sm:rounded-lg overflow-hidden">
+        <DialogHeader className="px-4 sm:px-6 pt-5 pb-3 border-b text-left shrink-0">
+          <DialogTitle className="flex items-center gap-2 pr-6"><Calculator className="h-5 w-5 text-primary" /> Recalcular guia</DialogTitle>
           <DialogDescription>A Receita emite a guia atualizada com juros e multa até hoje.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Select value={clientId} onValueChange={(v) => { setClientId(v); setPdf(null); }}>
-              <SelectTrigger><SelectValue placeholder="Empresa" /></SelectTrigger>
-              <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <Select value={tipo} onValueChange={(v) => { setTipo(v as Tipo); setPdf(null); }}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="simples">Simples Nacional (DAS)</SelectItem>
-              <SelectItem value="dctfweb">DCTFWeb (DARF previdenciário)</SelectItem>
-            </SelectContent>
-          </Select>
-          {tipo === 'dctfweb' ? (
-            <Select value={categoria} onValueChange={setCategoria}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="GERAL_MENSAL">Geral Mensal</SelectItem>
-                <SelectItem value="13_SALARIO">13º Salário</SelectItem>
-                <SelectItem value="GERAL_ANUAL">Geral Anual</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : <div className="hidden sm:block" />}
-          {(tipo === 'simples' || categoria === 'GERAL_MENSAL') && (
-            <Select value={mes} onValueChange={setMes}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{MONTHS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-            </Select>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-5">
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Dados da guia</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="col-span-2 space-y-1">
+                <Label>Empresa</Label>
+                <Select value={clientId} onValueChange={(v) => { setClientId(v); setPdf(null); }}>
+                  <SelectTrigger><SelectValue placeholder="Empresa" /></SelectTrigger>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
+                </Select>
+              </label>
+              <label className={`col-span-2 space-y-1 ${tipo === 'dctfweb' ? 'sm:col-span-1' : ''}`}>
+                <Label>Tipo de guia</Label>
+                <Select value={tipo} onValueChange={(v) => { setTipo(v as Tipo); setPdf(null); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="simples">Simples Nacional (DAS)</SelectItem>
+                    <SelectItem value="dctfweb">DCTFWeb (DARF previdenciário)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              {tipo === 'dctfweb' && (
+                <label className="col-span-2 sm:col-span-1 space-y-1">
+                  <Label>Categoria</Label>
+                  <Select value={categoria} onValueChange={(v) => { setCategoria(v); setPdf(null); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="GERAL_MENSAL">Geral Mensal</SelectItem>
+                      <SelectItem value="13_SALARIO">13º Salário</SelectItem>
+                      <SelectItem value="GERAL_ANUAL">Geral Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+              )}
+              {showMes && (
+                <label className="space-y-1">
+                  <Label>Mês</Label>
+                  <Select value={mes} onValueChange={(v) => { setMes(v); setPdf(null); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{MONTHS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                  </Select>
+                </label>
+              )}
+              <label className={`space-y-1 ${showMes ? '' : 'col-span-2'}`}>
+                <Label>Ano</Label>
+                <Select value={ano} onValueChange={(v) => { setAno(v); setPdf(null); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+              </label>
+            </div>
+          </section>
+
+          {pdf && (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">Guia gerada</h3>
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{tipo === 'simples' ? 'DAS – Simples Nacional' : 'DARF – DCTFWeb'} • {showMes ? `${mes}/${ano}` : ano}</p>
+                  <p className="text-xs text-muted-foreground truncate">{client?.company_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{pdf.file.name} • {sizeKb} KB</p>
+                </div>
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => window.open(pdf.url, '_blank')}>
+                  <ExternalLink className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Abrir guia</span>
+                </Button>
+              </div>
+              <label className="block space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label>Mensagem para o cliente</Label>
+                  <span className="text-xs text-muted-foreground">{mensagem.length} caracteres</span>
+                </div>
+                <Textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={4} className="resize-none" placeholder="Mensagem para o cliente (opcional)" />
+              </label>
+            </section>
           )}
-          <Select value={ano} onValueChange={setAno}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
-          </Select>
         </div>
-        {pdf && <iframe src={pdf.url} title="Guia" className="w-full h-[50dvh] rounded border" />}
-        {pdf && (
-          <Textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={3} placeholder="Mensagem para o cliente (opcional)" />
-        )}
-        <DialogFooter className="flex-col sm:flex-row gap-2">
+
+        <div className="shrink-0 border-t bg-background px-4 sm:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {pdf ? (
-            <>
-              <Button variant="outline" onClick={() => { const a = document.createElement('a'); a.href = pdf.url; a.download = pdf.file.name; a.click(); }}>
-                <Download className="h-4 w-4 mr-2" /> Baixar
-              </Button>
-              <Button variant="outline" onClick={gerar} disabled={busy}>Gerar de novo</Button>
-              <Button onClick={() => { onSend(pdf.file, mensagem); onOpenChange(false); }}>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <Button variant="outline" onClick={() => { const a = document.createElement('a'); a.href = pdf.url; a.download = pdf.file.name; a.click(); }}>
+                  <Download className="h-4 w-4 mr-2" /> Baixar
+                </Button>
+                <Button variant="outline" onClick={gerar} disabled={busy}>
+                  {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />} Gerar de novo
+                </Button>
+              </div>
+              <Button className="w-full sm:w-auto" onClick={() => { onSend(pdf.file, mensagem); onOpenChange(false); }}>
                 <Send className="h-4 w-4 mr-2" /> Enviar no chat
               </Button>
-            </>
+            </div>
           ) : (
-            <Button onClick={gerar} disabled={busy || !client}>
-              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calculator className="h-4 w-4 mr-2" />} Gerar guia
+            <Button className="w-full sm:w-auto sm:float-right" onClick={gerar} disabled={busy || !client}>
+              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calculator className="h-4 w-4 mr-2" />} {busy ? 'Gerando…' : 'Gerar guia'}
             </Button>
           )}
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
