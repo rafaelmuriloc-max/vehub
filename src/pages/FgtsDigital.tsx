@@ -8,7 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Download, FileDown, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileDown, RefreshCw } from "lucide-react";
+
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const ANOS = Array.from({ length: new Date().getFullYear() - 2023 }, (_, i) => String(2024 + i));
 import { toast } from "sonner";
 
 type Client = { id: string; company_name: string; cnpj: string | null; sci_code?: string | null };
@@ -56,6 +59,11 @@ export default function FgtsDigital() {
   useEffect(() => { load(); }, [comp]);
 
   const periodo = `${comp.slice(5)}/${comp.slice(0, 4)}`;
+  const shift = (n: number) => {
+    const d = new Date(Number(comp.slice(0, 4)), Number(comp.slice(5)) - 1 + n, 1);
+    if (d.getFullYear() < 2024 || d.getFullYear() > new Date().getFullYear()) return;
+    setComp(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
   const sync = async (clientId: string) => {
     const { data, error } = await supabase.functions.invoke("fgts-digital-sync", { body: { client_id: clientId, periodo } });
     if (error || data?.error) throw new Error(data?.error || error?.message);
@@ -128,7 +136,18 @@ export default function FgtsDigital() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-2">
-        <Input type="month" value={comp} onChange={(e) => setComp(e.target.value)} className="md:w-44" />
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" onClick={() => shift(-1)}><ChevronLeft className="h-4 w-4" /></Button>
+          <Select value={comp.slice(5)} onValueChange={(m) => setComp(`${comp.slice(0, 4)}-${m}`)}>
+            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>{MESES.map((m, i) => <SelectItem key={m} value={String(i + 1).padStart(2, "0")}>{m}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={comp.slice(0, 4)} onValueChange={(y) => setComp(`${y}-${comp.slice(5)}`)}>
+            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+            <SelectContent>{ANOS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button variant="outline" size="icon" onClick={() => shift(1)}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
         <Input placeholder="Buscar empresa, CNPJ ou código" value={search} onChange={(e) => setSearch(e.target.value)} className="md:flex-1" />
         <Select value={filter} onValueChange={setFilter}>
           <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
