@@ -101,7 +101,7 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
     } finally { setBusy(false); }
   };
 
-  const showMes = tipo === 'simples' || categoria === 'GERAL_MENSAL';
+  const showMes = tipo !== 'dctfweb' || categoria === 'GERAL_MENSAL';
   const sizeKb = pdf ? Math.max(1, Math.round(pdf.file.size / 1024)) : 0;
   const Label = ({ children }: { children: React.ReactNode }) => (
     <span className="text-xs font-medium text-muted-foreground">{children}</span>
@@ -133,6 +133,7 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
                   <SelectContent>
                     <SelectItem value="simples">Simples Nacional (DAS)</SelectItem>
                     <SelectItem value="dctfweb">DCTFWeb (DARF previdenciário)</SelectItem>
+                    <SelectItem value="mei">MEI (DAS MEI)</SelectItem>
                   </SelectContent>
                 </Select>
               </label>
@@ -176,7 +177,7 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
                   <FileText className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{tipo === 'simples' ? 'DAS – Simples Nacional' : 'DARF – DCTFWeb'} • {showMes ? `${mes}/${ano}` : ano}</p>
+                  <p className="text-sm font-medium truncate">{TIPO_INFO[tipo].card} • {showMes ? `${mes}/${ano}` : ano}</p>
                   <p className="text-xs text-muted-foreground truncate">{client?.company_name}</p>
                   <p className="text-xs text-muted-foreground truncate">{pdf.file.name} • {sizeKb} KB</p>
                 </div>
