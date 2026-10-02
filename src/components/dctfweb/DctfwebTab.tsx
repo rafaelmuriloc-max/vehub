@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
-import { FileCheck, Loader2, Receipt, FileText, Banknote, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { FileCheck, Loader2, Receipt, FileText, Banknote, Search, ChevronLeft, ChevronRight, Download, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 
@@ -14,6 +16,7 @@ import { formatClientLabel } from '@/lib/utils';
 
 type Client = { id: string; company_name: string; sci_code: string | null; document: string | null };
 type Action = 'recibo' | 'declaracao' | 'guia';
+type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null };
 
 const ACTIONS: Record<Action, { label: string; idServico: string; tipo: string; icon: any }> = {
   recibo: { label: 'Recibo', idServico: 'CONSRECIBO32', tipo: 'Consultar', icon: Receipt },
@@ -81,16 +84,54 @@ export default function DctfwebTab() {
     return () => { cancel = true; };
   }, [ano, mes, categoria]);
 
-  const filtered = useMemo(() => {
+  const [pays, setPays] = useState<Record<string, Pay>>({});
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pago' | 'aberto'>('all');
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const comp = `${ano}-${categoria === 'GERAL_MENSAL' ? mes : '12'}-01`;
+      const { data } = await (supabase as any).from('dctfweb_competencias')
+        .select('client_id, status, valor_pago, data_pagamento, mensagem').eq('competencia', comp).eq('categoria', categoria);
+      if (cancel) return;
+      const m: Record<string, Pay> = {};
+      for (const r of (data || []) as Pay[]) m[r.client_id] = r;
+      setPays(m);
+    })();
+    return () => { cancel = true; };
+  }, [ano, mes, categoria]);
+
+  const dueTime = useMemo(() => {
+    const y = Number(ano), m = Number(mes);
+    return categoria === '13_SALARIO' ? new Date(y, 11, 20, 23, 59).getTime() : new Date(y, m, 20, 23, 59).getTime();
+  }, [ano, mes, categoria]);
+  const statusOf = (id: string): 'pago' | 'aberto' | 'vencido' => {
+    const p = pays[id];
+    if (p?.status === 'pago') return 'pago';
+    return Date.now() > dueTime ? 'vencido' : 'aberto';
+  };
+
+  const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     const qd = q.replace(/\D/g, '');
     if (!q) return clients;
     return clients.filter(c => c.company_name.toLowerCase().includes(q) || (c.sci_code || '').toLowerCase().includes(q)
       || (c.document || '').toLowerCase().includes(q) || (!!qd && (c.document || '').replace(/\D/g, '').includes(qd)));
   }, [clients, search]);
+  const filtered = useMemo(() => statusFilter === 'all' ? searched
+    : searched.filter(c => statusFilter === 'pago' ? statusOf(c.id) === 'pago' : statusOf(c.id) !== 'pago'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searched, statusFilter, pays, dueTime]);
+  const stats = useMemo(() => {
+    let pago = 0, aberto = 0, valor = 0;
+    for (const c of searched) {
+      if (statusOf(c.id) === 'pago') { pago++; valor += pays[c.id]?.valor_pago || 0; } else aberto++;
+    }
+    return { total: searched.length, pago, aberto, valor, pct: searched.length ? Math.round((pago / searched.length) * 100) : 0 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searched, pays, dueTime]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const rows = filtered.slice(page * PAGE, page * PAGE + PAGE);
-  useEffect(() => setPage(0), [search]);
+  useEffect(() => setPage(0), [search, statusFilter]);
 
   const years = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
@@ -163,6 +204,41 @@ export default function DctfwebTab() {
     setBulk(b => ({ ...b, running: false }));
   };
 
+  const refreshOne = async (c: Client) => {
+    const { data, error } = await supabase.functions.invoke('dctfweb-pagamentos', { body: { client_id: c.id, ano, mes, categoria } });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    setPays(p => ({ ...p, [c.id]: data as Pay }));
+    return data as Pay;
+  };
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  const refreshClick = async (c: Client) => {
+    setStatusBusy(c.id);
+    try {
+      const p = await refreshOne(c);
+      if (p.mensagem && p.status !== 'pago') toast({ title: 'Aviso da Receita', description: p.mensagem });
+    } catch (e) { toast({ title: 'Falha ao atualizar', description: (e as Error).message, variant: 'destructive' }); }
+    finally { setStatusBusy(null); }
+  };
+  const [sync, setSync] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 });
+  const syncCancel = useRef(false);
+  const refreshAll = async () => {
+    const list = filtered.filter(c => c.document);
+    syncCancel.current = false;
+    setSync({ running: true, done: 0, total: list.length });
+    for (let i = 0; i < list.length; i++) {
+      if (syncCancel.current) break;
+      try { await refreshOne(list[i]); }
+      catch { await sleep(1500); try { await refreshOne(list[i]); } catch { /* segue */ } }
+      setSync(s => ({ ...s, done: i + 1 }));
+      await sleep(500);
+    }
+    setSync(s => ({ ...s, running: false }));
+  };
+
+  const fmtBRL = (v: number | null) => v == null ? '' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const fmtDate = (d: string | null) => d ? d.split('-').reverse().join('/') : '';
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -197,10 +273,45 @@ export default function DctfwebTab() {
               <SelectItem value="GERAL_ANUAL">Geral Anual</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={sync.running ? () => { syncCancel.current = true; } : refreshAll} disabled={loading || (!sync.running && searched.length === 0)}>
+            <RefreshCw className={cn('h-4 w-4 mr-1', sync.running && 'animate-spin')} />
+            {sync.running ? `Cancelar (${sync.done}/${sync.total})` : 'Atualizar situação'}
+          </Button>
           <Button onClick={runBulk} disabled={loading || bulk.running || filtered.filter(c => c.document).length === 0}>
             <Download className="h-4 w-4 mr-1" /> Baixar todas as guias ({filtered.filter(c => c.document).length})
           </Button>
         </div>
+      </div>
+
+      {sync.running && <Progress value={sync.total ? (sync.done / sync.total) * 100 : 0} />}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {([
+          { key: 'all', label: 'Empresas com guia', value: String(stats.total), sub: 'Darf Previdenciário concluído' },
+          { key: 'pago', label: 'Guias pagas', value: String(stats.pago), sub: fmtBRL(stats.valor) || '—' },
+          { key: 'aberto', label: 'Em aberto / vencidas', value: String(stats.aberto), sub: Date.now() > dueTime ? 'Vencimento já passou' : 'Ainda no prazo' },
+          { key: 'pct', label: '% pagas', value: `${stats.pct}%`, sub: `${stats.pago} de ${stats.total}` },
+        ] as const).map(card => {
+          const clickable = card.key !== 'pct';
+          const active = clickable && statusFilter === card.key;
+          return (
+            <button key={card.key} type="button" disabled={!clickable}
+              onClick={() => clickable && setStatusFilter(card.key as any)}
+              className={cn('rounded-xl border bg-card p-4 text-left transition-colors', clickable && 'hover:bg-muted', active && 'border-primary ring-1 ring-primary')}>
+              <p className="text-xs text-muted-foreground">{card.label}</p>
+              <p className="text-2xl font-bold text-foreground">{card.value}</p>
+              <p className="text-xs text-muted-foreground truncate">{card.sub}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex gap-2">
+        {(['all', 'pago', 'aberto'] as const).map(f => (
+          <Button key={f} size="sm" variant={statusFilter === f ? 'default' : 'outline'} onClick={() => setStatusFilter(f)}>
+            {f === 'all' ? 'Todas' : f === 'pago' ? 'Pagas' : 'Em aberto'}
+          </Button>
+        ))}
       </div>
 
       <div className="rounded-xl border bg-card divide-y">
@@ -208,13 +319,37 @@ export default function DctfwebTab() {
           <div className="p-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         ) : rows.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma empresa encontrada.</p>
-        ) : rows.map(c => (
+        ) : rows.map(c => {
+          const st = statusOf(c.id);
+          const p = pays[c.id];
+          return (
           <div key={c.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate font-medium">{formatClientLabel(c as any)}</p>
-              <p className="text-xs text-muted-foreground">{c.document || 'Sem CNPJ'}</p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>{c.document || 'Sem CNPJ'}</span>
+                {st === 'pago' ? (
+                  <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/15">
+                    Pago{p?.data_pagamento ? ` em ${fmtDate(p.data_pagamento)}` : ''}{p?.valor_pago ? ` • ${fmtBRL(p.valor_pago)}` : ''}
+                  </Badge>
+                ) : st === 'vencido' ? (
+                  <Badge variant="destructive">Vencida</Badge>
+                ) : (
+                  <Badge className="bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">Em aberto</Badge>
+                )}
+                {!p && <span>(não consultado)</span>}
+                {p?.mensagem && st !== 'pago' && (
+                  <span className="inline-flex items-center gap-1 text-destructive" title={p.mensagem}>
+                    <AlertTriangle className="h-3 w-3" /> Aviso da Receita
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex gap-2 shrink-0">
+              <Button size="icon" variant="ghost" aria-label="Atualizar situação" title="Atualizar situação"
+                disabled={!c.document || statusBusy === c.id || sync.running} onClick={() => refreshClick(c)}>
+                <RefreshCw className={cn('h-4 w-4', statusBusy === c.id && 'animate-spin')} />
+              </Button>
               {(Object.keys(ACTIONS) as Action[]).map(k => {
                 const A = ACTIONS[k];
                 const isBusy = busy?.id === c.id && busy.action === k;
@@ -227,7 +362,8 @@ export default function DctfwebTab() {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">

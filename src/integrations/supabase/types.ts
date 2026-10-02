@@ -1095,6 +1095,53 @@ export type Database = {
           },
         ]
       }
+      dctfweb_competencias: {
+        Row: {
+          categoria: string
+          client_id: string
+          competencia: string
+          created_at: string
+          data_pagamento: string | null
+          id: string
+          mensagem: string | null
+          status: string
+          updated_at: string
+          valor_pago: number | null
+        }
+        Insert: {
+          categoria?: string
+          client_id: string
+          competencia: string
+          created_at?: string
+          data_pagamento?: string | null
+          id?: string
+          mensagem?: string | null
+          status?: string
+          updated_at?: string
+          valor_pago?: number | null
+        }
+        Update: {
+          categoria?: string
+          client_id?: string
+          competencia?: string
+          created_at?: string
+          data_pagamento?: string | null
+          id?: string
+          mensagem?: string | null
+          status?: string
+          updated_at?: string
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dctfweb_competencias_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       department_credentials: {
         Row: {
           department_id: string
