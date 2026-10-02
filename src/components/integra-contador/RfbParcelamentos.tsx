@@ -12,6 +12,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Search, PlayCircle, Eye, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { formatClientLabel } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown, Send, FileDown } from 'lucide-react';
 
 type Modalidade = {
   idSistema: string;
@@ -49,6 +53,8 @@ const MODALIDADES: Modalidade[] = [
   // (sistema PARCMEPN/OBTERPARC24x retorna "Identificação do sistema ou serviço inválida").
   // Para PGFN, consultar diretamente o portal REGULARIZE.
 ];
+
+type GuiaFile = { file: File; parcela: string };
 
 type Client = {
   id: string;
@@ -154,6 +160,14 @@ export default function RfbParcelamentos() {
   const [parcelasError, setParcelasError] = useState<string | null>(null);
   const [emittingParcela, setEmittingParcela] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const { user, profile } = useAuth();
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [guias, setGuias] = useState<Record<string, GuiaFile>>({});
+  const [picker, setPicker] = useState<{ row: ParcRow; lista: Array<{ parcela: string; valor: number | null }>; sel: string; thenSend: boolean } | null>(null);
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const [sendState, setSendState] = useState<{ row: ParcRow; guia: GuiaFile; conversationId: string | null; phone: string | null; text: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -178,12 +192,16 @@ export default function RfbParcelamentos() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  async function consultarCliente(clientId: string): Promise<void> {
-    // Apaga registros anteriores deste cliente para evitar duplicação
-    await supabase.from('parcelamento_results' as any).delete().eq('client_id', clientId);
+  async function consultarCliente(clientId: string, only?: string): Promise<void> {
+    // Apaga registros anteriores deste cliente (ou só da modalidade) para evitar duplicação
+    if (only) {
+      await supabase.from('parcelamento_results' as any).delete().eq('client_id', clientId).in('modalidade', [only, '_none']);
+    } else {
+      await supabase.from('parcelamento_results' as any).delete().eq('client_id', clientId);
+    }
 
     const toInsert: any[] = [];
-    for (const mod of MODALIDADES) {
+    for (const mod of MODALIDADES.filter(m => !only || m.idServico === only)) {
       try {
         const { data, error } = await supabase.functions.invoke('integra-contador', {
           body: {
@@ -249,7 +267,7 @@ export default function RfbParcelamentos() {
       }
     }
 
-    if (toInsert.length === 0) {
+    if (toInsert.length === 0 && !only) {
       // grava marcador de "sem parcelamentos" para indicar que já foi consultado
       toInsert.push({
         client_id: clientId,
@@ -260,7 +278,157 @@ export default function RfbParcelamentos() {
       });
     }
 
-    await supabase.from('parcelamento_results' as any).insert(toInsert as any);
+    if (toInsert.length) await supabase.from('parcelamento_results' as any).insert(toInsert as any);
+  }
+
+  async function handleAtualizarParc(row: ParcRow) {
+    setBusyKey(`upd:${row.id}`);
+    try {
+      await consultarCliente(row.client_id, row.modalidade);
+      await loadData();
+      toast({ title: 'Parcelamento atualizado' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao atualizar', description: err?.message, variant: 'destructive' });
+    } finally { setBusyKey(null); }
+  }
+
+  async function fetchParcelas(row: ParcRow) {
+    const map = PARCELAS_SERVICES[row.modalidade];
+    if (!map) throw new Error('Modalidade sem emissão de guia');
+    const { data, error } = await supabase.functions.invoke('integra-contador', {
+      body: { client_id: row.client_id, idSistema: map.idSistema, idServico: map.parcelasService, tipo: 'Consultar', dados: '' },
+    });
+    if (error) throw error;
+    if (!data?.success) {
+      const msgs = data?.data?.mensagens?.map((m: any) => m.texto).join('; ');
+      throw new Error(msgs || data?.error || 'Falha ao obter parcelas');
+    }
+    const lista = extractParcelasList(data?.data || data).filter(p => p.parcela <= currentYyyymm());
+    lista.sort((a, b) => b.parcela.localeCompare(a.parcela));
+    return lista;
+  }
+
+  function findPdf(obj: any, depth = 0): string | null {
+    if (!obj || depth > 6) return null;
+    if (typeof obj === 'string') {
+      if (obj.startsWith('JVBERi0')) return obj;
+      if (obj.trim().startsWith('{') || obj.trim().startsWith('[')) { try { return findPdf(JSON.parse(obj), depth + 1); } catch { return null; } }
+      return null;
+    }
+    if (typeof obj === 'object') {
+      for (const v of Object.values(obj)) { const r = findPdf(v, depth + 1); if (r) return r; }
+    }
+    return null;
+  }
+
+  async function emitGuia(row: ParcRow, parcela: string): Promise<GuiaFile> {
+    const map = PARCELAS_SERVICES[row.modalidade];
+    if (!map) throw new Error('Modalidade sem emissão de guia');
+    const { data, error } = await supabase.functions.invoke('integra-contador', {
+      body: { client_id: row.client_id, idSistema: map.idSistema, idServico: map.emitirService, tipo: 'Emitir', dados: JSON.stringify({ parcelaParaEmitir: parcela }) },
+    });
+    if (error) throw error;
+    if (!data?.success) {
+      const msgs = data?.data?.mensagens?.map((m: any) => m.texto).join('; ');
+      throw new Error(msgs || data?.error || 'Falha ao gerar guia');
+    }
+    const b64 = findPdf(data?.data);
+    if (!b64) throw new Error('PDF não retornado pela Receita');
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const client = clients.find(c => c.id === row.client_id);
+    const nome = (client?.company_name || 'EMPRESA').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
+    const fileName = `Parcela_${(row.modalidade_label || 'Parcelamento').replace(/[^a-zA-Z0-9]+/g, '_')}_${parcela}_${nome}.pdf`;
+    const g: GuiaFile = { file: new File([bytes], fileName, { type: 'application/pdf' }), parcela };
+    setGuias(prev => ({ ...prev, [row.id]: g }));
+    return g;
+  }
+
+  function downloadFile(f: File) {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement('a');
+    a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  // Gera a parcela: 1 disponível => direto; várias => escolha
+  async function startGerar(row: ParcRow, thenSend: boolean) {
+    setBusyKey(`${thenSend ? 'send' : 'gen'}:${row.id}`);
+    try {
+      const lista = await fetchParcelas(row);
+      if (!lista.length) { toast({ title: 'Nenhuma parcela disponível para gerar' }); return; }
+      if (lista.length === 1) {
+        await finishGerar(row, lista[0].parcela, thenSend);
+      } else {
+        setPicker({ row, lista, sel: lista.find(p => p.parcela === currentYyyymm())?.parcela || lista[0].parcela, thenSend });
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao buscar parcelas', description: err?.message, variant: 'destructive' });
+    } finally { setBusyKey(null); }
+  }
+
+  async function finishGerar(row: ParcRow, parcela: string, thenSend: boolean) {
+    const g = await emitGuia(row, parcela);
+    if (thenSend) openSend(row, g);
+    else { downloadFile(g.file); toast({ title: 'Guia gerada', description: `Parcela ${formatParcelaLabel(parcela)}` }); }
+  }
+
+  async function confirmPicker() {
+    if (!picker) return;
+    const { row, sel, thenSend } = picker;
+    setPickerBusy(true);
+    try { await finishGerar(row, sel, thenSend); setPicker(null); }
+    catch (err: any) { toast({ title: 'Erro ao gerar guia', description: err?.message, variant: 'destructive' }); }
+    finally { setPickerBusy(false); }
+  }
+
+  async function openSend(row: ParcRow, g: GuiaFile) {
+    const client = clients.find(c => c.id === row.client_id);
+    const { data: convs } = await supabase
+      .from('chat_conversations')
+      .select('id, whatsapp_phone, is_group, updated_at')
+      .eq('client_id', row.client_id)
+      .not('whatsapp_phone', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(10);
+    const conv = (convs || []).find((c: any) => !c.is_group) || null;
+    setSendState({
+      row, guia: g, conversationId: conv?.id || null, phone: conv?.whatsapp_phone || null,
+      text: `Olá! Segue a guia da parcela ${formatParcelaLabel(g.parcela)} do parcelamento ${row.modalidade_label || ''}${row.numero_parcelamento ? ` nº ${row.numero_parcelamento}` : ''} da empresa ${client?.company_name || ''}. Qualquer dúvida, estamos à disposição.`,
+    });
+  }
+
+  async function handleEnviar(row: ParcRow) {
+    const g = guias[row.id];
+    if (g) { await openSend(row, g); return; }
+    await startGerar(row, true);
+  }
+
+  async function confirmSend() {
+    if (!sendState?.conversationId || !user) return;
+    setSending(true);
+    try {
+      const f = sendState.guia.file;
+      const path = `${sendState.conversationId}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error: upErr } = await supabase.storage.from('chat-media').upload(path, f);
+      if (upErr) throw upErr;
+      const mediaUrl = supabase.storage.from('chat-media').getPublicUrl(path).data.publicUrl;
+      if (sendState.text.trim()) {
+        const { data: d1, error: e1 } = await supabase.functions.invoke('whatsapp-send-text', {
+          body: { conversationId: sendState.conversationId, text: sendState.text.trim(), senderName: profile?.full_name || undefined, senderId: user.id },
+        });
+        if (e1 || (d1 as any)?.error) throw new Error((d1 as any)?.error || e1?.message);
+      }
+      const { data: d2, error: e2 } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: { conversationId: sendState.conversationId, type: 'document', mediaUrl, fileName: f.name, senderName: profile?.full_name || undefined, senderId: user.id },
+      });
+      if (e2 || (d2 as any)?.error) throw new Error((d2 as any)?.error || e2?.message);
+      toast({ title: 'Guia enviada no WhatsApp' });
+      setSendState(null);
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: String(err?.message || err).slice(0, 200), variant: 'destructive' });
+    } finally { setSending(false); }
   }
 
   async function handleConsultarIndividual(clientId: string) {
@@ -347,9 +515,18 @@ export default function RfbParcelamentos() {
   }, [display, search, filterModalidade, filterOrigem, filterSituacao]);
 
   const PAGE_SIZE = 15;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const companies = useMemo(() => {
+    const map = new Map<string, { client: Client; parcs: ParcRow[] }>();
+    filtered.forEach(it => {
+      const e = map.get(it.client.id) || { client: it.client, parcs: [] };
+      if (it.parc) e.parcs.push(it.parc);
+      map.set(it.client.id, e);
+    });
+    return Array.from(map.values());
+  }, [filtered]);
+  const totalPages = Math.max(1, Math.ceil(companies.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pagedCompanies = companies.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [search, filterModalidade, filterOrigem, filterSituacao]);
 
   const kpis = useMemo(() => {
@@ -590,108 +767,108 @@ export default function RfbParcelamentos() {
 
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={filteredClientIds.length > 0 && selected.size === filteredClientIds.length}
-                    onCheckedChange={toggleAll}
-                  />
-                </TableHead>
-                <TableHead>Empresa</TableHead>
-                <TableHead>CNPJ</TableHead>
-                <TableHead>Origem</TableHead>
-                <TableHead>Modalidade</TableHead>
-                <TableHead>Nº Parc.</TableHead>
-                <TableHead>Situação</TableHead>
-                <TableHead>Data Pedido</TableHead>
-                <TableHead>Valor Total</TableHead>
-                <TableHead>Parcelas</TableHead>
-                <TableHead>Última Consulta</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                  </TableCell>
-                </TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
-                    Nenhum cliente encontrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paged.map(it => (
-                  <TableRow key={it.key}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selected.has(it.client.id)}
-                        onCheckedChange={() => toggleSelect(it.client.id)}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{formatClientLabel(it.client)}</TableCell>
-                    <TableCell className="font-mono text-xs">{formatCnpj(it.client.document)}</TableCell>
-                    <TableCell>
-                      {it.parc?.origem
-                        ? <Badge variant={it.parc.origem === 'PGFN' ? 'secondary' : 'outline'}>{it.parc.origem}</Badge>
-                        : '-'}
-                    </TableCell>
-                    <TableCell>{it.parc?.modalidade_label || '-'}</TableCell>
-                    <TableCell className="font-mono text-xs">{it.parc?.numero_parcelamento || '-'}</TableCell>
-                    <TableCell>{statusBadge(it.parc)}</TableCell>
-                    <TableCell>{formatDate(it.parc?.data_pedido || null)}</TableCell>
-                    <TableCell>
-                      {it.parc?.valor_total != null
-                        ? it.parc.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {it.parc?.parcelas_total != null
-                        ? `${it.parc.parcelas_pagas ?? 0} / ${it.parc.parcelas_total}`
-                        : '-'}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDateTime(it.parc?.consulted_at || null)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {it.parc && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setDetailRow(it.parc)}
-                            title="Ver detalhes"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleConsultarIndividual(it.client.id)}
-                          disabled={consultingId === it.client.id || batchRunning}
-                        >
-                          {consultingId === it.client.id
-                            ? <Loader2 className="h-3 w-3 animate-spin" />
-                            : <PlayCircle className="h-3 w-3" />}
-                          <span className="ml-1 hidden sm:inline">Consultar</span>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <div className="flex items-center gap-3 px-4 py-2 border-b text-sm text-muted-foreground">
+            <Checkbox checked={filteredClientIds.length > 0 && selected.size === filteredClientIds.length} onCheckedChange={toggleAll} aria-label="Selecionar todas" />
+            <span>Empresas</span>
           </div>
+          {loading ? (
+            <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : pagedCompanies.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">Nenhuma empresa encontrada</div>
+          ) : pagedCompanies.map(({ client, parcs }) => {
+            const ok = parcs.filter(p => p.status === 'success');
+            const ativos = ok.filter(p => !(p.situacao && ENCERRADO_REGEX.test(p.situacao)));
+            const total = ativos.reduce((a, p) => a + (p.valor_total || 0), 0);
+            const last = parcs.reduce<string | null>((m, p) => (!m || p.consulted_at > m ? p.consulted_at : m), null);
+            const hasErr = parcs.some(p => p.status === 'error');
+            const badge = !parcs.length
+              ? <Badge variant="outline" className="gap-1"><AlertCircle className="h-3 w-3" />Não consultada</Badge>
+              : ok.length
+                ? <Badge className="gap-1 bg-primary"><CheckCircle2 className="h-3 w-3" />Com parcelamento</Badge>
+                : hasErr
+                  ? <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Erro</Badge>
+                  : <Badge variant="secondary" className="gap-1"><CheckCircle2 className="h-3 w-3" />Sem parcelamentos</Badge>;
+            const groups = new Map<string, ParcRow[]>();
+            parcs.filter(p => p.status !== 'no_data').forEach(p => {
+              const k = p.modalidade_label || p.modalidade;
+              groups.set(k, [...(groups.get(k) || []), p]);
+            });
+            const isOpen = expanded.has(client.id);
+            return (
+              <Collapsible key={client.id} open={isOpen} onOpenChange={o => setExpanded(prev => { const n = new Set(prev); if (o) n.add(client.id); else n.delete(client.id); return n; })} className="border-b last:border-b-0">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Checkbox checked={selected.has(client.id)} onCheckedChange={() => toggleSelect(client.id)} aria-label="Selecionar empresa" />
+                  <CollapsibleTrigger asChild>
+                    <button type="button" className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-left">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground truncate">{formatClientLabel(client)}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{formatCnpj(client.document)}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {badge}
+                        {ativos.length > 0 && <span>{ativos.length} ativo(s) • {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>}
+                        {last && <span className="hidden lg:inline">Consulta: {formatDateTime(last)}</span>}
+                      </div>
+                      <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform hidden md:block ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                  </CollapsibleTrigger>
+                  <Button size="sm" variant="outline" onClick={() => handleConsultarIndividual(client.id)} disabled={consultingId === client.id || batchRunning} title="Consultar todas as categorias">
+                    {consultingId === client.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlayCircle className="h-3 w-3" />}
+                    <span className="ml-1 hidden sm:inline">Consultar</span>
+                  </Button>
+                </div>
+                <CollapsibleContent>
+                  <div className="px-4 pb-4 space-y-4 bg-muted/30">
+                    {groups.size === 0 ? (
+                      <p className="text-sm text-muted-foreground pt-3">{parcs.length ? 'Nenhum parcelamento encontrado nesta empresa.' : 'Empresa ainda não consultada. Clique em Consultar.'}</p>
+                    ) : Array.from(groups.entries()).map(([label, list]) => (
+                      <div key={label} className="pt-3">
+                        <div className="text-sm font-semibold text-foreground mb-2">{label} <Badge variant="secondary" className="ml-1">{list.length}</Badge></div>
+                        <div className="grid gap-2">
+                          {list.map(p => {
+                            const encerrado = !!(p.situacao && ENCERRADO_REGEX.test(p.situacao));
+                            const canEmit = p.status === 'success' && !encerrado && !!PARCELAS_SERVICES[p.modalidade];
+                            const g = guias[p.id];
+                            return (
+                              <div key={p.id} className={`rounded-lg border bg-card p-3 ${encerrado ? 'opacity-60' : ''}`}>
+                                {p.status === 'error' ? (
+                                  <div className="text-sm text-destructive">{p.error_message || 'Erro na consulta'}</div>
+                                ) : (
+                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
+                                    <div><div className="text-xs text-muted-foreground">Nº</div><div className="font-mono">{p.numero_parcelamento || '-'}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Situação</div><div>{p.situacao || '-'}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Pedido</div><div>{formatDate(p.data_pedido)}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Valor total</div><div>{p.valor_total != null ? p.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Parcelas</div><div>{p.parcelas_total != null ? `${p.parcelas_pagas ?? 0} / ${p.parcelas_total}` : '-'}</div></div>
+                                  </div>
+                                )}
+                                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mt-3">
+                                  <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => handleAtualizarParc(p)} disabled={!!busyKey}>
+                                    {busyKey === `upd:${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}Atualizar
+                                  </Button>
+                                  <Button size="sm" className="w-full sm:w-auto" onClick={() => startGerar(p, false)} disabled={!canEmit || !!busyKey}>
+                                    {busyKey === `gen:${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <FileDown className="h-3 w-3 mr-1" />}Gerar parcela
+                                  </Button>
+                                  <Button size="sm" variant="secondary" className="w-full sm:w-auto" onClick={() => handleEnviar(p)} disabled={!canEmit || !!busyKey}>
+                                    {busyKey === `send:${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}Enviar{g ? ` (${formatParcelaLabel(g.parcela)})` : ''}
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="w-full sm:w-auto" onClick={() => setDetailRow(p)}>
+                                    <Eye className="h-3 w-3 mr-1" />Detalhes
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border-t text-sm text-muted-foreground">
-            <span>{filtered.length} registro(s) • Página {safePage} de {totalPages}</span>
+            <span>{companies.length} empresa(s) • Página {safePage} de {totalPages}</span>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>Anterior</Button>
               <Button size="sm" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Próxima</Button>
@@ -699,6 +876,59 @@ export default function RfbParcelamentos() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!picker} onOpenChange={o => !o && !pickerBusy && setPicker(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Escolha a parcela</DialogTitle></DialogHeader>
+          {picker && (
+            <div className="space-y-3">
+              <Select value={picker.sel} onValueChange={v => setPicker({ ...picker, sel: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {picker.lista.map(p => (
+                    <SelectItem key={p.parcela} value={p.parcela}>
+                      {formatParcelaLabel(p.parcela)}{p.valor != null ? ` • ${p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex flex-col sm:flex-row justify-end gap-2">
+                <Button variant="outline" onClick={() => setPicker(null)} disabled={pickerBusy}>Cancelar</Button>
+                <Button onClick={confirmPicker} disabled={pickerBusy}>
+                  {pickerBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{picker.thenSend ? 'Gerar e continuar' : 'Gerar guia'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!sendState} onOpenChange={o => !o && !sending && setSendState(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Enviar guia no WhatsApp</DialogTitle></DialogHeader>
+          {sendState && (
+            <div className="space-y-3">
+              <div className="rounded-lg border p-3 text-sm">
+                <div className="font-medium truncate">{sendState.guia.file.name}</div>
+                <div className="text-xs text-muted-foreground">Parcela {formatParcelaLabel(sendState.guia.parcela)} • {(sendState.guia.file.size / 1024).toFixed(0)} KB</div>
+                <Button size="sm" variant="link" className="px-0" onClick={() => downloadFile(sendState.guia.file)}>Baixar guia</Button>
+              </div>
+              {sendState.conversationId ? (
+                <div className="text-sm text-muted-foreground">Para: {sendState.phone}</div>
+              ) : (
+                <div className="text-sm text-destructive">Esta empresa não tem conversa de WhatsApp no Chat. Inicie uma conversa com o cliente para poder enviar.</div>
+              )}
+              <Textarea rows={5} value={sendState.text} onChange={e => setSendState({ ...sendState, text: e.target.value })} />
+              <div className="flex flex-col sm:flex-row justify-end gap-2">
+                <Button variant="outline" onClick={() => setSendState(null)} disabled={sending}>Cancelar</Button>
+                <Button onClick={confirmSend} disabled={sending || !sendState.conversationId}>
+                  {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}Enviar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!detailRow} onOpenChange={o => !o && setDetailRow(null)}>
         <DialogContent className="max-w-3xl">
