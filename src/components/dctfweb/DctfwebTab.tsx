@@ -16,7 +16,8 @@ import { formatClientLabel } from '@/lib/utils';
 
 type Client = { id: string; company_name: string; sci_code: string | null; document: string | null };
 type Action = 'recibo' | 'declaracao' | 'guia';
-type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null };
+type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null; enviada?: boolean | null };
+type Filter = 'all' | 'enviada' | 'nao_enviada' | 'pago' | 'aberto';
 
 const ACTIONS: Record<Action, { label: string; idServico: string; tipo: string; icon: any }> = {
   recibo: { label: 'Recibo', idServico: 'CONSRECIBO32', tipo: 'Consultar', icon: Receipt },
@@ -58,23 +59,27 @@ export default function DctfwebTab() {
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState<{ id: string; action: Action } | null>(null);
 
-  // Só empresas com a obrigação "Darf Previdenciário" concluída na competência escolhida.
+  // Empresas ativas com obrigação de Folha de Pagamento Mensal ou Folha Pró-labore.
   useEffect(() => {
     let cancel = false;
     setLoading(true);
     setPage(0);
     (async () => {
       const refMonth = `${ano}-${categoria === 'GERAL_MENSAL' ? mes : '12'}-01`;
-      const { data: obs } = await supabase.from('obligations').select('id').ilike('name', '%darf previd%');
+      const { data: obs } = await supabase.from('obligations').select('id, name')
+        .or('name.ilike.%folha de pagamento%,name.ilike.%folha pr%labore%');
       const ids = (obs || []).map((o: any) => o.id);
       if (ids.length === 0) { if (!cancel) { setClients([]); setLoading(false); } return; }
-      const { data } = await supabase.from('obligation_instances')
-        .select('client_id, clients(id, company_name, sci_code, document, status)')
-        .in('obligation_id', ids).eq('status', 'done').is('deleted_at', null).eq('reference_month', refMonth);
       const map = new Map<string, Client>();
-      for (const r of (data || []) as any[]) {
-        const c = r.clients;
-        if (c && c.status === 'active') map.set(c.id, { id: c.id, company_name: c.company_name, sci_code: c.sci_code, document: c.document });
+      const add = (c: any) => { if (c && c.status === 'active') map.set(c.id, { id: c.id, company_name: c.company_name, sci_code: c.sci_code, document: c.document }); };
+      const { data: links } = await supabase.from('client_department_obligations')
+        .select('client_id, clients(id, company_name, sci_code, document, status)').in('obligation_id', ids);
+      for (const r of (links || []) as any[]) add(r.clients);
+      if (map.size === 0) {
+        const { data } = await supabase.from('obligation_instances')
+          .select('client_id, clients(id, company_name, sci_code, document, status)')
+          .in('obligation_id', ids).is('deleted_at', null).eq('reference_month', refMonth);
+        for (const r of (data || []) as any[]) add(r.clients);
       }
       if (!cancel) {
         setClients([...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name)));
@@ -85,13 +90,13 @@ export default function DctfwebTab() {
   }, [ano, mes, categoria]);
 
   const [pays, setPays] = useState<Record<string, Pay>>({});
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pago' | 'aberto'>('all');
+  const [statusFilter, setStatusFilter] = useState<Filter>('all');
   useEffect(() => {
     let cancel = false;
     (async () => {
       const comp = `${ano}-${categoria === 'GERAL_MENSAL' ? mes : '12'}-01`;
       const { data } = await (supabase as any).from('dctfweb_competencias')
-        .select('client_id, status, valor_pago, data_pagamento, mensagem').eq('competencia', comp).eq('categoria', categoria);
+        .select('client_id, status, valor_pago, data_pagamento, mensagem, enviada').eq('competencia', comp).eq('categoria', categoria);
       if (cancel) return;
       const m: Record<string, Pay> = {};
       for (const r of (data || []) as Pay[]) m[r.client_id] = r;
@@ -104,6 +109,10 @@ export default function DctfwebTab() {
     const y = Number(ano), m = Number(mes);
     return categoria === '13_SALARIO' ? new Date(y, 11, 20, 23, 59).getTime() : new Date(y, m, 20, 23, 59).getTime();
   }, [ano, mes, categoria]);
+  const envioOf = (id: string): 'enviada' | 'nao_enviada' | 'nao_consultado' => {
+    const e = pays[id]?.enviada;
+    return e === true ? 'enviada' : e === false ? 'nao_enviada' : 'nao_consultado';
+  };
   const statusOf = (id: string): 'pago' | 'aberto' | 'vencido' => {
     const p = pays[id];
     if (p?.status === 'pago') return 'pago';
@@ -117,18 +126,29 @@ export default function DctfwebTab() {
     return clients.filter(c => c.company_name.toLowerCase().includes(q) || (c.sci_code || '').toLowerCase().includes(q)
       || (c.document || '').toLowerCase().includes(q) || (!!qd && (c.document || '').replace(/\D/g, '').includes(qd)));
   }, [clients, search]);
-  const filtered = useMemo(() => statusFilter === 'all' ? searched
-    : searched.filter(c => statusFilter === 'pago' ? statusOf(c.id) === 'pago' : statusOf(c.id) !== 'pago'),
+  const filtered = useMemo(() => searched.filter(c => {
+    const env = envioOf(c.id);
+    switch (statusFilter) {
+      case 'enviada': return env === 'enviada';
+      case 'nao_enviada': return env !== 'enviada';
+      case 'pago': return env === 'enviada' && statusOf(c.id) === 'pago';
+      case 'aberto': return env === 'enviada' && statusOf(c.id) !== 'pago';
+      default: return true;
+    }
+  }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [searched, statusFilter, pays, dueTime]);
   const stats = useMemo(() => {
-    let pago = 0, aberto = 0, valor = 0;
+    let enviada = 0, nao = 0, pago = 0, aberto = 0, valor = 0;
     for (const c of searched) {
+      if (envioOf(c.id) !== 'enviada') { nao++; continue; }
+      enviada++;
       if (statusOf(c.id) === 'pago') { pago++; valor += pays[c.id]?.valor_pago || 0; } else aberto++;
     }
-    return { total: searched.length, pago, aberto, valor, pct: searched.length ? Math.round((pago / searched.length) * 100) : 0 };
+    return { total: searched.length, enviada, nao, pago, aberto, valor };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searched, pays, dueTime]);
+  const guiaList = filtered.filter(c => c.document && envioOf(c.id) === 'enviada');
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const rows = filtered.slice(page * PAGE, page * PAGE + PAGE);
   useEffect(() => setPage(0), [search, statusFilter]);
