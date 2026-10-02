@@ -153,6 +153,7 @@ export default function RfbParcelamentos() {
   const [parcelasLoading, setParcelasLoading] = useState(false);
   const [parcelasError, setParcelasError] = useState<string | null>(null);
   const [emittingParcela, setEmittingParcela] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -320,10 +321,12 @@ export default function RfbParcelamentos() {
 
   const filtered = useMemo(() => {
     const s = search.toLowerCase().trim();
+    const sDigits = s.replace(/\D/g, '');
     return display.filter(it => {
       if (s) {
-        const hay = `${formatClientLabel(it.client)} ${it.client.document || ''}`.toLowerCase();
-        if (!hay.includes(s)) return false;
+        const hay = `${formatClientLabel(it.client)} ${it.client.sci_code || ''} ${it.client.document || ''}`.toLowerCase();
+        const docDigits = (it.client.document || '').replace(/\D/g, '');
+        if (!hay.includes(s) && !(sDigits.length >= 3 && docDigits.includes(sDigits))) return false;
       }
       if (filterModalidade !== 'all') {
         if (!it.parc || it.parc.modalidade !== filterModalidade) return false;
@@ -334,12 +337,29 @@ export default function RfbParcelamentos() {
       if (filterSituacao !== 'all') {
         if (filterSituacao === 'sem' && it.parc) return false;
         if (filterSituacao === 'com' && (!it.parc || it.parc.status !== 'success')) return false;
+        if (filterSituacao === 'ativo' && (!it.parc || it.parc.status !== 'success' || (it.parc.situacao && ENCERRADO_REGEX.test(it.parc.situacao)))) return false;
+        if (filterSituacao === 'encerrado' && (!it.parc || !it.parc.situacao || !ENCERRADO_REGEX.test(it.parc.situacao))) return false;
         if (filterSituacao === 'erro' && (!it.parc || it.parc.status !== 'error')) return false;
         if (filterSituacao === 'no_data' && (!it.parc || it.parc.status !== 'no_data')) return false;
       }
       return true;
     });
   }, [display, search, filterModalidade, filterOrigem, filterSituacao]);
+
+  const PAGE_SIZE = 15;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, filterModalidade, filterOrigem, filterSituacao]);
+
+  const kpis = useMemo(() => {
+    const ativos = rows.filter(r => r.status === 'success' && !(r.situacao && ENCERRADO_REGEX.test(r.situacao)));
+    const empresas = new Set(ativos.map(r => r.client_id)).size;
+    const total = ativos.reduce((s, r) => s + (r.valor_total || 0), 0);
+    const consultados = new Set(rows.map(r => r.client_id));
+    const erros = new Set(rows.filter(r => r.status === 'error').map(r => r.client_id)).size;
+    return { empresas, ativos: ativos.length, total, naoConsultados: clients.filter(c => !consultados.has(c.id)).length, erros };
+  }, [rows, clients]);
 
   // Para seleção: lista única de clientes filtrados
   const filteredClientIds = useMemo(() => {
@@ -486,6 +506,21 @@ export default function RfbParcelamentos() {
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Empresas com parcelamento', value: String(kpis.empresas), sub: `${kpis.ativos} parcelamento(s) ativo(s)`, f: 'ativo' },
+          { label: 'Total parcelado (ativos)', value: kpis.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), sub: 'Soma dos parcelamentos ativos', f: 'ativo' },
+          { label: 'Não consultadas', value: String(kpis.naoConsultados), sub: 'Empresas ainda sem consulta', f: 'sem' },
+          { label: 'Com erro na consulta', value: String(kpis.erros), sub: 'Recusas ou falhas da Receita', f: 'erro' },
+        ].map(k => (
+          <button key={k.label} type="button" onClick={() => setFilterSituacao(filterSituacao === k.f ? 'all' : k.f)}
+            className={`text-left rounded-xl border bg-card p-4 transition-colors hover:bg-muted ${filterSituacao === k.f ? 'border-primary ring-1 ring-primary' : 'border-border'}`}>
+            <div className="text-xs text-muted-foreground">{k.label}</div>
+            <div className="text-xl sm:text-2xl font-bold text-foreground mt-1 truncate">{k.value}</div>
+            <div className="text-xs text-muted-foreground mt-1">{k.sub}</div>
+          </button>
+        ))}
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Filtros</CardTitle>
@@ -495,7 +530,7 @@ export default function RfbParcelamentos() {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por empresa ou CNPJ..."
+                placeholder="Buscar por empresa, código SCI ou CNPJ..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-8"
@@ -522,6 +557,8 @@ export default function RfbParcelamentos() {
               <SelectTrigger className="md:w-48"><SelectValue placeholder="Situação" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas situações</SelectItem>
+                <SelectItem value="ativo">Parcelamento ativo</SelectItem>
+                <SelectItem value="encerrado">Encerrado/liquidado</SelectItem>
                 <SelectItem value="com">Com parcelamento</SelectItem>
                 <SelectItem value="no_data">Sem parcelamentos</SelectItem>
                 <SelectItem value="sem">Não consultado</SelectItem>
@@ -553,6 +590,7 @@ export default function RfbParcelamentos() {
 
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -589,7 +627,7 @@ export default function RfbParcelamentos() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map(it => (
+                paged.map(it => (
                   <TableRow key={it.key}>
                     <TableCell>
                       <Checkbox
@@ -651,6 +689,14 @@ export default function RfbParcelamentos() {
               )}
             </TableBody>
           </Table>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border-t text-sm text-muted-foreground">
+            <span>{filtered.length} registro(s) • Página {safePage} de {totalPages}</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>Anterior</Button>
+              <Button size="sm" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Próxima</Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
