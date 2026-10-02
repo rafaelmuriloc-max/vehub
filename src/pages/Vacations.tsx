@@ -36,6 +36,7 @@ export default function Vacations() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [periods, setPeriods] = useState<VacationPeriodRow[]>([]);
