@@ -1,23 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bar, CartesianGrid, LabelList, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, Bar, CartesianGrid, ComposedChart, LabelList, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BarChart3, CalendarDays, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+export const monthLabel = (k: string) => `${MES[Number(k.slice(5, 7)) - 1]}/${k.slice(2, 4)}`;
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const brlCompact = (v: number) => 'R$ ' + new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+export const brlMil = (v: number) => {
+  if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+  if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+  return `R$ ${v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`;
+};
 
+export type PayrollMonth = { key: string; funcionarios: number; salarios: number; empresas: number };
 type Row = { client_id: string; competence: string; qty_employees: number | null; gross: number | null };
 
-export function PersonnelEvolutionChart({ clientIds }: { clientIds: string[] }) {
+export function usePayrollMonthly(clientIds: string[]) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const key = clientIds.slice().sort().join(',');
-
   useEffect(() => {
     let alive = true;
     (async () => {
-      setLoading(true);
       const all: Row[] = [];
       for (let from = 0; ; from += 1000) {
         const { data, error } = await supabase.from('payroll_summaries')
@@ -30,54 +38,158 @@ export function PersonnelEvolutionChart({ clientIds }: { clientIds: string[] }) 
     })();
     return () => { alive = false; };
   }, []);
-
-  const data = useMemo(() => {
+  const key = clientIds.slice().sort().join(',');
+  const months = useMemo(() => {
     const ids = new Set(key.split(','));
-    const map = new Map<string, { funcionarios: number; salarios: number; empresas: number }>();
+    const map = new Map<string, PayrollMonth>();
     for (const r of rows) {
       if (!ids.has(r.client_id)) continue;
       const k = r.competence.slice(0, 7);
-      const m = map.get(k) ?? { funcionarios: 0, salarios: 0, empresas: 0 };
+      const m = map.get(k) ?? { key: k, funcionarios: 0, salarios: 0, empresas: 0 };
       m.funcionarios += Number(r.qty_employees ?? 0);
       m.salarios += Number(r.gross ?? 0);
       m.empresas += 1;
       map.set(k, m);
     }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => ({
-      mes: `${MES[Number(k.slice(5)) - 1]}/${k.slice(2, 4)}`, ...v,
-    }));
+    return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
   }, [rows, key]);
+  return { months, loading };
+}
+
+type Gran = 'mensal' | 'trimestral' | 'anual';
+
+const SalaryPill = (props: any) => {
+  const { x, y, value } = props;
+  if (value == null) return null;
+  const text = brlMil(Number(value));
+  const w = text.length * 6.6 + 16;
+  return (
+    <g>
+      <rect x={x - w / 2} y={y + 10} width={w} height={22} rx={6} className="fill-success/15" style={{ fill: 'hsl(var(--success) / 0.14)' }} />
+      <text x={x} y={y + 25} textAnchor="middle" fontSize={11.5} fontWeight={600} style={{ fill: 'hsl(var(--foreground))' }}>{text}</text>
+    </g>
+  );
+};
+
+export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMonth[]; loading: boolean }) {
+  const [gran, setGran] = useState<Gran>('mensal');
+  const [showEmp, setShowEmp] = useState(true);
+  const [showSal, setShowSal] = useState(true);
+  const [from, setFrom] = useState<string>('');
+  const [to, setTo] = useState<string>('');
+  const keys = months.map(m => m.key);
+  const start = from && keys.includes(from) ? from : keys[0] ?? '';
+  const end = to && keys.includes(to) ? to : keys[keys.length - 1] ?? '';
+
+  const data = useMemo(() => {
+    const inRange = months.filter(m => m.key >= start && m.key <= end);
+    if (gran === 'mensal') return inRange.map(m => ({ ...m, label: monthLabel(m.key) }));
+    const groups = new Map<string, PayrollMonth[]>();
+    for (const m of inRange) {
+      const y = m.key.slice(0, 4);
+      const g = gran === 'anual' ? y : `${Math.floor((Number(m.key.slice(5)) - 1) / 3) + 1}T/${y.slice(2)}`;
+      groups.set(g, [...(groups.get(g) ?? []), m]);
+    }
+    return [...groups.entries()].map(([label, ms]) => ({
+      key: label, label,
+      funcionarios: Math.round(ms.reduce((s, m) => s + m.funcionarios, 0) / ms.length),
+      salarios: ms.reduce((s, m) => s + m.salarios, 0),
+      empresas: Math.max(...ms.map(m => m.empresas)),
+    }));
+  }, [months, start, end, gran]);
 
   return (
-    <Card className="border-border/70 shadow-sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Evolução de funcionários e salários</CardTitle>
-        <CardDescription>Considera só as empresas com relatório de folha sincronizado.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {loading ? <p className="text-sm text-muted-foreground py-10 text-center">Carregando...</p>
-          : !data.length ? <p className="text-sm text-muted-foreground py-10 text-center">Sincronize a Folha para ver a evolução.</p>
+    <Card className="border-border/70 shadow-sm rounded-2xl">
+      <CardContent className="p-5 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="h-11 w-11 rounded-xl bg-info/10 text-info flex items-center justify-center shrink-0"><BarChart3 className="h-5 w-5" /></div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold leading-tight">Evolução de funcionários e salários</h2>
+              <p className="text-sm text-muted-foreground">Considera só as empresas com relatório de folha sincronizado.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border bg-muted/40 p-1">
+              {(['mensal', 'trimestral', 'anual'] as Gran[]).map(g => (
+                <button key={g} onClick={() => setGran(g)} className={cn('px-4 py-1.5 text-sm rounded-lg capitalize transition-colors', gran === g ? 'bg-sidebar text-sidebar-foreground shadow-sm' : 'text-foreground hover:bg-muted')}>{g}</button>
+              ))}
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="inline-flex items-center gap-2 rounded-xl border bg-card px-4 py-2 text-sm hover:bg-muted/50" disabled={!keys.length}>
+                  <CalendarDays className="h-4 w-4" />{start ? `${monthLabel(start)} – ${monthLabel(end)}` : 'Sem período'}<ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 space-y-3">
+                {[['De', start, setFrom], ['Até', end, setTo]].map(([lab, val, set]: any) => (
+                  <div key={lab} className="space-y-1">
+                    <p className="text-xs text-muted-foreground">{lab}</p>
+                    <Select value={val} onValueChange={set}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>{keys.map(k => <SelectItem key={k} value={k}>{monthLabel(k)}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-1.5 text-sm cursor-pointer">
+            <Checkbox checked={showEmp} onCheckedChange={v => setShowEmp(!!v)} className="border-primary data-[state=checked]:bg-primary" />Funcionários
+          </label>
+          <label className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
+            <Checkbox checked={showSal} onCheckedChange={v => setShowSal(!!v)} className="border-success data-[state=checked]:bg-success data-[state=checked]:text-success-foreground" />Salários (R$)
+          </label>
+        </div>
+
+        {loading ? <p className="text-sm text-muted-foreground py-16 text-center">Carregando...</p>
+          : !data.length ? <p className="text-sm text-muted-foreground py-16 text-center">Sincronize a Folha para ver a evolução.</p>
           : (
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data} margin={{ top: 24, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-                  <YAxis yAxisId="q" tick={{ fontSize: 12 }} allowDecimals={false} />
-                  <YAxis yAxisId="v" orientation="right" tick={{ fontSize: 12 }} tickFormatter={brlCompact} width={70} />
-                  <Tooltip
-                    formatter={(v: number, name: string) => name === 'Salários' ? brl(v) : v.toLocaleString('pt-BR')}
-                    labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`}
-                  />
-                  <Legend />
-                  <Bar yAxisId="q" dataKey="funcionarios" name="Funcionários" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="funcionarios" position="top" fontSize={11} className="fill-foreground" formatter={(v: number) => v.toLocaleString('pt-BR')} />
-                  </Bar>
-                  <Line yAxisId="v" dataKey="salarios" name="Salários" stroke="hsl(var(--success))" strokeWidth={2} dot={{ r: 3 }}>
-                    <LabelList dataKey="salarios" position="top" offset={10} fontSize={11} fill="hsl(var(--success))" formatter={(v: number) => brlCompact(v)} />
-                  </Line>
-                </ComposedChart>
-              </ResponsiveContainer>
+            <div>
+              <div className="flex justify-between text-xs px-1"><span className="text-muted-foreground">{showEmp && 'Funcionários'}</span><span className="text-success">{showSal && 'Salários'}</span></div>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={data} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+                    <defs>
+                      <linearGradient id="pe-bar" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.75} />
+                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                      </linearGradient>
+                      <linearGradient id="pe-area" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.18} />
+                        <stop offset="100%" stopColor="hsl(var(--success))" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} />
+                    <YAxis yAxisId="q" hide={!showEmp} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} domain={[0, (max: number) => Math.ceil((max * 1.25) / 50) * 50]} />
+                    <YAxis yAxisId="v" hide={!showSal} orientation="right" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={brlMil} width={84} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} domain={[0, (max: number) => max * 1.15]} />
+                    <Tooltip
+                      formatter={(v: number, name: string) => name === 'Salários (R$)' ? brl(v) : v.toLocaleString('pt-BR')}
+                      labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`}
+                    />
+                    {showEmp && (
+                      <Bar yAxisId="q" dataKey="funcionarios" name="Funcionários" fill="url(#pe-bar)" radius={[4, 4, 0, 0]} maxBarSize={110}>
+                        <LabelList dataKey="funcionarios" position="top" fontSize={13} fontWeight={700} style={{ fill: 'hsl(var(--foreground))' }} formatter={(v: number) => v.toLocaleString('pt-BR')} />
+                      </Bar>
+                    )}
+                    {showSal && <Area yAxisId="v" dataKey="salarios" stroke="none" fill="url(#pe-area)" legendType="none" tooltipType="none" />}
+                    {showSal && (
+                      <Line yAxisId="v" dataKey="salarios" name="Salários (R$)" stroke="hsl(var(--success))" strokeWidth={2.5}
+                        dot={{ r: 5, fill: 'hsl(var(--card))', stroke: 'hsl(var(--success))', strokeWidth: 2.5 }} activeDot={{ r: 6 }}>
+                        <LabelList dataKey="salarios" content={<SalaryPill />} />
+                      </Line>
+                    )}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center gap-6 pt-2 text-sm">
+                {showEmp && <span className="inline-flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-full bg-primary" />Funcionários</span>}
+                {showSal && <span className="inline-flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-full bg-success" />Salários (R$)</span>}
+              </div>
             </div>
           )}
       </CardContent>
