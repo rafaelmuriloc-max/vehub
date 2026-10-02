@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FileCheck, Loader2, Receipt, FileText, Banknote, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import JSZip from 'jszip';
+import { FileCheck, Loader2, Receipt, FileText, Banknote, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -192,6 +197,9 @@ export default function DctfwebTab() {
               <SelectItem value="GERAL_ANUAL">Geral Anual</SelectItem>
             </SelectContent>
           </Select>
+          <Button onClick={runBulk} disabled={loading || bulk.running || filtered.filter(c => c.document).length === 0}>
+            <Download className="h-4 w-4 mr-1" /> Baixar todas as guias ({filtered.filter(c => c.document).length})
+          </Button>
         </div>
       </div>
 
