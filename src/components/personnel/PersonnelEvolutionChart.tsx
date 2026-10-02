@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, CartesianGrid, LabelList, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -58,9 +58,9 @@ export function PersonnelEvolutionChart({ clientIds }: { clientIds: string[] }) 
         {loading ? <p className="text-sm text-muted-foreground py-10 text-center">Carregando...</p>
           : !data.length ? <p className="text-sm text-muted-foreground py-10 text-center">Sincronize a Folha para ver a evolução.</p>
           : (
-            <div className="h-64">
+            <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <ComposedChart data={data} margin={{ top: 24, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
                   <YAxis yAxisId="q" tick={{ fontSize: 12 }} allowDecimals={false} />
@@ -70,8 +70,12 @@ export function PersonnelEvolutionChart({ clientIds }: { clientIds: string[] }) 
                     labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`}
                   />
                   <Legend />
-                  <Bar yAxisId="q" dataKey="funcionarios" name="Funcionários" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="v" dataKey="salarios" name="Salários" stroke="hsl(var(--success))" strokeWidth={2} dot={{ r: 3 }} />
+                  <Bar yAxisId="q" dataKey="funcionarios" name="Funcionários" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="funcionarios" position="top" fontSize={11} className="fill-foreground" formatter={(v: number) => v.toLocaleString('pt-BR')} />
+                  </Bar>
+                  <Line yAxisId="v" dataKey="salarios" name="Salários" stroke="hsl(var(--success))" strokeWidth={2} dot={{ r: 3 }}>
+                    <LabelList dataKey="salarios" position="top" offset={10} fontSize={11} fill="hsl(var(--success))" formatter={(v: number) => brlCompact(v)} />
+                  </Line>
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
