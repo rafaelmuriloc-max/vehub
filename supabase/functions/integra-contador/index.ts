@@ -848,7 +848,8 @@ Deno.serve(async (req) => {
         console.log(`[integra-contador] Header autenticar_procurador_token incluído na requisição`);
       }
 
-      return requestWithFetchHttp1(
+      const t0 = Date.now();
+      const res = await requestWithFetchHttp1(
         apiUrl,
         {
           method: "POST",
@@ -859,6 +860,16 @@ Deno.serve(async (req) => {
         apiKeyPem,
         "serpro-api"
       );
+      try {
+        const st = res.status;
+        serviceClient.from("integra_contador_usage").insert({
+          client_id, id_sistema: idSistema, id_servico: idServico, tipo,
+          status_http: st, sucesso: st >= 200 && st < 300,
+          cobrada: st >= 200 && st < 300,
+          duracao_ms: Date.now() - t0,
+        }).then(({ error }: any) => { if (error) console.error("[usage] insert", error.message); });
+      } catch (_) { /* ignore */ }
+      return res;
     }
 
     let apiResponse = await callSerproApi(bearerToken, jwtToken);
