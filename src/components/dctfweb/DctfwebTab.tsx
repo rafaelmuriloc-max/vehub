@@ -362,7 +362,8 @@ export default function DctfwebTab() {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
