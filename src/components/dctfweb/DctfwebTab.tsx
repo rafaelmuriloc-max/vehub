@@ -50,10 +50,31 @@ export default function DctfwebTab() {
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState<{ id: string; action: Action } | null>(null);
 
+  // Só empresas com a obrigação "Darf Previdenciário" concluída na competência escolhida.
   useEffect(() => {
-    supabase.from('clients').select('id, company_name, sci_code, document').eq('status', 'active').order('company_name')
-      .then(({ data }) => { setClients((data as Client[]) || []); setLoading(false); });
-  }, []);
+    let cancel = false;
+    setLoading(true);
+    setPage(0);
+    (async () => {
+      const refMonth = `${ano}-${categoria === 'GERAL_MENSAL' ? mes : '12'}-01`;
+      const { data: obs } = await supabase.from('obligations').select('id').ilike('name', '%darf previd%');
+      const ids = (obs || []).map((o: any) => o.id);
+      if (ids.length === 0) { if (!cancel) { setClients([]); setLoading(false); } return; }
+      const { data } = await supabase.from('obligation_instances')
+        .select('client_id, clients(id, company_name, sci_code, document, status)')
+        .in('obligation_id', ids).eq('status', 'done').is('deleted_at', null).eq('reference_month', refMonth);
+      const map = new Map<string, Client>();
+      for (const r of (data || []) as any[]) {
+        const c = r.clients;
+        if (c && c.status === 'active') map.set(c.id, { id: c.id, company_name: c.company_name, sci_code: c.sci_code, document: c.document });
+      }
+      if (!cancel) {
+        setClients([...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name)));
+        setLoading(false);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [ano, mes, categoria]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
