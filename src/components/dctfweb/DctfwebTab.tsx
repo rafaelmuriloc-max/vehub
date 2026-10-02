@@ -238,6 +238,30 @@ export default function DctfwebTab() {
           <Button size="icon" variant="outline" disabled={page + 1 >= pages} onClick={() => setPage(p => p + 1)} aria-label="Próxima página"><ChevronRight className="h-4 w-4" /></Button>
         </div>
       </div>
+      <Dialog open={bulk.open} onOpenChange={o => { if (!bulk.running) setBulk(b => ({ ...b, open: o })); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Guias DCTFWeb em lote</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Progress value={bulk.total ? (bulk.done / bulk.total) * 100 : 0} />
+            <p className="text-sm text-muted-foreground">
+              {bulk.done} de {bulk.total} • {bulk.ok} guias geradas • {bulk.fails.length} falhas
+              {!bulk.running && bulk.ok > 0 && ' — arquivo ZIP baixado.'}
+            </p>
+            {bulk.fails.length > 0 && (
+              <div className="max-h-60 overflow-y-auto rounded-md border divide-y text-xs">
+                {bulk.fails.map((f, i) => (
+                  <div key={i} className="p-2"><p className="font-medium">{f.name}</p><p className="text-muted-foreground">{f.msg}</p></div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            {bulk.running
+              ? <Button variant="outline" onClick={() => { cancelRef.current = true; }}>Cancelar</Button>
+              : <Button onClick={() => setBulk(b => ({ ...b, open: false }))}>Fechar</Button>}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
