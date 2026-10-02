@@ -388,6 +388,33 @@ export default function Personnel() {
     );
   }, [activeClients, activeEmployees, employeesByClient, search]);
 
+  // Números dos cartões e do gráfico seguindo a busca
+  const overview = useMemo(() => {
+    const ids = new Set(filteredClients.map(c => c.id));
+    const scoped = scopedEmployees.filter(e => ids.has(e.client_id));
+    const active = scoped.filter(e => e.status === 'active');
+    const activeIdSet = new Set(active.map(e => e.id));
+    const isTrial = (e: Employee, fn: (left: number) => boolean) =>
+      [e.trial_end_1, e.trial_end_2].some(d => { const l = daysUntil(d); return l !== null && fn(l); });
+    let vSoon = 0, vOver = 0;
+    for (const p of vacations) {
+      if (!activeIdSet.has(p.employee_id)) continue;
+      const l = daysUntil(vacationDue(p));
+      if (l === null) continue;
+      if (l < 0) vOver++; else if (l <= 60) vSoon++;
+    }
+    return {
+      ids: [...ids],
+      activeCount: active.length,
+      terminatedCount: scoped.length - active.length,
+      companies: new Set(active.map(e => e.client_id)).size,
+      salaries: active.reduce((s, e) => s + (e.salary ?? 0), 0),
+      trialSoon: active.filter(e => isTrial(e, l => l >= 0 && l <= 15)).length,
+      trialOverdue: active.filter(e => isTrial(e, l => l < 0)).length,
+      vSoon, vOver,
+    };
+  }, [filteredClients, scopedEmployees, vacations]);
+
   const totalPages = pageSize === 'all'
     ? 1
     : Math.max(1, Math.ceil(filteredClients.length / pageSize));
@@ -739,15 +766,17 @@ export default function Personnel() {
       </header>
 
       <PersonnelOverview
-        clientIds={activeClients.map(c => c.id)}
-        activeCount={activeEmployees.length}
-        terminatedCount={scopedEmployees.length - activeEmployees.length}
-        companiesWithActive={clientsWithActive}
-        totalSalaries={totalSalaries}
-        trialSoon={trialSoon}
-        trialOverdue={trialOverdue}
-        vacationSoon={vacationAlerts.count}
-        vacationOverdue={vacationAlerts.overdue}
+        clientIds={overview.ids}
+        activeCount={overview.activeCount}
+        terminatedCount={overview.terminatedCount}
+        companiesWithActive={overview.companies}
+        totalSalaries={overview.salaries}
+        trialSoon={overview.trialSoon}
+        trialOverdue={overview.trialOverdue}
+        vacationSoon={overview.vSoon}
+        vacationOverdue={overview.vOver}
+        showTerminated={statusFilter === 'terminated'}
+        filterNote={search.trim() ? `Filtrado: ${overview.ids.length} empresa(s)` : undefined}
         onTrial={() => setTrialDialogOpen(true)}
         onVacation={() => setVacationDialogOpen(true)}
       />

@@ -24,6 +24,8 @@ type Props = {
   vacationOverdue: number;
   onTrial: () => void;
   onVacation: () => void;
+  showTerminated?: boolean;
+  filterNote?: string;
 };
 
 const pct = (a?: number, b?: number) => (a == null || !b ? null : ((a - b) / b) * 100);
@@ -80,9 +82,9 @@ export function PersonnelOverview(p: Props) {
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Kpi title="Funcionários ativos" value={p.activeCount.toLocaleString('pt-BR')} delta={pct(last?.funcionarios, prev?.funcionarios)}
+        <Kpi title={p.showTerminated ? 'Funcionários desligados' : 'Funcionários ativos'} value={(p.showTerminated ? p.terminatedCount : p.activeCount).toLocaleString('pt-BR')} delta={p.showTerminated ? null : pct(last?.funcionarios, prev?.funcionarios)}
           Icon={Users} tone="primary" bars={empBars}
-          footer={<span className="flex flex-wrap gap-x-4 gap-y-1"><span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />{p.companiesWithActive} empresas</span><span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />{p.terminatedCount} desligados</span></span>} />
+          footer={<span className="flex flex-wrap gap-x-4 gap-y-1"><span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />{p.companiesWithActive} empresas</span><span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />{p.showTerminated ? `${p.activeCount} ativos` : `${p.terminatedCount} desligados`}</span></span>} />
         <Kpi title="Total de salários" value={brlMil(p.totalSalaries)} delta={pct(last?.salarios, prev?.salarios)}
           Icon={Wallet} tone="success" bars={salBars} footer={`Folha dos ${p.activeCount.toLocaleString('pt-BR')} funcionários`} />
         <Kpi title="Experiências a vencer" badge="15 dias" value={p.trialSoon.toLocaleString('pt-BR')} delta={null}
@@ -90,6 +92,7 @@ export function PersonnelOverview(p: Props) {
         <Kpi title="Férias a vencer" badge="60 dias" value={p.vacationSoon.toLocaleString('pt-BR')} delta={null}
           Icon={Palmtree} tone="warning" bars={[2, 4, 3, 5, 4, 7, 6, 9]} footer={`${p.vacationOverdue} período(s) já vencidos`} onClick={p.onVacation} />
       </div>
+      {p.filterNote && <p className="text-xs text-muted-foreground -mb-2">{p.filterNote}</p>}
       <PersonnelEvolutionChart months={months} loading={loading} />
     </>
   );
