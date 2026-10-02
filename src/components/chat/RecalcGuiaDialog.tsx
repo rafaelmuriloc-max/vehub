@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Download, Send, Calculator } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -10,7 +11,7 @@ interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   clientIds: string[];
-  onSend: (file: File) => void;
+  onSend: (file: File, mensagem: string) => void | Promise<void>;
 }
 
 type Tipo = 'simples' | 'dctfweb';
@@ -37,6 +38,7 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
   const [categoria, setCategoria] = useState('GERAL_MENSAL');
   const [busy, setBusy] = useState(false);
   const [pdf, setPdf] = useState<{ url: string; file: File } | null>(null);
+  const [mensagem, setMensagem] = useState('');
 
   const key = clientIds.join(',');
   useEffect(() => {
@@ -80,6 +82,9 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
       const name = `Guia_${tipo === 'simples' ? 'DAS' : 'DCTFWeb'}_${ano}${mes}_${safeName(client.company_name)}.pdf`;
       const file = new File([arr], name, { type: 'application/pdf' });
       setPdf({ url: URL.createObjectURL(file), file });
+      const comp = tipo === 'simples' || categoria === 'GERAL_MENSAL' ? `${mes}/${ano}` : `${categoria === '13_SALARIO' ? '13º salário ' : 'anual '}${ano}`;
+      const desc = tipo === 'simples' ? 'do Simples Nacional (DAS)' : 'da DCTFWeb (DARF previdenciário)';
+      setMensagem(`Olá! Segue a guia ${desc} da competência ${comp} da empresa ${client.company_name}, recalculada com juros e multa até hoje. Qualquer dúvida, estamos à disposição.`);
     } catch (e) {
       toast({ title: 'Guia indisponível', description: (e as Error).message, variant: 'destructive' });
     } finally { setBusy(false); }
@@ -128,6 +133,9 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
           </Select>
         </div>
         {pdf && <iframe src={pdf.url} title="Guia" className="w-full h-[50dvh] rounded border" />}
+        {pdf && (
+          <Textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={3} placeholder="Mensagem para o cliente (opcional)" />
+        )}
         <DialogFooter className="flex-col sm:flex-row gap-2">
           {pdf ? (
             <>
@@ -135,7 +143,7 @@ export function RecalcGuiaDialog({ open, onOpenChange, clientIds, onSend }: Prop
                 <Download className="h-4 w-4 mr-2" /> Baixar
               </Button>
               <Button variant="outline" onClick={gerar} disabled={busy}>Gerar de novo</Button>
-              <Button onClick={() => { onSend(pdf.file); onOpenChange(false); }}>
+              <Button onClick={() => { onSend(pdf.file, mensagem); onOpenChange(false); }}>
                 <Send className="h-4 w-4 mr-2" /> Enviar no chat
               </Button>
             </>

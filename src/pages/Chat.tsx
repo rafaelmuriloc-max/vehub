@@ -990,7 +990,10 @@ export default function Chat() {
         open={recalcOpen}
         onOpenChange={setRecalcOpen}
         clientIds={(activeConv as any)?.linkedClientIds || []}
-        onSend={(file) => sendMedia(file, 'document')}
+        onSend={async (file, mensagem) => {
+          if (mensagem.trim()) await sendMessage(mensagem.trim());
+          await sendMedia(file, 'document');
+        }}
       />
 
       <AttachFromObligationDialog
