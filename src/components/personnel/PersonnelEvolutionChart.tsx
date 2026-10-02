@@ -1,6 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { BarChart3, CalendarDays, ChevronDown } from 'lucide-react';
+import { Area, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowUp, BarChart3, CalendarDays, ChevronDown, Users, Wallet } from 'lucide-react';
+
+function ChartHeader({ Icon, tone, title, subtitle, delta }: { Icon: LucideIcon; tone: 'primary' | 'success'; title: string; subtitle: string; delta: number | null }) {
+  const up = (delta ?? 0) >= 0;
+  const box = tone === 'primary' ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success';
+  const pill = !up ? 'bg-destructive/10 text-destructive' : box;
+  return (
+    <div className="flex items-start gap-3">
+      <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${box}`}><Icon className="h-6 w-6" /></div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-base font-bold leading-tight">{title}</h3>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      </div>
+      {delta != null && (
+        <div className={`rounded-xl px-3 py-1.5 text-center shrink-0 ${pill}`}>
+          <p className="text-sm font-bold inline-flex items-center gap-1">{up ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}{up ? '+' : ''}{delta.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</p>
+          <p className="text-[11px] text-muted-foreground leading-none">no período</p>
+        </div>
+      )}
+    </div>
+  );
+}
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -81,6 +103,13 @@ export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMo
       empresas: Math.max(...ms.map(m => m.empresas)),
     }));
   }, [months, start, end, gran]);
+  const deltaOf = (k: 'funcionarios' | 'salarios') => {
+    if (data.length < 2) return null;
+    const a = data[0][k], b = data[data.length - 1][k];
+    return a ? ((b - a) / a) * 100 : null;
+  };
+  const salMax = Math.max(0, ...data.map(d => d.salarios));
+  const salTop = Math.max(250_000, Math.ceil((salMax * 1.1) / 250_000) * 250_000);
 
   return (
     <Card className="border-border/70 shadow-sm rounded-2xl">
@@ -124,50 +153,69 @@ export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMo
           : !data.length ? <p className="text-sm text-muted-foreground py-16 text-center">Sincronize a Folha para ver a evolução.</p>
           : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="rounded-xl border p-4">
-                <p className="text-sm font-semibold mb-2 inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-primary" />Funcionários</p>
-                <div className="h-72">
+              <div className="rounded-2xl border border-border/70 p-5 shadow-sm">
+                <ChartHeader Icon={Users} tone="primary" title="Funcionários" subtitle="Evolução do total de funcionários ativos." delta={deltaOf('funcionarios')} />
+                <div className="h-72 mt-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+                    <BarChart data={data} margin={{ top: 30, right: 8, left: -8, bottom: 0 }} barCategoryGap="30%">
                       <defs>
                         <linearGradient id="pe-bar" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.75} />
-                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} />
-                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.ceil((max * 1.2) / 10) * 10]} />
-                      <Tooltip formatter={(v: number) => v.toLocaleString('pt-BR')} labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`} />
-                      <Bar dataKey="funcionarios" name="Funcionários" fill="url(#pe-bar)" radius={[4, 4, 0, 0]} maxBarSize={80}>
-                        <LabelList dataKey="funcionarios" position="top" fontSize={13} fontWeight={700} style={{ fill: 'hsl(var(--foreground))' }} formatter={(v: number) => v.toLocaleString('pt-BR')} />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              <div className="rounded-xl border p-4">
-                <p className="text-sm font-semibold mb-2 inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-success" />Salários (R$)</p>
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} />
-                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={brlMil} width={84} axisLine={false} tickLine={false} domain={[0, (max: number) => max * 1.1]} />
-                      <Tooltip formatter={(v: number) => brl(v)} labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`} />
-                      <Bar dataKey="salarios" name="Salários (R$)" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} maxBarSize={80}>
-                        <LabelList dataKey="salarios" content={(props: any) => {
-                          const { x, y, width, height, value } = props;
-                          if (value == null || Number(height) < 22) return null;
-                          return (
-                            <text x={Number(x) + Number(width) / 2} y={Number(y) + Number(height) - 10} textAnchor="middle"
-                              fontSize={11} fontWeight={700} fill="hsl(var(--primary-foreground))">{brlMil(Number(value))}</text>
-                          );
+                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false}
+                        domain={[(min: number) => Math.max(0, Math.floor((min * 0.8) / 20) * 20), (max: number) => Math.ceil((max * 1.1) / 20) * 20]} />
+                      <Tooltip cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} formatter={(v: number) => v.toLocaleString('pt-BR')} labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`} />
+                      <Bar dataKey="funcionarios" name="Funcionários ativos" fill="url(#pe-bar)" radius={[8, 8, 0, 0]} maxBarSize={56}>
+                        <LabelList dataKey="funcionarios" content={(props: any) => {
+                          const { x, y, width, value } = props;
+                          if (value == null) return null;
+                          const t = Number(value).toLocaleString('pt-BR');
+                          const w = t.length * 8 + 16; const cx = Number(x) + Number(width) / 2;
+                          return <g><rect x={cx - w / 2} y={Number(y) - 28} width={w} height={22} rx={6} fill="hsl(var(--primary) / 0.12)" />
+                            <text x={cx} y={Number(y) - 12} textAnchor="middle" fontSize={13} fontWeight={700} fill="hsl(var(--primary))">{t}</text></g>;
                         }} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+                <p className="mt-2 inline-flex items-center gap-2 text-xs text-muted-foreground"><span className="h-3 w-3 rounded-full bg-primary" />Funcionários ativos</p>
+              </div>
+              <div className="rounded-2xl border border-border/70 p-5 shadow-sm">
+                <ChartHeader Icon={Wallet} tone="success" title="Salários (R$)" subtitle="Evolução do total da folha de pagamento." delta={deltaOf('salarios')} />
+                <div className="h-72 mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={data} margin={{ top: 30, right: 24, left: 8, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="pe-area" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="hsl(var(--success))" stopOpacity={0.04} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} padding={{ left: 24, right: 24 }} />
+                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} width={90} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false}
+                        tickFormatter={(v: number) => v === 0 ? 'R$ 0' : `R$ ${(v / 1000).toLocaleString('pt-BR')} mil`}
+                        domain={[0, salTop]} ticks={[0, 1, 2, 3, 4].map(i => (salTop / 4) * i)} />
+                      <Tooltip formatter={(v: number) => brl(v)} labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`} />
+                      <Area dataKey="salarios" stroke="none" fill="url(#pe-area)" tooltipType="none" legendType="none" />
+                      <Line dataKey="salarios" name="Total da folha" stroke="hsl(var(--success))" strokeWidth={3} type="monotone"
+                        dot={{ r: 5, fill: 'hsl(var(--card))', stroke: 'hsl(var(--success))', strokeWidth: 2.5 }} activeDot={{ r: 6 }}>
+                        <LabelList dataKey="salarios" content={(props: any) => {
+                          const { x, y, value } = props;
+                          if (value == null) return null;
+                          const t = brlMil(Number(value)); const w = t.length * 6.4 + 14;
+                          return <g><rect x={Number(x) - w / 2} y={Number(y) - 32} width={w} height={20} rx={6} fill="hsl(var(--success) / 0.14)" />
+                            <text x={Number(x)} y={Number(y) - 18} textAnchor="middle" fontSize={11} fontWeight={700} fill="hsl(var(--success))">{t}</text></g>;
+                        }} />
+                      </Line>
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="mt-2 inline-flex items-center gap-2 text-xs text-muted-foreground"><span className="h-3 w-3 rounded-full bg-success" />Total da folha de pagamento (R$)</p>
               </div>
             </div>
           )}
