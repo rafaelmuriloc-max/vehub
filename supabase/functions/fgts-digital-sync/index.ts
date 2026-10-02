@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const { data: u } = await userClient.auth.getUser();
     if (!u?.user) return json({ error: "Não autenticado" }, 401);
 
-    const token = Deno.env.get("INFOSIMPLES_API_TOKEN");
+    const token = (Deno.env.get("INFOSIMPLES_API_TOKEN") ?? "").trim().replace(/\s*visibility$/i, "").trim();
     if (!token) return json({ error: "Token da Infosimples não configurado." }, 400);
     const encKey = Deno.env.get("INFOSIMPLES_ENCRYPTION_KEY");
     if (!encKey) return json({ error: "Chave de criptografia da Infosimples não configurada." }, 400);
@@ -61,25 +61,38 @@ Deno.serve(async (req) => {
     const competencia = `${periodo.slice(3)}-${periodo.slice(0, 2)}`;
 
     const svc = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: client } = await svc.from("clients").select("id, document").eq("id", clientId).maybeSingle();
+    const { data: client } = await svc.from("clients")
+      .select("id, document, digital_certificate_url, digital_certificate_password, digital_certificate_expiry")
+      .eq("id", clientId).maybeSingle();
     if (!client?.document) return json({ error: "Empresa sem CNPJ." }, 400);
-    const { data: company } = await svc.from("company_settings")
-      .select("digital_certificate_url, digital_certificate_password").limit(1).maybeSingle();
-    if (!company?.digital_certificate_url || !company?.digital_certificate_password) {
-      return json({ error: "Certificado do escritório não configurado." }, 400);
+    const cnpj = String(client.document).replace(/\D/g, "");
+    const skip = async (situacao: string, reason: string) => {
+      await svc.from("fgts_digital_guias").upsert([{ client_id: clientId, competencia, numero_guia: "", tipo: null,
+        situacao, data_emissao: null, data_vencimento: null, data_pagamento: null, valor_total: null,
+        guia_pdf_url: null, raw: null, consultado_em: new Date().toISOString() }], { onConflict: "client_id,competencia,numero_guia" });
+      console.log(`[fgts-digital-sync] ${cnpj} pulada: ${reason}`);
+      return json({ success: true, skipped: reason, count: 0 });
+    };
+    if (!client.digital_certificate_url || !client.digital_certificate_password) return await skip("Sem certificado", "sem_certificado");
+    if (client.digital_certificate_expiry && new Date(client.digital_certificate_expiry) < new Date(new Date().toDateString())) {
+      return await skip("Certificado vencido", "certificado_vencido");
     }
-    const { data: file, error: fErr } = await svc.storage.from("certificates").download(company.digital_certificate_url);
-    if (fErr || !file) return json({ error: "Erro ao baixar certificado." }, 500);
-    const cert = toBase64(new Uint8Array(await file.arrayBuffer()));
+    const { data: file, error: fErr } = await svc.storage.from("certificates").download(client.digital_certificate_url);
+    if (fErr || !file) {
+      console.error(`[fgts-digital-sync] ${cnpj} erro ao baixar certificado`, fErr?.message);
+      return json({ error: "Erro ao baixar o certificado da empresa." }, 500);
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    console.log(`[fgts-digital-sync] ${cnpj} periodo ${periodo} certificado ${bytes.length} bytes`);
+    const cert = toBase64(bytes);
 
     const encCert = await aesBridge(cert, encKey);
-    const encPass = await aesBridge(company.digital_certificate_password, encKey);
+    const encPass = await aesBridge(client.digital_certificate_password, encKey);
     const guias: any[] = [];
     let lastRes: any = null;
     for (let pagina = 1; pagina <= 10; pagina++) {
       const form = new URLSearchParams({
         token, timeout: "300", pkcs12_cert: encCert, pkcs12_pass: encPass,
-        representado: String(client.document).replace(/\D/g, ""),
         periodo: periodo.slice(3) + periodo.slice(0, 2), pagina: String(pagina),
       });
       const r = await fetch("https://api.infosimples.com/api/v2/consultas/fgts/guia", { method: "POST", body: form });
