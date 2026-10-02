@@ -65,28 +65,38 @@ export default function FgtsDigital() {
     if (d.getFullYear() < 2024 || d.getFullYear() > new Date().getFullYear()) return;
     setComp(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
-  const sync = async (clientId: string) => {
+  const sync = async (clientId: string): Promise<string | undefined> => {
     const { data, error } = await supabase.functions.invoke("fgts-digital-sync", { body: { client_id: clientId, periodo } });
     if (error || data?.error) throw new Error(data?.error || error?.message);
+    return data?.skipped;
   };
   const syncOne = async (id: string) => {
     setBusy(id);
-    try { await sync(id); toast.success("FGTS consultado"); } catch (e: any) { toast.error(e.message); }
+    try {
+      const s = await sync(id);
+      if (s === "sem_certificado") toast.warning("Empresa sem certificado cadastrado");
+      else if (s === "certificado_vencido") toast.warning("Certificado da empresa vencido");
+      else toast.success("FGTS consultado");
+    } catch (e: any) { toast.error(e.message); }
     setBusy(null); load();
   };
   const syncAll = async () => {
     const list = [...new Set(rows.map((r) => r.client.id))];
     if (!list.length) { toast.warning("Nenhuma empresa para consultar."); return; }
-    let fails = 0; let firstErr = "";
+    let fails = 0; let semCert = 0; let vencido = 0; let firstErr = "";
     setProgress(0);
     for (let i = 0; i < list.length; i++) {
-      try { await sync(list[i]); } catch (e: any) { fails++; if (!firstErr) firstErr = e.message; }
+      try {
+        const s = await sync(list[i]);
+        if (s === "sem_certificado") semCert++; else if (s === "certificado_vencido") vencido++;
+      } catch (e: any) { fails++; if (!firstErr) firstErr = e.message; }
       setProgress(Math.round(((i + 1) / list.length) * 100));
     }
     setProgress(null);
-    const ok = list.length - fails;
-    if (fails) toast.error(`${ok} consultadas, ${fails} com erro. Primeiro erro: ${firstErr}`, { duration: 15000 });
-    else toast.success(`${ok} empresas consultadas`);
+    const ok = list.length - fails - semCert - vencido;
+    const resumo = `${ok} consultadas, ${semCert} sem certificado, ${vencido} com certificado vencido, ${fails} com erro`;
+    if (fails) toast.error(`${resumo}. Primeiro erro: ${firstErr}`, { duration: 15000 });
+    else toast.success(resumo, { duration: 10000 });
     load();
   };
 

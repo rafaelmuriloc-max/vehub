@@ -99,8 +99,11 @@ Deno.serve(async (req) => {
       const res = await r.json().catch(() => ({}));
       lastRes = res;
       if (res.code === 612) break;
+      console.log(`[fgts-digital-sync] ${cnpj} pagina ${pagina} code ${res.code} ${res.code_message ?? ""}`);
       if (res.code !== 200) {
-        return json({ error: res.code_message || `Erro Infosimples (${res.code ?? r.status})`, errors: res.errors, code: res.code });
+        console.error(`[fgts-digital-sync] ${cnpj} erro Infosimples`, JSON.stringify(res.errors ?? []));
+        const detail = Array.isArray(res.errors) && res.errors.length ? ` — ${res.errors.join("; ")}` : "";
+        return json({ error: (res.code_message || `Erro Infosimples (${res.code ?? r.status})`) + detail, errors: res.errors, code: res.code });
       }
       const d = res.data?.[0] ?? {};
       guias.push(...(d.guias ?? []));
