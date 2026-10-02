@@ -68,19 +68,45 @@ Deno.serve(async (req) => {
     const venc = categoria === "13_SALARIO" ? new Date(Date.UTC(ano, 11, 20)) : new Date(Date.UTC(ano, mes, 20));
     const fimBusca = new Date(Date.UTC(ano, mes + 3, 0)).toISOString().slice(0, 10);
 
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/integra-contador`, {
+    const callIC = (payload: Record<string, unknown>) => fetch(`${SUPABASE_URL}/functions/v1/integra-contador`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}`, apikey: SERVICE_KEY },
-      body: JSON.stringify({
-        client_id: clientId, idSistema: "PAGTOWEB", idServico: "PAGAMENTOS71", tipo: "Consultar",
-        dados: JSON.stringify({
-          intervaloDataArrecadacao: { dataInicial: competencia, dataFinal: fimBusca },
-          primeiroDaPagina: 0, tamanhoDaPagina: 100,
-        }),
+      body: JSON.stringify({ client_id: clientId, ...payload }),
+    }).then((x) => x.json()).catch(() => null);
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const now = new Date().toISOString();
+
+    // 1) Verifica se a DCTFWeb foi transmitida (recibo de entrega).
+    const dadosRec: Record<string, unknown> = { categoria, anoPA: String(ano) };
+    if (categoria === "GERAL_MENSAL") dadosRec.mesPA = String(mes).padStart(2, "0");
+    const rec = await callIC({ idSistema: "DCTFWEB", idServico: "CONSRECIBO32", tipo: "Consultar", dados: JSON.stringify(dadosRec) });
+    const recMsgs: string = (rec?.data?.mensagens || rec?.mensagens || []).map((m: any) => `${m.codigo ?? ""} ${m.texto ?? ""}`).join("; ");
+    const recDados = rec?.data?.dados ?? rec?.dados;
+    const hasDoc = typeof recDados === "string" ? recDados.length > 50 : !!recDados && Object.keys(recDados).length > 0;
+    console.log(`[dctfweb-pag] recibo ${clientId} ${ym} ok=${rec?.success} doc=${hasDoc} msgs=${recMsgs.slice(0, 500)}`);
+    let enviada: boolean | null = null;
+    if (rec && rec.success !== false && hasDoc) enviada = true;
+    else if (/n[ãa]o (foi )?(encontrad|localizad|existe|h[áa])|inexist|nenhum|sem declara/i.test(recMsgs)) enviada = false;
+
+    if (enviada !== true) {
+      const row = {
+        client_id: clientId, competencia, categoria, status: "aberto", valor_pago: null, data_pagamento: null,
+        enviada, enviada_em: null, consultado_em: now,
+        mensagem: enviada === false ? null : (recMsgs || rec?.error || "Falha ao consultar o recibo"),
+      };
+      const { error } = await admin.from("dctfweb_competencias").upsert(row, { onConflict: "client_id,competencia,categoria" });
+      if (error) throw error;
+      return json({ success: true, ...row });
+    }
+
+    // 2) Enviada: consulta pagamentos.
+    const r = await callIC({
+      idSistema: "PAGTOWEB", idServico: "PAGAMENTOS71", tipo: "Consultar",
+      dados: JSON.stringify({
+        intervaloDataArrecadacao: { dataInicial: competencia, dataFinal: fimBusca },
+        primeiroDaPagina: 0, tamanhoDaPagina: 100,
       }),
     });
-    const r = await res.json().catch(() => null);
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
     let status = "aberto", valor: number | null = null, data: string | null = null, mensagem: string | null = null;
     if (!r || r.success === false) {
@@ -109,7 +135,7 @@ Deno.serve(async (req) => {
     }
     if (status !== "pago" && venc.getTime() < Date.now()) status = "vencido";
 
-    const row = { client_id: clientId, competencia, categoria, status, valor_pago: status === "pago" ? valor : null, data_pagamento: status === "pago" ? data : null, mensagem };
+    const row = { client_id: clientId, competencia, categoria, status, valor_pago: status === "pago" ? valor : null, data_pagamento: status === "pago" ? data : null, mensagem, enviada: true, enviada_em: now, consultado_em: now };
     const { error } = await admin.from("dctfweb_competencias").upsert(row, { onConflict: "client_id,competencia,categoria" });
     if (error) throw error;
     return json({ success: true, ...row });

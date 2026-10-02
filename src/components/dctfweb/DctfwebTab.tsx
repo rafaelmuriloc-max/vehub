@@ -16,7 +16,8 @@ import { formatClientLabel } from '@/lib/utils';
 
 type Client = { id: string; company_name: string; sci_code: string | null; document: string | null };
 type Action = 'recibo' | 'declaracao' | 'guia';
-type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null };
+type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null; enviada?: boolean | null };
+type Filter = 'all' | 'enviada' | 'nao_enviada' | 'pago' | 'aberto';
 
 const ACTIONS: Record<Action, { label: string; idServico: string; tipo: string; icon: any }> = {
   recibo: { label: 'Recibo', idServico: 'CONSRECIBO32', tipo: 'Consultar', icon: Receipt },
@@ -58,23 +59,27 @@ export default function DctfwebTab() {
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState<{ id: string; action: Action } | null>(null);
 
-  // Só empresas com a obrigação "Darf Previdenciário" concluída na competência escolhida.
+  // Empresas ativas com obrigação de Folha de Pagamento Mensal ou Folha Pró-labore.
   useEffect(() => {
     let cancel = false;
     setLoading(true);
     setPage(0);
     (async () => {
       const refMonth = `${ano}-${categoria === 'GERAL_MENSAL' ? mes : '12'}-01`;
-      const { data: obs } = await supabase.from('obligations').select('id').ilike('name', '%darf previd%');
+      const { data: obs } = await supabase.from('obligations').select('id, name')
+        .or('name.ilike.%folha de pagamento%,name.ilike.%folha pr%labore%');
       const ids = (obs || []).map((o: any) => o.id);
       if (ids.length === 0) { if (!cancel) { setClients([]); setLoading(false); } return; }
-      const { data } = await supabase.from('obligation_instances')
-        .select('client_id, clients(id, company_name, sci_code, document, status)')
-        .in('obligation_id', ids).eq('status', 'done').is('deleted_at', null).eq('reference_month', refMonth);
       const map = new Map<string, Client>();
-      for (const r of (data || []) as any[]) {
-        const c = r.clients;
-        if (c && c.status === 'active') map.set(c.id, { id: c.id, company_name: c.company_name, sci_code: c.sci_code, document: c.document });
+      const add = (c: any) => { if (c && c.status === 'active') map.set(c.id, { id: c.id, company_name: c.company_name, sci_code: c.sci_code, document: c.document }); };
+      const { data: links } = await supabase.from('client_department_obligations')
+        .select('client_id, clients(id, company_name, sci_code, document, status)').in('obligation_id', ids);
+      for (const r of (links || []) as any[]) add(r.clients);
+      if (map.size === 0) {
+        const { data } = await supabase.from('obligation_instances')
+          .select('client_id, clients(id, company_name, sci_code, document, status)')
+          .in('obligation_id', ids).is('deleted_at', null).eq('reference_month', refMonth);
+        for (const r of (data || []) as any[]) add(r.clients);
       }
       if (!cancel) {
         setClients([...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name)));
@@ -85,13 +90,13 @@ export default function DctfwebTab() {
   }, [ano, mes, categoria]);
 
   const [pays, setPays] = useState<Record<string, Pay>>({});
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pago' | 'aberto'>('all');
+  const [statusFilter, setStatusFilter] = useState<Filter>('all');
   useEffect(() => {
     let cancel = false;
     (async () => {
       const comp = `${ano}-${categoria === 'GERAL_MENSAL' ? mes : '12'}-01`;
       const { data } = await (supabase as any).from('dctfweb_competencias')
-        .select('client_id, status, valor_pago, data_pagamento, mensagem').eq('competencia', comp).eq('categoria', categoria);
+        .select('client_id, status, valor_pago, data_pagamento, mensagem, enviada').eq('competencia', comp).eq('categoria', categoria);
       if (cancel) return;
       const m: Record<string, Pay> = {};
       for (const r of (data || []) as Pay[]) m[r.client_id] = r;
@@ -104,6 +109,10 @@ export default function DctfwebTab() {
     const y = Number(ano), m = Number(mes);
     return categoria === '13_SALARIO' ? new Date(y, 11, 20, 23, 59).getTime() : new Date(y, m, 20, 23, 59).getTime();
   }, [ano, mes, categoria]);
+  const envioOf = (id: string): 'enviada' | 'nao_enviada' | 'nao_consultado' => {
+    const e = pays[id]?.enviada;
+    return e === true ? 'enviada' : e === false ? 'nao_enviada' : 'nao_consultado';
+  };
   const statusOf = (id: string): 'pago' | 'aberto' | 'vencido' => {
     const p = pays[id];
     if (p?.status === 'pago') return 'pago';
@@ -117,18 +126,29 @@ export default function DctfwebTab() {
     return clients.filter(c => c.company_name.toLowerCase().includes(q) || (c.sci_code || '').toLowerCase().includes(q)
       || (c.document || '').toLowerCase().includes(q) || (!!qd && (c.document || '').replace(/\D/g, '').includes(qd)));
   }, [clients, search]);
-  const filtered = useMemo(() => statusFilter === 'all' ? searched
-    : searched.filter(c => statusFilter === 'pago' ? statusOf(c.id) === 'pago' : statusOf(c.id) !== 'pago'),
+  const filtered = useMemo(() => searched.filter(c => {
+    const env = envioOf(c.id);
+    switch (statusFilter) {
+      case 'enviada': return env === 'enviada';
+      case 'nao_enviada': return env !== 'enviada';
+      case 'pago': return env === 'enviada' && statusOf(c.id) === 'pago';
+      case 'aberto': return env === 'enviada' && statusOf(c.id) !== 'pago';
+      default: return true;
+    }
+  }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [searched, statusFilter, pays, dueTime]);
   const stats = useMemo(() => {
-    let pago = 0, aberto = 0, valor = 0;
+    let enviada = 0, nao = 0, pago = 0, aberto = 0, valor = 0;
     for (const c of searched) {
+      if (envioOf(c.id) !== 'enviada') { nao++; continue; }
+      enviada++;
       if (statusOf(c.id) === 'pago') { pago++; valor += pays[c.id]?.valor_pago || 0; } else aberto++;
     }
-    return { total: searched.length, pago, aberto, valor, pct: searched.length ? Math.round((pago / searched.length) * 100) : 0 };
+    return { total: searched.length, enviada, nao, pago, aberto, valor };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searched, pays, dueTime]);
+  const guiaList = filtered.filter(c => c.document && envioOf(c.id) === 'enviada');
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const rows = filtered.slice(page * PAGE, page * PAGE + PAGE);
   useEffect(() => setPage(0), [search, statusFilter]);
@@ -169,7 +189,7 @@ export default function DctfwebTab() {
   const cancelRef = useRef(false);
 
   const runBulk = async () => {
-    const list = filtered.filter(c => c.document);
+    const list = guiaList;
     if (!list.length) return;
     cancelRef.current = false;
     setBulk({ open: true, running: true, done: 0, total: list.length, ok: 0, fails: [] });
@@ -277,22 +297,23 @@ export default function DctfwebTab() {
             <RefreshCw className={cn('h-4 w-4 mr-1', sync.running && 'animate-spin')} />
             {sync.running ? `Cancelar (${sync.done}/${sync.total})` : 'Atualizar situação'}
           </Button>
-          <Button onClick={runBulk} disabled={loading || bulk.running || filtered.filter(c => c.document).length === 0}>
-            <Download className="h-4 w-4 mr-1" /> Baixar todas as guias ({filtered.filter(c => c.document).length})
+          <Button onClick={runBulk} disabled={loading || bulk.running || guiaList.length === 0}>
+            <Download className="h-4 w-4 mr-1" /> Baixar todas as guias ({guiaList.length})
           </Button>
         </div>
       </div>
 
       {sync.running && <Progress value={sync.total ? (sync.done / sync.total) * 100 : 0} />}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {([
-          { key: 'all', label: 'Empresas com guia', value: String(stats.total), sub: 'Darf Previdenciário concluído' },
+          { key: 'all', label: 'Empresas com folha', value: String(stats.total), sub: 'Folha mensal ou pró-labore' },
+          { key: 'enviada', label: 'Enviadas', value: String(stats.enviada), sub: 'Confirmado na Receita' },
+          { key: 'nao_enviada', label: 'Não enviadas', value: String(stats.nao), sub: 'Inclui não consultadas' },
           { key: 'pago', label: 'Guias pagas', value: String(stats.pago), sub: fmtBRL(stats.valor) || '—' },
           { key: 'aberto', label: 'Em aberto / vencidas', value: String(stats.aberto), sub: Date.now() > dueTime ? 'Vencimento já passou' : 'Ainda no prazo' },
-          { key: 'pct', label: '% pagas', value: `${stats.pct}%`, sub: `${stats.pago} de ${stats.total}` },
         ] as const).map(card => {
-          const clickable = card.key !== 'pct';
+          const clickable = true;
           const active = clickable && statusFilter === card.key;
           return (
             <button key={card.key} type="button" disabled={!clickable}
@@ -306,10 +327,10 @@ export default function DctfwebTab() {
         })}
       </div>
 
-      <div className="flex gap-2">
-        {(['all', 'pago', 'aberto'] as const).map(f => (
+      <div className="flex flex-wrap gap-2">
+        {([['all', 'Todas'], ['enviada', 'Enviadas'], ['nao_enviada', 'Não enviadas'], ['pago', 'Pagas'], ['aberto', 'Em aberto']] as const).map(([f, l]) => (
           <Button key={f} size="sm" variant={statusFilter === f ? 'default' : 'outline'} onClick={() => setStatusFilter(f)}>
-            {f === 'all' ? 'Todas' : f === 'pago' ? 'Pagas' : 'Em aberto'}
+            {l}
           </Button>
         ))}
       </div>
@@ -322,13 +343,18 @@ export default function DctfwebTab() {
         ) : rows.map(c => {
           const st = statusOf(c.id);
           const p = pays[c.id];
+          const env = envioOf(c.id);
           return (
           <div key={c.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate font-medium">{formatClientLabel(c as any)}</p>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>{c.document || 'Sem CNPJ'}</span>
-                {st === 'pago' ? (
+                {env === 'nao_enviada' ? (
+                  <Badge variant="outline" className="border-muted-foreground/40">Não enviado</Badge>
+                ) : env === 'nao_consultado' ? (
+                  <Badge variant="outline">Não consultado</Badge>
+                ) : st === 'pago' ? (
                   <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/15">
                     Pago{p?.data_pagamento ? ` em ${fmtDate(p.data_pagamento)}` : ''}{p?.valor_pago ? ` • ${fmtBRL(p.valor_pago)}` : ''}
                   </Badge>
@@ -337,7 +363,6 @@ export default function DctfwebTab() {
                 ) : (
                   <Badge className="bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">Em aberto</Badge>
                 )}
-                {!p && <span>(não consultado)</span>}
                 {p?.mensagem && st !== 'pago' && (
                   <span className="inline-flex items-center gap-1 text-destructive" title={p.mensagem}>
                     <AlertTriangle className="h-3 w-3" /> Aviso da Receita
@@ -350,7 +375,7 @@ export default function DctfwebTab() {
                 disabled={!c.document || statusBusy === c.id || sync.running} onClick={() => refreshClick(c)}>
                 <RefreshCw className={cn('h-4 w-4', statusBusy === c.id && 'animate-spin')} />
               </Button>
-              {(Object.keys(ACTIONS) as Action[]).map(k => {
+              {env === 'enviada' && (Object.keys(ACTIONS) as Action[]).map(k => {
                 const A = ACTIONS[k];
                 const isBusy = busy?.id === c.id && busy.action === k;
                 return (

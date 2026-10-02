@@ -1,0 +1,1 @@
+ALTER TABLE public.dctfweb_competencias ADD COLUMN IF NOT EXISTS enviada boolean, ADD COLUMN IF NOT EXISTS enviada_em timestamptz, ADD COLUMN IF NOT EXISTS consultado_em timestamptz;

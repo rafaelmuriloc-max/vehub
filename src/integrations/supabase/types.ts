@@ -1100,8 +1100,11 @@ export type Database = {
           categoria: string
           client_id: string
           competencia: string
+          consultado_em: string | null
           created_at: string
           data_pagamento: string | null
+          enviada: boolean | null
+          enviada_em: string | null
           id: string
           mensagem: string | null
           status: string
@@ -1112,8 +1115,11 @@ export type Database = {
           categoria?: string
           client_id: string
           competencia: string
+          consultado_em?: string | null
           created_at?: string
           data_pagamento?: string | null
+          enviada?: boolean | null
+          enviada_em?: string | null
           id?: string
           mensagem?: string | null
           status?: string
@@ -1124,8 +1130,11 @@ export type Database = {
           categoria?: string
           client_id?: string
           competencia?: string
+          consultado_em?: string | null
           created_at?: string
           data_pagamento?: string | null
+          enviada?: boolean | null
+          enviada_em?: string | null
           id?: string
           mensagem?: string | null
           status?: string
