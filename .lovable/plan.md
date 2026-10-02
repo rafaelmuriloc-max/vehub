@@ -1,26 +1,15 @@
-# Saúde do Supabase (verificado em 02/10/2026, 01:35 UTC)
+# Guia do MEI no "Recalcular guia" do Chat
 
-## Resultado
+## O que será feito
+- Na janela "Recalcular guia", o campo **Tipo de guia** ganha a opção **MEI (DAS MEI)**.
+- Se a empresa da conversa for MEI, essa opção já vem marcada. As empresas Simples continuam vindo com "Simples Nacional", e as demais com "DCTFWeb".
+- Para o MEI, escolhe-se mês e ano e clica em **Gerar guia**. A Receita emite o DAS MEI atualizado até hoje.
+- A mensagem para o cliente já vem pronta, por exemplo: "Olá! Segue a guia do MEI (DAS MEI) da competência 09/2026 da empresa X, recalculada com juros e multa até hoje...".
+- O envio no chat, o download e a opção "Gerar de novo" funcionam como hoje.
 
-| Serviço | Situação |
-|---|---|
-| Banco de dados (consultas) | Fora do ar: sem resposta em 25s |
-| Login (auth) | Fora do ar: sem resposta em 25s |
-| Pool de conexões | Indisponível |
-| Arquivos (storage) | OK (0,5s) |
-| Funções (edge functions) | Respondendo |
-
-Por isso a tela de login não entra e as listas do sistema não carregam. O problema está no banco do Supabase, não no código do app. Os sinais (pool de conexões indisponível e login travado) apontam para um projeto pausado, reiniciando ou sobrecarregado. A causa exata não foi confirmada, porque só aparece no painel do Supabase.
-
-## O que fazer (no painel do Supabase, feito pelo dono da conta)
-
-1. Abrir https://supabase.com/dashboard/project/ismgjjvarzzfsbdpthot e ver o status do projeto.
-2. Se estiver "Paused", clicar em "Restore project".
-3. Se estiver "Unhealthy" ou com CPU/memória/disco no limite (em Reports e Database > Usage), reiniciar o projeto ("Restart project" em Settings > General) ou aumentar o plano ou o tamanho da instância.
-4. Conferir se a cota do plano não foi estourada (Billing > Usage).
-
-## Depois que voltar
-
-Eu rodo uma nova verificação: tempo das consultas, número de conexões, tamanho do banco, consultas lentas e alertas de segurança. Assim dá para confirmar a causa e evitar que aconteça de novo, por exemplo por rotinas automáticas pesadas que concorrem ao mesmo tempo.
-
-Nenhuma alteração no app é necessária agora.
+## Detalhes técnicos
+- Só `src/components/chat/RecalcGuiaDialog.tsx`.
+- `Tipo = 'simples' | 'dctfweb' | 'mei'`. Tipo inicial definido por `tax_regime` sem diferenciar maiúsculas: "mei" → `mei`; contém "simples" → `simples`; senão `dctfweb`.
+- Para o MEI, a chamada é `integra-contador` com `PGMEI / GERARDASPDF21`, tipo Emitir e `dados = { periodoApuracao: 'AAAAMM' }`. O PDF sai pela mesma busca recursiva já usada.
+- Arquivo `Guia_DAS_MEI_AAAAMM_EMPRESA.pdf`; rótulo do cartão "DAS – MEI".
+- Sem mudança no banco nem nas funções do servidor.
