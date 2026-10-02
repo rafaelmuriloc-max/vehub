@@ -759,6 +759,7 @@ export default function Personnel() {
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/ferias')}><Palmtree className="h-4 w-4 mr-1" />Férias</Button>
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/folha')}><Wallet className="h-4 w-4 mr-1" />Folha</Button>
         <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/dctfweb')}><FileCheck className="h-4 w-4 mr-1" />DCTFWeb</Button>
+        <Button variant="outline" className="h-10 shrink-0 rounded-full" onClick={() => navigate('/fgts')}><FileCheck className="h-4 w-4 mr-1" />FGTS</Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button className="h-10 shrink-0 rounded-full" disabled={syncingAny}>{syncingAny ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FolderSync className="h-4 w-4 mr-1" />}Sincronizar<ChevronDown className="h-4 w-4 ml-1" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => syncNow()} disabled={syncingAny}><FolderSync className="h-4 w-4 mr-2" />Pasta (fichas)</DropdownMenuItem>
           <DropdownMenuItem onClick={() => syncNow(true)} disabled={syncingAny}><CalendarClock className="h-4 w-4 mr-2" />Experiência</DropdownMenuItem>

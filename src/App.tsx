@@ -26,6 +26,7 @@ import Personnel from "./pages/Personnel";
 import Vacations from "./pages/Vacations";
 import Payroll from "./pages/Payroll";
 import Dctfweb from "./pages/Dctfweb";
+import FgtsDigital from "./pages/FgtsDigital";
 import ScheduledMessages from "./pages/ScheduledMessages";
 import NotFound from "./pages/NotFound";
 import DemoShowcase from "./pages/DemoShowcase";
@@ -68,6 +69,7 @@ const App = () => (
               <Route path="/ferias" element={<Vacations />} />
               <Route path="/folha" element={<Payroll />} />
               <Route path="/dctfweb" element={<Dctfweb />} />
+              <Route path="/fgts" element={<FgtsDigital />} />
               <Route path="/scheduled-messages" element={<ScheduledMessages />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/document-types" element={<DocumentTypes />} />
