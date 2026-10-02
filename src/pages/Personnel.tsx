@@ -750,11 +750,6 @@ export default function Personnel() {
           <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9 h-9 bg-card" placeholder="Buscar empresa, CNPJ, SCI ou funcionário..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v as typeof statusFilter)}><SelectTrigger className="h-9 w-full sm:w-36 bg-card"><div className="text-left"><span className="block text-[10px] leading-none text-muted-foreground">Situação</span><SelectValue /></div></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="active">Ativos</SelectItem><SelectItem value="terminated">Desligados</SelectItem></SelectContent></Select>
           <div className="flex items-center gap-2 self-end sm:self-auto">
-          <div className="relative hidden sm:block w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={systemSearch} onChange={e => setSystemSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSystemSearch()} placeholder="Buscar no sistema..." className="h-9 pl-9 pr-12 bg-card" />
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">⌘K</kbd>
-          </div>
           <Button variant="outline" size="icon" className="relative h-9 w-9" onClick={() => navigate('/chat')} aria-label="Notificações">
             <Bell className="h-4 w-4" />{unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />}
           </Button>
