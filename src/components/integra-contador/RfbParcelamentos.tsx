@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,18 +26,18 @@ type Modalidade = {
 
 // Mapeia o serviço de pedidos (PEDIDOSPARC*) para os serviços de
 // "parcelas para impressão" e "emissão de DAS" da mesma modalidade.
-const PARCELAS_SERVICES: Record<string, { idSistema: string; parcelasService: string; emitirService: string } | undefined> = {
-  PEDIDOSPARC163: { idSistema: 'PARCSN',      parcelasService: 'PARCELASPARAGERAR162', emitirService: 'GERARDAS161' },
-  PEDIDOSPARC173: { idSistema: 'PARCSN-ESP',  parcelasService: 'PARCELASPARAGERAR172', emitirService: 'GERARDAS171' },
-  PEDIDOSPARC183: { idSistema: 'PERTSN',      parcelasService: 'PARCELASPARAGERAR182', emitirService: 'GERARDAS181' },
-  PEDIDOSPARC193: { idSistema: 'RELPSN',      parcelasService: 'PARCELASPARAGERAR192', emitirService: 'GERARDAS191' },
-  PEDIDOSPARC203: { idSistema: 'PARCMEI',     parcelasService: 'PARCELASPARAGERAR202', emitirService: 'GERARDAS201' },
-  PEDIDOSPARC213: { idSistema: 'PARCMEI-ESP', parcelasService: 'PARCELASPARAGERAR212', emitirService: 'GERARDAS211' },
-  PEDIDOSPARC223: { idSistema: 'PERTMEI',     parcelasService: 'PARCELASPARAGERAR222', emitirService: 'GERARDAS221' },
-  PEDIDOSPARC233: { idSistema: 'RELPMEI',     parcelasService: 'PARCELASPARAGERAR232', emitirService: 'GERARDAS231' },
+const PARCELAS_SERVICES: Record<string, { idSistema: string; parcelasService: string; emitirService: string; obterService: string } | undefined> = {
+  PEDIDOSPARC163: { idSistema: 'PARCSN',      parcelasService: 'PARCELASPARAGERAR162', emitirService: 'GERARDAS161', obterService: 'OBTERPARC164' },
+  PEDIDOSPARC173: { idSistema: 'PARCSN-ESP',  parcelasService: 'PARCELASPARAGERAR172', emitirService: 'GERARDAS171', obterService: 'OBTERPARC174' },
+  PEDIDOSPARC183: { idSistema: 'PERTSN',      parcelasService: 'PARCELASPARAGERAR182', emitirService: 'GERARDAS181', obterService: 'OBTERPARC184' },
+  PEDIDOSPARC193: { idSistema: 'RELPSN',      parcelasService: 'PARCELASPARAGERAR192', emitirService: 'GERARDAS191', obterService: 'OBTERPARC194' },
+  PEDIDOSPARC203: { idSistema: 'PARCMEI',     parcelasService: 'PARCELASPARAGERAR202', emitirService: 'GERARDAS201', obterService: 'OBTERPARC204' },
+  PEDIDOSPARC213: { idSistema: 'PARCMEI-ESP', parcelasService: 'PARCELASPARAGERAR212', emitirService: 'GERARDAS211', obterService: 'OBTERPARC214' },
+  PEDIDOSPARC223: { idSistema: 'PERTMEI',     parcelasService: 'PARCELASPARAGERAR222', emitirService: 'GERARDAS221', obterService: 'OBTERPARC224' },
+  PEDIDOSPARC233: { idSistema: 'RELPMEI',     parcelasService: 'PARCELASPARAGERAR232', emitirService: 'GERARDAS231', obterService: 'OBTERPARC234' },
 };
 
-const ENCERRADO_REGEX = /encerrad|liquidad|rescind|cancelad/i;
+const ENCERRADO_REGEX = /encerrad|liquidad|rescind|cancelad|sem efeito|n[aã]o validado/i;
 
 const MODALIDADES: Modalidade[] = [
   // Receita Federal — Simples Nacional / MEI
@@ -141,6 +141,28 @@ function normalizeParc(p: any) {
   };
 }
 
+function num(v: any): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+// Extrai valores do OBTERPARC de forma tolerante
+function parseDetalhe(d: any): { valor: number | null; total: number | null; pagas: number | null; parcela: number | null } {
+  if (!d || typeof d !== 'object') return { valor: null, total: null, pagas: null, parcela: null };
+  const c = d.consolidacaoOriginal || d.consolidacao || d;
+  const valor = num(c?.valorTotalConsolidadoDaEntrada ?? c?.valorTotalConsolidado ?? c?.valorConsolidado ?? d?.valorTotalConsolidado);
+  let total = num(c?.quantidadeParcelas ?? d?.quantidadeParcelas ?? d?.qtdParcelas);
+  const parcela = num(c?.parcelaBasica ?? d?.parcelaBasica ?? d?.valorParcela);
+  const pagos = d?.demonstrativoDePagamentos ?? d?.demonstrativoPagamentos ?? d?.pagamentos;
+  const pagas = Array.isArray(pagos) ? pagos.length : null;
+  if (total == null && Array.isArray(d?.alteracoesDeDivida) && d.alteracoesDeDivida.length) {
+    const last = d.alteracoesDeDivida[d.alteracoesDeDivida.length - 1];
+    total = num(last?.quantidadeParcelas ?? last?.parcelasRemanescentes);
+  }
+  return { valor, total, pagas, parcela };
+}
+
 export default function RfbParcelamentos() {
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
@@ -160,6 +182,7 @@ export default function RfbParcelamentos() {
   const [parcelasError, setParcelasError] = useState<string | null>(null);
   const [emittingParcela, setEmittingParcela] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const cancelRef = useRef(false);
   const { user, profile } = useAuth();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [guias, setGuias] = useState<Record<string, GuiaFile>>({});
@@ -238,6 +261,24 @@ export default function RfbParcelamentos() {
 
         for (const p of lista) {
           const n = normalizeParc(p);
+          let detalhe: any = null;
+          const svc = PARCELAS_SERVICES[mod.idServico];
+          if (svc && n.numero && !(n.situacao && ENCERRADO_REGEX.test(n.situacao))) {
+            try {
+              const { data: dd } = await supabase.functions.invoke('integra-contador', {
+                body: { client_id: clientId, idSistema: svc.idSistema, idServico: svc.obterService, tipo: 'Consultar', dados: JSON.stringify({ numeroParcelamento: Number(n.numero) }) },
+              });
+              if (dd?.success) {
+                let d: any = dd?.data?.dados ?? dd?.data;
+                if (typeof d === 'string') { try { d = JSON.parse(d); } catch { d = null; } }
+                detalhe = d;
+                const det = parseDetalhe(d);
+                if (det.valor != null) n.valor_total = det.valor;
+                if (det.total != null) n.parcelas_total = det.total;
+                if (det.pagas != null) n.parcelas_pagas = det.pagas;
+              }
+            } catch (e) { console.warn('OBTERPARC falhou', e); }
+          }
           toInsert.push({
             client_id: clientId,
             modalidade: mod.idServico,
@@ -249,7 +290,7 @@ export default function RfbParcelamentos() {
             valor_total: n.valor_total,
             parcelas_pagas: n.parcelas_pagas,
             parcelas_total: n.parcelas_total,
-            raw_response: p,
+            raw_response: detalhe ? { ...p, detalhe } : p,
             status: 'success',
             consulted_at: new Date().toISOString(),
           });
@@ -442,6 +483,27 @@ export default function RfbParcelamentos() {
     } finally {
       setConsultingId(null);
     }
+  }
+
+  async function handleAtualizarTodas() {
+    const ids = Array.from(new Set(rows.filter(r => r.status === 'success').map(r => r.client_id)));
+    if (!ids.length) { toast({ title: 'Nenhuma empresa com parcelamento para atualizar' }); return; }
+    cancelRef.current = false;
+    setBatchRunning(true);
+    setBatchProgress({ current: 0, total: ids.length });
+    for (let i = 0; i < ids.length; i++) {
+      if (cancelRef.current) break;
+      try { await consultarCliente(ids[i]); }
+      catch {
+        await new Promise(r => setTimeout(r, 3000));
+        try { await consultarCliente(ids[i]); } catch (e) { console.error(e); }
+      }
+      setBatchProgress({ current: i + 1, total: ids.length });
+      if (i < ids.length - 1) await new Promise(r => setTimeout(r, 1500));
+    }
+    setBatchRunning(false);
+    await loadData();
+    toast({ title: cancelRef.current ? 'Atualização cancelada' : 'Parcelamentos atualizados' });
   }
 
   async function handleConsultarSelecionados() {
@@ -753,6 +815,13 @@ export default function RfbParcelamentos() {
               {batchRunning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
               Consultar selecionados ({selected.size})
             </Button>
+            <Button onClick={handleAtualizarTodas} size="sm" variant="secondary" disabled={batchRunning}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${batchRunning ? 'animate-spin' : ''}`} />
+              Atualizar todas
+            </Button>
+            {batchRunning && (
+              <Button size="sm" variant="ghost" onClick={() => { cancelRef.current = true; }}>Cancelar</Button>
+            )}
             <Button onClick={loadData} variant="outline" size="sm" disabled={loading}>
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
@@ -808,7 +877,8 @@ export default function RfbParcelamentos() {
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {badge}
                         {ativos.length > 0 && <span>{ativos.length} ativo(s) • {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>}
-                        {last && <span className="hidden lg:inline">Consulta: {formatDateTime(last)}</span>}
+                        {last && <span>Consultado em {new Date(last).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>}
+                        {last && Date.now() - new Date(last).getTime() > 7 * 86400000 && <Badge variant="outline" className="border-warning text-warning">Desatualizado</Badge>}
                       </div>
                       <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform hidden md:block ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
