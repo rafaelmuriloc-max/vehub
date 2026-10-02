@@ -1878,6 +1878,53 @@ export type Database = {
         }
         Relationships: []
       }
+      integra_contador_usage: {
+        Row: {
+          client_id: string | null
+          cobrada: boolean
+          created_at: string
+          duracao_ms: number | null
+          id: string
+          id_servico: string
+          id_sistema: string
+          status_http: number | null
+          sucesso: boolean
+          tipo: string
+        }
+        Insert: {
+          client_id?: string | null
+          cobrada?: boolean
+          created_at?: string
+          duracao_ms?: number | null
+          id?: string
+          id_servico: string
+          id_sistema: string
+          status_http?: number | null
+          sucesso?: boolean
+          tipo: string
+        }
+        Update: {
+          client_id?: string | null
+          cobrada?: boolean
+          created_at?: string
+          duracao_ms?: number | null
+          id?: string
+          id_servico?: string
+          id_sistema?: string
+          status_http?: number | null
+          sucesso?: boolean
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integra_contador_usage_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           access_key: string | null

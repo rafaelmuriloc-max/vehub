@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Scale, Receipt, Plug, FolderOpen, Calculator, FileCheck, Store } from 'lucide-react';
+import { Scale, Receipt, Plug, FolderOpen, Calculator, FileCheck, Store, Wallet } from 'lucide-react';
 import DctfwebTab from '@/components/dctfweb/DctfwebTab';
 import MeiTab from '@/components/mei/MeiTab';
 import SituacaoFiscalTab from '@/components/integra-contador/SituacaoFiscalTab';
+import UsageCostTab from '@/components/integra-contador/UsageCostTab';
 import Invoices from './Invoices';
 import IntegraContador from './IntegraContador';
 import ParcelamentosTab from '@/components/integra-contador/ParcelamentosTab';
 import SimplesNacionalTab from '@/components/simples-nacional/SimplesNacionalTab';
 import { cn } from '@/lib/utils';
 
-type View = 'situacao' | 'simples' | 'dctfweb' | 'mei' | 'notas' | 'parcelamentos' | 'integra';
+type View = 'situacao' | 'simples' | 'dctfweb' | 'mei' | 'notas' | 'parcelamentos' | 'integra' | 'custos';
 
 const ITEMS: { key: View; label: string; icon: any }[] = [
   { key: 'situacao', label: 'Situação Fiscal', icon: Scale },
@@ -19,6 +20,7 @@ const ITEMS: { key: View; label: string; icon: any }[] = [
   { key: 'notas', label: 'Notas Fiscais', icon: Receipt },
   { key: 'parcelamentos', label: 'Parcelamentos', icon: FolderOpen },
   { key: 'integra', label: 'Integra Contador', icon: Plug },
+  { key: 'custos', label: 'Custos SERPRO', icon: Wallet },
 ];
 
 export default function Fiscal() {
@@ -56,6 +58,7 @@ export default function Fiscal() {
       {view === 'notas' && <Invoices />}
       {view === 'parcelamentos' && <ParcelamentosTab />}
       {view === 'integra' && <IntegraContador />}
+      {view === 'custos' && <UsageCostTab />}
     </div>
   );
 }
