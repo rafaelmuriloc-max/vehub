@@ -140,3 +140,6 @@ verify_jwt = false
 
 [functions.nfe-nfse-daily-sync]
 verify_jwt = false
+
+[functions.fgts-digital-sync]
+verify_jwt = false
