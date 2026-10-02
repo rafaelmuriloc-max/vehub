@@ -207,7 +207,7 @@ export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMo
                         <LabelList dataKey="salarios" content={(props: any) => {
                           const { x, y, value } = props;
                           if (value == null) return null;
-                          const t = brlMil(Number(value)); const w = t.length * 6.4 + 14;
+                          const t = `R$ ${(Number(value) / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}`; const w = t.length * 6.4 + 14;
                           return <g><rect x={Number(x) - w / 2} y={Number(y) - 32} width={w} height={20} rx={6} fill="hsl(var(--success) / 0.14)" />
                             <text x={Number(x)} y={Number(y) - 18} textAnchor="middle" fontSize={11} fontWeight={700} fill="hsl(var(--success))">{t}</text></g>;
                         }} />
