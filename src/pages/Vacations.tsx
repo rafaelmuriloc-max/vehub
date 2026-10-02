@@ -13,13 +13,14 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertTriangle, ArrowLeft, Building2, CalendarX, Check, ChevronsUpDown, Clock,
-  Loader2, MoreVertical, RefreshCw, Search, Users, X,
+  Bell, Loader2, MoreVertical, RefreshCw, Search, Users, X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
 } from 'recharts';
 import { cn } from '@/lib/utils';
+import { PersonnelAlertsDialog } from '@/components/personnel/PersonnelAlertsDialog';
 import {
   analyzeEmployees, dueByMonth, fmtDate, fmtDays, statusClass, statusLabel, todayKeySP,
   totalsByCompany, type EmployeeAnalysis, type PeriodStatus, type VacationPeriodRow,
@@ -214,10 +215,13 @@ export default function Vacations() {
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Gestão de férias</h1>
           <p className="text-pr-muted mt-1">Antecipe vencimentos e acompanhe os saldos da sua carteira.</p>
         </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+        <Button variant="outline" onClick={() => setAlertOpen(true)} className="h-11 px-5 rounded-[10px]"><Bell className="h-4 w-4 mr-2" />Avisos de férias</Button>
         <Button onClick={syncVacations} disabled={syncing} className="bg-pr-orange hover:bg-pr-orange/90 text-pr-navy-fg h-11 px-5 rounded-[10px]">
           <RefreshCw className={cn('h-4 w-4 mr-2', syncing && 'animate-spin motion-reduce:animate-none')} />
           {syncing ? 'Sincronizando...' : 'Sincronizar férias'}
         </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -598,6 +602,7 @@ export default function Vacations() {
           </div>
         </DialogContent>
       </Dialog>
+    <PersonnelAlertsDialog open={alertOpen} onOpenChange={setAlertOpen} kind="ferias" />
     </div>
   );
 }
