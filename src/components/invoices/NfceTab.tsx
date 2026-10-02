@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import JSZip from 'jszip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
+
+const safe = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '_').slice(0, 50);
 import { ClientCombobox } from '@/components/ClientCombobox';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -177,6 +182,60 @@ export default function NfceTab() {
     }
   }
 
+  const [bulk, setBulk] = useState({ open: false, running: false, done: 0, total: 0, ok: 0, missing: [] as string[] });
+  const cancelRef = useRef(false);
+
+  async function handleBulkXml() {
+    const list = filtered;
+    if (!list.length) return;
+    cancelRef.current = false;
+    setBulk({ open: true, running: true, done: 0, total: list.length, ok: 0, missing: [] });
+    const zip = new JSZip();
+    const multi = new Set(list.map((i) => i.client_id)).size > 1;
+    const nameOf = (id: string) => {
+      const c = clients.find((x) => x.id === id);
+      return safe(c ? `${c.sci_code ? c.sci_code + '_' : ''}${c.company_name}` : id);
+    };
+    const xmls = new Map<string, string>();
+    let done = 0;
+    // 1) Storage, 8 por vez
+    const withUrl = list.filter((i) => i.xml_url);
+    for (let i = 0; i < withUrl.length && !cancelRef.current; i += 8) {
+      await Promise.all(withUrl.slice(i, i + 8).map(async (inv) => {
+        try {
+          const { data } = await supabase.storage.from('documents').download(inv.xml_url!);
+          if (data) xmls.set(inv.id, await data.text());
+        } catch { /* fallback abaixo */ }
+      }));
+      done += Math.min(8, withUrl.length - i);
+      setBulk((b) => ({ ...b, done, ok: xmls.size }));
+    }
+    // 2) raw_xml em blocos de 200
+    const rest = list.filter((i) => !xmls.has(i.id));
+    for (let i = 0; i < rest.length && !cancelRef.current; i += 200) {
+      const chunk = rest.slice(i, i + 200);
+      const { data } = await supabase.from('nfce_invoices').select('id, raw_xml').in('id', chunk.map((c) => c.id));
+      for (const r of (data || []) as any[]) if (r.raw_xml) xmls.set(r.id, r.raw_xml);
+      done = Math.min(list.length, withUrl.length + i + chunk.length);
+      setBulk((b) => ({ ...b, done: Math.max(b.done, done), ok: xmls.size }));
+    }
+    const missing: string[] = [];
+    for (const inv of list) {
+      const x = xmls.get(inv.id);
+      if (!x) { if (!cancelRef.current) missing.push(inv.access_key); continue; }
+      zip.file(`${multi ? nameOf(inv.client_id) + '/' : ''}${inv.access_key}.xml`, x);
+    }
+    if (xmls.size > 0) {
+      const empresa = selectedClient !== 'all' ? nameOf(selectedClient) : 'Todas';
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `NFCe_${empresa}_${dateFrom}_a_${dateTo}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }
+    setBulk((b) => ({ ...b, running: false, ok: xmls.size, missing }));
+  }
+
   async function handleSync() {
     const today = new Date().toISOString().slice(0, 10);
     const targets = selectedClient !== 'all'
@@ -263,12 +322,17 @@ export default function NfceTab() {
             <p className="text-sm text-muted-foreground">Busca automática dos cupons eletrônicos na SEF-SC.</p>
           </div>
         </div>
-        {isAdmin && (
-          <Button onClick={handleSync} disabled={syncing} className="bg-orange-500 hover:bg-orange-600 text-white">
-            {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            {syncing ? (syncProgress || 'Sincronizando...') : 'Sincronizar'}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleBulkXml} disabled={bulk.running || isFetching || filtered.length === 0}>
+            <Download className="h-4 w-4 mr-2" /> Baixar XMLs ({filtered.length})
           </Button>
-        )}
+          {isAdmin && (
+            <Button onClick={handleSync} disabled={syncing} className="bg-orange-500 hover:bg-orange-600 text-white">
+              {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              {syncing ? (syncProgress || 'Sincronizando...') : 'Sincronizar'}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -379,6 +443,28 @@ export default function NfceTab() {
           )}
         </CardContent>
       </Card>
+      <Dialog open={bulk.open} onOpenChange={(o) => { if (!bulk.running) setBulk((b) => ({ ...b, open: o })); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>XMLs das NFC-e em lote</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Progress value={bulk.total ? (bulk.done / bulk.total) * 100 : 0} />
+            <p className="text-sm text-muted-foreground">
+              {bulk.done} de {bulk.total} • {bulk.ok} XML(s) • {bulk.missing.length} sem XML
+              {!bulk.running && bulk.ok > 0 && ' — arquivo ZIP baixado.'}
+            </p>
+            {!bulk.running && bulk.missing.length > 0 && (
+              <div className="max-h-48 overflow-y-auto rounded-md border p-2 text-xs font-mono break-all">
+                {bulk.missing.map((k) => <div key={k}>{k}</div>)}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            {bulk.running
+              ? <Button variant="outline" onClick={() => { cancelRef.current = true; }}>Cancelar</Button>
+              : <Button onClick={() => setBulk((b) => ({ ...b, open: false }))}>Fechar</Button>}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
