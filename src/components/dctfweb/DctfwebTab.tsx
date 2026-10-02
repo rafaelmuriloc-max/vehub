@@ -273,10 +273,45 @@ export default function DctfwebTab() {
               <SelectItem value="GERAL_ANUAL">Geral Anual</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={sync.running ? () => { syncCancel.current = true; } : refreshAll} disabled={loading || (!sync.running && searched.length === 0)}>
+            <RefreshCw className={cn('h-4 w-4 mr-1', sync.running && 'animate-spin')} />
+            {sync.running ? `Cancelar (${sync.done}/${sync.total})` : 'Atualizar situação'}
+          </Button>
           <Button onClick={runBulk} disabled={loading || bulk.running || filtered.filter(c => c.document).length === 0}>
             <Download className="h-4 w-4 mr-1" /> Baixar todas as guias ({filtered.filter(c => c.document).length})
           </Button>
         </div>
+      </div>
+
+      {sync.running && <Progress value={sync.total ? (sync.done / sync.total) * 100 : 0} />}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {([
+          { key: 'all', label: 'Empresas com guia', value: String(stats.total), sub: 'Darf Previdenciário concluído' },
+          { key: 'pago', label: 'Guias pagas', value: String(stats.pago), sub: fmtBRL(stats.valor) || '—' },
+          { key: 'aberto', label: 'Em aberto / vencidas', value: String(stats.aberto), sub: Date.now() > dueTime ? 'Vencimento já passou' : 'Ainda no prazo' },
+          { key: 'pct', label: '% pagas', value: `${stats.pct}%`, sub: `${stats.pago} de ${stats.total}` },
+        ] as const).map(card => {
+          const clickable = card.key !== 'pct';
+          const active = clickable && statusFilter === card.key;
+          return (
+            <button key={card.key} type="button" disabled={!clickable}
+              onClick={() => clickable && setStatusFilter(card.key as any)}
+              className={cn('rounded-xl border bg-card p-4 text-left transition-colors', clickable && 'hover:bg-muted', active && 'border-primary ring-1 ring-primary')}>
+              <p className="text-xs text-muted-foreground">{card.label}</p>
+              <p className="text-2xl font-bold text-foreground">{card.value}</p>
+              <p className="text-xs text-muted-foreground truncate">{card.sub}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex gap-2">
+        {(['all', 'pago', 'aberto'] as const).map(f => (
+          <Button key={f} size="sm" variant={statusFilter === f ? 'default' : 'outline'} onClick={() => setStatusFilter(f)}>
+            {f === 'all' ? 'Todas' : f === 'pago' ? 'Pagas' : 'Em aberto'}
+          </Button>
+        ))}
       </div>
 
       <div className="rounded-xl border bg-card divide-y">
@@ -284,13 +319,37 @@ export default function DctfwebTab() {
           <div className="p-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         ) : rows.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma empresa encontrada.</p>
-        ) : rows.map(c => (
+        ) : rows.map(c => {
+          const st = statusOf(c.id);
+          const p = pays[c.id];
+          return (
           <div key={c.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate font-medium">{formatClientLabel(c as any)}</p>
-              <p className="text-xs text-muted-foreground">{c.document || 'Sem CNPJ'}</p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>{c.document || 'Sem CNPJ'}</span>
+                {st === 'pago' ? (
+                  <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/15">
+                    Pago{p?.data_pagamento ? ` em ${fmtDate(p.data_pagamento)}` : ''}{p?.valor_pago ? ` • ${fmtBRL(p.valor_pago)}` : ''}
+                  </Badge>
+                ) : st === 'vencido' ? (
+                  <Badge variant="destructive">Vencida</Badge>
+                ) : (
+                  <Badge className="bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">Em aberto</Badge>
+                )}
+                {!p && <span>(não consultado)</span>}
+                {p?.mensagem && st !== 'pago' && (
+                  <span className="inline-flex items-center gap-1 text-destructive" title={p.mensagem}>
+                    <AlertTriangle className="h-3 w-3" /> Aviso da Receita
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex gap-2 shrink-0">
+              <Button size="icon" variant="ghost" aria-label="Atualizar situação" title="Atualizar situação"
+                disabled={!c.document || statusBusy === c.id || sync.running} onClick={() => refreshClick(c)}>
+                <RefreshCw className={cn('h-4 w-4', statusBusy === c.id && 'animate-spin')} />
+              </Button>
               {(Object.keys(ACTIONS) as Action[]).map(k => {
                 const A = ACTIONS[k];
                 const isBusy = busy?.id === c.id && busy.action === k;
