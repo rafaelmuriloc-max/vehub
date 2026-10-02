@@ -388,6 +388,33 @@ export default function Personnel() {
     );
   }, [activeClients, activeEmployees, employeesByClient, search]);
 
+  // Números dos cartões e do gráfico seguindo a busca
+  const overview = useMemo(() => {
+    const ids = new Set(filteredClients.map(c => c.id));
+    const scoped = scopedEmployees.filter(e => ids.has(e.client_id));
+    const active = scoped.filter(e => e.status === 'active');
+    const activeIdSet = new Set(active.map(e => e.id));
+    const isTrial = (e: Employee, fn: (left: number) => boolean) =>
+      [e.trial_end_1, e.trial_end_2].some(d => { const l = daysUntil(d); return l !== null && fn(l); });
+    let vSoon = 0, vOver = 0;
+    for (const p of vacations) {
+      if (!activeIdSet.has(p.employee_id)) continue;
+      const l = daysUntil(vacationDue(p));
+      if (l === null) continue;
+      if (l < 0) vOver++; else if (l <= 60) vSoon++;
+    }
+    return {
+      ids: [...ids],
+      activeCount: active.length,
+      terminatedCount: scoped.length - active.length,
+      companies: new Set(active.map(e => e.client_id)).size,
+      salaries: active.reduce((s, e) => s + (e.salary ?? 0), 0),
+      trialSoon: active.filter(e => isTrial(e, l => l >= 0 && l <= 15)).length,
+      trialOverdue: active.filter(e => isTrial(e, l => l < 0)).length,
+      vSoon, vOver,
+    };
+  }, [filteredClients, scopedEmployees, vacations]);
+
   const totalPages = pageSize === 'all'
     ? 1
     : Math.max(1, Math.ceil(filteredClients.length / pageSize));
