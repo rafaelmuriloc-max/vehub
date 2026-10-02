@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Area, Bar, CartesianGrid, ComposedChart, LabelList, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { BarChart3, CalendarDays, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -58,23 +57,8 @@ export function usePayrollMonthly(clientIds: string[]) {
 
 type Gran = 'mensal' | 'trimestral' | 'anual';
 
-const SalaryPill = (props: any) => {
-  const { x, y, value } = props;
-  if (value == null) return null;
-  const text = brlMil(Number(value));
-  const w = text.length * 6.6 + 16;
-  return (
-    <g>
-      <rect x={x - w / 2} y={y + 10} width={w} height={22} rx={6} className="fill-success/15" style={{ fill: 'hsl(var(--success) / 0.14)' }} />
-      <text x={x} y={y + 25} textAnchor="middle" fontSize={11.5} fontWeight={600} style={{ fill: 'hsl(var(--foreground))' }}>{text}</text>
-    </g>
-  );
-};
-
 export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMonth[]; loading: boolean }) {
   const [gran, setGran] = useState<Gran>('mensal');
-  const [showEmp, setShowEmp] = useState(true);
-  const [showSal, setShowSal] = useState(true);
   const [from, setFrom] = useState<string>('');
   const [to, setTo] = useState<string>('');
   const keys = months.map(m => m.key);
@@ -136,68 +120,54 @@ export function PersonnelEvolutionChart({ months, loading }: { months: PayrollMo
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="inline-flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-1.5 text-sm cursor-pointer">
-            <Checkbox checked={showEmp} onCheckedChange={v => setShowEmp(!!v)} className="border-primary data-[state=checked]:bg-primary" />Funcionários
-          </label>
-          <label className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
-            <Checkbox checked={showSal} onCheckedChange={v => setShowSal(!!v)} className="border-success data-[state=checked]:bg-success data-[state=checked]:text-success-foreground" />Salários (R$)
-          </label>
-        </div>
-
         {loading ? <p className="text-sm text-muted-foreground py-16 text-center">Carregando...</p>
           : !data.length ? <p className="text-sm text-muted-foreground py-16 text-center">Sincronize a Folha para ver a evolução.</p>
           : (
-            <div>
-              <div className="flex justify-between text-xs px-1"><span className="text-muted-foreground">{showEmp && 'Funcionários'}</span><span className="text-success">{showSal && 'Salários'}</span></div>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={data} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
-                    <defs>
-                      <linearGradient id="pe-bar" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.75} />
-                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
-                      </linearGradient>
-                      <linearGradient id="pe-area" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.18} />
-                        <stop offset="100%" stopColor="hsl(var(--success))" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} />
-                    <YAxis yAxisId="q" hide={!showEmp} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} domain={[0, (max: number) => Math.ceil((max * 1.25) / 50) * 50]} />
-                    <YAxis yAxisId="v" hide={!showSal} orientation="right" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={brlMil} width={84} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} domain={[0, (max: number) => max * 1.15]} />
-                    <Tooltip
-                      formatter={(v: number, name: string) => name === 'Salários (R$)' ? brl(v) : v.toLocaleString('pt-BR')}
-                      labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`}
-                    />
-                    {showEmp && (
-                      <Bar yAxisId="q" dataKey="funcionarios" name="Funcionários" fill="url(#pe-bar)" radius={[4, 4, 0, 0]} maxBarSize={110}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-xl border p-4">
+                <p className="text-sm font-semibold mb-2 inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-primary" />Funcionários</p>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+                      <defs>
+                        <linearGradient id="pe-bar" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.75} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.ceil((max * 1.2) / 10) * 10]} />
+                      <Tooltip formatter={(v: number) => v.toLocaleString('pt-BR')} labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`} />
+                      <Bar dataKey="funcionarios" name="Funcionários" fill="url(#pe-bar)" radius={[4, 4, 0, 0]} maxBarSize={80}>
                         <LabelList dataKey="funcionarios" position="top" fontSize={13} fontWeight={700} style={{ fill: 'hsl(var(--foreground))' }} formatter={(v: number) => v.toLocaleString('pt-BR')} />
-                        {showSal && (
-                          <LabelList dataKey="salarios" content={(props: any) => {
-                            const { x, y, width, height, value } = props;
-                            if (value == null || Number(height) < 22) return null;
-                            return (
-                              <text x={Number(x) + Number(width) / 2} y={Number(y) + Number(height) - 10} textAnchor="middle"
-                                fontSize={12} fontWeight={700} fill="hsl(var(--primary-foreground))">{brlMil(Number(value))}</text>
-                            );
-                          }} />
-                        )}
                       </Bar>
-                    )}
-                    {showSal && <Area yAxisId="v" dataKey="salarios" stroke="none" fill="url(#pe-area)" legendType="none" tooltipType="none" />}
-                    {showSal && (
-                      <Line yAxisId="v" dataKey="salarios" name="Salários (R$)" stroke="hsl(var(--success))" strokeWidth={2.5}
-                        dot={{ r: 5, fill: 'hsl(var(--card))', stroke: 'hsl(var(--success))', strokeWidth: 2.5 }} activeDot={{ r: 6 }}>
-                      </Line>
-                    )}
-                  </ComposedChart>
-                </ResponsiveContainer>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div className="flex justify-center gap-6 pt-2 text-sm">
-                {showEmp && <span className="inline-flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-full bg-primary" />Funcionários</span>}
-                {showSal && <span className="inline-flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-full bg-success" />Salários (R$)</span>}
+              <div className="rounded-xl border p-4">
+                <p className="text-sm font-semibold mb-2 inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-success" />Salários (R$)</p>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={brlMil} width={84} axisLine={false} tickLine={false} domain={[0, (max: number) => max * 1.1]} />
+                      <Tooltip formatter={(v: number) => brl(v)} labelFormatter={(l, p) => `${l} · ${p?.[0]?.payload?.empresas ?? 0} empresa(s)`} />
+                      <Bar dataKey="salarios" name="Salários (R$)" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} maxBarSize={80}>
+                        <LabelList dataKey="salarios" content={(props: any) => {
+                          const { x, y, width, height, value } = props;
+                          if (value == null || Number(height) < 22) return null;
+                          return (
+                            <text x={Number(x) + Number(width) / 2} y={Number(y) + Number(height) - 10} textAnchor="middle"
+                              fontSize={11} fontWeight={700} fill="hsl(var(--primary-foreground))">{brlMil(Number(value))}</text>
+                          );
+                        }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           )}
