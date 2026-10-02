@@ -19,6 +19,7 @@ import { TaskRequestForm } from '@/components/chat/TaskRequestForm';
 import { PendingTasksPanel } from '@/components/chat/PendingTasksPanel';
 import { X } from 'lucide-react';
 import { formatClientLabel } from '@/lib/utils';
+import { RecalcGuiaDialog } from '@/components/chat/RecalcGuiaDialog';
 
 
 export type ChatTab = 'mine' | 'in_progress' | 'all';
@@ -196,6 +197,7 @@ export default function Chat() {
         companyNames: whatsappCompanyMap.get(conv.id) || [],
         whatsappPhone: conv.whatsapp_phone || undefined,
         clientId: conv.client_id || null,
+        linkedClientIds: Array.from(matchedIds),
         status: conv.status || 'open',
         assignedToName: conv.assigned_to_name || null,
         assignedToColor: (conv as any).assigned_to_color || null,
@@ -556,6 +558,7 @@ export default function Chat() {
   const [attachSystemOpen, setAttachSystemOpen] = useState(false);
   const [attachSocietyOpen, setAttachSocietyOpen] = useState(false);
   const [registerContactOpen, setRegisterContactOpen] = useState(false);
+  const [recalcOpen, setRecalcOpen] = useState(false);
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const [pendingTasksOpen, setPendingTasksOpen] = useState(true);
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
@@ -919,6 +922,7 @@ export default function Chat() {
             onRegisterContact={() => setRegisterContactOpen(true)}
             conversationId={activeConvId}
             onRequestTask={() => setTaskPanelOpen(true)}
+            onRecalcGuia={((activeConv as any)?.linkedClientIds?.length ?? 0) > 0 ? () => setRecalcOpen(true) : undefined}
             rightPanel={taskPanelOpen ? (
               <>
                 <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
@@ -981,6 +985,13 @@ export default function Chat() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <RecalcGuiaDialog
+        open={recalcOpen}
+        onOpenChange={setRecalcOpen}
+        clientIds={(activeConv as any)?.linkedClientIds || []}
+        onSend={(file) => sendMedia(file, 'document')}
+      />
 
       <AttachFromObligationDialog
         open={attachObligationOpen}
