@@ -18,6 +18,8 @@ import { ArrowLeft, FileDown, MessageCircle, RefreshCw, Sparkles } from 'lucide-
 import { useToast } from '@/hooks/use-toast';
 import { formatClientLabel } from '@/lib/utils';
 import jsPDF from 'jspdf';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TicketEvaluationPanel, NpsBadge } from '@/components/tickets/TicketEvaluationPanel';
 import autoTable from 'jspdf-autotable';
 
 type TicketRow = {
@@ -39,6 +41,15 @@ type TicketRow = {
   summary: string | null;
   category: string | null;
   summary_status: string;
+  nps_score?: number | null;
+  empathy_score?: number | null;
+  clarity_score?: number | null;
+  resolution_score?: number | null;
+  sentiment_start?: string | null;
+  sentiment_end?: string | null;
+  feedback_strengths?: string | null;
+  feedback_improvements?: string | null;
+  evaluation_status?: string | null;
 };
 
 function fmtDate(v?: string | null) {
@@ -90,6 +101,24 @@ export default function Tickets() {
   const [detail, setDetail] = useState<TicketRow | null>(null);
   const [generating, setGenerating] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [tab, setTab] = useState<'list' | 'eval'>('list');
+  const [reevaluating, setReevaluating] = useState(false);
+
+  const reevaluate = async () => {
+    if (!detail) return;
+    setReevaluating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ticket-summarize', { body: { ticket_id: detail.id, reevaluate: true } });
+      if (error) throw error;
+      setDetail({ ...detail, ...data });
+      toast({ title: 'Atendimento reavaliado' });
+      refetch();
+    } catch (e: any) {
+      toast({ title: 'Erro ao reavaliar', description: e?.message, variant: 'destructive' });
+    } finally {
+      setReevaluating(false);
+    }
+  };
   const pageSize = 25;
 
   const sinceIso = useMemo(() => {
@@ -381,6 +410,20 @@ export default function Tickets() {
         </Select>
       </Card>
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'list' | 'eval')}>
+        <TabsList>
+          <TabsTrigger value="list">Lista</TabsTrigger>
+          <TabsTrigger value="eval">Avaliação</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {tab === 'eval' ? (
+        <TicketEvaluationPanel
+          sinceIso={sinceIso} agent={agent} dept={dept}
+          profileMap={profileMap} deptMap={deptMap}
+          onOpenTicket={(t) => setDetail(t as TicketRow)}
+        />
+      ) : (
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -394,12 +437,13 @@ export default function Tickets() {
                 <th className="px-3 py-2 text-left hidden md:table-cell">Empresa</th>
                 <th className="px-3 py-2 text-left hidden lg:table-cell">Assunto</th>
                 <th className="px-3 py-2 text-left hidden xl:table-cell">Responsável</th>
+                <th className="px-3 py-2 text-left">Nota</th>
                 <th className="px-3 py-2 text-left">Situação</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">Nenhum chamado encontrado.</td></tr>
+                <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">Nenhum chamado encontrado.</td></tr>
               )}
               {rows.map((t) => (
                 <tr
@@ -421,6 +465,7 @@ export default function Tickets() {
                   <td className="px-3 py-2 hidden xl:table-cell truncate max-w-[160px]">
                     {t.assigned_to ? profileMap[t.assigned_to]?.name ?? '—' : '—'}
                   </td>
+                  <td className="px-3 py-2"><NpsBadge score={t.nps_score ?? null} status={t.evaluation_status} /></td>
                   <td className="px-3 py-2">
                     <Badge variant={t.status === 'open' ? 'default' : 'secondary'}>
                       {t.status === 'open' ? 'Aberto' : 'Encerrado'}
@@ -441,6 +486,7 @@ export default function Tickets() {
           </div>
         )}
       </Card>
+      )}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90dvh] overflow-y-auto">
@@ -467,6 +513,32 @@ export default function Tickets() {
                 <p className="whitespace-pre-wrap leading-relaxed">
                   {detail.summary || (detail.summary_status === 'pending' ? 'Resumo ainda não gerado.' : 'Sem resumo.')}
                 </p>
+              </div>
+              <div className="rounded-md border border-border/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Avaliação do atendimento (IA)</p>
+                  <Button size="sm" variant="ghost" onClick={reevaluate} disabled={reevaluating || detail.status !== 'closed'}>
+                    <Sparkles className="h-3.5 w-3.5 mr-1" /> {reevaluating ? 'Avaliando...' : 'Reavaliar'}
+                  </Button>
+                </div>
+                {detail.evaluation_status === 'done' ? (
+                  <>
+                    <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">NPS</span><NpsBadge score={detail.nps_score ?? null} /></div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>Empatia: <b>{detail.empathy_score ?? '—'}</b>/5</div>
+                      <div>Clareza: <b>{detail.clarity_score ?? '—'}</b>/5</div>
+                      <div>Resolução: <b>{detail.resolution_score ?? '—'}</b>/5</div>
+                    </div>
+                    <p className="text-xs">Humor do cliente: {detail.sentiment_start ?? '—'} → {detail.sentiment_end ?? '—'}</p>
+                    {detail.feedback_strengths && <p className="text-xs"><b>Pontos fortes:</b> {detail.feedback_strengths}</p>}
+                    {detail.feedback_improvements && <p className="text-xs"><b>Melhoria:</b> {detail.feedback_improvements}</p>}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {detail.evaluation_status === 'not_applicable' ? 'Não avaliado (interação insuficiente).'
+                      : detail.evaluation_status === 'failed' ? 'Falha na avaliação.' : 'Avaliação pendente.'}
+                  </p>
+                )}
               </div>
               {detail.conversation_id && (
                 <Button variant="outline" className="w-full" onClick={() => navigate('/chat')}>
