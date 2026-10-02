@@ -26,6 +26,18 @@ function toBase64(bytes: Uint8Array) {
   return btoa(bin);
 }
 
+async function aesBridge(data: string, pass: string): Promise<string> {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 100000 }, base,
+    { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, enc.encode(data)));
+  const out = new Uint8Array(28 + ct.length); out.set(salt); out.set(nonce, 16); out.set(ct, 28);
+  return toBase64(out).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -37,6 +49,8 @@ Deno.serve(async (req) => {
 
     const token = Deno.env.get("INFOSIMPLES_API_TOKEN");
     if (!token) return json({ error: "Token da Infosimples não configurado." }, 400);
+    const encKey = Deno.env.get("INFOSIMPLES_ENCRYPTION_KEY");
+    if (!encKey) return json({ error: "Chave de criptografia da Infosimples não configurada." }, 400);
 
     const body = await req.json().catch(() => ({}));
     const clientId = String(body.client_id ?? "");
@@ -58,18 +72,28 @@ Deno.serve(async (req) => {
     if (fErr || !file) return json({ error: "Erro ao baixar certificado." }, 500);
     const cert = toBase64(new Uint8Array(await file.arrayBuffer()));
 
-    const form = new URLSearchParams({
-      token, timeout: "300",
-      pkcs12_cert: cert, pkcs12_pass: company.digital_certificate_password,
-      representado: String(client.cnpj).replace(/\D/g, ""),
-      periodo,
-    });
-    const r = await fetch("https://api.infosimples.com/api/v2/consultas/fgts/guia", { method: "POST", body: form });
-    const res = await r.json().catch(() => ({}));
-    if (res.code !== 200 && res.code !== 612) {
-      return json({ error: res.code_message || `Erro Infosimples (${res.code ?? r.status})`, errors: res.errors });
+    const encCert = await aesBridge(cert, encKey);
+    const encPass = await aesBridge(company.digital_certificate_password, encKey);
+    const guias: any[] = [];
+    let lastRes: any = null;
+    for (let pagina = 1; pagina <= 10; pagina++) {
+      const form = new URLSearchParams({
+        token, timeout: "300", pkcs12_cert: encCert, pkcs12_pass: encPass,
+        representado: String(client.cnpj).replace(/\D/g, ""),
+        periodo: periodo.slice(3) + periodo.slice(0, 2), pagina: String(pagina),
+      });
+      const r = await fetch("https://api.infosimples.com/api/v2/consultas/fgts/guia", { method: "POST", body: form });
+      const res = await r.json().catch(() => ({}));
+      lastRes = res;
+      if (res.code === 612) break;
+      if (res.code !== 200) {
+        return json({ error: res.code_message || `Erro Infosimples (${res.code ?? r.status})`, errors: res.errors, code: res.code });
+      }
+      const d = res.data?.[0] ?? {};
+      guias.push(...(d.guias ?? []));
+      if (pagina >= Number(d.total_paginas ?? 1)) break;
     }
-    const guias: any[] = (res.data ?? []).flatMap((d: any) => d.guias ?? []);
+    void lastRes;
     const rows = guias.map((g) => ({
       client_id: clientId, competencia,
       numero_guia: String(g.numero ?? ""),
