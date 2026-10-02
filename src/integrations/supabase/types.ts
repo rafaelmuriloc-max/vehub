@@ -1940,6 +1940,50 @@ export type Database = {
           },
         ]
       }
+      mei_competencias: {
+        Row: {
+          client_id: string
+          competencia: string
+          created_at: string
+          data_pagamento: string | null
+          id: string
+          mensagem: string | null
+          status: string
+          updated_at: string
+          valor_pago: number | null
+        }
+        Insert: {
+          client_id: string
+          competencia: string
+          created_at?: string
+          data_pagamento?: string | null
+          id?: string
+          mensagem?: string | null
+          status?: string
+          updated_at?: string
+          valor_pago?: number | null
+        }
+        Update: {
+          client_id?: string
+          competencia?: string
+          created_at?: string
+          data_pagamento?: string | null
+          id?: string
+          mensagem?: string | null
+          status?: string
+          updated_at?: string
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mei_competencias_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nfce_events: {
         Row: {
           access_key: string
