@@ -89,28 +89,73 @@ export default function DctfwebTab() {
 
   const years = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
+  const fetchPdf = async (c: Client, action: Action): Promise<string> => {
+    const a = ACTIONS[action];
+    const dados: Record<string, unknown> = { categoria, anoPA: ano };
+    if (categoria !== 'GERAL_ANUAL' && categoria !== '13_SALARIO') dados.mesPA = mes;
+    const { data, error } = await supabase.functions.invoke('integra-contador', {
+      body: { client_id: c.id, idSistema: 'DCTFWEB', idServico: a.idServico, tipo: a.tipo, dados: JSON.stringify(dados) },
+    });
+    if (error) throw error;
+    const msgs = (data?.data?.mensagens || data?.mensagens || []) as Array<{ texto: string }>;
+    const raw = data?.data?.dados ?? data?.dados;
+    const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return raw; } })() : raw;
+    const pdf = (typeof parsed === 'string' && parsed.startsWith('JVBERi0') ? parsed : null) || walkForPdf(parsed) || walkForPdf(data?.data);
+    if (!pdf) throw new Error(msgs.map(m => m.texto).join('; ') || data?.error || 'A Receita não retornou o documento.');
+    return pdf;
+  };
+  const safeName = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '_').slice(0, 40);
+
   const run = async (c: Client, action: Action) => {
     const a = ACTIONS[action];
     setBusy({ id: c.id, action });
     try {
-      const dados: Record<string, unknown> = { categoria, anoPA: ano };
-      if (categoria !== 'GERAL_ANUAL' && categoria !== '13_SALARIO') dados.mesPA = mes;
-      const { data, error } = await supabase.functions.invoke('integra-contador', {
-        body: { client_id: c.id, idSistema: 'DCTFWEB', idServico: a.idServico, tipo: a.tipo, dados: JSON.stringify(dados) },
-      });
-      if (error) throw error;
-      const msgs = (data?.data?.mensagens || data?.mensagens || []) as Array<{ texto: string }>;
-      const raw = data?.data?.dados ?? data?.dados;
-      const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return raw; } })() : raw;
-      const pdf = (typeof parsed === 'string' && parsed.startsWith('JVBERi0') ? parsed : null) || walkForPdf(parsed) || walkForPdf(data?.data);
-      if (!pdf) throw new Error(msgs.map(m => m.texto).join('; ') || data?.error || 'A Receita não retornou o documento.');
-      const name = c.company_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '_').slice(0, 40);
-      openPdf(pdf, `DCTFWeb_${a.label.normalize('NFD').replace(/[\u0300-\u036f]/g, '')}_${ano}${mes}_${name}.pdf`);
+      const pdf = await fetchPdf(c, action);
+      openPdf(pdf, `DCTFWeb_${safeName(a.label)}_${ano}${mes}_${safeName(c.company_name)}.pdf`);
     } catch (e) {
       toast({ title: `${a.label} indisponível`, description: (e as Error).message, variant: 'destructive' });
     } finally {
       setBusy(null);
     }
+  };
+
+  const [bulk, setBulk] = useState<{ open: boolean; running: boolean; done: number; total: number; ok: number; fails: { name: string; msg: string }[] }>({ open: false, running: false, done: 0, total: 0, ok: 0, fails: [] });
+  const cancelRef = useRef(false);
+
+  const runBulk = async () => {
+    const list = filtered.filter(c => c.document);
+    if (!list.length) return;
+    cancelRef.current = false;
+    setBulk({ open: true, running: true, done: 0, total: list.length, ok: 0, fails: [] });
+    const zip = new JSZip();
+    let ok = 0;
+    const fails: { name: string; msg: string }[] = [];
+    for (let i = 0; i < list.length; i++) {
+      if (cancelRef.current) break;
+      const c = list[i];
+      try {
+        let pdf: string;
+        try { pdf = await fetchPdf(c, 'guia'); }
+        catch (e) {
+          if (/fetch|network|failed to send/i.test((e as Error).message)) { await sleep(1500); pdf = await fetchPdf(c, 'guia'); }
+          else throw e;
+        }
+        zip.file(`Guia_${c.sci_code || 'sem_codigo'}_${safeName(c.company_name)}.pdf`, pdf, { base64: true });
+        ok++;
+      } catch (e) {
+        fails.push({ name: formatClientLabel(c as any), msg: (e as Error).message });
+      }
+      setBulk(b => ({ ...b, done: i + 1, ok, fails: [...fails] }));
+      await sleep(500);
+    }
+    if (ok > 0) {
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `DCTFWeb_Guias_${ano}${mes}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }
+    setBulk(b => ({ ...b, running: false }));
   };
 
   return (
