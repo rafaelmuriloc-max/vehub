@@ -122,6 +122,25 @@ function fmtRef(r: string | null, created: string) {
   return `${d[1]}/${d[0]}`;
 }
 
+function fileKind(ext: string): { label: string; color: string } {
+  if (ext === 'pdf') return { label: 'PDF', color: 'var(--tag-inss)' };
+  if (ext.startsWith('xls') || ext === 'csv') return { label: 'XLS', color: 'var(--tag-fgts)' };
+  if (ext.startsWith('doc')) return { label: 'DOC', color: 'var(--tag-das)' };
+  if (ext === 'xml') return { label: 'XML', color: 'var(--tag-iss)' };
+  return { label: (ext || 'ARQ').toUpperCase().slice(0, 4), color: 'var(--tag-outro)' };
+}
+
+export function FileTypeIcon({ ext }: { ext: string }) {
+  const k = fileKind(ext);
+  return (
+    <svg viewBox="0 0 40 48" className="h-12 w-10 shrink-0" role="img" aria-label={`Arquivo ${k.label}`}>
+      <path d="M6 0h20l14 14v28a6 6 0 0 1-6 6H6a6 6 0 0 1-6-6V6a6 6 0 0 1 6-6z" fill={`hsl(${k.color})`} />
+      <path d="M26 0l14 14H31a5 5 0 0 1-5-5z" fill="hsl(var(--primary-foreground))" fillOpacity={0.35} />
+      <text x="20" y="33" textAnchor="middle" fontSize={k.label.length > 3 ? 9 : 11} fontWeight={700} fill="hsl(var(--primary-foreground))">{k.label}</text>
+    </svg>
+  );
+}
+
 export function RecentDocuments({ docs, onOpen, onSeeAll, limit = 3 }: { docs: DocItem[]; onOpen: (d: DocItem, download: boolean) => void; onSeeAll?: () => void; limit?: number }) {
   return (
     <SectionCard>
@@ -130,10 +149,9 @@ export function RecentDocuments({ docs, onOpen, onSeeAll, limit = 3 }: { docs: D
       <div className="divide-y divide-border/70">
         {docs.slice(0, limit).map(d => {
           const ext = (d.file_name.split('.').pop() || '').toLowerCase();
-          const xls = ext.startsWith('xls') || ext === 'csv';
           return (
             <div key={d.id} className="flex items-center gap-3 py-3">
-              <span className={cn('h-10 w-10 shrink-0 rounded-lg flex items-center justify-center text-[10px] font-bold text-primary-foreground', xls ? 'bg-tag-fgts' : ext === 'pdf' ? 'bg-tag-inss' : 'bg-tag-outro')}>{ext ? ext.toUpperCase().slice(0, 4) : <FileText className="h-4 w-4" />}</span>
+              <FileTypeIcon ext={ext} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-portal-ink truncate">{d.label}</p>
                 <p className="text-xs text-muted-foreground truncate">{d.area} • {fmtRef(d.ref, d.created_at)}</p>
