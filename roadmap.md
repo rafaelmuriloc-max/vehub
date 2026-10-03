@@ -25,3 +25,4 @@
 - [x] PGFN: gestão manual de negociações (parcelamento_results origem PGFN), guia em bucket privado, envio revisado, Emitir no Regularize (SISPAR)
 - [ ] PGFN: sincronização automática — bloqueado: sem API oficial nem conector autenticado confirmado (Infosimples issue 602 aberta)
 - [ ] PGFN: índice único (client_id, origem, numero) no banco — aguarda autorização de migração
+- [x] Portal do cliente: aba Pessoal (sem documentos de funcionários, com controle de contratos de experiência)
