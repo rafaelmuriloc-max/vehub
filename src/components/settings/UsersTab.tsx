@@ -162,7 +162,7 @@ export function UsersTab() {
         arr.push(l.department_id);
         linkMap.set(l.user_id, arr);
       });
-      setUsers((profiles as any[]).map(p => ({
+      setUsers((profiles as any[]).filter(p => !clientIds.has(p.user_id)).map(p => ({
         id: p.id, user_id: p.user_id, full_name: p.full_name, job_title: p.job_title,
         department_id: p.department_id, role: roleMap.get(p.user_id) || 'employee',
         department_ids: linkMap.get(p.user_id) || [],
