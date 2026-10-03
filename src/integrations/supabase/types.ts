@@ -4270,8 +4270,32 @@ export type Database = {
         Returns: boolean
       }
       portal_contact_client_ids: { Args: { _email: string }; Returns: string[] }
+      portal_documents: {
+        Args: { _client_id: string }
+        Returns: {
+          area: string
+          created_at: string
+          file_name: string
+          file_url: string
+          id: string
+          label: string
+          reference_month: string
+        }[]
+      }
+      portal_due_dates: {
+        Args: { _client_id: string; _from: string; _to: string }
+        Returns: {
+          due_date: string
+          id: string
+          name: string
+          reference_month: string
+          status: string
+          system_code: string
+        }[]
+      }
       portal_my_clients: { Args: never; Returns: string[] }
       portal_norm_email: { Args: { _e: string }; Returns: string }
+      portal_safe_uuid: { Args: { _t: string }; Returns: string }
       recalc_obligation_instance_status: {
         Args: { _instance_id: string }
         Returns: undefined
