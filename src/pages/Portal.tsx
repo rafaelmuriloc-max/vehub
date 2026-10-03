@@ -189,18 +189,18 @@ export default function Portal() {
 
   return (
     <div className="min-h-[100dvh] bg-portal-bg overflow-x-hidden text-portal-ink">
-      <header className="sticky top-0 z-20 bg-portal-bg/95 backdrop-blur border-b border-border/50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className="mx-auto max-w-5xl flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2">
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="h-9 w-9 rounded-xl bg-portal-blue text-primary-foreground flex items-center justify-center font-black text-lg">V</span>
-            <span className="hidden sm:block leading-tight"><span className="block font-bold text-lg">Velocitä</span><span className="block text-xs text-muted-foreground">Portal do Cliente</span></span>
+      <header className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-border/50 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="mx-auto max-w-5xl flex flex-wrap md:flex-nowrap items-center gap-x-2 gap-y-2 sm:gap-x-3 px-3 sm:px-4 py-2">
+          <div className="flex items-center gap-2 shrink-0 min-w-0">
+            <span className="h-9 w-9 shrink-0 rounded-xl bg-portal-blue text-primary-foreground flex items-center justify-center font-black text-lg">V</span>
+            <span className="leading-tight min-w-0"><span className="block font-bold text-base sm:text-lg truncate">Velocitä</span><span className="block text-[11px] sm:text-xs text-muted-foreground truncate">Portal do Cliente</span></span>
           </div>
           {companies.length > 0 && (
             <Select value={activeId} onValueChange={setActiveId} disabled={companies.length < 2}>
-              <SelectTrigger className="h-12 flex-1 min-w-0 max-w-sm bg-card" aria-label="Empresa">
-                <span className="flex items-center gap-2 min-w-0 text-left">
-                  <span className="h-8 w-8 shrink-0 rounded-lg bg-portal-blue-soft text-portal-blue flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
-                  <span className="min-w-0"><span className="block text-sm font-semibold truncate">{company?.company_name}</span><span className="block text-[11px] text-muted-foreground truncate">{company?.document}</span></span>
+              <SelectTrigger className={cn('order-last md:order-none basis-full md:basis-auto h-14 md:h-12 w-full md:flex-1 md:max-w-sm min-w-0 bg-portal-bg md:bg-card items-center [&>span]:line-clamp-none disabled:opacity-100 disabled:cursor-default', companies.length < 2 && '[&>svg]:hidden')} aria-label="Empresa">
+                <span className="flex items-center gap-2.5 min-w-0 flex-1 text-left">
+                  <span className="h-9 w-9 shrink-0 rounded-lg bg-portal-blue-soft text-portal-blue flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
+                  <span className="min-w-0 flex-1 flex flex-col"><span className="text-sm font-semibold truncate">{company?.company_name}</span><span className="text-[11px] text-muted-foreground truncate tabular-nums">{company?.document}</span></span>
                 </span>
               </SelectTrigger>
               <SelectContent className="max-w-[calc(100vw-2rem)]">{companies.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
