@@ -15,7 +15,8 @@ import { formatClientLabel } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, Send, FileDown } from 'lucide-react';
+import { ChevronDown, Send, FileDown, Building2, Landmark, Briefcase, MoreVertical, CalendarDays, FileText, MessageCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 type Modalidade = {
   idSistema: string;
@@ -845,208 +846,217 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
     }
   }
 
+  useEffect(() => {
+    if (!onSummary) return;
+    const ok = rows.filter(r => r.status === 'success');
+    const ativos = ok.filter(r => !isEncerrado(r));
+    const now = Date.now();
+    onSummary({
+      monitoradas: clients.length,
+      ativos: ativos.length,
+      atraso: ativos.reduce((s, r) => s + (parcAtraso(r) ?? 0), 0),
+      rescindidos: ok.filter(r => /rescind/i.test(r.situacao || '')).length,
+      vence7: ativos.filter(r => { const d = proximoVenc(r); return d && d.getTime() - now <= 7 * 86400000 && d.getTime() >= now - 86400000; }).length,
+      lastBatch: rows.reduce<string | null>((m, r) => (!m || r.consulted_at > m ? r.consulted_at : m), null),
+      batchRunning,
+      atualizarTodas: handleAtualizarTodas,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, clients, batchRunning]);
+
+  function exportCsv() {
+    const lines = [['Código', 'Empresa', 'CNPJ', 'Modalidade', 'Número', 'Situação', 'Data pedido', 'Valor consolidado', 'Pagas', 'Total', 'Valor parcela', 'Consultado em'].join(';')];
+    companies.forEach(({ client, parcs }) => parcs.filter(p => p.status === 'success').forEach(p => {
+      lines.push([client.sci_code || '', client.company_name, formatCnpj(client.document), p.modalidade_label || '', p.numero_parcelamento || '', p.situacao || '', formatDate(p.data_pedido), p.valor_total ?? '', p.parcelas_pagas ?? '', p.parcelas_total ?? '', valorParcela(p)?.toFixed(2) ?? '', formatDateTime(p.consulted_at)].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'));
+    }));
+    downloadFile(new File(['\ufeff' + lines.join('\n')], `parcelamentos_rfb_${new Date().toISOString().slice(0, 10)}.csv`, { type: 'text/csv' }));
+  }
+
+  function renderParc(p: ParcRow) {
+    const encerrado = isEncerrado(p);
+    const canEmit = p.status === 'success' && !encerrado && !!PARCELAS_SERVICES[p.modalidade];
+    const g = guias[p.id];
+    const venc = encerrado ? null : proximoVenc(p);
+    const atraso = encerrado ? 0 : (parcAtraso(p) ?? 0);
+    const sit = encerrado ? (/rescind/i.test(p.situacao || '') ? 'Rescindido' : 'Encerrado') : atraso > 0 ? 'Em atraso' : 'Ativo';
+    const sitCls = encerrado ? 'bg-muted text-muted-foreground' : atraso > 0 ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success';
+    const Field = ({ label, children, strong }: { label: string; children: React.ReactNode; strong?: boolean }) => (
+      <div className="min-w-0"><div className="text-xs text-muted-foreground">{label}</div><div className={`text-sm truncate ${strong ? 'font-semibold text-foreground' : 'text-foreground'}`}>{children}</div></div>
+    );
+    return (
+      <div key={p.id} className={`rounded-lg border bg-card p-4 ${encerrado ? 'opacity-60' : ''}`}>
+        {p.status === 'error' ? (
+          <div className="text-sm text-destructive">{p.error_message || 'Erro na consulta'}</div>
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex items-start gap-4 lg:w-56 shrink-0">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${sitCls}`}>{sit}</span>
+              <div className="min-w-0 space-y-1">
+                <span className="inline-block rounded-md bg-info/10 text-info px-2 py-0.5 text-[11px] font-semibold">{modTag(p)}</span>
+                <div className="text-sm text-foreground">{(p.origem || 'RFB')} • {(p.modalidade_label || '').replace(/^RFB\s*-\s*/i, '')}</div>
+                <div className="text-sm text-foreground">Nº {p.numero_parcelamento || '—'}</div>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0 space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <Field label="Situação">{p.situacao || 'Em parcelamento'}</Field>
+                <Field label="Data do pedido">{formatDate(p.data_pedido)}</Field>
+                <Field label="Valor consolidado" strong>{brl(p.valor_total)}</Field>
+                <Field label="Parcelas" strong>{p.parcelas_total != null ? `${p.parcelas_pagas ?? 0} / ${p.parcelas_total}` : '—'}</Field>
+                <Field label="Valor da parcela" strong>{brl(valorParcela(p))}</Field>
+                <Field label="Próximo vencimento" strong><span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />{venc ? venc.toLocaleDateString('pt-BR') : '—'}</span></Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                <Button size="sm" variant="outline" className="text-info" onClick={() => handleAtualizarParc(p)} disabled={!!busyKey}>
+                  {busyKey === `upd:${p.id}` ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}Atualizar
+                </Button>
+                <Button size="sm" variant="outline" className="text-info" onClick={() => startGerar(p, false)} disabled={!canEmit || !!busyKey}>
+                  {busyKey === `gen:${p.id}` ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileText className="h-4 w-4 mr-1" />}Gerar parcela
+                </Button>
+                <Button size="sm" variant="outline" className="text-success" onClick={() => handleEnviar(p)} disabled={!canEmit || !!busyKey}>
+                  {busyKey === `send:${p.id}` ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-1" />}Enviar via WhatsApp{g ? ` (${formatParcelaLabel(g.parcela)})` : ''}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setDetailRow(p)}>
+                  <Eye className="h-4 w-4 mr-1" />Detalhes
+                </Button>
+              </div>
+            </div>
+            <button type="button" onClick={() => setDetailRow(p)} className="hidden lg:flex self-center text-muted-foreground hover:text-foreground" aria-label="Detalhes"><ChevronDown className="h-5 w-5" /></button>
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: 'Empresas com parcelamento', value: String(kpis.empresas), sub: `${kpis.ativos} parcelamento(s) ativo(s)`, f: 'ativo' },
-          { label: 'Total parcelado (ativos)', value: kpis.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), sub: 'Soma dos parcelamentos ativos', f: 'ativo' },
-          { label: 'Não consultadas', value: String(kpis.naoConsultados), sub: 'Empresas ainda sem consulta', f: 'sem' },
-          { label: 'Com erro na consulta', value: String(kpis.erros), sub: 'Recusas ou falhas da Receita', f: 'erro' },
-        ].map(k => (
-          <button key={k.label} type="button" onClick={() => setFilterSituacao(filterSituacao === k.f ? 'all' : k.f)}
-            className={`text-left rounded-xl border bg-card p-4 transition-colors hover:bg-muted ${filterSituacao === k.f ? 'border-primary ring-1 ring-primary' : 'border-border'}`}>
-            <div className="text-xs text-muted-foreground">{k.label}</div>
-            <div className="text-xl sm:text-2xl font-bold text-foreground mt-1 truncate">{k.value}</div>
-            <div className="text-xs text-muted-foreground mt-1">{k.sub}</div>
-          </button>
-        ))}
+      <div className="rounded-xl border bg-card p-3 flex flex-col lg:flex-row gap-2">
+        <Select value={filterSituacao} onValueChange={setFilterSituacao}>
+          <SelectTrigger className="lg:w-52 h-10"><SelectValue placeholder="Situação" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as situações</SelectItem>
+            <SelectItem value="ativo">Parcelamento ativo</SelectItem>
+            <SelectItem value="encerrado">Encerrado/liquidado</SelectItem>
+            <SelectItem value="com">Com parcelamento</SelectItem>
+            <SelectItem value="sem">Não consultado</SelectItem>
+            <SelectItem value="erro">Com erro</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterModalidade} onValueChange={setFilterModalidade}>
+          <SelectTrigger className="lg:w-52 h-10"><SelectValue placeholder="Origem" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as origens</SelectItem>
+            {MODALIDADES.map(m => (
+              <SelectItem key={m.idServico} value={m.idServico}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar por nome, CNPJ ou número do parcelamento..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10" />
+        </div>
+        <Button onClick={handleConsultarSelecionados} disabled={batchRunning || selected.size === 0} className="h-10 bg-info text-info-foreground hover:bg-info/90">
+          {batchRunning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+          Consultar selecionados{selected.size ? ` (${selected.size})` : ''}
+        </Button>
+        <Button variant="outline" className="h-10" onClick={exportCsv}>
+          <FileDown className="h-4 w-4 mr-2" />Exportar<ChevronDown className="h-4 w-4 ml-1" />
+        </Button>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtros</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-col md:flex-row gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por empresa, código SCI ou CNPJ..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Select value={filterModalidade} onValueChange={setFilterModalidade}>
-              <SelectTrigger className="md:w-56"><SelectValue placeholder="Modalidade" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as modalidades</SelectItem>
-                {MODALIDADES.map(m => (
-                  <SelectItem key={m.idServico} value={m.idServico}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterOrigem} onValueChange={setFilterOrigem}>
-              <SelectTrigger className="md:w-36"><SelectValue placeholder="Origem" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas origens</SelectItem>
-                <SelectItem value="RFB">Receita Federal</SelectItem>
-                <SelectItem value="PGFN">PGFN</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterSituacao} onValueChange={setFilterSituacao}>
-              <SelectTrigger className="md:w-48"><SelectValue placeholder="Situação" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas situações</SelectItem>
-                <SelectItem value="ativo">Parcelamento ativo</SelectItem>
-                <SelectItem value="encerrado">Encerrado/liquidado</SelectItem>
-                <SelectItem value="com">Com parcelamento</SelectItem>
-                <SelectItem value="sem">Não consultado</SelectItem>
-                <SelectItem value="erro">Com erro</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={handleConsultarSelecionados}
-              disabled={batchRunning || selected.size === 0}
-              size="sm"
-            >
-              {batchRunning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
-              Consultar selecionados ({selected.size})
-            </Button>
-            <Button onClick={handleAtualizarTodas} size="sm" variant="secondary" disabled={batchRunning}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${batchRunning ? 'animate-spin' : ''}`} />
-              Atualizar todas
-            </Button>
-            {batchRunning && (
-              <Button size="sm" variant="ghost" onClick={() => { cancelRef.current = true; }}>Cancelar</Button>
-            )}
-            <Button onClick={loadData} variant="outline" size="sm" disabled={loading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
-            {batchRunning && (
-              <div className="text-sm text-muted-foreground self-center">
-                Progresso: {batchProgress.current} / {batchProgress.total}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {batchRunning && (
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Progresso: {batchProgress.current} / {batchProgress.total}
+          <Button size="sm" variant="ghost" onClick={() => { cancelRef.current = true; }}>Cancelar</Button>
+        </div>
+      )}
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="flex items-center gap-3 px-4 py-2 border-b text-sm text-muted-foreground">
-            <Checkbox checked={filteredClientIds.length > 0 && selected.size === filteredClientIds.length} onCheckedChange={toggleAll} aria-label="Selecionar todas" />
-            <span>Empresas</span>
-          </div>
-          {loading ? (
-            <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>
-          ) : pagedCompanies.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">Nenhuma empresa encontrada</div>
-          ) : pagedCompanies.map(({ client, parcs }) => {
-            const ok = parcs.filter(p => p.status === 'success');
-            const ativos = ok.filter(p => !(p.situacao && ENCERRADO_REGEX.test(p.situacao)));
-            const total = ativos.reduce((a, p) => a + (p.valor_total || 0), 0);
-            const last = parcs.reduce<string | null>((m, p) => (!m || p.consulted_at > m ? p.consulted_at : m), null);
-            const hasErr = parcs.some(p => p.status === 'error');
-            const badge = !parcs.length
-              ? <Badge variant="outline" className="gap-1"><AlertCircle className="h-3 w-3" />Não consultada</Badge>
-              : ok.length
-                ? <Badge className="gap-1 bg-primary"><CheckCircle2 className="h-3 w-3" />Com parcelamento</Badge>
-                : hasErr
-                  ? <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Erro</Badge>
-                  : <Badge variant="secondary" className="gap-1"><CheckCircle2 className="h-3 w-3" />Sem parcelamentos</Badge>;
-            const groups = new Map<string, ParcRow[]>();
-            parcs.filter(p => p.status !== 'no_data').forEach(p => {
-              const k = p.modalidade_label || p.modalidade;
-              groups.set(k, [...(groups.get(k) || []), p]);
-            });
-            const isOpen = expanded.has(client.id);
-            return (
-              <Collapsible key={client.id} open={isOpen} onOpenChange={o => setExpanded(prev => { const n = new Set(prev); if (o) n.add(client.id); else n.delete(client.id); return n; })} className="border-b last:border-b-0">
-                <div className="flex items-center gap-3 px-4 py-3">
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 px-1 text-sm text-muted-foreground">
+          <Checkbox checked={filteredClientIds.length > 0 && selected.size === filteredClientIds.length} onCheckedChange={toggleAll} aria-label="Selecionar todas" />
+          <span>Selecionar todas</span>
+        </div>
+        {loading ? (
+          <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        ) : pagedCompanies.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground rounded-xl border bg-card">Nenhuma empresa encontrada</div>
+        ) : pagedCompanies.map(({ client, parcs }) => {
+          const ok = parcs.filter(p => p.status === 'success');
+          const ativos = ok.filter(p => !isEncerrado(p));
+          const total = ativos.reduce((a, p) => a + (p.valor_total || 0), 0);
+          const last = parcs.reduce<string | null>((m, p) => (!m || p.consulted_at > m ? p.consulted_at : m), null);
+          const hasErr = parcs.some(p => p.status === 'error');
+          const atrasada = ativos.some(p => (parcAtraso(p) ?? 0) > 0);
+          const badge = !parcs.length
+            ? <span className="rounded-full px-3 py-1 text-xs font-medium bg-muted text-muted-foreground">Não consultada</span>
+            : ok.length
+              ? <span className={`rounded-full px-3 py-1 text-xs font-medium ${atrasada ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'}`}>Com parcelamento</span>
+              : hasErr
+                ? <span className="rounded-full px-3 py-1 text-xs font-medium bg-destructive/15 text-destructive">Erro</span>
+                : <span className="rounded-full px-3 py-1 text-xs font-medium bg-muted text-muted-foreground">Sem parcelamentos</span>;
+          const visible = parcs.filter(p => p.status !== 'no_data');
+          const rfb = visible.filter(p => !isMei(p));
+          const mei = visible.filter(p => isMei(p));
+          const isOpen = expanded.has(client.id);
+          return (
+            <Collapsible key={client.id} open={isOpen} onOpenChange={o => setExpanded(prev => { const n = new Set(prev); if (o) n.add(client.id); else n.delete(client.id); return n; })} className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex flex-col md:flex-row md:items-center gap-3 px-4 py-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
                   <Checkbox checked={selected.has(client.id)} onCheckedChange={() => toggleSelect(client.id)} aria-label="Selecionar empresa" />
                   <CollapsibleTrigger asChild>
-                    <button type="button" className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-left">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-foreground truncate">{formatClientLabel(client)}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{formatCnpj(client.document)}</div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {badge}
-                        {ativos.length > 0 && <span>{ativos.length} ativo(s) • {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>}
-                        {last && <span>Consultado em {new Date(last).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>}
-                        {last && Date.now() - new Date(last).getTime() > 7 * 86400000 && <Badge variant="outline" className="border-warning text-warning">Desatualizado</Badge>}
-                      </div>
-                      <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform hidden md:block ${isOpen ? 'rotate-180' : ''}`} />
+                    <button type="button" className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                      <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      <span className="h-10 w-10 shrink-0 rounded-full bg-success/15 text-success flex items-center justify-center"><Building2 className="h-5 w-5" /></span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-foreground truncate">{client.sci_code ? `${String(client.sci_code).padStart(5, '0')} • ` : ''}{client.company_name}</span>
+                        <span className="block text-xs text-muted-foreground font-mono">{formatCnpj(client.document)}</span>
+                      </span>
                     </button>
                   </CollapsibleTrigger>
-                  <Button size="sm" variant="outline" onClick={() => handleConsultarIndividual(client.id)} disabled={consultingId === client.id || batchRunning} title="Consultar todas as categorias">
-                    {consultingId === client.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlayCircle className="h-3 w-3" />}
-                    <span className="ml-1 hidden sm:inline">Consultar</span>
-                  </Button>
                 </div>
-                <CollapsibleContent>
-                  <div className="px-4 pb-4 space-y-4 bg-muted/30">
-                    {groups.size === 0 ? (
-                      <p className="text-sm text-muted-foreground pt-3">{parcs.length ? 'Nenhum parcelamento encontrado nesta empresa.' : 'Empresa ainda não consultada. Clique em Consultar.'}</p>
-                    ) : Array.from(groups.entries()).map(([label, list]) => (
-                      <div key={label} className="pt-3">
-                        <div className="text-sm font-semibold text-foreground mb-2">{label} <Badge variant="secondary" className="ml-1">{list.length}</Badge></div>
-                        <div className="grid gap-2">
-                          {list.map(p => {
-                            const encerrado = !!(p.situacao && ENCERRADO_REGEX.test(p.situacao));
-                            const canEmit = p.status === 'success' && !encerrado && !!PARCELAS_SERVICES[p.modalidade];
-                            const g = guias[p.id];
-                            return (
-                              <div key={p.id} className={`rounded-lg border bg-card p-3 ${encerrado ? 'opacity-60' : ''}`}>
-                                {p.status === 'error' ? (
-                                  <div className="text-sm text-destructive">{p.error_message || 'Erro na consulta'}</div>
-                                ) : (
-                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
-                                    <div><div className="text-xs text-muted-foreground">Nº</div><div className="font-mono">{p.numero_parcelamento || '-'}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Situação</div><div>{p.situacao || '-'}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Pedido</div><div>{formatDate(p.data_pedido)}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Valor total</div><div>{p.valor_total != null ? p.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Parcelas</div><div>{p.parcelas_total != null ? `${p.parcelas_pagas ?? 0} / ${p.parcelas_total}` : '-'}</div></div>
-                                  </div>
-                                )}
-                                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mt-3">
-                                  <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => handleAtualizarParc(p)} disabled={!!busyKey}>
-                                    {busyKey === `upd:${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}Atualizar
-                                  </Button>
-                                  <Button size="sm" className="w-full sm:w-auto" onClick={() => startGerar(p, false)} disabled={!canEmit || !!busyKey}>
-                                    {busyKey === `gen:${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <FileDown className="h-3 w-3 mr-1" />}Gerar parcela
-                                  </Button>
-                                  <Button size="sm" variant="secondary" className="w-full sm:w-auto" onClick={() => handleEnviar(p)} disabled={!canEmit || !!busyKey}>
-                                    {busyKey === `send:${p.id}` ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}Enviar{g ? ` (${formatParcelaLabel(g.parcela)})` : ''}
-                                  </Button>
-                                  <Button size="sm" variant="ghost" className="w-full sm:w-auto" onClick={() => setDetailRow(p)}>
-                                    <Eye className="h-3 w-3 mr-1" />Detalhes
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          })}
+                <div className="flex flex-wrap items-center gap-3 md:gap-6 pl-7 md:pl-0">
+                  {badge}
+                  <div className="text-sm min-w-[150px]">
+                    {ativos.length > 0 && <div className="font-semibold text-foreground">{ativos.length} {ativos.length === 1 ? 'ativo' : 'ativos'} • {brl(total)}</div>}
+                    {last && <div className="text-xs text-muted-foreground">Consultado em {new Date(last).toLocaleDateString('pt-BR')}</div>}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => handleConsultarIndividual(client.id)} disabled={consultingId === client.id || batchRunning}>
+                    {consultingId === client.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}Atualizar
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild><Button size="icon" variant="outline" className="h-9 w-9"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setExpanded(prev => { const n = new Set(prev); if (n.has(client.id)) n.delete(client.id); else n.add(client.id); return n; })}>{isOpen ? 'Recolher' : 'Ver parcelamentos'}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toggleSelect(client.id)}>{selected.has(client.id) ? 'Desmarcar' : 'Selecionar'}</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              <CollapsibleContent>
+                {visible.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-4 pb-4">{parcs.length ? 'Nenhum parcelamento encontrado nesta empresa.' : 'Empresa ainda não consultada. Clique em Atualizar.'}</p>
+                ) : (
+                  <div className="px-3 pb-3 space-y-3">
+                    {([['Receita Federal', rfb, 'info'], ['MEI', mei, 'success']] as const).filter(([, l]) => l.length).map(([label, list, tone]) => (
+                      <div key={label} className="space-y-2">
+                        <div className={`flex items-center gap-2 rounded-lg px-4 py-2 font-semibold ${tone === 'info' ? 'bg-info/10 text-info' : 'bg-success/10 text-success'}`}>
+                          {tone === 'info' ? <Landmark className="h-4 w-4" /> : <Briefcase className="h-4 w-4" />}{label}
                         </div>
+                        {list.map(p => renderParc(p))}
                       </div>
                     ))}
                   </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border-t text-sm text-muted-foreground">
-            <span>{companies.length} empresa(s) • Página {safePage} de {totalPages}</span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>Anterior</Button>
-              <Button size="sm" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Próxima</Button>
-            </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 text-sm text-muted-foreground">
+          <span>{companies.length} empresa(s) • Página {safePage} de {totalPages}</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>Anterior</Button>
+            <Button size="sm" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Próxima</Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Dialog open={!!picker} onOpenChange={o => !o && !pickerBusy && setPicker(null)}>
         <DialogContent className="max-w-md">
