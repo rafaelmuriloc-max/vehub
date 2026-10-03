@@ -51,13 +51,16 @@ function NotasList({ notas, showEmitter }: { notas: Nota[]; showEmitter?: boolea
   return (
     <div className="divide-y divide-border">
       {notas.slice(0, 200).map(n => (
-        <div key={n.kind + n.id} className="flex items-center gap-3 py-2 text-sm">
-          <Badge variant="outline">{n.kind}</Badge>
+        <div key={n.kind + n.id} className="flex items-start sm:items-center gap-3 py-3 sm:py-2 text-sm">
+          <Badge variant="outline" className="shrink-0">{n.kind}</Badge>
           <div className="flex-1 min-w-0">
-            <p className="truncate">Nº {n.invoice_number || '—'}{showEmitter && n.emitter_name ? ` · ${n.emitter_name}` : ''}</p>
-            <p className="text-xs text-muted-foreground">{n.issue_date ? n.issue_date.slice(0, 10).split('-').reverse().join('/') : '—'}{isCancelled(n.status) ? ' · Cancelada' : ''}</p>
+            <p className="break-words sm:truncate">Nº {n.invoice_number || '—'}{showEmitter && n.emitter_name ? ` · ${n.emitter_name}` : ''}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">{n.issue_date ? n.issue_date.slice(0, 10).split('-').reverse().join('/') : '—'}{isCancelled(n.status) ? ' · Cancelada' : ''}</p>
+              <span className="font-medium tabular-nums sm:hidden">{brl(Number(n.total_value) || 0)}</span>
+            </div>
           </div>
-          <span className="font-medium tabular-nums">{brl(Number(n.total_value) || 0)}</span>
+          <span className="font-medium tabular-nums hidden sm:inline shrink-0">{brl(Number(n.total_value) || 0)}</span>
         </div>
       ))}
     </div>
@@ -132,73 +135,75 @@ export default function Portal() {
   const faixa = faixaDe(total, limite);
 
   return (
-    <div className="min-h-[100dvh] bg-background">
-      <header className="sticky top-0 z-10 bg-secondary text-secondary-foreground" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className="min-h-[100dvh] bg-background overflow-x-hidden">
+      <header className="sticky top-0 z-20 bg-secondary text-secondary-foreground" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="mx-auto max-w-4xl flex items-center gap-3 px-4 h-14">
           <span className="font-bold tracking-tight">Velocitä</span>
           <span className="text-xs text-secondary-foreground/60 hidden sm:inline">Área do Cliente</span>
-          <Button variant="ghost" size="sm" className="ml-auto text-secondary-foreground hover:bg-secondary-foreground/10" onClick={signOut}><LogOut className="h-4 w-4 mr-1" /> Sair</Button>
+          <Button variant="ghost" size="sm" aria-label="Sair" className="ml-auto h-11 sm:h-9 text-secondary-foreground hover:bg-secondary-foreground/10" onClick={signOut}><LogOut className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Sair</span></Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl p-4 space-y-4">
+      <main className="mx-auto max-w-4xl p-3 sm:p-4 space-y-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
         {companies.length === 0 ? (
           <Card><CardContent className="py-10 text-center text-muted-foreground">Nenhuma empresa vinculada ao seu acesso. Fale com o escritório.</CardContent></Card>
         ) : (
           <>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 min-w-0">
               {companies.length > 1 ? (
                 <Select value={activeId} onValueChange={setActiveId}>
-                  <SelectTrigger className="sm:flex-1" aria-label="Empresa"><SelectValue /></SelectTrigger>
-                  <SelectContent>{companies.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="h-11 sm:h-10 w-full sm:flex-1 min-w-0 [&>span]:truncate" aria-label="Empresa"><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-w-[calc(100vw-2rem)]">{companies.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
                 </Select>
-              ) : <h1 className="text-lg font-semibold sm:flex-1">{company?.company_name}</h1>}
+              ) : <h1 className="text-lg font-semibold sm:flex-1 break-words min-w-0">{company?.company_name}</h1>}
               <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
-                <SelectTrigger className="sm:w-28" aria-label="Ano"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11 sm:h-10 w-full sm:w-28" aria-label="Ano"><SelectValue /></SelectTrigger>
                 <SelectContent>{[0, 1, 2, 3].map(d => { const y = new Date().getFullYear() - d; return <SelectItem key={y} value={String(y)}>{y}</SelectItem>; })}</SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2">{company?.document} · {company?.tax_regime || 'Regime não informado'}</p>
+            <p className="text-xs text-muted-foreground -mt-2 break-words">{company?.document} · {company?.tax_regime || 'Regime não informado'}</p>
 
             <Tabs defaultValue="faturamento">
-              <TabsList className="flex w-full overflow-x-auto justify-start h-auto">
+              <div className="sticky z-10 -mx-3 px-3 sm:mx-0 sm:px-0 py-1 bg-background" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
+              <TabsList className="flex w-full overflow-x-auto justify-start h-auto [&>button]:shrink-0 [&>button]:min-h-10">
                 <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
                 <TabsTrigger value="emitidas">Emitidas</TabsTrigger>
                 <TabsTrigger value="recebidas">Recebidas</TabsTrigger>
                 {(modules.includes('das_mei') || modules.includes('das_simples')) && <TabsTrigger value="guias">Guias</TabsTrigger>}
                 <TabsTrigger value="avisos">Avisos{myAvisos.length ? ` (${myAvisos.length})` : ''}</TabsTrigger>
               </TabsList>
+              </div>
 
               <TabsContent value="faturamento" className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Faturado em {ano}</p><p className="text-xl font-bold tabular-nums">{brl(total)}</p></CardContent></Card>
-                  <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Notas emitidas</p><p className="text-xl font-bold">{emitidas.filter(n => !isCancelled(n.status)).length}</p></CardContent></Card>
+                  <Card className="min-w-0"><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground">Faturado em {ano}</p><p className="text-base sm:text-xl font-bold tabular-nums break-all">{brl(total)}</p></CardContent></Card>
+                  <Card className="min-w-0"><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground">Notas emitidas</p><p className="text-base sm:text-xl font-bold">{emitidas.filter(n => !isCancelled(n.status)).length}</p></CardContent></Card>
                 </div>
                 {modules.includes('limite') && (
                   <Card>
                     <CardContent className="p-4 space-y-2">
-                      <div className="flex justify-between text-sm"><span>Limite MEI {ano}</span><span className="tabular-nums">{brl(total)} de {brl(limite)}</span></div>
+                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1 text-sm"><span>Limite MEI {ano}</span><span className="tabular-nums">{brl(total)} de {brl(limite)}</span></div>
                       <div className="h-3 rounded-full bg-muted overflow-hidden"><div className={`h-full ${faixa === 'normal' ? 'bg-primary' : 'bg-destructive'}`} style={{ width: `${Math.min(100, limite ? (total / limite) * 100 : 100)}%` }} /></div>
                       <p className="text-xs text-muted-foreground">{faixa === 'normal' ? `Disponível: ${brl(Math.max(0, limite - total))}` : faixa === 'alerta' ? 'Atenção: acima de 80% do limite. Fale com o escritório.' : 'Limite ultrapassado. Fale com o escritório.'}</p>
                     </CardContent>
                   </Card>
                 )}
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-base">Por mês</CardTitle></CardHeader>
-                  <CardContent className="space-y-1">
+                  <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2"><CardTitle className="text-base">Por mês</CardTitle></CardHeader>
+                  <CardContent className="space-y-1 p-3 pt-0 sm:p-6 sm:pt-0">
                     {meses.map((v, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs">
-                        <span className="w-8 text-muted-foreground">{MONTHS[i]}</span>
-                        <div className="flex-1 h-4 bg-muted rounded"><div className="h-full bg-primary rounded" style={{ width: `${(v / max) * 100}%` }} /></div>
-                        <span className="w-24 text-right tabular-nums">{brl(v)}</span>
+                      <div key={i} className="flex items-center gap-2 text-[11px] sm:text-xs">
+                        <span className="w-7 sm:w-8 shrink-0 text-muted-foreground">{MONTHS[i]}</span>
+                        <div className="flex-1 min-w-0 h-4 bg-muted rounded"><div className="h-full bg-primary rounded" style={{ width: `${(v / max) * 100}%` }} /></div>
+                        <span className="w-20 sm:w-24 shrink-0 text-right tabular-nums">{brl(v)}</span>
                       </div>
                     ))}
                   </CardContent>
                 </Card>
               </TabsContent>
 
-              <TabsContent value="emitidas" className="mt-4"><Card><CardContent className="p-4"><NotasList notas={emitidas} /></CardContent></Card></TabsContent>
-              <TabsContent value="recebidas" className="mt-4"><Card><CardContent className="p-4"><NotasList notas={recebidas} showEmitter /></CardContent></Card></TabsContent>
+              <TabsContent value="emitidas" className="mt-4"><Card><CardContent className="p-3 sm:p-4"><NotasList notas={emitidas} /></CardContent></Card></TabsContent>
+              <TabsContent value="recebidas" className="mt-4"><Card><CardContent className="p-3 sm:p-4"><NotasList notas={recebidas} showEmitter /></CardContent></Card></TabsContent>
 
               <TabsContent value="guias" className="mt-4 space-y-4">
                 {modules.includes('das_mei') && (
@@ -206,11 +211,11 @@ export default function Portal() {
                     <CardHeader className="pb-2"><CardTitle className="text-base">DAS MEI e CCMEI</CardTitle></CardHeader>
                     <CardContent className="flex flex-col sm:flex-row gap-2">
                       <Select value={mes} onValueChange={setMes}>
-                        <SelectTrigger className="sm:w-28" aria-label="Mês"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-10 w-full sm:w-28" aria-label="Mês"><SelectValue /></SelectTrigger>
                         <SelectContent>{MONTHS.map((m, i) => <SelectItem key={m} value={String(i + 1).padStart(2, '0')}>{m}/{ano}</SelectItem>)}</SelectContent>
                       </Select>
-                      <Button onClick={() => emitir('das')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'das' ? 'Gerando...' : 'Emitir DAS'}</Button>
-                      <Button variant="outline" onClick={() => emitir('ccmei')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'ccmei' ? 'Gerando...' : 'Emitir CCMEI'}</Button>
+                      <Button className="h-11 sm:h-10 w-full sm:w-auto" onClick={() => emitir('das')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'das' ? 'Gerando...' : 'Emitir DAS'}</Button>
+                      <Button className="h-11 sm:h-10 w-full sm:w-auto" variant="outline" onClick={() => emitir('ccmei')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'ccmei' ? 'Gerando...' : 'Emitir CCMEI'}</Button>
                     </CardContent>
                   </Card>
                 )}
@@ -220,10 +225,10 @@ export default function Portal() {
                     <CardContent className="divide-y divide-border">
                       {simples.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma guia disponibilizada pelo escritório em {ano}.</p>}
                       {simples.map(s => (
-                        <div key={s.id} className="flex items-center gap-3 py-2 text-sm">
-                          <div className="flex-1"><p>{s.competencia}</p><p className="text-xs text-muted-foreground">{s.data_vencimento ? `Vence ${s.data_vencimento.split('-').reverse().join('/')}` : ''} · {s.status}</p></div>
-                          <span className="tabular-nums">{s.valor_das != null ? brl(Number(s.valor_das)) : '—'}</span>
-                          {s.das_pdf_base64 && <Button size="icon" variant="ghost" aria-label="Baixar DAS" onClick={() => openPdf(s.das_pdf_base64, `DAS_${s.competencia}.pdf`)}><FileDown className="h-4 w-4" /></Button>}
+                        <div key={s.id} className="flex items-center gap-2 sm:gap-3 py-2 text-sm">
+                          <div className="flex-1 min-w-0"><p className="truncate">{s.competencia}</p><p className="text-xs text-muted-foreground break-words">{s.data_vencimento ? `Vence ${s.data_vencimento.split('-').reverse().join('/')}` : ''} · {s.status}</p></div>
+                          <span className="tabular-nums shrink-0">{s.valor_das != null ? brl(Number(s.valor_das)) : '—'}</span>
+                          {s.das_pdf_base64 && <Button size="icon" variant="ghost" className="h-11 w-11 sm:h-10 sm:w-10 shrink-0" aria-label="Baixar DAS" onClick={() => openPdf(s.das_pdf_base64, `DAS_${s.competencia}.pdf`)}><FileDown className="h-4 w-4" /></Button>}
                         </div>
                       ))}
                     </CardContent>
@@ -234,9 +239,9 @@ export default function Portal() {
               <TabsContent value="avisos" className="mt-4 space-y-2">
                 {myAvisos.length === 0 && <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum aviso no momento.</CardContent></Card>}
                 {myAvisos.map(a => (
-                  <Card key={a.id}><CardContent className="p-4 flex gap-3">
+                  <Card key={a.id}><CardContent className="p-3 sm:p-4 flex gap-3">
                     <Megaphone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                    <div><p className="font-medium">{a.title}</p><p className="text-sm text-muted-foreground whitespace-pre-line">{a.body}</p><p className="text-xs text-muted-foreground mt-1">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p></div>
+                    <div className="min-w-0"><p className="font-medium break-words">{a.title}</p><p className="text-sm text-muted-foreground whitespace-pre-line break-words [overflow-wrap:anywhere]">{a.body}</p><p className="text-xs text-muted-foreground mt-1">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p></div>
                   </CardContent></Card>
                 ))}
               </TabsContent>
