@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn, formatClientLabel } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MeiLimitTab from './MeiLimitTab';
 
 type Client = { id: string; company_name: string; sci_code: string | null; document: string | null };
 type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null };
@@ -207,6 +209,10 @@ export default function MeiTab() {
         <p className="text-muted-foreground text-sm">Empresas MEI e todos os comandos do Integra Contador</p>
       </div>
 
+      <Tabs defaultValue="guias">
+        <TabsList><TabsTrigger value="guias">Guias e Pagamentos</TabsTrigger><TabsTrigger value="limite">Controle de Limite</TabsTrigger></TabsList>
+        <TabsContent value="limite" className="mt-4"><MeiLimitTab /></TabsContent>
+        <TabsContent value="guias" className="mt-4 space-y-4">
       <div className="flex flex-col md:flex-row gap-2 md:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -317,6 +323,8 @@ export default function MeiTab() {
           <Button size="icon" variant="outline" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}><ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
+        </TabsContent>
+      </Tabs>
 
       {panel && <CommandsDialog client={panel} periodo={`${ano}${mes}`} ano={ano} onClose={() => setPanel(null)} run={run} errorOf={errorOf} />}
     </div>
