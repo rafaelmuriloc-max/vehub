@@ -171,7 +171,7 @@ export function UpcomingDues({ items, onSeeAll, limit = 3 }: { items: DueItem[];
                 <span className="text-lg font-bold">{dd}</span><span className="text-[10px] uppercase">{MONTHS[Number(mm) - 1]}</span>
               </span>
               <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-portal-ink truncate">{i.name}</p><p className="text-xs text-muted-foreground truncate">{i.competencia}</p></div>
-              <span className={cn('hidden xs:inline-flex sm:inline-flex rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap', b.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning')}>{b.label}</span>
+              <span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap', b.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning')}>{b.label}</span>
               <span className="text-sm font-semibold text-portal-ink tabular-nums whitespace-nowrap">{i.valor != null ? brl(i.valor) : '—'}</span>
             </div>
           );

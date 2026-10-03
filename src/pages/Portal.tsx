@@ -1,24 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, FileDown, Megaphone } from 'lucide-react';
+import { Bell, Building2, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, BarChart3 } from 'lucide-react';
 import { modulesFor } from '@/lib/portal';
-import { limiteAnual, faixaDe, somarPorMes } from '@/lib/meiLimit';
+import { limiteAnual, faixaDe } from '@/lib/meiLimit';
+import { pctChange } from '@/lib/portalDashboard';
+import { cn } from '@/lib/utils';
+import { brl, MONTHS, DueItem, DocItem, SectionCard, KpiCard, Trend, FiscalCalendar, RevenueChart, RecentDocuments, UpcomingDues } from '@/components/portal/PortalWidgets';
 
 type Company = { id: string; company_name: string; document: string | null; tax_regime: string | null; opening_date: string | null };
 type Nota = { id: string; invoice_number: string | null; issue_date: string | null; total_value: number | null; status: string | null; emitter_name: string | null; kind: 'NF-e' | 'NFC-e' };
+type View = 'dashboard' | 'calendario' | 'documentos' | 'perfil';
 
 const db = supabase as any;
-const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const isCancelled = (s: string | null) => (s || '').toLowerCase().includes('cancel');
+const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const iso = (d: Date) => `${ym(d)}-${String(d.getDate()).padStart(2, '0')}`;
 
 function walkForPdf(o: any): string | null {
   if (typeof o === 'string') { try { return walkForPdf(JSON.parse(o)); } catch { return o.startsWith('JVBERi0') ? o : null; } }
@@ -34,12 +39,9 @@ function openPdf(b64: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-async function loadNotas(clientId: string, direction: 'saida' | 'entrada', ano: number): Promise<Nota[]> {
-  const from = `${ano}-01-01`, to = `${ano}-12-31T23:59:59`;
-  const [nfe, nfce] = await Promise.all([
-    db.from('nfe_invoices').select('id, invoice_number, issue_date, total_value, status, emitter_name').eq('client_id', clientId).eq('direction', direction).gte('issue_date', from).lte('issue_date', to).order('issue_date', { ascending: false }).limit(1000),
-    db.from('nfce_invoices').select('id, invoice_number, issue_date, total_value, status, emitter_name').eq('client_id', clientId).eq('direction', direction).gte('issue_date', from).lte('issue_date', to).order('issue_date', { ascending: false }).limit(1000),
-  ]);
+async function loadNotas(clientId: string, direction: 'saida' | 'entrada', from: string): Promise<Nota[]> {
+  const q = (t: string) => db.from(t).select('id, invoice_number, issue_date, total_value, status, emitter_name').eq('client_id', clientId).eq('direction', direction).gte('issue_date', from).order('issue_date', { ascending: false }).limit(1000);
+  const [nfe, nfce] = await Promise.all([q('nfe_invoices'), q('nfce_invoices')]);
   return [
     ...((nfe.data as any[]) || []).map(n => ({ ...n, kind: 'NF-e' as const })),
     ...((nfce.data as any[]) || []).map(n => ({ ...n, kind: 'NFC-e' as const })),
@@ -47,7 +49,7 @@ async function loadNotas(clientId: string, direction: 'saida' | 'entrada', ano: 
 }
 
 function NotasList({ notas, showEmitter }: { notas: Nota[]; showEmitter?: boolean }) {
-  if (!notas.length) return <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota neste ano.</p>;
+  if (!notas.length) return <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota encontrada.</p>;
   return (
     <div className="divide-y divide-border">
       {notas.slice(0, 200).map(n => (
@@ -55,12 +57,9 @@ function NotasList({ notas, showEmitter }: { notas: Nota[]; showEmitter?: boolea
           <Badge variant="outline" className="shrink-0">{n.kind}</Badge>
           <div className="flex-1 min-w-0">
             <p className="break-words sm:truncate">Nº {n.invoice_number || '—'}{showEmitter && n.emitter_name ? ` · ${n.emitter_name}` : ''}</p>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">{n.issue_date ? n.issue_date.slice(0, 10).split('-').reverse().join('/') : '—'}{isCancelled(n.status) ? ' · Cancelada' : ''}</p>
-              <span className="font-medium tabular-nums sm:hidden">{brl(Number(n.total_value) || 0)}</span>
-            </div>
+            <p className="text-xs text-muted-foreground">{n.issue_date ? n.issue_date.slice(0, 10).split('-').reverse().join('/') : '—'}{isCancelled(n.status) ? ' · Cancelada' : ''}</p>
           </div>
-          <span className="font-medium tabular-nums hidden sm:inline shrink-0">{brl(Number(n.total_value) || 0)}</span>
+          <span className="font-medium tabular-nums shrink-0">{brl(Number(n.total_value) || 0)}</span>
         </div>
       ))}
     </div>
@@ -70,15 +69,22 @@ function NotasList({ notas, showEmitter }: { notas: Nota[]; showEmitter?: boolea
 export default function Portal() {
   const { user, loading, isClient, profile, signOut } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [view, setView] = useState<View>('dashboard');
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [activeId, setActiveId] = useState<string>('');
-  const [ano, setAno] = useState(new Date().getFullYear());
+  const [activeId, setActiveId] = useState('');
   const [emitidas, setEmitidas] = useState<Nota[]>([]);
   const [recebidas, setRecebidas] = useState<Nota[]>([]);
   const [avisos, setAvisos] = useState<any[]>([]);
   const [simples, setSimples] = useState<any[]>([]);
+  const [obrig, setObrig] = useState<any[]>([]);
+  const [docs, setDocs] = useState<DocItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [range, setRange] = useState<6 | 12>(6);
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [mes, setMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const today = useMemo(() => new Date(), []);
+  const ano = today.getFullYear();
 
   useEffect(() => {
     if (!user || !isClient) return;
@@ -99,15 +105,33 @@ export default function Portal() {
 
   useEffect(() => {
     if (!activeId) return;
-    loadNotas(activeId, 'saida', ano).then(setEmitidas);
-    loadNotas(activeId, 'entrada', ano).then(setRecebidas);
-    db.from('simples_nacional_competencias').select('id, competencia, valor_das, data_vencimento, status, das_pdf_base64').eq('client_id', activeId).eq('ano', ano).order('competencia', { ascending: false }).then(({ data }: any) => setSimples(data || []));
-  }, [activeId, ano]);
+    const from = iso(new Date(today.getFullYear() - 2, today.getMonth(), 1));
+    loadNotas(activeId, 'saida', from).then(setEmitidas);
+    loadNotas(activeId, 'entrada', from).then(setRecebidas);
+    db.from('simples_nacional_competencias').select('id, competencia, valor_das, data_vencimento, status, das_pdf_base64').eq('client_id', activeId).gte('ano', ano - 1).order('competencia', { ascending: false }).then(({ data }: any) => setSimples(data || []));
+    db.rpc('portal_due_dates', { _client_id: activeId, _from: iso(new Date(today.getFullYear(), today.getMonth() - 3, 1)), _to: iso(new Date(today.getFullYear(), today.getMonth() + 4, 0)) }).then(({ data }: any) => setObrig(data || []));
+    db.rpc('portal_documents', { _client_id: activeId }).then(({ data }: any) => setDocs(((data as any[]) || []).map(d => ({ id: d.id, label: d.label, area: d.area, ref: d.reference_month, file_url: d.file_url, file_name: d.file_name || d.file_url?.split('/').pop() || 'arquivo', created_at: d.created_at }))));
+  }, [activeId, today, ano]);
 
-  const meses = useMemo(() => somarPorMes(emitidas.filter(n => !isCancelled(n.status)), ano), [emitidas, ano]);
-  const total = meses.reduce((a, b) => a + b, 0);
-  const max = Math.max(1, ...meses);
+  const validas = useMemo(() => emitidas.filter(n => !isCancelled(n.status)), [emitidas]);
+  const porMes = useMemo(() => { const m = new Map<string, number>(); validas.forEach(n => { if (!n.issue_date) return; const k = n.issue_date.slice(0, 7); m.set(k, (m.get(k) || 0) + (Number(n.total_value) || 0)); }); return m; }, [validas]);
+  const monthSum = (offset: number) => porMes.get(ym(new Date(today.getFullYear(), today.getMonth() + offset, 1))) || 0;
+  const chart = Array.from({ length: range }, (_, i) => { const off = i - range + 1; const d = new Date(today.getFullYear(), today.getMonth() + off, 1); return { label: MONTHS[d.getMonth()], value: monthSum(off) }; });
+  const periodTotal = chart.reduce((a, b) => a + b.value, 0);
+  const prevYearTotal = Array.from({ length: range }, (_, i) => monthSum(i - range + 1 - 12)).reduce((a, b) => a + b, 0);
+  const totalAno = Array.from({ length: today.getMonth() + 1 }, (_, i) => monthSum(-i)).reduce((a, b) => a + b, 0);
+
+  const dues: DueItem[] = useMemo(() => {
+    const list: DueItem[] = obrig.map((o: any) => ({ id: o.id, name: o.name, due: o.due_date, competencia: o.reference_month ? `Competência ${o.reference_month.slice(5, 7)}/${o.reference_month.slice(0, 4)}` : '', valor: null, done: o.status === 'done' } as any));
+    simples.forEach((s: any) => { if (s.data_vencimento) list.push({ id: 'sn' + s.id, name: 'DAS', due: s.data_vencimento, competencia: `Simples Nacional · ${s.competencia}`, valor: s.valor_das != null ? Number(s.valor_das) : null }); });
+    return list.sort((a, b) => a.due.localeCompare(b.due));
+  }, [obrig, simples]);
+  const in30 = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30));
+  const upcoming = dues.filter(d => d.due >= iso(today) && d.due <= in30 && !(d as any).done);
+  const pendentesMes = obrig.filter((o: any) => o.status !== 'done' && o.reference_month && o.due_date?.slice(0, 7) === ym(today)).length;
+
   const myAvisos = avisos.filter(a => a.audience === 'all' || (a.audience === 'client' && a.client_id === activeId) || (a.audience === 'regime' && a.tax_regime === company?.tax_regime));
+  const initials = (profile?.full_name || user?.email || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((s: string) => s[0]?.toUpperCase()).join('');
 
   if (loading) return <div className="flex min-h-[100dvh] items-center justify-center"><p className="text-muted-foreground">Carregando...</p></div>;
   if (!user) return <Navigate to="/auth" replace />;
@@ -131,124 +155,165 @@ export default function Portal() {
     } finally { setBusy(null); }
   }
 
+  async function openDoc(d: DocItem, download: boolean) {
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(d.file_url, 120, download ? { download: d.file_name } : undefined);
+    if (error || !data) return toast({ title: 'Não foi possível abrir', description: 'Arquivo indisponível. Fale com o escritório.', variant: 'destructive' });
+    window.open(data.signedUrl, '_blank', 'noopener');
+  }
+
   const limite = limiteAnual(ano, company?.opening_date ?? null);
-  const faixa = faixaDe(total, limite);
+  const faixa = faixaDe(totalAno, limite);
+  const NAV: { key: View; label: string; icon: any }[] = [
+    { key: 'dashboard', label: 'Dashboard', icon: Home }, { key: 'calendario', label: 'Calendário', icon: CalendarDays },
+    { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'perfil', label: 'Perfil', icon: User },
+  ];
+
+  const meiBlock = modules.includes('das_mei') && (
+    <SectionCard className="space-y-3">
+      <h2 className="text-lg font-bold text-portal-ink">MEI</h2>
+      <div className="space-y-1">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-1 text-sm"><span>Limite anual {ano}</span><span className="tabular-nums">{brl(totalAno)} de {brl(limite)}</span></div>
+        <div className="h-3 rounded-full bg-muted overflow-hidden"><div className={cn('h-full', faixa === 'normal' ? 'bg-portal-blue' : 'bg-destructive')} style={{ width: `${Math.min(100, limite ? (totalAno / limite) * 100 : 100)}%` }} /></div>
+        <p className="text-xs text-muted-foreground">{faixa === 'normal' ? `Disponível: ${brl(Math.max(0, limite - totalAno))}` : faixa === 'alerta' ? 'Atenção: acima de 80% do limite. Fale com o escritório.' : 'Limite ultrapassado. Fale com o escritório.'}</p>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Select value={mes} onValueChange={setMes}>
+          <SelectTrigger className="h-11 sm:h-10 w-full sm:w-32" aria-label="Mês do DAS"><SelectValue /></SelectTrigger>
+          <SelectContent>{MONTHS.map((m, i) => <SelectItem key={m} value={String(i + 1).padStart(2, '0')}>{m}/{ano}</SelectItem>)}</SelectContent>
+        </Select>
+        <Button className="h-11 sm:h-10 bg-portal-blue hover:bg-portal-blue-strong text-primary-foreground" onClick={() => emitir('das')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'das' ? 'Gerando...' : 'Emitir DAS'}</Button>
+        <Button className="h-11 sm:h-10" variant="outline" onClick={() => emitir('ccmei')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'ccmei' ? 'Gerando...' : 'Emitir CCMEI'}</Button>
+      </div>
+    </SectionCard>
+  );
 
   return (
-    <div className="min-h-[100dvh] bg-background overflow-x-hidden">
-      <header className="sticky top-0 z-20 bg-secondary text-secondary-foreground" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className="mx-auto max-w-4xl flex items-center gap-3 px-4 h-14">
-          <span className="font-bold tracking-tight">Velocitä</span>
-          <span className="text-xs text-secondary-foreground/60 hidden sm:inline">Área do Cliente</span>
-          <Button variant="ghost" size="sm" aria-label="Sair" className="ml-auto h-11 sm:h-9 text-secondary-foreground hover:bg-secondary-foreground/10" onClick={signOut}><LogOut className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Sair</span></Button>
+    <div className="min-h-[100dvh] bg-portal-bg overflow-x-hidden text-portal-ink">
+      <header className="sticky top-0 z-20 bg-portal-bg/95 backdrop-blur border-b border-border/50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="mx-auto max-w-5xl flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="h-9 w-9 rounded-xl bg-portal-blue text-primary-foreground flex items-center justify-center font-black text-lg">V</span>
+            <span className="hidden sm:block leading-tight"><span className="block font-bold text-lg">Velocitä</span><span className="block text-xs text-muted-foreground">Portal do Cliente</span></span>
+          </div>
+          {companies.length > 0 && (
+            <Select value={activeId} onValueChange={setActiveId} disabled={companies.length < 2}>
+              <SelectTrigger className="h-12 flex-1 min-w-0 max-w-sm bg-card" aria-label="Empresa">
+                <span className="flex items-center gap-2 min-w-0 text-left">
+                  <span className="h-8 w-8 shrink-0 rounded-lg bg-portal-blue-soft text-portal-blue flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
+                  <span className="min-w-0"><span className="block text-sm font-semibold truncate">{company?.company_name}</span><span className="block text-[11px] text-muted-foreground truncate">{company?.document}</span></span>
+                </span>
+              </SelectTrigger>
+              <SelectContent className="max-w-[calc(100vw-2rem)]">{companies.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative h-11 w-11 shrink-0 ml-auto" aria-label="Avisos">
+                <Bell className="h-5 w-5" />
+                {myAvisos.length > 0 && <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">{myAvisos.length}</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 max-w-[calc(100vw-1.5rem)] max-h-96 overflow-y-auto p-0">
+              <p className="px-4 py-3 font-semibold border-b">Avisos da contabilidade</p>
+              {myAvisos.length === 0 && <p className="p-4 text-sm text-muted-foreground">Nenhum aviso no momento.</p>}
+              {myAvisos.map(a => <div key={a.id} className="px-4 py-3 border-b last:border-0"><p className="text-sm font-medium break-words">{a.title}</p><p className="text-xs text-muted-foreground whitespace-pre-line [overflow-wrap:anywhere]">{a.body}</p></div>)}
+            </PopoverContent>
+          </Popover>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-blue" aria-label="Menu do usuário">
+                <span className="h-10 w-10 rounded-full bg-portal-ink text-primary-foreground flex items-center justify-center text-sm font-semibold">{initials}</span>
+                <ChevronDown className="h-4 w-4 hidden sm:block" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="max-w-[220px] truncate">{profile?.full_name || user.email}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate('/change-password')}><KeyRound className="h-4 w-4 mr-2" />Trocar senha</DropdownMenuItem>
+              <DropdownMenuItem onClick={signOut}><LogOut className="h-4 w-4 mr-2" />Sair</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+        <nav className="hidden md:flex mx-auto max-w-5xl px-4 gap-1">
+          {NAV.map(n => <button key={n.key} onClick={() => setView(n.key)} className={cn('flex items-center gap-2 px-3 py-2 text-sm border-b-2 -mb-px', view === n.key ? 'border-portal-blue text-portal-blue font-semibold' : 'border-transparent text-muted-foreground hover:text-portal-ink')}><n.icon className="h-4 w-4" />{n.label}</button>)}
+        </nav>
       </header>
 
-      <main className="mx-auto max-w-4xl p-3 sm:p-4 space-y-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+      <main className="mx-auto max-w-5xl p-3 sm:p-4 space-y-4 pb-28 md:pb-8">
         {companies.length === 0 ? (
-          <Card><CardContent className="py-10 text-center text-muted-foreground">Nenhuma empresa vinculada ao seu acesso. Fale com o escritório.</CardContent></Card>
+          <SectionCard><p className="py-8 text-center text-muted-foreground">Nenhuma empresa vinculada ao seu acesso. Fale com o escritório.</p></SectionCard>
+        ) : view === 'dashboard' ? (
+          <>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <KpiCard onClick={() => setView('calendario')} icon={<CalendarDays className="h-6 w-6" />} iconClass="bg-portal-blue-soft text-portal-blue" title="Próximos vencimentos" value={upcoming.length} hint="Nos próximos 30 dias" />
+              <KpiCard onClick={() => setView('calendario')} icon={<FileText className="h-6 w-6" />} iconClass="bg-warning/10 text-warning" title="Documentos pendentes" value={pendentesMes} hint="Aguardando envio" />
+              <KpiCard onClick={() => setView('documentos')} icon={<BarChart3 className="h-6 w-6" />} iconClass="bg-success/10 text-success" title="Faturamento do mês" value={brl(monthSum(0))} hint={<><Trend pct={pctChange(monthSum(0), monthSum(-1))} /> <span className="hidden sm:inline">em relação ao mês anterior</span></>} />
+            </div>
+            {meiBlock}
+            <FiscalCalendar items={dues} month={calMonth} onMonth={setCalMonth} />
+            <RevenueChart data={chart} total={periodTotal} pct={pctChange(periodTotal, prevYearTotal)} range={range} onRange={setRange} />
+            <RecentDocuments docs={docs} onOpen={openDoc} onSeeAll={() => setView('documentos')} />
+            <UpcomingDues items={upcoming} onSeeAll={() => setView('calendario')} />
+          </>
+        ) : view === 'calendario' ? (
+          <>
+            <FiscalCalendar items={dues} month={calMonth} onMonth={setCalMonth} />
+            <UpcomingDues items={upcoming} limit={50} />
+          </>
+        ) : view === 'documentos' ? (
+          <Tabs defaultValue="docs">
+            <TabsList className="flex w-full overflow-x-auto justify-start h-auto [&>button]:shrink-0 [&>button]:min-h-10">
+              <TabsTrigger value="docs">Documentos</TabsTrigger>
+              {modules.includes('das_simples') && <TabsTrigger value="guias">Guias DAS</TabsTrigger>}
+              <TabsTrigger value="emitidas">Notas emitidas</TabsTrigger>
+              <TabsTrigger value="recebidas">Notas recebidas</TabsTrigger>
+            </TabsList>
+            <TabsContent value="docs" className="mt-4"><RecentDocuments docs={docs} onOpen={openDoc} limit={200} /></TabsContent>
+            <TabsContent value="guias" className="mt-4">
+              <SectionCard className="divide-y divide-border/70">
+                {simples.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma guia disponibilizada pelo escritório.</p>}
+                {simples.map(s => (
+                  <div key={s.id} className="flex items-center gap-2 sm:gap-3 py-2 text-sm">
+                    <div className="flex-1 min-w-0"><p className="truncate font-medium">{s.competencia}</p><p className="text-xs text-muted-foreground">{s.data_vencimento ? `Vence ${s.data_vencimento.split('-').reverse().join('/')}` : ''} · {s.status}</p></div>
+                    <span className="tabular-nums shrink-0">{s.valor_das != null ? brl(Number(s.valor_das)) : '—'}</span>
+                    {s.das_pdf_base64 && <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0" aria-label="Baixar DAS" onClick={() => openPdf(s.das_pdf_base64, `DAS_${s.competencia}.pdf`)}><FileDown className="h-4 w-4" /></Button>}
+                  </div>
+                ))}
+              </SectionCard>
+            </TabsContent>
+            <TabsContent value="emitidas" className="mt-4"><SectionCard><NotasList notas={emitidas} /></SectionCard></TabsContent>
+            <TabsContent value="recebidas" className="mt-4"><SectionCard><NotasList notas={recebidas} showEmitter /></SectionCard></TabsContent>
+          </Tabs>
         ) : (
           <>
-            <div className="flex flex-col sm:flex-row gap-2 min-w-0">
-              {companies.length > 1 ? (
-                <Select value={activeId} onValueChange={setActiveId}>
-                  <SelectTrigger className="h-11 sm:h-10 w-full sm:flex-1 min-w-0 [&>span]:truncate" aria-label="Empresa"><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-w-[calc(100vw-2rem)]">{companies.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
-                </Select>
-              ) : <h1 className="text-lg font-semibold sm:flex-1 break-words min-w-0">{company?.company_name}</h1>}
-              <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
-                <SelectTrigger className="h-11 sm:h-10 w-full sm:w-28" aria-label="Ano"><SelectValue /></SelectTrigger>
-                <SelectContent>{[0, 1, 2, 3].map(d => { const y = new Date().getFullYear() - d; return <SelectItem key={y} value={String(y)}>{y}</SelectItem>; })}</SelectContent>
-              </Select>
+            <SectionCard className="flex items-center gap-4">
+              <span className="h-14 w-14 rounded-full bg-portal-ink text-primary-foreground flex items-center justify-center text-lg font-semibold shrink-0">{initials}</span>
+              <div className="min-w-0"><p className="font-semibold break-words">{profile?.full_name || 'Cliente'}</p><p className="text-sm text-muted-foreground break-all">{user.email}</p></div>
+            </SectionCard>
+            <SectionCard className="space-y-2">
+              <p className="font-semibold">Empresas</p>
+              {companies.map(c => <p key={c.id} className="text-sm break-words">{c.company_name} <span className="text-muted-foreground">· {c.document} · {c.tax_regime || 'Regime não informado'}</span></p>)}
+            </SectionCard>
+            <SectionCard className="space-y-2">
+              <p className="font-semibold">Avisos da contabilidade</p>
+              {myAvisos.length === 0 && <p className="text-sm text-muted-foreground">Nenhum aviso no momento.</p>}
+              {myAvisos.map(a => <div key={a.id} className="flex gap-3 py-2"><Megaphone className="h-5 w-5 text-portal-blue shrink-0" /><div className="min-w-0"><p className="font-medium break-words">{a.title}</p><p className="text-sm text-muted-foreground whitespace-pre-line [overflow-wrap:anywhere]">{a.body}</p></div></div>)}
+            </SectionCard>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" className="h-11" onClick={() => navigate('/change-password')}><KeyRound className="h-4 w-4 mr-2" />Trocar senha</Button>
+              <Button variant="outline" className="h-11" onClick={signOut}><LogOut className="h-4 w-4 mr-2" />Sair</Button>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2 break-words">{company?.document} · {company?.tax_regime || 'Regime não informado'}</p>
-
-            <Tabs defaultValue="faturamento">
-              <div className="sticky z-10 -mx-3 px-3 sm:mx-0 sm:px-0 py-1 bg-background" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
-              <TabsList className="flex w-full overflow-x-auto justify-start h-auto [&>button]:shrink-0 [&>button]:min-h-10">
-                <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
-                <TabsTrigger value="emitidas">Emitidas</TabsTrigger>
-                <TabsTrigger value="recebidas">Recebidas</TabsTrigger>
-                {(modules.includes('das_mei') || modules.includes('das_simples')) && <TabsTrigger value="guias">Guias</TabsTrigger>}
-                <TabsTrigger value="avisos">Avisos{myAvisos.length ? ` (${myAvisos.length})` : ''}</TabsTrigger>
-              </TabsList>
-              </div>
-
-              <TabsContent value="faturamento" className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <Card className="min-w-0"><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground">Faturado em {ano}</p><p className="text-base sm:text-xl font-bold tabular-nums break-all">{brl(total)}</p></CardContent></Card>
-                  <Card className="min-w-0"><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground">Notas emitidas</p><p className="text-base sm:text-xl font-bold">{emitidas.filter(n => !isCancelled(n.status)).length}</p></CardContent></Card>
-                </div>
-                {modules.includes('limite') && (
-                  <Card>
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex flex-col sm:flex-row sm:justify-between gap-1 text-sm"><span>Limite MEI {ano}</span><span className="tabular-nums">{brl(total)} de {brl(limite)}</span></div>
-                      <div className="h-3 rounded-full bg-muted overflow-hidden"><div className={`h-full ${faixa === 'normal' ? 'bg-primary' : 'bg-destructive'}`} style={{ width: `${Math.min(100, limite ? (total / limite) * 100 : 100)}%` }} /></div>
-                      <p className="text-xs text-muted-foreground">{faixa === 'normal' ? `Disponível: ${brl(Math.max(0, limite - total))}` : faixa === 'alerta' ? 'Atenção: acima de 80% do limite. Fale com o escritório.' : 'Limite ultrapassado. Fale com o escritório.'}</p>
-                    </CardContent>
-                  </Card>
-                )}
-                <Card>
-                  <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2"><CardTitle className="text-base">Por mês</CardTitle></CardHeader>
-                  <CardContent className="space-y-1 p-3 pt-0 sm:p-6 sm:pt-0">
-                    {meses.map((v, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[11px] sm:text-xs">
-                        <span className="w-7 sm:w-8 shrink-0 text-muted-foreground">{MONTHS[i]}</span>
-                        <div className="flex-1 min-w-0 h-4 bg-muted rounded"><div className="h-full bg-primary rounded" style={{ width: `${(v / max) * 100}%` }} /></div>
-                        <span className="w-20 sm:w-24 shrink-0 text-right tabular-nums">{brl(v)}</span>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="emitidas" className="mt-4"><Card><CardContent className="p-3 sm:p-4"><NotasList notas={emitidas} /></CardContent></Card></TabsContent>
-              <TabsContent value="recebidas" className="mt-4"><Card><CardContent className="p-3 sm:p-4"><NotasList notas={recebidas} showEmitter /></CardContent></Card></TabsContent>
-
-              <TabsContent value="guias" className="mt-4 space-y-4">
-                {modules.includes('das_mei') && (
-                  <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-base">DAS MEI e CCMEI</CardTitle></CardHeader>
-                    <CardContent className="flex flex-col sm:flex-row gap-2">
-                      <Select value={mes} onValueChange={setMes}>
-                        <SelectTrigger className="h-11 sm:h-10 w-full sm:w-28" aria-label="Mês"><SelectValue /></SelectTrigger>
-                        <SelectContent>{MONTHS.map((m, i) => <SelectItem key={m} value={String(i + 1).padStart(2, '0')}>{m}/{ano}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Button className="h-11 sm:h-10 w-full sm:w-auto" onClick={() => emitir('das')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'das' ? 'Gerando...' : 'Emitir DAS'}</Button>
-                      <Button className="h-11 sm:h-10 w-full sm:w-auto" variant="outline" onClick={() => emitir('ccmei')} disabled={!!busy}><FileDown className="h-4 w-4 mr-1" />{busy === 'ccmei' ? 'Gerando...' : 'Emitir CCMEI'}</Button>
-                    </CardContent>
-                  </Card>
-                )}
-                {modules.includes('das_simples') && (
-                  <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-base">DAS do Simples Nacional</CardTitle></CardHeader>
-                    <CardContent className="divide-y divide-border">
-                      {simples.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma guia disponibilizada pelo escritório em {ano}.</p>}
-                      {simples.map(s => (
-                        <div key={s.id} className="flex items-center gap-2 sm:gap-3 py-2 text-sm">
-                          <div className="flex-1 min-w-0"><p className="truncate">{s.competencia}</p><p className="text-xs text-muted-foreground break-words">{s.data_vencimento ? `Vence ${s.data_vencimento.split('-').reverse().join('/')}` : ''} · {s.status}</p></div>
-                          <span className="tabular-nums shrink-0">{s.valor_das != null ? brl(Number(s.valor_das)) : '—'}</span>
-                          {s.das_pdf_base64 && <Button size="icon" variant="ghost" className="h-11 w-11 sm:h-10 sm:w-10 shrink-0" aria-label="Baixar DAS" onClick={() => openPdf(s.das_pdf_base64, `DAS_${s.competencia}.pdf`)}><FileDown className="h-4 w-4" /></Button>}
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              <TabsContent value="avisos" className="mt-4 space-y-2">
-                {myAvisos.length === 0 && <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum aviso no momento.</CardContent></Card>}
-                {myAvisos.map(a => (
-                  <Card key={a.id}><CardContent className="p-3 sm:p-4 flex gap-3">
-                    <Megaphone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                    <div className="min-w-0"><p className="font-medium break-words">{a.title}</p><p className="text-sm text-muted-foreground whitespace-pre-line break-words [overflow-wrap:anywhere]">{a.body}</p><p className="text-xs text-muted-foreground mt-1">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p></div>
-                  </CardContent></Card>
-                ))}
-              </TabsContent>
-            </Tabs>
           </>
         )}
       </main>
+
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-4" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {NAV.map(n => (
+          <button key={n.key} onClick={() => { setView(n.key); window.scrollTo({ top: 0 }); }} className={cn('flex flex-col items-center gap-0.5 py-2 min-h-14 text-xs', view === n.key ? 'text-portal-blue font-semibold' : 'text-muted-foreground')} aria-current={view === n.key ? 'page' : undefined}>
+            <n.icon className="h-6 w-6" />{n.label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
