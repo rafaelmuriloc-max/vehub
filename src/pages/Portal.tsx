@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, BarChart3 } from 'lucide-react';
+import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3 } from 'lucide-react';
+import PortalPersonnel from '@/components/portal/PortalPersonnel';
 import { modulesFor } from '@/lib/portal';
 import { limiteAnual, faixaDe } from '@/lib/meiLimit';
 import { pctChange } from '@/lib/portalDashboard';
