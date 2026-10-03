@@ -5,11 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3 } from 'lucide-react';
+import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3, Receipt } from 'lucide-react';
 import logoVelocita from '@/assets/logo_velocita.jpeg.asset.json';
 import PortalPersonnel from '@/components/portal/PortalPersonnel';
 import { modulesFor } from '@/lib/portal';
@@ -20,7 +21,7 @@ import { brl, MONTHS, DueItem, DocItem, SectionCard, KpiCard, Trend, FiscalCalen
 
 type Company = { id: string; company_name: string; document: string | null; tax_regime: string | null; opening_date: string | null };
 type Nota = { id: string; invoice_number: string | null; issue_date: string | null; total_value: number | null; status: string | null; emitter_name: string | null; kind: 'NF-e' | 'NFC-e' };
-type View = 'dashboard' | 'calendario' | 'documentos' | 'pessoal' | 'perfil';
+type View = 'dashboard' | 'calendario' | 'documentos' | 'notas' | 'pessoal' | 'perfil';
 
 const db = supabase as any;
 const isCancelled = (s: string | null) => (s || '').toLowerCase().includes('cancel');
@@ -65,6 +66,32 @@ function NotasList({ notas, showEmitter }: { notas: Nota[]; showEmitter?: boolea
         </div>
       ))}
     </div>
+  );
+}
+
+function NotasView({ emitidas, recebidas }: { emitidas: Nota[]; recebidas: Nota[] }) {
+  const [tab, setTab] = useState<'emitidas' | 'recebidas'>('emitidas');
+  const [q, setQ] = useState('');
+  const base = tab === 'emitidas' ? emitidas : recebidas;
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return s ? base.filter(n => String(n.invoice_number || '').toLowerCase().includes(s) || (n.emitter_name || '').toLowerCase().includes(s)) : base;
+  }, [base, q]);
+  const validas = list.filter(n => !isCancelled(n.status));
+  const total = validas.reduce((a, n) => a + (Number(n.total_value) || 0), 0);
+  return (
+    <Tabs value={tab} onValueChange={v => setTab(v as any)}>
+      <TabsList className="grid w-full grid-cols-2 h-auto [&>button]:min-h-10">
+        <TabsTrigger value="emitidas">Emitidas</TabsTrigger>
+        <TabsTrigger value="recebidas">Recebidas</TabsTrigger>
+      </TabsList>
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
+        <SectionCard><p className="text-xs text-muted-foreground">Notas válidas</p><p className="text-xl font-bold tabular-nums">{validas.length}</p></SectionCard>
+        <SectionCard><p className="text-xs text-muted-foreground">Valor total</p><p className="text-xl font-bold tabular-nums break-words">{brl(total)}</p></SectionCard>
+      </div>
+      <Input className="mt-3 h-11" placeholder={tab === 'recebidas' ? 'Buscar por número ou emitente' : 'Buscar por número'} value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar notas" />
+      <SectionCard className="mt-3"><NotasList notas={list} showEmitter={tab === 'recebidas'} /></SectionCard>
+    </Tabs>
   );
 }
 
@@ -167,7 +194,7 @@ export default function Portal() {
   const faixa = faixaDe(totalAno, limite);
   const NAV: { key: View; label: string; icon: any }[] = [
     { key: 'dashboard', label: 'Dashboard', icon: Home }, { key: 'calendario', label: 'Calendário', icon: CalendarDays },
-    { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'pessoal', label: 'Pessoal', icon: Users }, { key: 'perfil', label: 'Perfil', icon: User },
+    { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'notas', label: 'Notas', icon: Receipt }, { key: 'pessoal', label: 'Pessoal', icon: Users }, { key: 'perfil', label: 'Perfil', icon: User },
   ];
 
   const meiBlock = modules.includes('das_mei') && (
@@ -246,7 +273,7 @@ export default function Portal() {
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <KpiCard onClick={() => setView('calendario')} icon={<CalendarDays className="h-6 w-6" />} iconClass="bg-portal-blue-soft text-portal-blue" title="Próximos vencimentos" value={upcoming.length} hint="Nos próximos 30 dias" />
               <KpiCard onClick={() => setView('calendario')} icon={<FileText className="h-6 w-6" />} iconClass="bg-warning/10 text-warning" title="Documentos pendentes" value={pendentesMes} hint="Aguardando envio" />
-              <KpiCard onClick={() => setView('documentos')} icon={<BarChart3 className="h-6 w-6" />} iconClass="bg-success/10 text-success" title="Faturamento do mês" value={brl(monthSum(0))} hint={<><Trend pct={pctChange(monthSum(0), monthSum(-1))} /> <span className="hidden sm:inline">em relação ao mês anterior</span></>} />
+              <KpiCard onClick={() => setView('notas')} icon={<BarChart3 className="h-6 w-6" />} iconClass="bg-success/10 text-success" title="Faturamento do mês" value={brl(monthSum(0))} hint={<><Trend pct={pctChange(monthSum(0), monthSum(-1))} /> <span className="hidden sm:inline">em relação ao mês anterior</span></>} />
             </div>
             {meiBlock}
             <FiscalCalendar items={dues} month={calMonth} onMonth={setCalMonth} />
@@ -264,8 +291,6 @@ export default function Portal() {
             <TabsList className="flex w-full overflow-x-auto justify-start h-auto [&>button]:shrink-0 [&>button]:min-h-10">
               <TabsTrigger value="docs">Documentos</TabsTrigger>
               {modules.includes('das_simples') && <TabsTrigger value="guias">Guias DAS</TabsTrigger>}
-              <TabsTrigger value="emitidas">Notas emitidas</TabsTrigger>
-              <TabsTrigger value="recebidas">Notas recebidas</TabsTrigger>
             </TabsList>
             <TabsContent value="docs" className="mt-4"><RecentDocuments docs={docs} onOpen={openDoc} limit={200} /></TabsContent>
             <TabsContent value="guias" className="mt-4">
@@ -280,9 +305,9 @@ export default function Portal() {
                 ))}
               </SectionCard>
             </TabsContent>
-            <TabsContent value="emitidas" className="mt-4"><SectionCard><NotasList notas={emitidas} /></SectionCard></TabsContent>
-            <TabsContent value="recebidas" className="mt-4"><SectionCard><NotasList notas={recebidas} showEmitter /></SectionCard></TabsContent>
           </Tabs>
+        ) : view === 'notas' ? (
+          <NotasView emitidas={emitidas} recebidas={recebidas} />
         ) : view === 'pessoal' ? (
           activeId ? <PortalPersonnel clientId={activeId} /> : null
         ) : (
@@ -308,10 +333,10 @@ export default function Portal() {
         )}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-5" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {NAV.map(n => (
-          <button key={n.key} onClick={() => { setView(n.key); window.scrollTo({ top: 0 }); }} className={cn('flex flex-col items-center gap-0.5 py-2 min-h-14 text-xs', view === n.key ? 'text-portal-blue font-semibold' : 'text-muted-foreground')} aria-current={view === n.key ? 'page' : undefined}>
-            <n.icon className="h-6 w-6" />{n.label}
+          <button key={n.key} onClick={() => { setView(n.key); window.scrollTo({ top: 0 }); }} className={cn('flex flex-col items-center gap-0.5 py-2 min-h-14 text-[10px] min-w-0', view === n.key ? 'text-portal-blue font-semibold' : 'text-muted-foreground')} aria-current={view === n.key ? 'page' : undefined}>
+            <n.icon className="h-5 w-5" /><span className="truncate max-w-full">{n.label}</span>
           </button>
         ))}
       </nav>
