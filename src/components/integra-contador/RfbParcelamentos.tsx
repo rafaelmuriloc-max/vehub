@@ -1131,6 +1131,49 @@ export default function RfbParcelamentos() {
                 )}
               </div>
 
+              {PARCELAS_SERVICES[detailRow.modalidade] && (
+                <div className="border-t pt-3">
+                  <div className="text-sm font-semibold mb-2">Parcelas pagas{pagamentos.length ? ` (${pagamentos.length})` : ''}</div>
+                  {pagamentosLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Carregando pagamentos...
+                    </div>
+                  ) : pagamentosError ? (
+                    <div className="text-sm text-destructive">{pagamentosError}</div>
+                  ) : pagamentos.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Nenhum pagamento registrado.</div>
+                  ) : (
+                    <ScrollArea className="max-h-[280px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Parcela</TableHead>
+                            <TableHead>Data pagamento</TableHead>
+                            <TableHead>Valor pago</TableHead>
+                            <TableHead className="hidden sm:table-cell">Nº DAS</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pagamentos.map((p, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-mono">{p.parcela || '-'}</TableCell>
+                              <TableCell>{p.data || '-'}</TableCell>
+                              <TableCell>{p.valor != null ? p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}</TableCell>
+                              <TableCell className="hidden sm:table-cell font-mono text-xs">{p.das || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow>
+                            <TableCell colSpan={2} className="font-semibold">Total pago</TableCell>
+                            <TableCell className="font-semibold">{pagamentos.reduce((s, p) => s + (p.valor ?? 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                            <TableCell className="hidden sm:table-cell" />
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  )}
+                </div>
+              )}
+
               <details className="text-xs">
                 <summary className="cursor-pointer text-muted-foreground">Resposta bruta</summary>
                 <ScrollArea className="max-h-[300px] rounded border mt-2">
