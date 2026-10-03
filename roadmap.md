@@ -21,3 +21,7 @@
 - [ ] Validação de assinatura e resolução de organização nos webhooks
 - [ ] Telas por organização (seletor de escritório, rota sem acesso, convites)
 - [ ] Configurar o provider Google e ligar as flags
+
+- [x] PGFN: gestão manual de negociações (parcelamento_results origem PGFN), guia em bucket privado, envio revisado, Emitir no Regularize (SISPAR)
+- [ ] PGFN: sincronização automática — bloqueado: sem API oficial nem conector autenticado confirmado (Infosimples issue 602 aberta)
+- [ ] PGFN: índice único (client_id, origem, numero) no banco — aguarda autorização de migração
