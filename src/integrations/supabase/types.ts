@@ -4293,9 +4293,55 @@ export type Database = {
           system_code: string
         }[]
       }
+      portal_employees: {
+        Args: { _client_id: string }
+        Returns: {
+          admission_date: string
+          cpf_masked: string
+          employee_code: string
+          full_name: string
+          id: string
+          position: string
+          salary: number
+          status: string
+          termination_date: string
+          trial_days_1: number
+          trial_days_2: number
+          trial_end_1: string
+          trial_end_2: string
+        }[]
+      }
       portal_my_clients: { Args: never; Returns: string[] }
       portal_norm_email: { Args: { _e: string }; Returns: string }
+      portal_payroll: {
+        Args: { _client_id: string }
+        Returns: {
+          active_count: number
+          admitted_count: number
+          competence: string
+          dismissed_count: number
+          fgts_value: number
+          gross: number
+          inss_value: number
+          net: number
+          qty_employees: number
+        }[]
+      }
       portal_safe_uuid: { Args: { _t: string }; Returns: string }
+      portal_vacations: {
+        Args: { _client_id: string }
+        Returns: {
+          acquisition_end: string
+          acquisition_start: string
+          days_right: number
+          deadline_date: string
+          employee_id: string
+          employee_name: string
+          enjoy_end: string
+          enjoy_start: string
+          id: string
+        }[]
+      }
       recalc_obligation_instance_status: {
         Args: { _instance_id: string }
         Returns: undefined

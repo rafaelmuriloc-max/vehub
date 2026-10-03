@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, BarChart3 } from 'lucide-react';
+import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3 } from 'lucide-react';
+import PortalPersonnel from '@/components/portal/PortalPersonnel';
 import { modulesFor } from '@/lib/portal';
 import { limiteAnual, faixaDe } from '@/lib/meiLimit';
 import { pctChange } from '@/lib/portalDashboard';
@@ -18,7 +19,7 @@ import { brl, MONTHS, DueItem, DocItem, SectionCard, KpiCard, Trend, FiscalCalen
 
 type Company = { id: string; company_name: string; document: string | null; tax_regime: string | null; opening_date: string | null };
 type Nota = { id: string; invoice_number: string | null; issue_date: string | null; total_value: number | null; status: string | null; emitter_name: string | null; kind: 'NF-e' | 'NFC-e' };
-type View = 'dashboard' | 'calendario' | 'documentos' | 'perfil';
+type View = 'dashboard' | 'calendario' | 'documentos' | 'pessoal' | 'perfil';
 
 const db = supabase as any;
 const isCancelled = (s: string | null) => (s || '').toLowerCase().includes('cancel');
@@ -165,7 +166,7 @@ export default function Portal() {
   const faixa = faixaDe(totalAno, limite);
   const NAV: { key: View; label: string; icon: any }[] = [
     { key: 'dashboard', label: 'Dashboard', icon: Home }, { key: 'calendario', label: 'Calendário', icon: CalendarDays },
-    { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'perfil', label: 'Perfil', icon: User },
+    { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'pessoal', label: 'Pessoal', icon: Users }, { key: 'perfil', label: 'Perfil', icon: User },
   ];
 
   const meiBlock = modules.includes('das_mei') && (
@@ -281,6 +282,8 @@ export default function Portal() {
             <TabsContent value="emitidas" className="mt-4"><SectionCard><NotasList notas={emitidas} /></SectionCard></TabsContent>
             <TabsContent value="recebidas" className="mt-4"><SectionCard><NotasList notas={recebidas} showEmitter /></SectionCard></TabsContent>
           </Tabs>
+        ) : view === 'pessoal' ? (
+          activeId ? <PortalPersonnel clientId={activeId} /> : null
         ) : (
           <>
             <SectionCard className="flex items-center gap-4">
@@ -304,7 +307,7 @@ export default function Portal() {
         )}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-4" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-5" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {NAV.map(n => (
           <button key={n.key} onClick={() => { setView(n.key); window.scrollTo({ top: 0 }); }} className={cn('flex flex-col items-center gap-0.5 py-2 min-h-14 text-xs', view === n.key ? 'text-portal-blue font-semibold' : 'text-muted-foreground')} aria-current={view === n.key ? 'page' : undefined}>
             <n.icon className="h-6 w-6" />{n.label}
