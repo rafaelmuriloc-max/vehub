@@ -185,8 +185,8 @@ export function UpcomingDues({ items, onSeeAll, limit = 3 }: { items: DueItem[];
           const [, mm, dd] = i.due.slice(0, 10).split('-');
           return (
             <div key={i.id} className="flex items-center gap-3 py-2.5">
-              <span className={cn('h-12 w-14 shrink-0 rounded-lg flex flex-col items-center justify-center leading-none', b.tone === 'danger' && days <= 0 ? 'bg-destructive/10 text-destructive' : 'bg-portal-blue-soft text-portal-ink')}>
-                <span className="text-lg font-bold">{dd}</span><span className="text-[10px] uppercase">{MONTHS[Number(mm) - 1]}</span>
+              <span className={cn('h-14 w-14 shrink-0 rounded-xl border flex flex-col items-center justify-center', b.tone === 'danger' ? 'bg-destructive/10 border-destructive/20' : 'bg-portal-blue-soft border-portal-blue/15')}>
+                <span className={cn('text-xl font-extrabold leading-none', b.tone === 'danger' ? 'text-destructive' : 'text-portal-ink')}>{dd}</span><span className="text-[11px] font-medium uppercase text-portal-ink mt-0.5">{MONTHS[Number(mm) - 1]}</span>
               </span>
               <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-portal-ink truncate">{i.name}</p><p className="text-xs text-muted-foreground truncate">{i.competencia}</p></div>
               <span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap', b.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning')}>{b.label}</span>
