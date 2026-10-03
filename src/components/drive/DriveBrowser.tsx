@@ -150,7 +150,8 @@ export function DriveBrowser({ mode = 'manage', multiple = true, onPick, onClose
 
   const load = useCallback(async () => {
     setLoading(true);
-    setSelected({});
+    // No modo de anexar, mantém os arquivos marcados ao trocar de pasta.
+    if (mode !== 'picker') setSelected({});
     try {
       const res = await callDrive('list', { folderId, q: appliedSearch || undefined, pageSize: 300, filter: tab });
       const list: DriveFile[] = res.files || [];

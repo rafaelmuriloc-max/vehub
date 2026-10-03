@@ -330,7 +330,8 @@ Deno.serve(async (req) => {
             // Download e upload para o bucket documents
             const bytes = await downloadDriveBytes(f.id);
             const safeName = sanitizeFileName(f.name);
-            const storagePath = `${client.id}/${refMonth}/${docType.id}/${safeName}`;
+            const refMonthIso = `${refMonth}-01`; // documents.reference_month é date
+            const storagePath = `${client.id}/${refMonthIso}/${docType.id}/${safeName}`;
             const { error: upErr } = await supabase.storage
               .from("documents")
               .upload(storagePath, bytes, { upsert: true, contentType: f.mimeType });
