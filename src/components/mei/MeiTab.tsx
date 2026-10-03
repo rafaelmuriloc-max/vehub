@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Store, Search, ChevronLeft, ChevronRight, Loader2, FileDown, Award, Terminal, Play, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Store, Search, ChevronLeft, ChevronRight, Loader2, FileDown, Award, Terminal, Play, RefreshCw, Send, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,10 @@ import { cn, formatClientLabel } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MeiLimitTab from './MeiLimitTab';
 import JSZip from 'jszip';
+import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/hooks/useAuth';
+import { type SendOption, loadSendOptions, sendGuia, fillTemplate } from '@/lib/sendGuiaWhatsApp';
+const b64ToFile = (b64: string, name: string) => { const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new File([arr], name, { type: 'application/pdf' }); };
 import { Checkbox } from '@/components/ui/checkbox';
 
 type Client = { id: string; company_name: string; sci_code: string | null; document: string | null };
@@ -178,10 +182,45 @@ export default function MeiTab() {
   const fmtBRL = (v: number | null) => v == null ? '' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const fmtDate = (d: string | null) => d ? d.split('-').reverse().join('/') : '';
 
+  const { user, profile } = useAuth();
+  const nextDue = (() => { const d = new Date(Number(ano), Number(mes), 20); return `20/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })();
+  const defaultMsg = `Olá! Segue a guia DAS do MEI da empresa {empresa}, competência {competencia}, com vencimento em ${nextDue}. Qualquer dúvida, estamos à disposição.`;
+  const [sendWa, setSendWa] = useState(true);
+  const [msg, setMsg] = useState(defaultMsg);
+  useEffect(() => setMsg(defaultMsg), [defaultMsg]);
+  const [single, setSingle] = useState<{ c: Client; file: File; options: SendOption[]; sel: number; text: string } | null>(null);
+  const [singleSending, setSingleSending] = useState(false);
+  const vars = (c: Client) => ({ empresa: c.company_name, competencia: `${mes}/${ano}` });
+  async function genFile(c: Client): Promise<File> {
+    const svc = SERVICES.find(s => s.idServico === 'GERARDASPDF21')!;
+    const data = await run(c, svc, { periodoApuracao: `${ano}${mes}` });
+    const pdf = walkForPdf(parseDeep(data));
+    if (!pdf) throw new Error(errorOf(data) || 'A Receita não retornou o PDF');
+    return b64ToFile(pdf, `DAS_MEI_${ano}${mes}_${safe(c.company_name)}.pdf`);
+  }
+  async function openSingle(c: Client) {
+    setBusy(`${c.id}:send`);
+    try {
+      const [file, options] = await Promise.all([genFile(c), loadSendOptions(c.id)]);
+      setSingle({ c, file, options, sel: 0, text: fillTemplate(defaultMsg, vars(c)) });
+    } catch (e) { toast({ title: 'Erro ao gerar DAS', description: (e as Error).message, variant: 'destructive' }); }
+    finally { setBusy(null); }
+  }
+  async function confirmSingle() {
+    const opt = single?.options[single.sel];
+    if (!single || !opt || !user) return;
+    setSingleSending(true);
+    try {
+      await sendGuia({ opt, clientId: single.c.id, clientName: single.c.company_name, file: single.file, text: single.text, userId: user.id, senderName: profile?.full_name || undefined });
+      toast({ title: 'DAS enviado no WhatsApp' }); setSingle(null);
+    } catch (e) { toast({ title: 'Erro ao enviar', description: String((e as Error).message).slice(0, 200), variant: 'destructive' }); }
+    finally { setSingleSending(false); }
+  }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [includePaid, setIncludePaid] = useState(false);
-  const [batch, setBatch] = useState<{ open: boolean; running: boolean; done: number; total: number; ok: number; fails: { name: string; msg: string }[]; finished: boolean }>({ open: false, running: false, done: 0, total: 0, ok: 0, fails: [], finished: false });
+  const [batch, setBatch] = useState<{ open: boolean; running: boolean; done: number; total: number; ok: number; sent: number; fails: { name: string; msg: string }[]; finished: boolean }>({ open: false, running: false, done: 0, total: 0, ok: 0, sent: 0, fails: [], finished: false });
   const batchCancel = useRef(false);
+  const emptyBatch = { open: false, running: false, done: 0, total: 0, ok: 0, sent: 0, fails: [] as { name: string; msg: string }[], finished: false };
   const batchList = useMemo(() => {
     const base = selected.size ? filtered.filter(c => selected.has(c.id)) : filtered;
     return includePaid ? base : base.filter(c => statusOf(c.id) !== 'pago');
@@ -193,8 +232,8 @@ export default function MeiTab() {
   async function runBatch() {
     const list = batchList;
     batchCancel.current = false;
-    setBatch({ open: true, running: true, done: 0, total: list.length, ok: 0, fails: [], finished: false });
-    const zip = new JSZip(); let ok = 0; const fails: { name: string; msg: string }[] = [];
+    setBatch({ open: true, running: true, done: 0, total: list.length, ok: 0, sent: 0, fails: [], finished: false });
+    const zip = new JSZip(); let ok = 0, sent = 0; const fails: { name: string; msg: string }[] = [];
     const svc = SERVICES.find(s => s.idServico === 'GERARDASPDF21')!;
     for (let i = 0; i < list.length; i++) {
       if (batchCancel.current) break;
@@ -207,10 +246,23 @@ export default function MeiTab() {
           catch (e) { errMsg = (e as Error).message; await sleep(1500); }
         }
         const pdf = data ? walkForPdf(parseDeep(data)) : null;
-        if (pdf) { zip.file(`DAS_${c.sci_code || 'sem_codigo'}_${safe(c.company_name)}.pdf`, pdf, { base64: true }); ok++; }
+        if (pdf) {
+          const fname = `DAS_${c.sci_code || 'sem_codigo'}_${safe(c.company_name)}.pdf`;
+          zip.file(fname, pdf, { base64: true }); ok++;
+          if (sendWa && user) {
+            try {
+              const opts = await loadSendOptions(c.id);
+              if (!opts.length) fails.push({ name: formatClientLabel(c), msg: 'Sem telefone — não enviada (guia está no ZIP)' });
+              else {
+                await sendGuia({ opt: opts[0], clientId: c.id, clientName: c.company_name, file: b64ToFile(pdf, fname), text: fillTemplate(msg, vars(c)), userId: user.id, senderName: profile?.full_name || undefined });
+                sent++; await sleep(1500);
+              }
+            } catch (e) { fails.push({ name: formatClientLabel(c), msg: `Guia gerada, envio falhou: ${(e as Error).message}`.slice(0, 200) }); }
+          }
+        }
         else fails.push({ name: formatClientLabel(c), msg: data ? (errorOf(data) || 'A Receita não retornou o PDF') : errMsg || 'Erro' });
       }
-      setBatch(b => ({ ...b, done: i + 1, ok, fails: [...fails] }));
+      setBatch(b => ({ ...b, done: i + 1, ok, sent, fails: [...fails] }));
       await sleep(500);
     }
     if (ok) {
@@ -218,7 +270,7 @@ export default function MeiTab() {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `DAS_MEI_${ano}${mes}.zip`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
     }
-    setBatch(b => ({ ...b, running: false, finished: true, ok, fails }));
+    setBatch(b => ({ ...b, running: false, finished: true, ok, sent, fails }));
   }
 
   async function run(c: Client, svc: Svc, values: Record<string, string>) {
@@ -277,7 +329,7 @@ export default function MeiTab() {
           <RefreshCw className={cn('h-4 w-4 mr-1', sync.running && 'animate-spin')} />
           {sync.running ? `Cancelar (${sync.done}/${sync.total})` : 'Atualizar situação'}
         </Button>
-        <Button onClick={() => setBatch({ open: true, running: false, done: 0, total: batchList.length, ok: 0, fails: [], finished: false })}
+        <Button onClick={() => setBatch({ open: true, running: false, done: 0, total: batchList.length, ok: 0, sent: 0, fails: [], finished: false })}
           disabled={loading || sync.running || batchList.length === 0}>
           <FileDown className="h-4 w-4 mr-1" /> Gerar DAS em lote ({batchList.length})
         </Button>
@@ -362,6 +414,9 @@ export default function MeiTab() {
                   <Button size="sm" variant="outline" disabled={!!busy} onClick={() => quick(c, 'das')}>
                     {busy === `${c.id}:das` ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />} DAS {mes}/{ano}
                   </Button>
+                  <Button size="sm" variant="outline" disabled={!!busy || !c.document} onClick={() => openSingle(c)}>
+                    {busy === `${c.id}:send` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar DAS
+                  </Button>
                   <Button size="sm" variant="outline" disabled={!!busy} onClick={() => quick(c, 'ccmei')}>
                     {busy === `${c.id}:ccmei` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} CCMEI
                   </Button>
@@ -390,6 +445,13 @@ export default function MeiTab() {
             <div className="space-y-3 text-sm">
               <p>Serão geradas <b>{batchList.length}</b> guias{includePaid ? '' : ' (empresas já pagas ficam de fora)'}.</p>
               <p className="text-muted-foreground">Cada guia é uma consulta cobrada no contrato SERPRO.</p>
+              <label className="flex items-center gap-2"><Checkbox checked={sendWa} onCheckedChange={v => setSendWa(!!v)} /> Enviar pelo WhatsApp para cada empresa</label>
+              {sendWa && (
+                <div className="space-y-1">
+                  <Textarea rows={4} value={msg} onChange={e => setMsg(e.target.value)} aria-label="Mensagem enviada antes da guia" />
+                  <p className="text-xs text-muted-foreground">{'{empresa}'} e {'{competencia}'} são trocados para cada empresa. Vai para o primeiro contato da empresa (conversa do Chat, contato principal, departamentos, telefone).</p>
+                </div>
+              )}
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setBatch(b => ({ ...b, open: false }))}>Cancelar</Button>
                 <Button onClick={runBatch}>Gerar {batchList.length} guias</Button>
@@ -399,7 +461,7 @@ export default function MeiTab() {
           {(batch.running || batch.finished) && (
             <div className="space-y-3 text-sm">
               <Progress value={batch.total ? (batch.done / batch.total) * 100 : 0} />
-              <p>{batch.done} de {batch.total} • {batch.ok} guias geradas • {batch.fails.length} falhas</p>
+              <p>{batch.done} de {batch.total} • {batch.ok} guias geradas{sendWa ? ` • ${batch.sent} enviadas` : ''} • {batch.fails.length} falhas</p>
               {batch.finished && <p className="text-muted-foreground">{batch.ok ? `Arquivo DAS_MEI_${ano}${mes}.zip baixado.` : 'Nenhuma guia gerada.'}</p>}
               {batch.fails.length > 0 && (
                 <div className="rounded-md border divide-y max-h-60 overflow-y-auto">
@@ -412,6 +474,32 @@ export default function MeiTab() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!single} onOpenChange={o => { if (!o && !singleSending) setSingle(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Enviar DAS — {single && formatClientLabel(single.c)}</DialogTitle></DialogHeader>
+          {single && (single.options.length === 0 ? (
+            <p className="text-sm text-destructive">A empresa não tem nenhum telefone cadastrado.</p>
+          ) : (
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1">
+                {single.options.map((o, i) => (
+                  <label key={o.phone} className="flex items-center gap-2 rounded-md border p-2 cursor-pointer">
+                    <input type="radio" name="mei-send" checked={single.sel === i} onChange={() => setSingle(s => s && { ...s, sel: i })} />
+                    <span className="flex-1">{o.label}</span><span className="text-muted-foreground">{o.phone}</span>
+                  </label>
+                ))}
+              </div>
+              <Textarea rows={4} value={single.text} onChange={e => setSingle(s => s && { ...s, text: e.target.value })} aria-label="Mensagem" />
+              <p className="text-xs text-muted-foreground">Anexo: {single.file.name}</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSingle(null)} disabled={singleSending}>Cancelar</Button>
+                <Button onClick={confirmSingle} disabled={singleSending}>{singleSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar</Button>
+              </div>
+            </div>
+          ))}
         </DialogContent>
       </Dialog>
 

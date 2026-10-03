@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Search, PlayCircle, Eye, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { formatClientLabel } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { type SendOption, loadSendOptions, sendGuia } from '@/lib/sendGuiaWhatsApp';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, Send, FileDown, Building2, Landmark, Briefcase, MoreVertical, CalendarDays, FileText, MessageCircle } from 'lucide-react';
@@ -56,22 +57,6 @@ const MODALIDADES: Modalidade[] = [
 ];
 
 type GuiaFile = { file: File; parcela: string };
-type SendOption = { label: string; phone: string; conversationId: string | null };
-
-const canonicalizePhone = (p?: string | null): string => {
-  let d = (p || '').replace(/\D/g, '');
-  if ((d.length === 10 || d.length === 11) && !d.startsWith('55')) d = '55' + d;
-  if (d.length === 12 && d.startsWith('55') && ['6', '7', '8', '9'].includes(d[4])) d = d.slice(0, 4) + '9' + d.slice(4);
-  return d;
-};
-const phoneVariants = (p: string): string[] => {
-  const raw = (p || '').replace(/\D/g, '');
-  const c = canonicalizePhone(raw);
-  const set = new Set([raw, c]);
-  if (c.length === 13 && c.startsWith('55') && c[4] === '9') set.add(c.slice(0, 4) + c.slice(5));
-  return [...set].filter(Boolean);
-};
-
 type Client = {
   id: string;
   sci_code?: string | null;
@@ -518,42 +503,11 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
 
   async function openSend(row: ParcRow, g: GuiaFile) {
     const client = clients.find(c => c.id === row.client_id);
-    const [{ data: convs }, { data: cli }, { data: deps }] = await Promise.all([
-      supabase.from('chat_conversations').select('id, name, whatsapp_phone, is_group, updated_at')
-        .eq('client_id', row.client_id).not('whatsapp_phone', 'is', null).order('updated_at', { ascending: false }).limit(10),
-      supabase.from('clients').select('contact_name, contact_phone, phone').eq('id', row.client_id).maybeSingle(),
-      supabase.from('client_department_contacts').select('contact_name, contact_phone').eq('client_id', row.client_id),
-    ]);
-    const options: SendOption[] = [];
-    const seen = new Set<string>();
-    const add = (label: string, phone: string | null | undefined, conversationId: string | null) => {
-      const c = canonicalizePhone(phone);
-      if (c.length < 12 || seen.has(c)) return;
-      phoneVariants(c).forEach(v => seen.add(v));
-      options.push({ label, phone: c, conversationId });
-    };
-    (convs || []).filter((c: any) => !c.is_group).forEach((c: any) => add(`${c.name || 'Conversa'} (Chat)`, c.whatsapp_phone, c.id));
-    add(`${(cli as any)?.contact_name || 'Contato principal'}`, (cli as any)?.contact_phone, null);
-    (deps || []).forEach((d: any) => add(`${d.contact_name || 'Contato do departamento'}`, d.contact_phone, null));
-    add('Telefone da empresa', (cli as any)?.phone, null);
+    const options = await loadSendOptions(row.client_id);
     setSendState({
       row, guia: g, options, selected: 0,
       text: `Olá! Segue a guia da parcela ${formatParcelaLabel(g.parcela)} do parcelamento ${row.modalidade_label || ''}${row.numero_parcelamento ? ` nº ${row.numero_parcelamento}` : ''} da empresa ${client?.company_name || ''}. Qualquer dúvida, estamos à disposição.`,
     });
-  }
-
-  async function ensureConversation(opt: SendOption, clientId: string, name: string): Promise<string> {
-    if (opt.conversationId) return opt.conversationId;
-    const variants = phoneVariants(opt.phone);
-    const { data: existing } = await supabase.from('chat_conversations').select('id, whatsapp_phone, is_group').in('whatsapp_phone', variants);
-    const found = (existing || []).find((c: any) => !c.is_group);
-    if (found) return found.id;
-    const { data: conv, error } = await supabase.from('chat_conversations').insert({
-      name, created_by: user!.id, is_group: false, assigned_to: user!.id, whatsapp_phone: opt.phone, client_id: clientId,
-    } as any).select('id').single();
-    if (error || !conv) throw error || new Error('Falha ao criar conversa');
-    await supabase.from('chat_participants').insert([{ conversation_id: conv.id, user_id: user!.id }]);
-    return conv.id;
   }
 
   async function handleEnviar(row: ParcRow) {
@@ -568,22 +522,7 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
     setSending(true);
     try {
       const clientName = clients.find(c => c.id === sendState.row.client_id)?.company_name || opt.label;
-      const conversationId = await ensureConversation(opt, sendState.row.client_id, clientName);
-      const f = sendState.guia.file;
-      const path = `${conversationId}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: upErr } = await supabase.storage.from('chat-media').upload(path, f);
-      if (upErr) throw upErr;
-      const mediaUrl = supabase.storage.from('chat-media').getPublicUrl(path).data.publicUrl;
-      if (sendState.text.trim()) {
-        const { data: d1, error: e1 } = await supabase.functions.invoke('whatsapp-send-text', {
-          body: { conversationId, text: sendState.text.trim(), senderName: profile?.full_name || undefined, senderId: user.id },
-        });
-        if (e1 || (d1 as any)?.error) throw new Error((d1 as any)?.error || e1?.message);
-      }
-      const { data: d2, error: e2 } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: { conversationId, type: 'document', mediaUrl, fileName: f.name, senderName: profile?.full_name || undefined, senderId: user.id },
-      });
-      if (e2 || (d2 as any)?.error) throw new Error((d2 as any)?.error || e2?.message);
+      await sendGuia({ opt, clientId: sendState.row.client_id, clientName, file: sendState.guia.file, text: sendState.text, userId: user.id, senderName: profile?.full_name || undefined });
       toast({ title: 'Guia enviada no WhatsApp' });
       setSendState(null);
     } catch (err: any) {
