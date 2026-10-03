@@ -11,6 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { cn, formatClientLabel } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MeiLimitTab from './MeiLimitTab';
+import JSZip from 'jszip';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type Client = { id: string; company_name: string; sci_code: string | null; document: string | null };
 type Pay = { client_id: string; status: string; valor_pago: number | null; data_pagamento: string | null; mensagem: string | null };
@@ -176,6 +178,49 @@ export default function MeiTab() {
   const fmtBRL = (v: number | null) => v == null ? '' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const fmtDate = (d: string | null) => d ? d.split('-').reverse().join('/') : '';
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [includePaid, setIncludePaid] = useState(false);
+  const [batch, setBatch] = useState<{ open: boolean; running: boolean; done: number; total: number; ok: number; fails: { name: string; msg: string }[]; finished: boolean }>({ open: false, running: false, done: 0, total: 0, ok: 0, fails: [], finished: false });
+  const batchCancel = useRef(false);
+  const batchList = useMemo(() => {
+    const base = selected.size ? filtered.filter(c => selected.has(c.id)) : filtered;
+    return includePaid ? base : base.filter(c => statusOf(c.id) !== 'pago');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, selected, includePaid, pays, dueTime]);
+  const allSel = filtered.length > 0 && filtered.every(c => selected.has(c.id));
+  const toggle = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  async function runBatch() {
+    const list = batchList;
+    batchCancel.current = false;
+    setBatch({ open: true, running: true, done: 0, total: list.length, ok: 0, fails: [], finished: false });
+    const zip = new JSZip(); let ok = 0; const fails: { name: string; msg: string }[] = [];
+    const svc = SERVICES.find(s => s.idServico === 'GERARDASPDF21')!;
+    for (let i = 0; i < list.length; i++) {
+      if (batchCancel.current) break;
+      const c = list[i];
+      if (!c.document) fails.push({ name: formatClientLabel(c), msg: 'Sem CNPJ cadastrado' });
+      else {
+        let data: any = null, errMsg = '';
+        for (let t = 0; t < 2 && !data; t++) {
+          try { data = await run(c, svc, { periodoApuracao: `${ano}${mes}` }); }
+          catch (e) { errMsg = (e as Error).message; await sleep(1500); }
+        }
+        const pdf = data ? walkForPdf(parseDeep(data)) : null;
+        if (pdf) { zip.file(`DAS_${c.sci_code || 'sem_codigo'}_${safe(c.company_name)}.pdf`, pdf, { base64: true }); ok++; }
+        else fails.push({ name: formatClientLabel(c), msg: data ? (errorOf(data) || 'A Receita não retornou o PDF') : errMsg || 'Erro' });
+      }
+      setBatch(b => ({ ...b, done: i + 1, ok, fails: [...fails] }));
+      await sleep(500);
+    }
+    if (ok) {
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `DAS_MEI_${ano}${mes}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    }
+    setBatch(b => ({ ...b, running: false, finished: true, ok, fails }));
+  }
+
   async function run(c: Client, svc: Svc, values: Record<string, string>) {
     const { data, error } = await supabase.functions.invoke('integra-contador', {
       body: { client_id: c.id, idSistema: svc.idSistema, idServico: svc.idServico, tipo: svc.tipo, dados: svc.fields.length ? JSON.stringify(values) : '' },
@@ -232,6 +277,10 @@ export default function MeiTab() {
           <RefreshCw className={cn('h-4 w-4 mr-1', sync.running && 'animate-spin')} />
           {sync.running ? `Cancelar (${sync.done}/${sync.total})` : 'Atualizar situação'}
         </Button>
+        <Button onClick={() => setBatch({ open: true, running: false, done: 0, total: batchList.length, ok: 0, fails: [], finished: false })}
+          disabled={loading || sync.running || batchList.length === 0}>
+          <FileDown className="h-4 w-4 mr-1" /> Gerar DAS em lote ({batchList.length})
+        </Button>
       </div>
 
       {sync.running && <Progress value={sync.total ? (sync.done / sync.total) * 100 : 0} />}
@@ -263,6 +312,13 @@ export default function MeiTab() {
             {f === 'all' ? 'Todas' : f === 'pago' ? 'Pagas' : 'Em aberto'}
           </Button>
         ))}
+        <label className="flex items-center gap-2 text-sm ml-2">
+          <Checkbox checked={allSel} onCheckedChange={v => setSelected(v ? new Set(filtered.map(c => c.id)) : new Set())} aria-label="Selecionar todas" /> Selecionar todas
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={includePaid} onCheckedChange={v => setIncludePaid(!!v)} /> Incluir pagas no lote
+        </label>
+        {selected.size > 0 && <span className="text-sm text-muted-foreground">{selected.size} selecionadas</span>}
         <span className="ml-auto text-sm text-muted-foreground">{filtered.length} empresas</span>
       </div>
 
@@ -275,6 +331,7 @@ export default function MeiTab() {
           <div className="divide-y">
             {rows.map(c => { const st = statusOf(c.id); const p = pays[c.id]; return (
               <div key={c.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3">
+                <Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggle(c.id)} aria-label={`Selecionar ${c.company_name}`} />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{formatClientLabel(c)}</div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -325,6 +382,38 @@ export default function MeiTab() {
       )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={batch.open} onOpenChange={o => { if (!o && !batch.running) setBatch(b => ({ ...b, open: false })); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Gerar DAS MEI em lote — {mes}/{ano}</DialogTitle></DialogHeader>
+          {!batch.running && !batch.finished && (
+            <div className="space-y-3 text-sm">
+              <p>Serão geradas <b>{batchList.length}</b> guias{includePaid ? '' : ' (empresas já pagas ficam de fora)'}.</p>
+              <p className="text-muted-foreground">Cada guia é uma consulta cobrada no contrato SERPRO.</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setBatch(b => ({ ...b, open: false }))}>Cancelar</Button>
+                <Button onClick={runBatch}>Gerar {batchList.length} guias</Button>
+              </div>
+            </div>
+          )}
+          {(batch.running || batch.finished) && (
+            <div className="space-y-3 text-sm">
+              <Progress value={batch.total ? (batch.done / batch.total) * 100 : 0} />
+              <p>{batch.done} de {batch.total} • {batch.ok} guias geradas • {batch.fails.length} falhas</p>
+              {batch.finished && <p className="text-muted-foreground">{batch.ok ? `Arquivo DAS_MEI_${ano}${mes}.zip baixado.` : 'Nenhuma guia gerada.'}</p>}
+              {batch.fails.length > 0 && (
+                <div className="rounded-md border divide-y max-h-60 overflow-y-auto">
+                  {batch.fails.map((f, i) => <div key={i} className="p-2"><div className="font-medium">{f.name}</div><div className="text-xs text-destructive">{f.msg}</div></div>)}
+                </div>
+              )}
+              <div className="flex justify-end">
+                {batch.running ? <Button variant="outline" onClick={() => { batchCancel.current = true; }}>Cancelar</Button>
+                  : <Button onClick={() => setBatch(b => ({ ...b, open: false }))}>Fechar</Button>}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {panel && <CommandsDialog client={panel} periodo={`${ano}${mes}`} ano={ano} onClose={() => setPanel(null)} run={run} errorOf={errorOf} />}
     </div>
