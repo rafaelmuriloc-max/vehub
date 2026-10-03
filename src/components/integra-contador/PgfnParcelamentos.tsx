@@ -54,6 +54,14 @@ const sitTone = (s: string | null) =>
       : /suspens/i.test(s) ? 'bg-warning/15 text-warning'
         : /liquidad/i.test(s) ? 'bg-info/15 text-info' : 'bg-success/15 text-success';
 
+const F = ({ id, label, children, err }: { id: string; label: string; children: React.ReactNode; err?: string }) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {err && <p id={`${id}-err`} role="alert" className="text-xs text-destructive">{err}</p>}
+    </div>
+  );
+
 export default function PgfnParcelamentos() {
   const { toast } = useToast();
   const { user, profile } = useAuth();
@@ -279,13 +287,6 @@ export default function PgfnParcelamentos() {
     } finally { setBusy(null); }
   }
 
-  const F = ({ id, label, children, err }: { id: string; label: string; children: React.ReactNode; err?: string }) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {err && <p id={`${id}-err`} role="alert" className="text-xs text-destructive">{err}</p>}
-    </div>
-  );
   const inp = (k: keyof FormState, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <Input id={`pgfn-${k}`} value={form![k] as string} onChange={e => setForm(f => f && { ...f, [k]: e.target.value })}
       aria-invalid={!!errors[k === 'numero' ? 'numero' : k]} aria-describedby={errors[k] ? `pgfn-${k}-err` : undefined} {...extra} />
