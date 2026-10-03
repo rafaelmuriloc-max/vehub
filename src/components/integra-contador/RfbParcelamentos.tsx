@@ -56,6 +56,21 @@ const MODALIDADES: Modalidade[] = [
 ];
 
 type GuiaFile = { file: File; parcela: string };
+type SendOption = { label: string; phone: string; conversationId: string | null };
+
+const canonicalizePhone = (p?: string | null): string => {
+  let d = (p || '').replace(/\D/g, '');
+  if ((d.length === 10 || d.length === 11) && !d.startsWith('55')) d = '55' + d;
+  if (d.length === 12 && d.startsWith('55') && ['6', '7', '8', '9'].includes(d[4])) d = d.slice(0, 4) + '9' + d.slice(4);
+  return d;
+};
+const phoneVariants = (p: string): string[] => {
+  const raw = (p || '').replace(/\D/g, '');
+  const c = canonicalizePhone(raw);
+  const set = new Set([raw, c]);
+  if (c.length === 13 && c.startsWith('55') && c[4] === '9') set.add(c.slice(0, 4) + c.slice(5));
+  return [...set].filter(Boolean);
+};
 
 type Client = {
   id: string;
@@ -264,7 +279,7 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
   const [guias, setGuias] = useState<Record<string, GuiaFile>>({});
   const [picker, setPicker] = useState<{ row: ParcRow; lista: Array<{ parcela: string; valor: number | null }>; sel: string; thenSend: boolean } | null>(null);
   const [pickerBusy, setPickerBusy] = useState(false);
-  const [sendState, setSendState] = useState<{ row: ParcRow; guia: GuiaFile; conversationId: string | null; phone: string | null; text: string } | null>(null);
+  const [sendState, setSendState] = useState<{ row: ParcRow; guia: GuiaFile; options: SendOption[]; selected: number; text: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -502,18 +517,42 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
 
   async function openSend(row: ParcRow, g: GuiaFile) {
     const client = clients.find(c => c.id === row.client_id);
-    const { data: convs } = await supabase
-      .from('chat_conversations')
-      .select('id, whatsapp_phone, is_group, updated_at')
-      .eq('client_id', row.client_id)
-      .not('whatsapp_phone', 'is', null)
-      .order('updated_at', { ascending: false })
-      .limit(10);
-    const conv = (convs || []).find((c: any) => !c.is_group) || null;
+    const [{ data: convs }, { data: cli }, { data: deps }] = await Promise.all([
+      supabase.from('chat_conversations').select('id, name, whatsapp_phone, is_group, updated_at')
+        .eq('client_id', row.client_id).not('whatsapp_phone', 'is', null).order('updated_at', { ascending: false }).limit(10),
+      supabase.from('clients').select('contact_name, contact_phone, phone').eq('id', row.client_id).maybeSingle(),
+      supabase.from('client_department_contacts').select('contact_name, contact_phone').eq('client_id', row.client_id),
+    ]);
+    const options: SendOption[] = [];
+    const seen = new Set<string>();
+    const add = (label: string, phone: string | null | undefined, conversationId: string | null) => {
+      const c = canonicalizePhone(phone);
+      if (c.length < 12 || seen.has(c)) return;
+      phoneVariants(c).forEach(v => seen.add(v));
+      options.push({ label, phone: c, conversationId });
+    };
+    (convs || []).filter((c: any) => !c.is_group).forEach((c: any) => add(`${c.name || 'Conversa'} (Chat)`, c.whatsapp_phone, c.id));
+    add(`${(cli as any)?.contact_name || 'Contato principal'}`, (cli as any)?.contact_phone, null);
+    (deps || []).forEach((d: any) => add(`${d.contact_name || 'Contato do departamento'}`, d.contact_phone, null));
+    add('Telefone da empresa', (cli as any)?.phone, null);
     setSendState({
-      row, guia: g, conversationId: conv?.id || null, phone: conv?.whatsapp_phone || null,
+      row, guia: g, options, selected: 0,
       text: `Olá! Segue a guia da parcela ${formatParcelaLabel(g.parcela)} do parcelamento ${row.modalidade_label || ''}${row.numero_parcelamento ? ` nº ${row.numero_parcelamento}` : ''} da empresa ${client?.company_name || ''}. Qualquer dúvida, estamos à disposição.`,
     });
+  }
+
+  async function ensureConversation(opt: SendOption, clientId: string, name: string): Promise<string> {
+    if (opt.conversationId) return opt.conversationId;
+    const variants = phoneVariants(opt.phone);
+    const { data: existing } = await supabase.from('chat_conversations').select('id, whatsapp_phone, is_group').in('whatsapp_phone', variants);
+    const found = (existing || []).find((c: any) => !c.is_group);
+    if (found) return found.id;
+    const { data: conv, error } = await supabase.from('chat_conversations').insert({
+      name, created_by: user!.id, is_group: false, assigned_to: user!.id, whatsapp_phone: opt.phone, client_id: clientId,
+    } as any).select('id').single();
+    if (error || !conv) throw error || new Error('Falha ao criar conversa');
+    await supabase.from('chat_participants').insert([{ conversation_id: conv.id, user_id: user!.id }]);
+    return conv.id;
   }
 
   async function handleEnviar(row: ParcRow) {
@@ -523,22 +562,25 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
   }
 
   async function confirmSend() {
-    if (!sendState?.conversationId || !user) return;
+    const opt = sendState?.options[sendState.selected];
+    if (!sendState || !opt || !user) return;
     setSending(true);
     try {
+      const clientName = clients.find(c => c.id === sendState.row.client_id)?.company_name || opt.label;
+      const conversationId = await ensureConversation(opt, sendState.row.client_id, clientName);
       const f = sendState.guia.file;
-      const path = `${sendState.conversationId}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const path = `${conversationId}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { error: upErr } = await supabase.storage.from('chat-media').upload(path, f);
       if (upErr) throw upErr;
       const mediaUrl = supabase.storage.from('chat-media').getPublicUrl(path).data.publicUrl;
       if (sendState.text.trim()) {
         const { data: d1, error: e1 } = await supabase.functions.invoke('whatsapp-send-text', {
-          body: { conversationId: sendState.conversationId, text: sendState.text.trim(), senderName: profile?.full_name || undefined, senderId: user.id },
+          body: { conversationId, text: sendState.text.trim(), senderName: profile?.full_name || undefined, senderId: user.id },
         });
         if (e1 || (d1 as any)?.error) throw new Error((d1 as any)?.error || e1?.message);
       }
       const { data: d2, error: e2 } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: { conversationId: sendState.conversationId, type: 'document', mediaUrl, fileName: f.name, senderName: profile?.full_name || undefined, senderId: user.id },
+        body: { conversationId, type: 'document', mediaUrl, fileName: f.name, senderName: profile?.full_name || undefined, senderId: user.id },
       });
       if (e2 || (d2 as any)?.error) throw new Error((d2 as any)?.error || e2?.message);
       toast({ title: 'Guia enviada no WhatsApp' });
@@ -1094,15 +1136,25 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
                 <div className="text-xs text-muted-foreground">Parcela {formatParcelaLabel(sendState.guia.parcela)} • {(sendState.guia.file.size / 1024).toFixed(0)} KB</div>
                 <Button size="sm" variant="link" className="px-0" onClick={() => downloadFile(sendState.guia.file)}>Baixar guia</Button>
               </div>
-              {sendState.conversationId ? (
-                <div className="text-sm text-muted-foreground">Para: {sendState.phone}</div>
+              {sendState.options.length ? (
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Enviar para</div>
+                  <Select value={String(sendState.selected)} onValueChange={v => setSendState({ ...sendState, selected: Number(v) })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {sendState.options.map((o, i) => (
+                        <SelectItem key={o.phone} value={String(i)}>{o.label} • +{o.phone}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               ) : (
-                <div className="text-sm text-destructive">Esta empresa não tem conversa de WhatsApp no Chat. Inicie uma conversa com o cliente para poder enviar.</div>
+                <div className="text-sm text-destructive">Esta empresa não tem nenhum telefone cadastrado. Cadastre um contato no cliente para poder enviar.</div>
               )}
               <Textarea rows={5} value={sendState.text} onChange={e => setSendState({ ...sendState, text: e.target.value })} />
               <div className="flex flex-col sm:flex-row justify-end gap-2">
                 <Button variant="outline" onClick={() => setSendState(null)} disabled={sending}>Cancelar</Button>
-                <Button onClick={confirmSend} disabled={sending || !sendState.conversationId}>
+                <Button onClick={confirmSend} disabled={sending || !sendState.options.length}>
                   {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}Enviar
                 </Button>
               </div>
