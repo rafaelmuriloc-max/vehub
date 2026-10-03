@@ -719,6 +719,35 @@ export type Database = {
           },
         ]
       }
+      client_portal_links: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_links_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_society_documents: {
         Row: {
           client_id: string
@@ -2918,6 +2947,53 @@ export type Database = {
           },
         ]
       }
+      portal_announcements: {
+        Row: {
+          audience: string
+          body: string
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          tax_regime: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          body: string
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          tax_regime?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          tax_regime?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_announcements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procurador_tokens: {
         Row: {
           client_cnpj: string
@@ -4175,7 +4251,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_portal_client: { Args: { _user_id: string }; Returns: boolean }
       pause_time_batch: { Args: { _id: string }; Returns: undefined }
+      portal_can_access_client: {
+        Args: { _client_id: string; _user_id: string }
+        Returns: boolean
+      }
       recalc_obligation_instance_status: {
         Args: { _instance_id: string }
         Returns: undefined
@@ -4197,7 +4278,7 @@ export type Database = {
     }
     Enums: {
       activity_type: "document" | "checklist" | "whatsapp" | "email"
-      app_role: "admin" | "employee"
+      app_role: "admin" | "employee" | "client"
       client_status: "active" | "inactive" | "churned"
       financial_entry_status: "pending" | "paid" | "overdue"
       financial_entry_type: "receivable" | "payable"
@@ -4332,7 +4413,7 @@ export const Constants = {
   public: {
     Enums: {
       activity_type: ["document", "checklist", "whatsapp", "email"],
-      app_role: ["admin", "employee"],
+      app_role: ["admin", "employee", "client"],
       client_status: ["active", "inactive", "churned"],
       financial_entry_status: ["pending", "paid", "overdue"],
       financial_entry_type: ["receivable", "payable"],

@@ -14,7 +14,7 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 60;
 
 export default function Auth() {
-  const { user, loading, isAdmin, profile } = useAuth();
+  const { user, loading, isAdmin, isClient, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -47,7 +47,7 @@ export default function Auth() {
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p>Carregando...</p></div>;
   if (user) {
     if (profile?.must_change_password) return <Navigate to="/change-password" replace />;
-    return <Navigate to={isAdmin ? '/' : '/calendar'} replace />;
+    return <Navigate to={isClient ? '/portal' : isAdmin ? '/' : '/calendar'} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

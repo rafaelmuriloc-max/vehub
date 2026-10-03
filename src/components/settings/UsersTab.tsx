@@ -154,6 +154,7 @@ export function UsersTab() {
     const { data: links } = await supabase.from('profile_departments' as any).select('user_id, department_id');
     if (depts) setDepartments(depts as unknown as Dept[]);
     if (profiles && roles) {
+      const clientIds = new Set((roles as any[]).filter(r => r.role === 'client').map(r => r.user_id));
       const roleMap = new Map((roles as any[]).map(r => [r.user_id, r.role]));
       const linkMap = new Map<string, string[]>();
       ((links as any[]) || []).forEach(l => {
@@ -161,7 +162,7 @@ export function UsersTab() {
         arr.push(l.department_id);
         linkMap.set(l.user_id, arr);
       });
-      setUsers((profiles as any[]).map(p => ({
+      setUsers((profiles as any[]).filter(p => !clientIds.has(p.user_id)).map(p => ({
         id: p.id, user_id: p.user_id, full_name: p.full_name, job_title: p.job_title,
         department_id: p.department_id, role: roleMap.get(p.user_id) || 'employee',
         department_ids: linkMap.get(p.user_id) || [],

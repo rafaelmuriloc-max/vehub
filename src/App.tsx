@@ -30,6 +30,7 @@ import FgtsDigital from "./pages/FgtsDigital";
 import ScheduledMessages from "./pages/ScheduledMessages";
 import NotFound from "./pages/NotFound";
 import DemoShowcase from "./pages/DemoShowcase";
+import Portal from "./pages/Portal";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/portal" element={<Portal />} />
             <Route path="/chat/popup" element={<ChatPopup />} />
             <Route path="/showcase/:screen" element={<DemoShowcase />} />
             <Route element={<AppLayout />}>

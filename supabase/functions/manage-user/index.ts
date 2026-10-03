@@ -195,6 +195,19 @@ Deno.serve(async (req) => {
         await adminClient.from("user_roles").update({ role: "admin" }).eq("user_id", userId);
       }
 
+      // Acesso da Área do Cliente: papel "client" + vínculos com as empresas
+      if (role === "client") {
+        await adminClient.from("user_roles").update({ role: "client" }).eq("user_id", userId);
+        const clientIds: string[] = Array.isArray(body.client_ids)
+          ? body.client_ids.filter((x: unknown) => typeof x === "string" && x.length > 0)
+          : [];
+        if (clientIds.length > 0) {
+          await adminClient.from("client_portal_links").insert(
+            clientIds.map((c) => ({ user_id: userId, client_id: c })),
+          );
+        }
+      }
+
       // Envia o acesso por WhatsApp (quando informado)
       let whatsapp_sent = false;
       let whatsapp_error: string | null = null;
