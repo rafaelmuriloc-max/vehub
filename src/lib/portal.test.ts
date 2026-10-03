@@ -15,3 +15,15 @@ describe('Área do Cliente - módulos por regime', () => {
     expect(modulesFor('Lucro Presumido')).toEqual(['faturamento', 'emitidas', 'recebidas', 'avisos']);
   });
 });
+
+import { eligibleEmail, portalStatus } from './portal';
+describe('Área do Cliente - contatos', () => {
+  it('e-mail é comparado sem maiúsculas/espaços', () => expect(eligibleEmail('  Joao@Gmail.com ')).toBe('joao@gmail.com'));
+  it('e-mail do escritório nunca vira acesso', () => expect(eligibleEmail('fiscal@velocitacontabilidade.com.br')).toBeNull());
+  it('contato sem e-mail não é elegível', () => expect(eligibleEmail('')).toBeNull());
+  it('situação do acesso', () => {
+    expect(portalStatus({ user_id: null, must_change_password: false, is_staff: false })).toBe('none');
+    expect(portalStatus({ user_id: 'x', must_change_password: true, is_staff: false })).toBe('temp');
+    expect(portalStatus({ user_id: 'x', must_change_password: false, is_staff: true })).toBe('staff');
+  });
+});

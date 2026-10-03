@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { KeyRound, Megaphone, Trash2, UserPlus, Link2 } from 'lucide-react';
+import { KeyRound, Megaphone, Trash2, UserPlus, Ban, Search } from 'lucide-react';
+import { portalStatus, type PortalStatus } from '@/lib/portal';
 
 type Client = { id: string; company_name: string; document: string | null; tax_regime: string | null };
-type Access = { user_id: string; full_name: string | null; must_change_password: boolean; client_ids: string[] };
+type Contact = { email: string; names: string[]; phones: string[]; client_ids: string[]; user_id: string | null; must_change_password: boolean; is_staff: boolean };
+const STATUS_LABEL: Record<PortalStatus, string> = { none: 'Sem acesso', temp: 'Senha temporária', active: 'Ativo', staff: 'É funcionário' };
 type Ann = { id: string; title: string; body: string; audience: string; tax_regime: string | null; client_id: string | null; expires_at: string | null; created_at: string };
 
 const db = supabase as any;
@@ -26,96 +28,65 @@ function genPwd() {
   return Array.from(r, n => a[n % a.length]).join('') + '!7';
 }
 
-function CompanyPicker({ clients, value, onChange }: { clients: Client[]; value: string[]; onChange: (v: string[]) => void }) {
-  const [q, setQ] = useState('');
-  const list = clients.filter(c => !q || `${c.company_name} ${c.document}`.toLowerCase().includes(q.toLowerCase())).slice(0, 80);
-  return (
-    <div className="space-y-2">
-      <Input placeholder="Buscar empresa ou CNPJ" value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar empresa" />
-      <div className="max-h-56 overflow-auto rounded-md border border-border p-2 space-y-1">
-        {list.map(c => (
-          <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox checked={value.includes(c.id)} onCheckedChange={v => onChange(v ? [...value, c.id] : value.filter(x => x !== c.id))} />
-            <span className="truncate">{c.company_name}</span>
-            <span className="ml-auto text-xs text-muted-foreground">{c.tax_regime}</span>
-          </label>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">{value.length} empresa(s) selecionada(s)</p>
-    </div>
-  );
-}
-
 export function ClientAccessTab() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
-  const [accesses, setAccesses] = useState<Access[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | PortalStatus>('all');
   const [anns, setAnns] = useState<Ann[]>([]);
   const [busy, setBusy] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ full_name: '', email: '', whatsapp: '', password: '', client_ids: [] as string[] });
-  const [linkFor, setLinkFor] = useState<Access | null>(null);
-  const [linkIds, setLinkIds] = useState<string[]>([]);
+  const [grant, setGrant] = useState<{ c: Contact; name: string; whatsapp: string; password: string } | null>(null);
   const [annOpen, setAnnOpen] = useState(false);
   const [ann, setAnn] = useState({ title: '', body: '', audience: 'all', tax_regime: 'Simples Nacional', client_id: '', expires_at: '' });
 
   const clientName = useMemo(() => new Map(clients.map(c => [c.id, c.company_name])), [clients]);
 
   async function load() {
-    const [{ data: cl }, { data: roles }, { data: links }, { data: a }] = await Promise.all([
+    const [{ data: cl }, { data: ct, error }, { data: a }] = await Promise.all([
       supabase.from('clients').select('id, company_name, document, tax_regime').order('company_name'),
-      db.from('user_roles').select('user_id, role').eq('role', 'client'),
-      db.from('client_portal_links').select('user_id, client_id'),
+      db.rpc('admin_portal_contacts'),
       db.from('portal_announcements').select('*').order('created_at', { ascending: false }),
     ]);
+    if (error) toast({ title: 'Erro ao carregar contatos', description: error.message, variant: 'destructive' });
     setClients((cl as Client[]) || []);
+    setContacts((ct as Contact[]) || []);
     setAnns((a as Ann[]) || []);
-    const ids = ((roles as any[]) || []).map(r => r.user_id);
-    if (!ids.length) { setAccesses([]); return; }
-    const { data: profs } = await supabase.from('profiles').select('user_id, full_name, must_change_password').in('user_id', ids);
-    setAccesses(((profs as any[]) || []).map(p => ({
-      user_id: p.user_id, full_name: p.full_name, must_change_password: !!p.must_change_password,
-      client_ids: ((links as any[]) || []).filter(l => l.user_id === p.user_id).map(l => l.client_id),
-    })));
   }
   useEffect(() => { load(); }, []);
 
-  async function create() {
-    if (!form.email || !form.full_name || form.client_ids.length === 0) {
-      toast({ title: 'Preencha nome, e-mail e ao menos uma empresa', variant: 'destructive' }); return;
-    }
+  const filtered = contacts.filter(c => {
+    if (statusFilter !== 'all' && portalStatus(c) !== statusFilter) return false;
+    if (!q) return true;
+    const hay = `${c.email} ${c.names.join(' ')} ${c.client_ids.map(id => clientName.get(id)).join(' ')}`.toLowerCase();
+    return hay.includes(q.toLowerCase());
+  });
+
+  async function confirmGrant() {
+    if (!grant) return;
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke('manage-user', { body: { action: 'create', role: 'client', ...form } });
+    const { data, error } = await supabase.functions.invoke('manage-user', { body: { action: 'create', role: 'client', email: grant.c.email, full_name: grant.name, whatsapp: grant.whatsapp, password: grant.password } });
     setBusy(false);
     if (error || data?.error) { toast({ title: 'Erro', description: data?.error || error?.message, variant: 'destructive' }); return; }
-    toast({ title: 'Acesso criado', description: data.whatsapp_sent ? 'Credenciais enviadas por WhatsApp.' : `Senha temporária: ${form.password}${data.whatsapp_error ? ` (WhatsApp: ${data.whatsapp_error})` : ''}` });
-    setCreateOpen(false); load();
+    toast({ title: 'Acesso liberado', description: data.whatsapp_sent ? 'Credenciais enviadas por WhatsApp.' : `Senha temporária: ${grant.password}${data.whatsapp_error ? ` (WhatsApp: ${data.whatsapp_error})` : ''}` });
+    setGrant(null); load();
   }
 
-  async function resend(a: Access) {
-    const phone = window.prompt(`WhatsApp para reenviar o acesso de ${a.full_name}:`);
-    if (!phone) return;
-    const { data, error } = await supabase.functions.invoke('manage-user', { body: { action: 'send-access', user_id: a.user_id, whatsapp: phone } });
+  async function resend(c: Contact) {
+    const phone = window.prompt(`WhatsApp para reenviar o acesso de ${c.email}:`, c.phones[0] || '');
+    if (!phone || !c.user_id) return;
+    const { data, error } = await supabase.functions.invoke('manage-user', { body: { action: 'send-access', user_id: c.user_id, whatsapp: phone } });
     if (error || data?.error) { toast({ title: 'Erro', description: data?.error || error?.message, variant: 'destructive' }); return; }
     toast({ title: 'Nova senha gerada', description: data.whatsapp_sent ? 'Enviada por WhatsApp.' : `Senha: ${data.temp_password}` });
     load();
   }
 
-  async function removeAccess(a: Access) {
-    if (!window.confirm(`Desativar o acesso de ${a.full_name}?`)) return;
-    const { data, error } = await supabase.functions.invoke('manage-user', { body: { action: 'delete', user_id: a.user_id } });
+  async function block(c: Contact) {
+    if (!c.user_id || !window.confirm(`Bloquear o acesso de ${c.email}? O login será excluído; o contato continua no cadastro.`)) return;
+    const { data, error } = await supabase.functions.invoke('manage-user', { body: { action: 'delete', user_id: c.user_id } });
     if (error || data?.error) { toast({ title: 'Erro', description: data?.error || error?.message, variant: 'destructive' }); return; }
     load();
-  }
-
-  async function saveLinks() {
-    if (!linkFor) return;
-    const toAdd = linkIds.filter(id => !linkFor.client_ids.includes(id));
-    const toDel = linkFor.client_ids.filter(id => !linkIds.includes(id));
-    if (toAdd.length) await db.from('client_portal_links').insert(toAdd.map(client_id => ({ user_id: linkFor.user_id, client_id })));
-    if (toDel.length) await db.from('client_portal_links').delete().eq('user_id', linkFor.user_id).in('client_id', toDel);
-    setLinkFor(null); load();
   }
 
   async function publish() {
@@ -134,31 +105,53 @@ export function ClientAccessTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <CardHeader className="space-y-3">
           <CardTitle>Acessos da Área do Cliente</CardTitle>
-          <Button onClick={() => { setForm({ full_name: '', email: '', whatsapp: '', password: genPwd(), client_ids: [] }); setCreateOpen(true); }}>
-            <UserPlus className="h-4 w-4 mr-1" /> Novo acesso
-          </Button>
+          <p className="text-sm text-muted-foreground">Os acessos vêm dos contatos cadastrados em cada empresa (contato principal e departamentos), agrupados por e-mail. Para incluir alguém, cadastre o contato na empresa.</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Buscar por nome, e-mail ou empresa" value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar contato" />
+            </div>
+            <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
+              <SelectTrigger className="sm:w-48" aria-label="Situação"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as situações</SelectItem>
+                {(Object.keys(STATUS_LABEL) as PortalStatus[]).map(k => <SelectItem key={k} value={k}>{STATUS_LABEL[k]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead className="hidden md:table-cell">Empresas</TableHead><TableHead>Situação</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Contato</TableHead><TableHead className="hidden md:table-cell">Empresas</TableHead><TableHead>Situação</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
-              {accesses.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Nenhum acesso criado.</TableCell></TableRow>}
-              {accesses.map(a => (
-                <TableRow key={a.user_id}>
-                  <TableCell className="font-medium">{a.full_name}</TableCell>
-                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{a.client_ids.map(id => clientName.get(id)).filter(Boolean).join(', ') || '—'}</TableCell>
-                  <TableCell>{a.must_change_password ? <Badge variant="secondary">Senha temporária</Badge> : <Badge>Ativo</Badge>}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button size="icon" variant="ghost" aria-label="Empresas vinculadas" onClick={() => { setLinkFor(a); setLinkIds(a.client_ids); }}><Link2 className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" aria-label="Reenviar acesso" onClick={() => resend(a)}><KeyRound className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" aria-label="Desativar acesso" onClick={() => removeAccess(a)}><Trash2 className="h-4 w-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Nenhum contato encontrado.</TableCell></TableRow>}
+              {filtered.slice(0, 300).map(c => {
+                const st = portalStatus(c);
+                return (
+                  <TableRow key={c.email}>
+                    <TableCell>
+                      <p className="font-medium">{c.names[0] || '—'}</p>
+                      <p className="text-xs text-muted-foreground">{c.email}{c.phones[0] ? ` · ${c.phones[0]}` : ''}</p>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground max-w-xs">
+                      <span className="line-clamp-2">{c.client_ids.map(id => clientName.get(id)).filter(Boolean).join(', ')}</span>
+                    </TableCell>
+                    <TableCell><Badge variant={st === 'active' ? 'default' : st === 'none' ? 'outline' : 'secondary'}>{STATUS_LABEL[st]}</Badge></TableCell>
+                    <TableCell className="text-right space-x-1 whitespace-nowrap">
+                      {st === 'none' && <Button size="sm" variant="outline" onClick={() => setGrant({ c, name: c.names[0] || c.email, whatsapp: c.phones[0] || '', password: genPwd() })}><UserPlus className="h-4 w-4 mr-1" />Liberar</Button>}
+                      {(st === 'temp' || st === 'active') && <>
+                        <Button size="icon" variant="ghost" aria-label="Reenviar senha" onClick={() => resend(c)}><KeyRound className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" aria-label="Bloquear acesso" onClick={() => block(c)}><Ban className="h-4 w-4" /></Button>
+                      </>}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
+          <p className="text-xs text-muted-foreground mt-2">{contacts.length} pessoa(s) com e-mail cadastrado. E-mails do escritório são ignorados.</p>
         </CardContent>
       </Card>
 
@@ -185,25 +178,16 @@ export function ClientAccessTab() {
         </CardContent>
       </Card>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={!!grant} onOpenChange={o => !o && setGrant(null)}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Novo acesso de cliente</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1"><Label htmlFor="ca-name">Nome</Label><Input id="ca-name" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} /></div>
-            <div className="space-y-1"><Label htmlFor="ca-email">E-mail de acesso</Label><Input id="ca-email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-            <div className="space-y-1"><Label htmlFor="ca-wa">WhatsApp (envia as credenciais)</Label><Input id="ca-wa" value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="(48) 99999-9999" /></div>
-            <div className="space-y-1"><Label htmlFor="ca-pwd">Senha temporária</Label><Input id="ca-pwd" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
-            <div className="space-y-1"><Label>Empresas</Label><CompanyPicker clients={clients} value={form.client_ids} onChange={v => setForm({ ...form, client_ids: v })} /></div>
-          </div>
-          <DialogFooter><Button onClick={create} disabled={busy}>{busy ? 'Criando...' : 'Criar e enviar'}</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!linkFor} onOpenChange={o => !o && setLinkFor(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Empresas de {linkFor?.full_name}</DialogTitle></DialogHeader>
-          <CompanyPicker clients={clients} value={linkIds} onChange={setLinkIds} />
-          <DialogFooter><Button onClick={saveLinks}>Salvar</Button></DialogFooter>
+          <DialogHeader><DialogTitle>Liberar acesso</DialogTitle></DialogHeader>
+          {grant && <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{grant.c.email} verá {grant.c.client_ids.length} empresa(s): {grant.c.client_ids.map(id => clientName.get(id)).filter(Boolean).join(', ')}</p>
+            <div className="space-y-1"><Label htmlFor="g-name">Nome</Label><Input id="g-name" value={grant.name} onChange={e => setGrant({ ...grant, name: e.target.value })} /></div>
+            <div className="space-y-1"><Label htmlFor="g-wa">WhatsApp (envia as credenciais)</Label><Input id="g-wa" value={grant.whatsapp} onChange={e => setGrant({ ...grant, whatsapp: e.target.value })} /></div>
+            <div className="space-y-1"><Label htmlFor="g-pwd">Senha temporária</Label><Input id="g-pwd" value={grant.password} onChange={e => setGrant({ ...grant, password: e.target.value })} /></div>
+          </div>}
+          <DialogFooter><Button onClick={confirmGrant} disabled={busy}>{busy ? 'Liberando...' : 'Liberar e enviar'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

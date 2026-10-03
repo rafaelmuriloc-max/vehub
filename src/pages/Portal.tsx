@@ -80,8 +80,8 @@ export default function Portal() {
   useEffect(() => {
     if (!user || !isClient) return;
     (async () => {
-      const { data: links } = await db.from('client_portal_links').select('client_id').eq('user_id', user.id);
-      const ids = ((links as any[]) || []).map(l => l.client_id);
+      const { data: links } = await db.rpc('portal_my_clients');
+      const ids = ((links as any[]) || []).map(l => (typeof l === 'string' ? l : l.portal_my_clients));
       if (!ids.length) return;
       const { data } = await supabase.from('clients').select('id, company_name, document, tax_regime, opening_date').in('id', ids).order('company_name');
       setCompanies((data as Company[]) || []);

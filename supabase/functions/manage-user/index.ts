@@ -158,6 +158,10 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "A senha deve ter pelo menos 6 caracteres" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      if (role === "client" && String(email).trim().toLowerCase().endsWith("@velocitacontabilidade.com.br")) {
+        return new Response(JSON.stringify({ error: "E-mails do escritório não podem ser acesso de cliente" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -195,17 +199,9 @@ Deno.serve(async (req) => {
         await adminClient.from("user_roles").update({ role: "admin" }).eq("user_id", userId);
       }
 
-      // Acesso da Área do Cliente: papel "client" + vínculos com as empresas
+      // Acesso da Área do Cliente: papel "client"; as empresas vêm dos contatos cadastrados (pelo e-mail)
       if (role === "client") {
         await adminClient.from("user_roles").update({ role: "client" }).eq("user_id", userId);
-        const clientIds: string[] = Array.isArray(body.client_ids)
-          ? body.client_ids.filter((x: unknown) => typeof x === "string" && x.length > 0)
-          : [];
-        if (clientIds.length > 0) {
-          await adminClient.from("client_portal_links").insert(
-            clientIds.map((c) => ({ user_id: userId, client_id: c })),
-          );
-        }
       }
 
       // Envia o acesso por WhatsApp (quando informado)

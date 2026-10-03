@@ -4176,6 +4176,18 @@ export type Database = {
         Args: { _id: string; _until: string }
         Returns: number
       }
+      admin_portal_contacts: {
+        Args: never
+        Returns: {
+          client_ids: string[]
+          email: string
+          is_staff: boolean
+          must_change_password: boolean
+          names: string[]
+          phones: string[]
+          user_id: string
+        }[]
+      }
       dashboard_client_counts: {
         Args: { p_end: string; p_start: string }
         Returns: {
@@ -4257,6 +4269,9 @@ export type Database = {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
       }
+      portal_contact_client_ids: { Args: { _email: string }; Returns: string[] }
+      portal_my_clients: { Args: never; Returns: string[] }
+      portal_norm_email: { Args: { _e: string }; Returns: string }
       recalc_obligation_instance_status: {
         Args: { _instance_id: string }
         Returns: undefined
