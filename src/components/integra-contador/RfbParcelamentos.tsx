@@ -296,6 +296,7 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
       const { data: parcData } = await supabase
         .from('parcelamento_results' as any)
         .select('*')
+        .eq('origem', 'RFB')
         .order('consulted_at', { ascending: false });
       setRows(((parcData || []) as any) as ParcRow[]);
     } catch (err) {
@@ -309,9 +310,9 @@ export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSu
   async function consultarCliente(clientId: string, only?: string): Promise<void> {
     // Apaga registros anteriores deste cliente (ou só da modalidade) para evitar duplicação
     if (only) {
-      await supabase.from('parcelamento_results' as any).delete().eq('client_id', clientId).in('modalidade', [only, '_none']);
+      await supabase.from('parcelamento_results' as any).delete().eq('client_id', clientId).eq('origem', 'RFB').in('modalidade', [only, '_none']);
     } else {
-      await supabase.from('parcelamento_results' as any).delete().eq('client_id', clientId);
+      await supabase.from('parcelamento_results' as any).delete().eq('client_id', clientId).eq('origem', 'RFB');
     }
 
     const toInsert: any[] = [];
