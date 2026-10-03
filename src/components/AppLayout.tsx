@@ -19,7 +19,7 @@ const pageTitles: Record<string, string> = {
 };
 
 export function AppLayout() {
-  const { user, loading, isAdmin, profile } = useAuth();
+  const { user, loading, isAdmin, isClient, profile } = useAuth();
   const location = useLocation();
   useChatNotification();
 
@@ -28,6 +28,7 @@ export function AppLayout() {
   if (profile?.must_change_password) {
     return <Navigate to="/change-password" replace />;
   }
+  if (isClient) return <Navigate to="/portal" replace />;
   if (!isAdmin && location.pathname === '/') {
     return <Navigate to="/calendar" replace />;
   }
