@@ -14,6 +14,23 @@ export default {
   	},
   	extend: {
   		colors: {
+  			portal: {
+  				bg: 'hsl(var(--portal-bg))',
+  				ink: 'hsl(var(--portal-ink))',
+  				blue: 'hsl(var(--portal-blue))',
+  				'blue-strong': 'hsl(var(--portal-blue-strong))',
+  				'blue-soft': 'hsl(var(--portal-blue-soft))',
+  				'blue-bar': 'hsl(var(--portal-blue-bar))',
+  			},
+  			tag: {
+  				das: 'hsl(var(--tag-das))',
+  				fgts: 'hsl(var(--tag-fgts))',
+  				inss: 'hsl(var(--tag-inss))',
+  				iss: 'hsl(var(--tag-iss))',
+  				folha: 'hsl(var(--tag-folha))',
+  				darf: 'hsl(var(--tag-darf))',
+  				outro: 'hsl(var(--tag-outro))',
+  			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',

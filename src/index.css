@@ -52,6 +52,19 @@
     --info: 217 91% 55%;
     --info-foreground: 0 0% 100%;
     --violet: 262 83% 58%;
+    --portal-bg: 216 50% 98%;
+    --portal-ink: 222 60% 14%;
+    --portal-blue: 217 91% 52%;
+    --portal-blue-strong: 221 83% 45%;
+    --portal-blue-soft: 214 100% 95%;
+    --portal-blue-bar: 213 94% 72%;
+    --tag-das: 217 91% 58%;
+    --tag-fgts: 142 71% 40%;
+    --tag-inss: 0 84% 58%;
+    --tag-iss: 30 95% 52%;
+    --tag-folha: 262 83% 58%;
+    --tag-darf: 174 72% 38%;
+    --tag-outro: 220 15% 50%;
 
     --border: 220 15% 88%;
     --input: 220 15% 88%;
