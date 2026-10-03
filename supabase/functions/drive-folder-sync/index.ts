@@ -349,7 +349,7 @@ Deno.serve(async (req) => {
               const { data: inserted, error: insErr } = await supabase.from("documents").insert({
                 document_type_id: docType.id,
                 client_id: client.id,
-                reference_month: refMonth,
+                reference_month: refMonthIso,
                 file_url: storagePath,
                 file_name: f.name,
                 uploaded_by: null,

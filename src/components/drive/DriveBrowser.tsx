@@ -167,7 +167,7 @@ export function DriveBrowser({ mode = 'manage', multiple = true, onPick, onClose
     } finally {
       setLoading(false);
     }
-  }, [folderId, appliedSearch, tab]);
+  }, [folderId, appliedSearch, tab, mode]);
 
   useEffect(() => { load(); }, [load]);
 
