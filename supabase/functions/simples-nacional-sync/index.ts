@@ -479,5 +479,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ success: true, count: results.length, pagos, payment_errors: paymentErrors, results });
+  return jsonResponse({ success: true, count: results.length, pagos, payment_errors: paymentErrors, results, total, next_offset: nextOffset });
 });
