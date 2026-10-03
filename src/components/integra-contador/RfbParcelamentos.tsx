@@ -163,6 +163,30 @@ function parseDetalhe(d: any): { valor: number | null; total: number | null; pag
   return { valor, total, pagas, parcela };
 }
 
+type Pagamento = { parcela: string | null; data: string | null; valor: number | null; das: string | null };
+
+function fmtYmd(v: any): string | null {
+  if (v == null || v === '') return null;
+  const s = String(v).replace(/\D/g, '');
+  if (s.length === 8) return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`;
+  if (s.length === 6) return `${s.slice(4, 6)}/${s.slice(0, 4)}`;
+  return String(v);
+}
+
+function extractPagamentos(d: any): Pagamento[] {
+  const pagos = d?.demonstrativoDePagamentos ?? d?.demonstrativoPagamentos ?? d?.pagamentos;
+  if (!Array.isArray(pagos)) return [];
+  const list = pagos.map((p: any) => ({
+    parcela: fmtYmd(p?.mesDaParcela ?? p?.parcela ?? p?.mesParcela ?? p?.periodoApuracao),
+    data: fmtYmd(p?.dataDeArrecadacao ?? p?.dataArrecadacao ?? p?.dataDoPagamento ?? p?.dataPagamento),
+    valor: num(p?.valorPago ?? p?.valor ?? p?.valorTotal),
+    das: p?.numeroDas ?? p?.numeroDAS ?? p?.numeroDocumento ?? null,
+    _k: String(p?.mesDaParcela ?? p?.parcela ?? p?.dataDeArrecadacao ?? p?.dataArrecadacao ?? ''),
+  }));
+  list.sort((a, b) => b._k.localeCompare(a._k));
+  return list.map(({ _k, ...r }) => r);
+}
+
 export default function RfbParcelamentos() {
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
@@ -180,6 +204,9 @@ export default function RfbParcelamentos() {
   const [parcelas, setParcelas] = useState<Array<{ parcela: string; valor: number | null }>>([]);
   const [parcelasLoading, setParcelasLoading] = useState(false);
   const [parcelasError, setParcelasError] = useState<string | null>(null);
+  const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
+  const [pagamentosLoading, setPagamentosLoading] = useState(false);
+  const [pagamentosError, setPagamentosError] = useState<string | null>(null);
   const [emittingParcela, setEmittingParcela] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const cancelRef = useRef(false);
@@ -697,12 +724,37 @@ export default function RfbParcelamentos() {
     }
   }
 
+  async function loadPagamentos(row: ParcRow) {
+    const map = PARCELAS_SERVICES[row.modalidade];
+    setPagamentos([]); setPagamentosError(null);
+    if (!map || !row.numero_parcelamento) return;
+    setPagamentosLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('integra-contador', {
+        body: { client_id: row.client_id, idSistema: map.idSistema, idServico: map.obterService, tipo: 'Consultar', dados: JSON.stringify({ numeroParcelamento: Number(String(row.numero_parcelamento).replace(/\D/g, '')) }) },
+      });
+      if (error) throw error;
+      if (!data?.success) {
+        const msgs = data?.data?.mensagens?.map((m: any) => m.texto).join('; ');
+        throw new Error(msgs || data?.error || 'Falha ao obter pagamentos');
+      }
+      let d: any = data?.data?.dados ?? data?.data;
+      if (typeof d === 'string') { try { d = JSON.parse(d); } catch { d = null; } }
+      setPagamentos(extractPagamentos(d));
+    } catch (err: any) {
+      setPagamentosError(err?.message || String(err));
+    } finally { setPagamentosLoading(false); }
+  }
+
   useEffect(() => {
     if (detailRow && detailRow.status === 'success') {
       loadParcelas(detailRow);
+      loadPagamentos(detailRow);
     } else {
       setParcelas([]);
       setParcelasError(null);
+      setPagamentos([]);
+      setPagamentosError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailRow?.id]);
