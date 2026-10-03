@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Bell, Building2, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, BarChart3 } from 'lucide-react';
+import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, BarChart3 } from 'lucide-react';
 import { modulesFor } from '@/lib/portal';
 import { limiteAnual, faixaDe } from '@/lib/meiLimit';
 import { pctChange } from '@/lib/portalDashboard';
@@ -197,11 +197,8 @@ export default function Portal() {
           </div>
           {companies.length > 0 && (
             <Select value={activeId} onValueChange={setActiveId} disabled={companies.length < 2}>
-              <SelectTrigger className={cn('order-last md:order-none basis-full md:basis-auto h-14 md:h-12 w-full md:flex-1 md:max-w-sm min-w-0 bg-portal-bg md:bg-card items-center [&>span]:line-clamp-none disabled:opacity-100 disabled:cursor-default', companies.length < 2 && '[&>svg]:hidden')} aria-label="Empresa">
-                <span className="flex items-center gap-2.5 min-w-0 flex-1 text-left">
-                  <span className="h-9 w-9 shrink-0 rounded-lg bg-portal-blue-soft text-portal-blue flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
-                  <span className="min-w-0 flex-1 flex flex-col"><span className="text-sm font-semibold truncate">{company?.company_name}</span><span className="text-[11px] text-muted-foreground truncate tabular-nums">{company?.document}</span></span>
-                </span>
+              <SelectTrigger className={cn('order-last md:order-none basis-full md:basis-auto h-11 w-full md:flex-1 md:max-w-sm min-w-0 bg-portal-bg md:bg-card items-center [&>span]:line-clamp-none disabled:opacity-100 disabled:cursor-default', companies.length < 2 && '[&>svg]:hidden')} aria-label="Empresa">
+                <span className="min-w-0 flex-1 text-left text-sm font-semibold truncate">{company?.company_name}</span>
               </SelectTrigger>
               <SelectContent className="max-w-[calc(100vw-2rem)]">{companies.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
             </Select>
