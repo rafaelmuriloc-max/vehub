@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3 } from 'lucide-react';
+import logoVelocita from '@/assets/logo_velocita.jpeg.asset.json';
 import PortalPersonnel from '@/components/portal/PortalPersonnel';
 import { modulesFor } from '@/lib/portal';
 import { limiteAnual, faixaDe } from '@/lib/meiLimit';
@@ -193,7 +194,7 @@ export default function Portal() {
       <header className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-border/50 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="mx-auto max-w-5xl flex flex-wrap md:flex-nowrap items-center gap-x-2 gap-y-2 sm:gap-x-3 px-3 sm:px-4 py-2">
           <div className="flex items-center gap-2 shrink-0 min-w-0">
-            <span className="h-9 w-9 shrink-0 rounded-xl bg-portal-blue text-primary-foreground flex items-center justify-center font-black text-lg">V</span>
+            <img src={logoVelocita.url} alt="Velocitä" className="h-9 w-9 shrink-0 rounded-xl object-cover" />
             <span className="leading-tight min-w-0"><span className="block font-bold text-base sm:text-lg truncate">Velocitä</span><span className="block text-[11px] sm:text-xs text-muted-foreground truncate">Portal do Cliente</span></span>
           </div>
           {companies.length > 0 && (
