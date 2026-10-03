@@ -56,6 +56,7 @@ export default {
 				green: 'hsl(var(--pr-green))', red: 'hsl(var(--pr-red))',
 			},
 			info: { DEFAULT: 'hsl(var(--info))', foreground: 'hsl(var(--info-foreground))' },
+			violet: { DEFAULT: 'hsl(var(--violet))' },
 			calendar: {
 				blue: 'hsl(var(--calendar-blue))',
 				'blue-soft': 'hsl(var(--calendar-blue-soft))',
