@@ -33,7 +33,7 @@ export default function PortalPersonnel({ clientId }: { clientId: string }) {
   useEffect(() => {
     let off = false;
     setLoading(true);
-    const rpc = supabase.rpc as any;
+    const rpc = (supabase.rpc as any).bind(supabase);
     Promise.all([rpc('portal_employees', { _client_id: clientId }), rpc('portal_payroll', { _client_id: clientId }), rpc('portal_vacations', { _client_id: clientId })]).then(([e, p, v]) => {
       if (off) return;
       setEmps(e.data || []); setPay(p.data || []); setVacs(v.data || []); setLoading(false);
