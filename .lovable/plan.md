@@ -1,49 +1,50 @@
-# Parcelamentos PGFN: diagnóstico e caminho para implementar
+# Plano B: robô próprio para negociações PGFN
 
-## O que existe hoje (verificado)
-- **Tela PGFN**: `src/components/integra-contador/PgfnParcelamentos.tsx` tem 40 linhas e é só um aviso fixo ("em construção", link do REGULARIZE). Não consulta nada nem grava dados.
-- **Proxy `PGFN_PROXY_URL`**: só aparece nesse texto. Não está nas chaves salvas, nenhuma função do servidor usa e não existe contrato definido. As únicas chaves de proxy configuradas são `NFE_PROXY_URL` e `NFE_PROXY_TOKEN`, usadas pelo proxy Hostinger das NF-e.
-- **Tabela `parcelamento_results`**: aceita `origem IN ('RFB','PGFN')` (migração 20260521144717). A migração 20260521174701 apagou todas as linhas PGFN e `OBTERPARC24*`, porque a tentativa via SERPRO (sistema `PARCMEPN`) retornou "Identificação do sistema ou serviço inválida".
-- **Acesso aos dados**: pelo plano já aprovado, qualquer usuário logado lê e grava. A tabela está na lista de isolamento por escritório (`supabase/multitenant/002–004`), que ainda **não foi aplicada** em produção.
-- **O que já mostra algo da PGFN**: o relatório SITFIS (`sitfis_results`, lido por `sitfisParser.ts`) tem a seção "Diagnóstico Fiscal na Procuradoria". Ela mostra só se há pendência na PGFN e, quando aparecem, parcelamentos citados no texto. Isso é **situação na Dívida Ativa, não a lista de negociações com parcelas** — não serve como fonte de parcelamentos.
-- **Chaves e conectores presentes (só nomes)**: SERPRO_CONSUMER_KEY/SECRET, INFOSIMPLES_API_TOKEN/ENCRYPTION_KEY, NFE_PROXY_URL/TOKEN, EVOLUTION_*, WHATSAPP_*, ASAAS_*, Gmail, Drive, Sheets e Firecrawl (não ligado). **Nenhuma credencial do REGULARIZE/PGFN**.
-- **Backend**: Supabase externo `ismgjjvarzzfsbdpthot`. Funções do servidor só são publicadas com sua autorização.
+## O que é
+Um pequeno servidor do escritório que abre o portal oficial da PGFN (Regularize/SISPAR) como se fosse uma pessoa. Ele entra com o certificado da empresa, lê as negociações e baixa a guia. Depois devolve os dados para o sistema. Não existe API oficial: o robô só repete o que a equipe já faz à mão.
 
-## O que não existe (bloqueios externos)
-1. O Integra Contador/SERPRO não tem serviço de parcelamentos PGFN.
-2. Não há API pública conhecida do REGULARIZE para listar negociações, parcelas ou emitir DARF de parcela. Não vou supor nenhum endereço oficial.
-3. O SISPAR é um sistema da RFB, não da PGFN; os parcelamentos não Simples da RFB também não estão no Integra Contador.
-4. O REGULARIZE pede login gov.br ou certificado digital com procuração da PGFN. Ela é separada da procuração e-CAC e precisa ser conferida por empresa.
-5. Automação de portal (robô) pode quebrar com captcha, mudanças de tela e limites de uso.
+## Etapa 1 — Mapear o caminho manual (sem código, 1 a 2 dias)
+Antes de programar qualquer coisa, alguém do escritório faz o processo à mão em 3 ou 4 empresas e anota cada tela:
+- Como entra: certificado A1 da empresa, certificado do contador com procuração ou login gov.br. Login com senha gov.br **não** entra no robô.
+- Em que tela aparece a lista de negociações e quais campos ela mostra (número, modalidade, situação, parcelas, valores).
+- Como se gera o DARF da parcela no SISPAR e se aparece captcha, confirmação por celular ou limite de tentativas.
+- Se a procuração na PGFN existe para cada cliente. Ela é separada da procuração no e-CAC.
 
-## Caminhos viáveis (precisa da sua escolha)
-- **A. Provedor terceirizado (recomendado avaliar primeiro)**: confirmar no catálogo da Infosimples (token já existe) se há consulta de parcelamentos e emissão de guia PGFN/REGULARIZE com certificado. Se houver, eu leio a documentação oficial deles antes de escrever código, igual ao que fizemos no FGTS.
-- **B. Proxy próprio (robô no REGULARIZE)**: um servidor seu (como o da Hostinger) com o certificado A1 de cada cliente. Exige definir o contrato abaixo e alguém para manter o robô.
-- **C. Controle manual**: cadastrar o parcelamento PGFN (número, modalidade, parcelas, valor e vencimento), anexar o DARF baixado do REGULARIZE e enviar por WhatsApp pela tela atual. Funciona hoje, sem depender de terceiros.
+**Se houver captcha ou confirmação por celular em todo acesso, o robô não é viável** e ficamos no cadastro manual. Esta etapa decide se vale continuar.
 
-## Contrato proposto para o proxy (caminho B, ainda não existe)
+## Etapa 2 — Servidor
+- Precisa ser um servidor virtual (VPS) com Linux, não a hospedagem compartilhada da Hostinger usada nas NF-e, porque o robô precisa de um navegador sem tela (Chromium/Playwright).
+- Requisitos mínimos: 2 GB de memória, IP fixo no Brasil e HTTPS.
+- Quem hospeda e mantém: o escritório ou um técnico contratado. Mudanças no portal vão exigir ajustes.
+
+## Etapa 3 — Robô (no servidor, fora deste sistema)
+- Recebe o pedido, abre o portal com o certificado da empresa e devolve dados estruturados. Guarda tudo só durante a consulta: não grava certificados nem senhas em disco.
+- Limita o ritmo (por exemplo, 1 empresa por vez com pausas) para não ser bloqueado.
+- Registra cada passo em log, sem dados sensíveis, para diagnóstico.
+- Contrato proposto, a ajustar conforme o mapeamento da Etapa 1:
+
 ```text
-POST {PGFN_PROXY_URL}/negociacoes   Authorization: Bearer PGFN_PROXY_TOKEN
+POST /negociacoes  Authorization: Bearer PGFN_PROXY_TOKEN
   { cnpj, cert_pfx_base64, cert_password }
-  -> { negociacoes: [{ numero, modalidade, situacao, data_adesao, valor_consolidado,
-                        parcelas_total, parcelas_pagas, proximo_vencimento }] }
-POST {PGFN_PROXY_URL}/parcelas      { cnpj, cert..., numero } -> { parcelas: [{ numero, vencimento, valor, situacao }] }
-POST {PGFN_PROXY_URL}/darf          { cnpj, cert..., numero, parcela } -> { pdf_base64, linha_digitavel, vencimento }
+  -> { negociacoes: [{ numero, modalidade, situacao, data_adesao,
+                       valor_consolidado, parcelas_total, parcelas_pagas,
+                       valor_proxima_parcela, vencimento_proxima }] }
+POST /darf         { cnpj, cert..., numero, parcela }
+  -> { pdf_base64, vencimento, valor }
+Erros: { erro: 'captcha' | 'sem_procuracao' | 'certificado_invalido' | 'portal_indisponivel', mensagem }
 ```
 
-## Implementação nesta sessão (depois da escolha)
-- Função do servidor `pgfn-parcelamentos` que verifica o usuário e chama o provedor escolhido. Ela grava em `parcelamento_results` com `origem='PGFN'` e a resposta original em `raw_response`, e devolve o PDF da guia.
-- `PgfnParcelamentos.tsx` no mesmo visual da aba RFB: cartões por empresa, parcelas pagas, Gerar parcela e Enviar via WhatsApp, reaproveitando a lógica de envio já feita.
-- Caminho C: formulário de cadastro manual e envio do PDF anexado. Nenhuma mudança no banco é necessária, porque a tabela já aceita PGFN.
+## Etapa 4 — Ligação com este sistema (eu faço quando o robô existir)
+- Salvar `PGFN_PROXY_URL` e `PGFN_PROXY_TOKEN` nas chaves do projeto.
+- Criar a função `pgfn-sync` com o mesmo modelo do FGTS. Ela verifica o usuário e pega o certificado da empresa no armazenamento privado. Depois chama o robô e grava em `parcelamento_results` (origem PGFN) com `fonte: 'robo'` e data da consulta, separado dos cadastros manuais.
+- Na aba PGFN: botões "Consultar" por empresa e em lote, e "Gerar guia" que guarda o PDF no armazenamento privado. Os registros manuais continuam valendo, e o aviso "Sincronização automática não configurada" some só quando o robô responder.
 - Publicar a função só com sua autorização.
 
-## Arquivos relevantes
-- `src/components/integra-contador/PgfnParcelamentos.tsx`, `ParcelamentosTab.tsx`, `RfbParcelamentos.tsx`
-- `src/components/integra-contador/sitfisParser.ts`, `SitfisDetailPanel.tsx`, `SituacaoFiscalTab.tsx`
-- `supabase/functions/integra-contador/index.ts`, `supabase/functions/_shared/certificate.ts`, `supabase/functions/fgts-digital-sync/index.ts` (modelo Infosimples)
-- `supabase/migrations/20260521144717_*.sql`, `20260521174701_*.sql`, `supabase/multitenant/002–004`
+## Riscos
+- Mudanças no portal quebram o robô sem aviso.
+- Captcha ou novas exigências de login podem inviabilizar o robô.
+- O uso automatizado pode contrariar os termos de uso do portal. Vale confirmar com o jurídico ou o contador responsável.
+- Custo: servidor (cerca de R$ 30 a 80 por mês) mais horas de manutenção.
 
-## Preciso de você
-1. Qual caminho seguir: A, B ou C (ou C agora e A/B depois)?
-2. Para o B: o endereço do servidor e quem vai hospedar o robô.
-3. As empresas têm procuração na PGFN (não só no e-CAC)?
+## Próximo passo sugerido
+Fazer a Etapa 1 e me mandar as anotações ou capturas de tela das telas. Com isso eu confirmo se dá para seguir e fecho o contrato do robô.
