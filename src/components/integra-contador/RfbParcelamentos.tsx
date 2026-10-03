@@ -187,7 +187,55 @@ function extractPagamentos(d: any): Pagamento[] {
   return list.map(({ _k, ...r }) => r);
 }
 
-export default function RfbParcelamentos() {
+const brl = (v: number | null | undefined) => v != null ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
+
+function monthsSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const n = new Date();
+  return (n.getFullYear() - d.getFullYear()) * 12 + (n.getMonth() - d.getMonth()) + 1;
+}
+
+// Parcelas vencidas e não pagas (estimativa: uma parcela por mês desde o pedido)
+function parcAtraso(p: ParcRow): number | null {
+  if (p.parcelas_pagas == null) return null;
+  const due = monthsSince(p.data_pedido);
+  if (due == null) return null;
+  const capped = p.parcelas_total != null ? Math.min(due - 1, p.parcelas_total) : due - 1;
+  return Math.max(0, capped - p.parcelas_pagas);
+}
+
+function proximoVenc(p: ParcRow): Date | null {
+  if (p.parcelas_total != null && p.parcelas_pagas != null && p.parcelas_pagas >= p.parcelas_total) return null;
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth() + 1, 0);
+}
+
+function valorParcela(p: ParcRow): number | null {
+  const r = p.raw_response || {};
+  const det = r?.detalhe ?? r;
+  const base = num(det?.consolidacaoOriginal?.parcelaBasica ?? det?.parcelaBasica ?? det?.valorParcela ?? r?.valorParcela);
+  if (base != null) return base;
+  if (p.valor_total != null && p.parcelas_total) return p.valor_total / p.parcelas_total;
+  return null;
+}
+
+const isEncerrado = (p: ParcRow) => !!(p.situacao && ENCERRADO_REGEX.test(p.situacao));
+const isMei = (p: ParcRow) => /MEI/i.test(p.modalidade_label || '') || ['PEDIDOSPARC203', 'PEDIDOSPARC213', 'PEDIDOSPARC223', 'PEDIDOSPARC233'].includes(p.modalidade);
+const modTag = (p: ParcRow) => {
+  const l = (p.modalidade_label || '').replace(/^RFB\s*-\s*/i, '');
+  if (/^Ordinário SN$/i.test(l)) return 'SIMPLES NACIONAL';
+  if (/^Ordinário MEI$/i.test(l)) return 'PARCMEI';
+  return l.toUpperCase();
+};
+
+export type ParcSummary = {
+  monitoradas: number; ativos: number; atraso: number; rescindidos: number; vence7: number;
+  lastBatch: string | null; batchRunning: boolean; atualizarTodas: () => void;
+};
+
+export default function RfbParcelamentos({ onSummary }: { onSummary?: (s: ParcSummary) => void } = {}) {
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [rows, setRows] = useState<ParcRow[]>([]);
