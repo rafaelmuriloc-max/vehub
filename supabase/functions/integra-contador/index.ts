@@ -496,7 +496,7 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const isServiceCall = token === serviceRoleKey;
 
-    const supabase = isServiceCall
+    let supabase = isServiceCall
       ? createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey)
       : createClient(
           Deno.env.get("SUPABASE_URL")!,
@@ -519,7 +519,6 @@ Deno.serve(async (req) => {
     const { client_id, idSistema, idServico, tipo, dados, versaoSistema, sitfis_context } = body;
 
     // Área do Cliente: só serviços liberados e apenas para empresas vinculadas.
-    let supabaseForPortal = supabase;
     if (portalCallerId) {
       const PORTAL_SERVICES = new Set(["GERARDASPDF21", "CCMEI", "EMITIRCCMEI121", "DADOSCCMEI122"]);
       if (!PORTAL_SERVICES.has(String(idServico)) || body?.sitfis_invalidate_cache) {
@@ -527,10 +526,8 @@ Deno.serve(async (req) => {
       }
       const { data: allowed } = await supabase.rpc("portal_can_access_client", { _user_id: portalCallerId, _client_id: client_id });
       if (!allowed) return jsonResponse({ error: "Empresa não vinculada ao seu acesso" }, 403);
-      supabaseForPortal = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
+      supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
     }
-    // deno-lint-ignore no-unused-vars
-    const _portal = supabaseForPortal;
 
     // Invalidação do contexto SITFIS em cache (protocolo expirado — ER05)
     if (body?.sitfis_invalidate_cache && client_id) {
