@@ -1,0 +1,1 @@
+alter function public.portal_safe_uuid(text) set search_path = public;
