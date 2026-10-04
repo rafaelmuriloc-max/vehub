@@ -12,6 +12,13 @@ const MONTHS_LONG = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
 const WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export type DueItem = { id: string; name: string; due: string; competencia: string; valor: number | null };
+const brD = (d?: string | null) => d ? d.slice(0, 10).split('-').reverse().join('/') : '';
+export function PayBadge({ pay }: { pay?: { state: string; data_pagamento?: string | null; valor_pago?: number | null } | null }) {
+  if (!pay) return null;
+  const m = pay.state === 'paga' ? { l: `Paga${pay.data_pagamento ? ' em ' + brD(pay.data_pagamento) : ''}${pay.valor_pago != null ? ' · ' + brl(Number(pay.valor_pago)) : ''}`, c: 'bg-success/10 text-success' }
+    : pay.state === 'vencida' ? { l: 'Vencida', c: 'bg-destructive/10 text-destructive' } : { l: 'Em aberto', c: 'bg-warning/10 text-warning' };
+  return <span className={cn('mt-1 mr-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium', m.c)}>{m.l}</span>;
+}
 export type DocItem = { id: string; label: string; area: string; ref: string | null; file_url: string; file_name: string; created_at: string };
 
 const TAG_BG: Record<TagKey, string> = { das: 'bg-tag-das', fgts: 'bg-tag-fgts', inss: 'bg-tag-inss', iss: 'bg-tag-iss', folha: 'bg-tag-folha', darf: 'bg-tag-darf', icms: 'bg-tag-icms', pis_cofins: 'bg-tag-pis_cofins', irpj_csll: 'bg-tag-irpj_csll', outro: 'bg-tag-outro' };
@@ -188,7 +195,7 @@ export function UpcomingDues({ items, onSeeAll, limit = 3, onOpen }: { items: Du
               <span className={cn('h-14 w-14 shrink-0 rounded-xl border flex flex-col items-center justify-center', b.tone === 'danger' ? 'bg-destructive/10 border-destructive/20' : 'bg-portal-blue-soft border-portal-blue/15')}>
                 <span className={cn('text-xl font-extrabold leading-none', b.tone === 'danger' ? 'text-destructive' : 'text-portal-ink')}>{dd}</span><span className="text-[11px] font-medium uppercase text-portal-ink mt-0.5">{MONTHS[Number(mm) - 1]}</span>
               </span>
-              <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-portal-ink truncate">{i.name}</p><p className="text-xs text-muted-foreground truncate">{i.competencia}</p>{(i as any).done && <span className="mt-1 inline-block rounded-full bg-portal-blue-soft px-2 py-0.5 text-[10px] font-medium text-portal-blue">Guia disponível</span>}</div>
+              <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-portal-ink truncate">{i.name}</p><p className="text-xs text-muted-foreground truncate">{i.competencia}</p><PayBadge pay={(i as any).pay} />{(i as any).done && <span className="mt-1 inline-block rounded-full bg-portal-blue-soft px-2 py-0.5 text-[10px] font-medium text-portal-blue">Guia disponível</span>}</div>
               <span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap', b.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning')}>{b.label}</span>
               <span className="text-sm font-semibold text-portal-ink tabular-nums whitespace-nowrap">{i.valor != null ? brl(i.valor) : '—'}</span>
               {onOpen && (i as any).file_url && (
