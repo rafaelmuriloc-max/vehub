@@ -42,3 +42,13 @@ describe('competenciaFromDue', () => {
   it('ISS 09/10/2026 é competência 09/2026', () => expect(competenciaFromDue('2026-10-09')).toBe('09/2026'));
   it('janeiro volta para dezembro do ano anterior', () => expect(competenciaFromDue('2027-01-20')).toBe('12/2026'));
 });
+import { groupByTax } from './portalDashboard';
+describe('groupByTax', () => {
+  const g = groupByTax([
+    { name: 'FGTS', due: '2026-10-20' }, { name: 'ISS', due: '2026-09-09' }, { name: 'ISS', due: '2026-10-09' },
+    { name: 'PIS / COFINS', due: '2026-10-23' }, { name: 'IRPJ / CSLL', due: '2026-10-30' }, { name: 'DAS - Simples Nacional', due: '2026-10-20' },
+  ]);
+  it('ordem das abas', () => expect(g.map(x => x.label)).toEqual(['DAS', 'ISS', 'PIS/COFINS', 'IRPJ/CSLL', 'FGTS']));
+  it('mais recente primeiro', () => expect(g[1].items[0].due).toBe('2026-10-09'));
+  it('omite abas vazias', () => expect(g.find(x => x.label === 'ICMS')).toBeUndefined());
+});
