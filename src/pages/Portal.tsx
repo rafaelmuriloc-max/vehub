@@ -233,7 +233,6 @@ export default function Portal() {
   }, [obrig, simples]);
   const in30 = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30));
   const upcoming = dues.filter(d => d.due >= iso(today) && d.due <= in30 && !(d as any).done);
-  const pendentesMes = obrig.filter((o: any) => o.status !== 'done' && o.reference_month && o.due_date?.slice(0, 7) === ym(today)).length;
 
   const myAvisos = avisos.filter(a => a.audience === 'all' || (a.audience === 'client' && a.client_id === activeId) || (a.audience === 'regime' && a.tax_regime === company?.tax_regime));
   const initials = (profile?.full_name || user?.email || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((s: string) => s[0]?.toUpperCase()).join('');
@@ -346,9 +345,8 @@ export default function Portal() {
           <SectionCard><p className="py-8 text-center text-muted-foreground">Nenhuma empresa vinculada ao seu acesso. Fale com o escritório.</p></SectionCard>
         ) : view === 'dashboard' ? (
           <>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               <KpiCard onClick={() => setView('calendario')} icon={<CalendarDays className="h-6 w-6" />} iconClass="bg-portal-blue-soft text-portal-blue" title="Próximos vencimentos" value={upcoming.length} hint="Nos próximos 30 dias" />
-              <KpiCard onClick={() => setView('calendario')} icon={<FileText className="h-6 w-6" />} iconClass="bg-warning/10 text-warning" title="Documentos pendentes" value={pendentesMes} hint="Aguardando envio" />
               <KpiCard onClick={() => setView('notas')} icon={<BarChart3 className="h-6 w-6" />} iconClass="bg-success/10 text-success" title="Faturamento do mês" value={brl(monthSum(0))} hint={<><Trend pct={pctChange(monthSum(0), monthSum(-1))} /> <span className="hidden sm:inline">em relação ao mês anterior</span></>} />
             </div>
             {meiBlock}
