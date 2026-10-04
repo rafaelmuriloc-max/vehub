@@ -269,7 +269,7 @@ export default function Portal() {
   const faixa = faixaDe(totalAno, limite);
   const NAV: { key: View; label: string; icon: any }[] = [
     { key: 'dashboard', label: 'Dashboard', icon: Home }, { key: 'calendario', label: 'Calendário', icon: CalendarDays },
-    { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'notas', label: 'Notas', icon: Receipt }, { key: 'pessoal', label: 'Pessoal', icon: Users }, { key: 'perfil', label: 'Perfil', icon: User },
+    { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'notas', label: 'Notas', icon: Receipt }, { key: 'pessoal', label: 'Pessoal', icon: Users },
   ];
 
   const meiBlock = modules.includes('das_mei') && (
@@ -330,6 +330,7 @@ export default function Portal() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel className="max-w-[220px] truncate">{profile?.full_name || user.email}</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setView('perfil')}><User className="h-4 w-4 mr-2" />Meu perfil</DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/change-password')}><KeyRound className="h-4 w-4 mr-2" />Trocar senha</DropdownMenuItem>
               <DropdownMenuItem onClick={signOut}><LogOut className="h-4 w-4 mr-2" />Sair</DropdownMenuItem>
             </DropdownMenuContent>
@@ -407,7 +408,7 @@ export default function Portal() {
         )}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-5" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {NAV.map(n => (
           <button key={n.key} onClick={() => { setView(n.key); window.scrollTo({ top: 0 }); }} className={cn('flex flex-col items-center gap-0.5 py-2 min-h-14 text-[10px] min-w-0', view === n.key ? 'text-portal-blue font-semibold' : 'text-muted-foreground')} aria-current={view === n.key ? 'page' : undefined}>
             <n.icon className="h-5 w-5" /><span className="truncate max-w-full">{n.label}</span>
