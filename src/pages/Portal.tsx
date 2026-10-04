@@ -62,7 +62,7 @@ function NotasList({ notas, showEmitter }: { notas: Nota[]; showEmitter?: boolea
         <div key={n.kind + n.id} className="flex items-start sm:items-center gap-3 py-3 sm:py-2 text-sm">
           <Badge variant="outline" className="shrink-0">{n.kind}</Badge>
           <div className="flex-1 min-w-0">
-            <p className="break-words sm:truncate">Nº {n.invoice_number || '—'}{showEmitter && n.emitter_name ? ` · ${n.emitter_name}` : ''}</p>
+            <p className="break-words sm:truncate">Nº {n.invoice_number || '—'}{(showEmitter || n.kind === 'NFS-e') && n.emitter_name ? ` · ${n.emitter_name}` : ''}</p>
             <p className="text-xs text-muted-foreground">{n.issue_date ? n.issue_date.slice(0, 10).split('-').reverse().join('/') : '—'}{isCancelled(n.status) ? ' · Cancelada' : ''}</p>
           </div>
           <span className="font-medium tabular-nums shrink-0">{brl(Number(n.total_value) || 0)}</span>
@@ -165,7 +165,7 @@ function NotasView({ clientId }: { clientId: string }) {
         <SectionCard><p className="text-xs text-muted-foreground">Notas válidas</p><p className="text-xl font-bold tabular-nums">{validas.length}</p></SectionCard>
         <SectionCard><p className="text-xs text-muted-foreground">Valor total</p><p className="text-xl font-bold tabular-nums break-words">{brl(total)}</p></SectionCard>
       </div>
-      <Input className="mt-3 h-11" placeholder={tab === 'recebidas' ? 'Buscar por número ou emitente' : 'Buscar por número'} value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar notas" />
+      <Input className="mt-3 h-11" placeholder={tab === 'recebidas' ? 'Buscar por número ou emitente' : 'Buscar por número ou destinatário'} value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar notas" />
       <SectionCard className="mt-3">{loadingN ? <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p> : !range ? <p className="text-sm text-muted-foreground py-6 text-center">Escolha as datas De e Até.</p> : <NotasList notas={list} showEmitter={tab === 'recebidas'} />}</SectionCard>
     </Tabs>
   );
