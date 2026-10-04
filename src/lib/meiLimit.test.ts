@@ -11,3 +11,7 @@ describe('MEI limite', () => {
   it('soma notas por mês do ano', () =>
     expect(somarPorMes([{ issue_date: '2026-02-03T10:00', total_value: 10 }, { issue_date: '2025-02-01', total_value: 99 }], 2026)[1]).toBe(10));
 });
+describe('MEI limite com NFS-e', () => {
+  it('soma NF-e e NFS-e emitidas no mesmo mês', () =>
+    expect(somarPorMes([{ issue_date: '2026-05-02', total_value: 1000 }, { issue_date: '2026-05-20T09:00', total_value: 500 }], 2026)[4]).toBe(1500));
+});

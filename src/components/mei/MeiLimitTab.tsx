@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import { limiteAnual, faixaDe, projecao, somarPorMes, MEI_LIMITE_ANUAL, type Faixa } from '@/lib/meiLimit';
 
-type Nota = { client_id: string; issue_date: string | null; total_value: number | null; invoice_number: string | null; tipo: 'NF-e' | 'NFC-e' };
+type Nota = { client_id: string; issue_date: string | null; total_value: number | null; invoice_number: string | null; tipo: 'NF-e' | 'NFC-e' | 'NFS-e' };
 export type MeiLimit = { abertura: string | null; limite: number; proporcional: boolean; meses: number[]; total: number; notas: Nota[]; faixa: Faixa; proj: number; saldo: number; pct: number };
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -35,6 +35,20 @@ async function fetchAll(table: 'nfe_invoices' | 'nfce_invoices', ids: string[], 
   return out;
 }
 
+async function fetchNfse(ids: string[], ano: number) {
+  const out: any[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await (supabase as any).from('invoices').select('client_id, issue_date, gross_value, invoice_number, status, issuer_cnpj')
+        .in('client_id', ids.slice(i, i + 100)).gte('issue_date', `${ano}-01-01`).lt('issue_date', `${ano + 1}-01-01`).range(from, from + 999);
+      if (error) throw error;
+      out.push(...(data || []).filter((r: any) => !(r.status || '').toLowerCase().includes('cancel')));
+      if (!data || data.length < 1000) break;
+    }
+  }
+  return out;
+}
+
 /** Faturamento anual (NF-e saída + NFC-e não canceladas) e situação do limite por empresa MEI. */
 export function useMeiLimits(clientIds: string[], ano: number) {
   const [map, setMap] = useState<Record<string, MeiLimit>>({});
@@ -46,10 +60,12 @@ export function useMeiLimits(clientIds: string[], ano: number) {
     (async () => {
       setLoading(true);
       try {
-        const { data: cs } = await supabase.from('clients').select('id, opening_date, foundation_date').in('id', clientIds);
-        const [nfe, nfce] = await Promise.all([fetchAll('nfe_invoices', clientIds, ano), fetchAll('nfce_invoices', clientIds, ano)]);
+        const { data: cs } = await supabase.from('clients').select('id, opening_date, foundation_date, document').in('id', clientIds);
+        const [nfe, nfce, nfse] = await Promise.all([fetchAll('nfe_invoices', clientIds, ano), fetchAll('nfce_invoices', clientIds, ano), fetchNfse(clientIds, ano)]);
+        const doc: Record<string, string> = {}; for (const c of (cs || []) as any[]) doc[c.id] = (c.document || '').replace(/\D/g, '');
+        const nfseEmit = nfse.filter((n: any) => doc[n.client_id] && (n.issuer_cnpj || '').replace(/\D/g, '') === doc[n.client_id]);
         const by: Record<string, Nota[]> = {};
-        [...nfe.map((n: any) => ({ ...n, tipo: 'NF-e' })), ...nfce.map((n: any) => ({ ...n, tipo: 'NFC-e' }))].forEach((n: Nota) => (by[n.client_id] ||= []).push(n));
+        [...nfe.map((n: any) => ({ ...n, tipo: 'NF-e' })), ...nfce.map((n: any) => ({ ...n, tipo: 'NFC-e' })), ...nfseEmit.map((n: any) => ({ ...n, total_value: n.gross_value, tipo: 'NFS-e' }))].forEach((n: Nota) => (by[n.client_id] ||= []).push(n));
         const m: Record<string, MeiLimit> = {};
         for (const c of (cs || []) as any[]) {
           const abertura = c.opening_date || c.foundation_date;

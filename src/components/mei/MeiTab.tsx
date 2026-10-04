@@ -334,7 +334,7 @@ export default function MeiTab() {
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground -mt-2">Limite anual calculado pelas NF-e de saída e NFC-e não canceladas importadas no sistema.</p>
+      <p className="text-xs text-muted-foreground -mt-2">Limite calculado pelas NF-e de saída, NFC-e e NFS-e emitidas não canceladas.</p>
       {limDet && limits[limDet.id] && <MeiLimitDialog name={formatClientLabel(limDet)} ano={Number(ano)} l={limits[limDet.id]} onClose={() => setLimDet(null)} />}
       {sync.running && <Progress value={sync.total ? (sync.done / sync.total) * 100 : 0} />}
 
