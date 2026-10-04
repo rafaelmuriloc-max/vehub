@@ -6,10 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { isTaxDue, competenciaFromDue, groupByTax } from '@/lib/portalDashboard';
-import { SectionCard, brl } from './PortalWidgets';
+import { isTaxDue, competenciaFromDue, groupByTax, paymentFor } from '@/lib/portalDashboard';
+import { SectionCard, brl, PayBadge } from './PortalWidgets';
 
-type Guia = { id: string; name: string; due: string; competencia: string; valor: number | null; done: boolean; file_url?: string | null; file_name?: string | null; pdf_b64?: string | null };
+type Guia = { id: string; name: string; due: string; competencia: string; valor: number | null; done: boolean; file_url?: string | null; file_name?: string | null; pdf_b64?: string | null; pay?: any };
 const db = supabase as any;
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const br = (s: string) => s.slice(0, 10).split('-').reverse().join('/');
@@ -27,13 +27,15 @@ export default function PortalImpostos({ clientId }: { clientId: string }) {
     const to = ano === today.getFullYear() ? iso(new Date(ano, today.getMonth() + 4, 0)) : `${ano}-12-31`;
     Promise.all([
       db.rpc('portal_due_dates', { _client_id: clientId, _from: `${ano}-01-01`, _to: to }),
-      db.from('simples_nacional_competencias').select('id, competencia, valor_das, data_vencimento, status, das_pdf_base64').eq('client_id', clientId).gte('data_vencimento', `${ano}-01-01`).lte('data_vencimento', to),
+      db.rpc('portal_tax_payments', { _client_id: clientId, _from: `${ano - 1}-12-01`, _to: to }),
     ]).then(([a, b]: any) => { setObrig(a.data || []); setSimples(b.data || []); setLoading(false); });
   }, [clientId, ano]);
 
   const groups = useMemo(() => {
     const list: Guia[] = obrig.filter(o => isTaxDue(o.name)).map(o => ({ id: o.id, name: o.name, due: o.due_date, competencia: competenciaFromDue(o.due_date), valor: null, done: o.status === 'done', file_url: o.file_url, file_name: o.file_name }));
-    simples.forEach(s => list.push({ id: 'sn' + s.id, name: 'DAS', due: s.data_vencimento, competencia: s.competencia, valor: s.valor_das != null ? Number(s.valor_das) : null, done: !!s.das_pdf_base64, pdf_b64: s.das_pdf_base64 }));
+    list.forEach(g => { const p = paymentFor(g, simples); if (p) { g.pay = p; if (p.valor != null) g.valor = Number(p.valor); if (p.pdf_b64) g.pdf_b64 = p.pdf_b64; } });
+    simples.forEach(s => { if (s.fonte !== 'SN' || !s.data_vencimento || s.data_vencimento < `${ano}-01-01` || list.some(g => g.pay?.fonte === 'SN' && g.pay.competencia === s.competencia)) return; const [y, m] = s.competencia.split('-');
+      list.push({ id: 'sn' + s.competencia, name: 'DAS', due: s.data_vencimento, competencia: `${m}/${y}`, valor: s.valor != null ? Number(s.valor) : null, done: false, pdf_b64: s.pdf_b64, pay: { ...s, state: (s.status || '').startsWith('pag') ? 'paga' : (s.status || '').startsWith('venc') ? 'vencida' : 'aberto' } }); });
     return groupByTax(list);
   }, [obrig, simples]);
 
@@ -75,7 +77,7 @@ export default function PortalImpostos({ clientId }: { clientId: string }) {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-portal-ink truncate">Competência {g.competencia}</p>
                         <p className="text-xs text-muted-foreground">Vence {br(g.due)}</p>
-                        <span className={cn('mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium', s.c)}>{s.l}</span>
+                        <PayBadge pay={g.pay} />{!(g.pay && s.l === 'Vencida') && <span className={cn('mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium', s.c)}>{s.l}</span>}
                       </div>
                       <span className="text-sm font-semibold tabular-nums whitespace-nowrap">{g.valor != null ? brl(g.valor) : '—'}</span>
                       {has && <span className="flex shrink-0 gap-1">

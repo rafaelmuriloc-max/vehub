@@ -4343,6 +4343,19 @@ export type Database = {
         }[]
       }
       portal_safe_uuid: { Args: { _t: string }; Returns: string }
+      portal_tax_payments: {
+        Args: { _client_id: string; _from: string; _to: string }
+        Returns: {
+          competencia: string
+          data_pagamento: string
+          data_vencimento: string
+          fonte: string
+          pdf_b64: string
+          status: string
+          valor: number
+          valor_pago: number
+        }[]
+      }
       portal_vacations: {
         Args: { _client_id: string }
         Returns: {

@@ -71,3 +71,17 @@ export function groupByTax<T extends { name: string; due: string }>(items: T[]):
     items: items.filter(i => tagFor(i.name) === k).sort((a, b) => b.due.localeCompare(a.due)),
   })).filter(g => g.items.length > 0);
 }
+
+export type TaxPayment = { fonte: 'SN' | 'MEI' | 'DCTFWEB'; competencia: string; status: string | null; valor: number | null; valor_pago: number | null; data_pagamento: string | null; data_vencimento: string | null; pdf_b64?: string | null };
+export type PayState = 'paga' | 'aberto' | 'vencida';
+/** Status de pagamento importado do escritório: DAS ← Simples/MEI, INSS ← DCTFWeb; casa pela competência (mês anterior ao vencimento). */
+export function paymentFor(item: { name: string; due: string }, payments: TaxPayment[]): (TaxPayment & { state: PayState }) | null {
+  const t = tagFor(item.name);
+  const fontes = t === 'das' ? ['SN', 'MEI'] : t === 'inss' ? ['DCTFWEB'] : null;
+  if (!fontes) return null;
+  const [mm, yy] = competenciaFromDue(item.due).split('/');
+  const p = payments.find(x => fontes.includes(x.fonte) && x.competencia === `${yy}-${mm}`);
+  if (!p) return null;
+  const s = (p.status || '').toLowerCase();
+  return { ...p, state: s.startsWith('pag') ? 'paga' : s.startsWith('venc') ? 'vencida' : 'aberto' };
+}
