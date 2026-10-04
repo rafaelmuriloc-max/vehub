@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { cn, formatClientLabel } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import MeiLimitTab from './MeiLimitTab';
+import { useMeiLimits, MeiLimitBar, MeiLimitDialog } from './MeiLimitTab';
 import JSZip from 'jszip';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/useAuth';
@@ -111,7 +111,10 @@ export default function MeiTab() {
   }, []);
 
   const [pays, setPays] = useState<Record<string, Pay>>({});
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pago' | 'aberto'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pago' | 'aberto' | 'limite'>('all');
+  const { limits } = useMeiLimits(useMemo(() => clients.map(c => c.id), [clients]), Number(ano));
+  const [limDet, setLimDet] = useState<Client | null>(null);
+  const overLimit = (id: string) => !!limits[id] && limits[id].faixa !== 'normal';
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -133,9 +136,9 @@ export default function MeiTab() {
     return clients.filter(c => !q || c.company_name.toLowerCase().includes(q) || (c.sci_code || '').toLowerCase().includes(q) || (qd && (c.document || '').replace(/\D/g, '').includes(qd)));
   }, [clients, search]);
   const filtered = useMemo(() => statusFilter === 'all' ? searched
-    : searched.filter(c => statusFilter === 'pago' ? statusOf(c.id) === 'pago' : statusOf(c.id) !== 'pago'),
+    : searched.filter(c => statusFilter === 'limite' ? overLimit(c.id) : statusFilter === 'pago' ? statusOf(c.id) === 'pago' : statusOf(c.id) !== 'pago'),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searched, statusFilter, pays, dueTime]);
+    [searched, statusFilter, pays, dueTime, limits]);
   const stats = useMemo(() => {
     let pago = 0, aberto = 0, valor = 0;
     for (const c of searched) {
@@ -306,10 +309,6 @@ export default function MeiTab() {
         <p className="text-muted-foreground text-sm">Empresas MEI e todos os comandos do Integra Contador</p>
       </div>
 
-      <Tabs defaultValue="guias">
-        <TabsList><TabsTrigger value="guias">Guias e Pagamentos</TabsTrigger><TabsTrigger value="limite">Controle de Limite</TabsTrigger></TabsList>
-        <TabsContent value="limite" className="mt-4"><MeiLimitTab /></TabsContent>
-        <TabsContent value="guias" className="mt-4 space-y-4">
       <div className="flex flex-col md:flex-row gap-2 md:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -335,14 +334,17 @@ export default function MeiTab() {
         </Button>
       </div>
 
+      <p className="text-xs text-muted-foreground -mt-2">Limite anual calculado pelas NF-e de saída e NFC-e não canceladas importadas no sistema.</p>
+      {limDet && limits[limDet.id] && <MeiLimitDialog name={formatClientLabel(limDet)} ano={Number(ano)} l={limits[limDet.id]} onClose={() => setLimDet(null)} />}
       {sync.running && <Progress value={sync.total ? (sync.done / sync.total) * 100 : 0} />}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {([
           { key: 'all', label: 'Empresas MEI', value: String(stats.total), sub: `Competência ${mes}/${ano}` },
           { key: 'pago', label: 'Guias pagas', value: String(stats.pago), sub: fmtBRL(stats.valor) || '—' },
           { key: 'aberto', label: 'Em aberto / vencidas', value: String(stats.aberto), sub: Date.now() > dueTime ? 'Vencimento já passou' : 'Ainda no prazo' },
           { key: 'pct', label: '% pagas', value: `${stats.pct}%`, sub: `${stats.pago} de ${stats.total}` },
+          { key: 'limite', label: 'Em alerta / excedidas no limite', value: String(searched.filter(c => overLimit(c.id)).length), sub: `Faturamento ${ano}` },
         ] as const).map(card => {
           const clickable = card.key !== 'pct';
           const active = clickable && statusFilter === card.key;
@@ -404,6 +406,7 @@ export default function MeiTab() {
                       </span>
                     )}
                   </div>
+                  <MeiLimitBar l={limits[c.id]} onDetail={() => setLimDet(c)} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="icon" variant="ghost" aria-label="Atualizar situação" title="Atualizar situação"
@@ -435,8 +438,6 @@ export default function MeiTab() {
           <Button size="icon" variant="outline" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}><ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
-        </TabsContent>
-      </Tabs>
 
       <Dialog open={batch.open} onOpenChange={o => { if (!o && !batch.running) setBatch(b => ({ ...b, open: false })); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
