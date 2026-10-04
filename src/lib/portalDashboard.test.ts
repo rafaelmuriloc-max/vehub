@@ -37,3 +37,8 @@ d2('isTaxDue', () => {
   i2('impostos entram', () => { for (const n of ['ISS','ICMS','PIS / COFINS','FGTS','Darf Previdenciário','IRPJ / CSLL','DAS - Simples Nacional']) e2(isTaxDue(n)).toBe(true); });
   i2('não impostos saem', () => { for (const n of ['Adto Salarial','DEFIS','MIT','REINF','Folha Pró Labore','Folha de Pagamento Mensal']) e2(isTaxDue(n)).toBe(false); });
 });
+import { competenciaFromDue } from './portalDashboard';
+describe('competenciaFromDue', () => {
+  it('ISS 09/10/2026 é competência 09/2026', () => expect(competenciaFromDue('2026-10-09')).toBe('09/2026'));
+  it('janeiro volta para dezembro do ano anterior', () => expect(competenciaFromDue('2027-01-20')).toBe('12/2026'));
+});

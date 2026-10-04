@@ -55,3 +55,10 @@ export function isTaxDue(name: string | null | undefined): boolean {
   const t = tagFor(name);
   return t !== 'folha' && t !== 'outro';
 }
+
+/** Competência de um imposto = mês anterior ao vencimento (YYYY-MM-DD → "MM/YYYY"). */
+export function competenciaFromDue(due: string): string {
+  const y = Number(due.slice(0, 4)), m = Number(due.slice(5, 7));
+  const pm = m === 1 ? 12 : m - 1, py = m === 1 ? y - 1 : y;
+  return `${String(pm).padStart(2, '0')}/${py}`;
+}
