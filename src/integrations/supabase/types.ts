@@ -4312,6 +4312,19 @@ export type Database = {
         }[]
       }
       portal_my_clients: { Args: never; Returns: string[] }
+      portal_nfse: {
+        Args: { _client_id: string; _from: string; _to: string }
+        Returns: {
+          counterpart_cnpj: string
+          counterpart_name: string
+          direction: string
+          gross_value: number
+          id: string
+          invoice_number: string
+          issue_date: string
+          status: string
+        }[]
+      }
       portal_norm_email: { Args: { _e: string }; Returns: string }
       portal_payroll: {
         Args: { _client_id: string }
