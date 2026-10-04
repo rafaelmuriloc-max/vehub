@@ -188,7 +188,7 @@ export function UpcomingDues({ items, onSeeAll, limit = 3 }: { items: DueItem[];
               <span className={cn('h-14 w-14 shrink-0 rounded-xl border flex flex-col items-center justify-center', b.tone === 'danger' ? 'bg-destructive/10 border-destructive/20' : 'bg-portal-blue-soft border-portal-blue/15')}>
                 <span className={cn('text-xl font-extrabold leading-none', b.tone === 'danger' ? 'text-destructive' : 'text-portal-ink')}>{dd}</span><span className="text-[11px] font-medium uppercase text-portal-ink mt-0.5">{MONTHS[Number(mm) - 1]}</span>
               </span>
-              <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-portal-ink truncate">{i.name}</p><p className="text-xs text-muted-foreground truncate">{i.competencia}</p></div>
+              <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-portal-ink truncate">{i.name}</p><p className="text-xs text-muted-foreground truncate">{i.competencia}</p>{(i as any).done && <span className="mt-1 inline-block rounded-full bg-portal-blue-soft px-2 py-0.5 text-[10px] font-medium text-portal-blue">Guia disponível</span>}</div>
               <span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap', b.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning')}>{b.label}</span>
               <span className="text-sm font-semibold text-portal-ink tabular-nums whitespace-nowrap">{i.valor != null ? brl(i.valor) : '—'}</span>
             </div>
