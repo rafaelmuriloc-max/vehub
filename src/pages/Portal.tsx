@@ -13,8 +13,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3, Receipt } from 'lucide-react';
+import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3, Receipt, Landmark } from 'lucide-react';
 import logoVelocita from '@/assets/logo_velocita.jpeg.asset.json';
+import PortalImpostos from '@/components/portal/PortalImpostos';
 import PortalPersonnel from '@/components/portal/PortalPersonnel';
 import { modulesFor } from '@/lib/portal';
 import { limiteAnual, faixaDe } from '@/lib/meiLimit';
@@ -24,7 +25,7 @@ import { brl, MONTHS, DueItem, DocItem, SectionCard, KpiCard, Trend, FiscalCalen
 
 type Company = { id: string; company_name: string; document: string | null; tax_regime: string | null; opening_date: string | null };
 type Nota = { id: string; invoice_number: string | null; issue_date: string | null; total_value: number | null; status: string | null; emitter_name: string | null; kind: 'NF-e' | 'NFC-e' | 'NFS-e' };
-type View = 'dashboard' | 'calendario' | 'documentos' | 'notas' | 'pessoal' | 'perfil';
+type View = 'dashboard' | 'calendario' | 'impostos' | 'documentos' | 'notas' | 'pessoal' | 'perfil';
 
 const db = supabase as any;
 const isCancelled = (s: string | null) => (s || '').toLowerCase().includes('cancel');
@@ -268,7 +269,7 @@ export default function Portal() {
   const limite = limiteAnual(ano, company?.opening_date ?? null);
   const faixa = faixaDe(totalAno, limite);
   const NAV: { key: View; label: string; icon: any }[] = [
-    { key: 'dashboard', label: 'Dashboard', icon: Home }, { key: 'calendario', label: 'Calendário', icon: CalendarDays },
+    { key: 'dashboard', label: 'Dashboard', icon: Home }, { key: 'calendario', label: 'Calendário', icon: CalendarDays }, { key: 'impostos', label: 'Impostos', icon: Landmark },
     { key: 'documentos', label: 'Documentos', icon: FileText }, { key: 'notas', label: 'Notas', icon: Receipt }, { key: 'pessoal', label: 'Pessoal', icon: Users },
   ];
 
@@ -381,6 +382,8 @@ export default function Portal() {
               </SectionCard>
             </TabsContent>
           </Tabs>
+        ) : view === 'impostos' ? (
+          activeId ? <PortalImpostos clientId={activeId} /> : null
         ) : view === 'notas' ? (
           activeId ? <NotasView clientId={activeId} /> : null
         ) : view === 'pessoal' ? (
@@ -408,7 +411,7 @@ export default function Portal() {
         )}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-5" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t border-border/60 grid grid-cols-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {NAV.map(n => (
           <button key={n.key} onClick={() => { setView(n.key); window.scrollTo({ top: 0 }); }} className={cn('flex flex-col items-center gap-0.5 py-2 min-h-14 text-[10px] min-w-0', view === n.key ? 'text-portal-blue font-semibold' : 'text-muted-foreground')} aria-current={view === n.key ? 'page' : undefined}>
             <n.icon className="h-5 w-5" /><span className="truncate max-w-full">{n.label}</span>

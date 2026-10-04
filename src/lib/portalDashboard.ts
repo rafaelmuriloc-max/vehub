@@ -62,3 +62,12 @@ export function competenciaFromDue(due: string): string {
   const pm = m === 1 ? 12 : m - 1, py = m === 1 ? y - 1 : y;
   return `${String(pm).padStart(2, '0')}/${py}`;
 }
+
+const TAX_ORDER: Exclude<TagKey, 'outro' | 'folha'>[] = ['das', 'iss', 'icms', 'pis_cofins', 'irpj_csll', 'inss', 'fgts', 'darf'];
+/** Agrupa guias por tipo de imposto, na ordem fixa das abas, omitindo tipos sem guias. Itens mais recentes primeiro. */
+export function groupByTax<T extends { name: string; due: string }>(items: T[]): { key: string; label: string; items: T[] }[] {
+  return TAX_ORDER.map(k => ({
+    key: k, label: TAGS.find(t => t.key === k)!.label,
+    items: items.filter(i => tagFor(i.name) === k).sort((a, b) => b.due.localeCompare(a.due)),
+  })).filter(g => g.items.length > 0);
+}
