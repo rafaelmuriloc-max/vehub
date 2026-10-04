@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { brl, MONTHS, DueItem, DocItem, SectionCard, KpiCard, Trend, FiscalCalendar, RevenueChart, RecentDocuments, UpcomingDues } from '@/components/portal/PortalWidgets';
 
 type Company = { id: string; company_name: string; document: string | null; tax_regime: string | null; opening_date: string | null };
-type Nota = { id: string; invoice_number: string | null; issue_date: string | null; total_value: number | null; status: string | null; emitter_name: string | null; kind: 'NF-e' | 'NFC-e' };
+type Nota = { id: string; invoice_number: string | null; issue_date: string | null; total_value: number | null; status: string | null; emitter_name: string | null; kind: 'NF-e' | 'NFC-e' | 'NFS-e' };
 type View = 'dashboard' | 'calendario' | 'documentos' | 'notas' | 'pessoal' | 'perfil';
 
 const db = supabase as any;
