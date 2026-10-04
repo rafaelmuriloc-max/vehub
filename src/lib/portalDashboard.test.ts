@@ -31,3 +31,9 @@ d2('tagFor PIS/COFINS e IRPJ/CSLL', () => {
   i2('IRPJ e CSLL', () => { e2(tagFor2('IRPJ')).toBe('irpj_csll'); e2(tagFor2('CSLL Trimestral')).toBe('irpj_csll'); });
   i2('IRRF continua DARF', () => { e2(tagFor2('IRRF')).toBe('darf'); });
 });
+
+import { isTaxDue } from './portalDashboard';
+d2('isTaxDue', () => {
+  i2('impostos entram', () => { for (const n of ['ISS','ICMS','PIS / COFINS','FGTS','Darf Previdenciário','IRPJ / CSLL','DAS - Simples Nacional']) e2(isTaxDue(n)).toBe(true); });
+  i2('não impostos saem', () => { for (const n of ['Adto Salarial','DEFIS','MIT','REINF','Folha Pró Labore','Folha de Pagamento Mensal']) e2(isTaxDue(n)).toBe(false); });
+});

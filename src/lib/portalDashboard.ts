@@ -1,9 +1,9 @@
 /** Regras de exibição do painel do Portal do Cliente. */
-export type TagKey = 'das' | 'fgts' | 'inss' | 'iss' | 'folha' | 'darf' | 'pis_cofins' | 'irpj_csll' | 'outro';
+export type TagKey = 'das' | 'fgts' | 'inss' | 'iss' | 'folha' | 'darf' | 'icms' | 'pis_cofins' | 'irpj_csll' | 'outro';
 
-export const TAGS: { key: Exclude<TagKey, 'outro'>; label: string }[] = [
+export const TAGS: { key: Exclude<TagKey, 'outro' | 'folha'>; label: string }[] = [
   { key: 'das', label: 'DAS' }, { key: 'fgts', label: 'FGTS' }, { key: 'inss', label: 'INSS' },
-  { key: 'iss', label: 'ISS' }, { key: 'folha', label: 'Folha' }, { key: 'pis_cofins', label: 'PIS/COFINS' }, { key: 'irpj_csll', label: 'IRPJ/CSLL' }, { key: 'darf', label: 'DARF' },
+  { key: 'iss', label: 'ISS' }, { key: 'pis_cofins', label: 'PIS/COFINS' }, { key: 'irpj_csll', label: 'IRPJ/CSLL' }, { key: 'darf', label: 'DARF' }, { key: 'icms', label: 'ICMS' },
 ];
 
 export function tagFor(name: string | null | undefined): TagKey {
@@ -16,6 +16,7 @@ export function tagFor(name: string | null | undefined): TagKey {
   if (/\bPIS\b|COFINS/.test(n)) return 'pis_cofins';
   if (/IRPJ|CSLL/.test(n)) return 'irpj_csll';
   if (/DARF|IRRF/.test(n)) return 'darf';
+  if (/ICMS/.test(n)) return 'icms';
   return 'outro';
 }
 
@@ -45,4 +46,12 @@ export function brlShort(v: number): string {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
   if (v >= 1_000) return `R$ ${Math.round(v / 1_000)} mil`;
   return `R$ ${Math.round(v)}`;
+}
+
+/** Só vencimentos de impostos entram no calendário do portal. */
+export function isTaxDue(name: string | null | undefined): boolean {
+  const n = (name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  if (/FOLHA|SALARI|PRO.?LABORE|DEFIS|\bMIT\b|REINF|DCTF|ESOCIAL|DECLARA/.test(n)) return false;
+  const t = tagFor(name);
+  return t !== 'folha' && t !== 'outro';
 }

@@ -18,7 +18,7 @@ import logoVelocita from '@/assets/logo_velocita.jpeg.asset.json';
 import PortalPersonnel from '@/components/portal/PortalPersonnel';
 import { modulesFor } from '@/lib/portal';
 import { limiteAnual, faixaDe } from '@/lib/meiLimit';
-import { pctChange } from '@/lib/portalDashboard';
+import { pctChange, isTaxDue } from '@/lib/portalDashboard';
 import { cn } from '@/lib/utils';
 import { brl, MONTHS, DueItem, DocItem, SectionCard, KpiCard, Trend, FiscalCalendar, RevenueChart, RecentDocuments, UpcomingDues } from '@/components/portal/PortalWidgets';
 
@@ -227,7 +227,7 @@ export default function Portal() {
   const totalAno = Array.from({ length: today.getMonth() + 1 }, (_, i) => monthSum(-i)).reduce((a, b) => a + b, 0);
 
   const dues: DueItem[] = useMemo(() => {
-    const list: DueItem[] = obrig.map((o: any) => ({ id: o.id, name: o.name, due: o.due_date, competencia: o.reference_month ? `Competência ${o.reference_month.slice(5, 7)}/${o.reference_month.slice(0, 4)}` : '', valor: null, done: o.status === 'done' } as any));
+    const list: DueItem[] = obrig.filter((o: any) => isTaxDue(o.name)).map((o: any) => ({ id: o.id, name: o.name, due: o.due_date, competencia: o.reference_month ? `Competência ${o.reference_month.slice(5, 7)}/${o.reference_month.slice(0, 4)}` : '', valor: null, done: o.status === 'done' } as any));
     simples.forEach((s: any) => { if (s.data_vencimento) list.push({ id: 'sn' + s.id, name: 'DAS', due: s.data_vencimento, competencia: `Simples Nacional · ${s.competencia}`, valor: s.valor_das != null ? Number(s.valor_das) : null }); });
     return list.sort((a, b) => a.due.localeCompare(b.due));
   }, [obrig, simples]);

@@ -29,6 +29,7 @@ export default {
   				iss: 'hsl(var(--tag-iss))',
   				folha: 'hsl(var(--tag-folha))',
   				darf: 'hsl(var(--tag-darf))',
+  				icms: 'hsl(var(--tag-icms))',
   				pis_cofins: 'hsl(var(--tag-pis-cofins))',
   				irpj_csll: 'hsl(var(--tag-irpj-csll))',
   				outro: 'hsl(var(--tag-outro))',
