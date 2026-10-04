@@ -183,6 +183,7 @@ export default function Portal() {
   const [recebidas, setRecebidas] = useState<Nota[]>([]);
   const [avisos, setAvisos] = useState<any[]>([]);
   const [simples, setSimples] = useState<any[]>([]);
+  const [nfseAno, setNfseAno] = useState(0);
   const [obrig, setObrig] = useState<any[]>([]);
   const [docs, setDocs] = useState<DocItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -213,6 +214,7 @@ export default function Portal() {
     if (!activeId) return;
     const from = iso(new Date(today.getFullYear() - 2, today.getMonth(), 1));
     loadNotas(activeId, 'saida', from).then(setEmitidas);
+    db.rpc('portal_nfse', { _client_id: activeId, _from: `${today.getFullYear()}-01-01`, _to: iso(today) }).then(({ data }: any) => setNfseAno(((data as any[]) || []).filter(n => n.direction === 'saida' && !isCancelled(n.status)).reduce((a, n) => a + (Number(n.gross_value) || 0), 0)));
     loadNotas(activeId, 'entrada', from).then(setRecebidas);
     db.rpc('portal_tax_payments', { _client_id: activeId, _from: `${ano - 1}-01-01`, _to: iso(new Date(today.getFullYear(), today.getMonth() + 4, 0)) }).then(({ data }: any) => setSimples(((data as any[]) || []).sort((a, b) => b.competencia.localeCompare(a.competencia))));
     db.rpc('portal_due_dates', { _client_id: activeId, _from: iso(new Date(today.getFullYear(), today.getMonth() - 3, 1)), _to: iso(new Date(today.getFullYear(), today.getMonth() + 4, 0)) }).then(({ data }: any) => setObrig(data || []));
@@ -225,7 +227,8 @@ export default function Portal() {
   const chart = Array.from({ length: range }, (_, i) => { const off = i - range + 1; const d = new Date(today.getFullYear(), today.getMonth() + off, 1); return { label: MONTHS[d.getMonth()], value: monthSum(off) }; });
   const periodTotal = chart.reduce((a, b) => a + b.value, 0);
   const prevYearTotal = Array.from({ length: range }, (_, i) => monthSum(i - range + 1 - 12)).reduce((a, b) => a + b, 0);
-  const totalAno = Array.from({ length: today.getMonth() + 1 }, (_, i) => monthSum(-i)).reduce((a, b) => a + b, 0);
+  const totalAnoProdutos = Array.from({ length: today.getMonth() + 1 }, (_, i) => monthSum(-i)).reduce((a, b) => a + b, 0);
+  const totalAno = totalAnoProdutos + nfseAno;
 
   const dues: DueItem[] = useMemo(() => {
     const list: DueItem[] = obrig.filter((o: any) => isTaxDue(o.name)).map((o: any) => ({ id: o.id, name: o.name, due: o.due_date, competencia: o.due_date ? `Competência ${competenciaFromDue(o.due_date)}` : '', valor: null, done: o.status === 'done', file_url: o.file_url, file_name: o.file_name } as any));
