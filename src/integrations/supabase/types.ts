@@ -4286,6 +4286,8 @@ export type Database = {
         Args: { _client_id: string; _from: string; _to: string }
         Returns: {
           due_date: string
+          file_name: string
+          file_url: string
           id: string
           name: string
           reference_month: string
