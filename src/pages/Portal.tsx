@@ -8,6 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Bell, CalendarDays, ChevronDown, FileDown, FileText, Home, KeyRound, LogOut, Megaphone, User, Users, BarChart3, Receipt } from 'lucide-react';
@@ -69,10 +72,54 @@ function NotasList({ notas, showEmitter }: { notas: Nota[]; showEmitter?: boolea
   );
 }
 
-function NotasView({ emitidas, recebidas }: { emitidas: Nota[]; recebidas: Nota[] }) {
+type Periodo = 'mes' | 'mes_passado' | '3m' | 'ano' | 'custom';
+function periodRange(p: Periodo, de?: Date, ate?: Date): [string, string] | null {
+  const t = new Date(); const y = t.getFullYear(), m = t.getMonth();
+  if (p === 'mes') return [iso(new Date(y, m, 1)), iso(new Date(y, m + 1, 0))];
+  if (p === 'mes_passado') return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+  if (p === '3m') return [iso(new Date(y, m - 2, 1)), iso(new Date(y, m + 1, 0))];
+  if (p === 'ano') return [iso(new Date(y, 0, 1)), iso(new Date(y, 11, 31))];
+  if (!de || !ate || de > ate) return null;
+  return [iso(de), iso(ate)];
+}
+
+function DateField({ label, value, onChange }: { label: string; value?: Date; onChange: (d?: Date) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className={cn('h-11 w-full sm:w-44 justify-start font-normal', !value && 'text-muted-foreground')} aria-label={label}>
+          <CalendarDays className="h-4 w-4 mr-2" />{label}: {value ? format(value, 'dd/MM/yyyy') : 'escolher'}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar mode="single" selected={value} onSelect={onChange} locale={ptBR} initialFocus className="p-3 pointer-events-auto" />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function NotasView({ clientId }: { clientId: string }) {
   const [tab, setTab] = useState<'emitidas' | 'recebidas'>('emitidas');
   const [q, setQ] = useState('');
-  const base = tab === 'emitidas' ? emitidas : recebidas;
+  const [periodo, setPeriodo] = useState<Periodo>('mes');
+  const [de, setDe] = useState<Date | undefined>();
+  const [ate, setAte] = useState<Date | undefined>();
+  const [base, setBase] = useState<Nota[]>([]);
+  const [loadingN, setLoadingN] = useState(false);
+  const range = periodRange(periodo, de, ate);
+  const rKey = range?.join('|') ?? '';
+  useEffect(() => {
+    if (!range) { setBase([]); return; }
+    let alive = true; setLoadingN(true);
+    const sel = (t: string) => db.from(t).select('id, invoice_number, issue_date, total_value, status, emitter_name').eq('client_id', clientId).eq('direction', tab === 'emitidas' ? 'saida' : 'entrada').gte('issue_date', range[0]).lte('issue_date', range[1] + 'T23:59:59').order('issue_date', { ascending: false }).limit(1000);
+    Promise.all([sel('nfe_invoices'), sel('nfce_invoices')]).then(([a, b]: any[]) => {
+      if (!alive) return;
+      setBase([...(a.data || []).map((n: any) => ({ ...n, kind: 'NF-e' })), ...(b.data || []).map((n: any) => ({ ...n, kind: 'NFC-e' }))].sort((x, y) => (y.issue_date || '').localeCompare(x.issue_date || '')));
+      setLoadingN(false);
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, tab, rKey]);
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
     return s ? base.filter(n => String(n.invoice_number || '').toLowerCase().includes(s) || (n.emitter_name || '').toLowerCase().includes(s)) : base;
@@ -85,12 +132,29 @@ function NotasView({ emitidas, recebidas }: { emitidas: Nota[]; recebidas: Nota[
         <TabsTrigger value="emitidas">Emitidas</TabsTrigger>
         <TabsTrigger value="recebidas">Recebidas</TabsTrigger>
       </TabsList>
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
+      <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-2">
+        <Select value={periodo} onValueChange={v => setPeriodo(v as Periodo)}>
+          <SelectTrigger className="h-11 w-full sm:w-48" aria-label="Período"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mes">Este mês</SelectItem>
+            <SelectItem value="mes_passado">Mês passado</SelectItem>
+            <SelectItem value="3m">Últimos 3 meses</SelectItem>
+            <SelectItem value="ano">Este ano</SelectItem>
+            <SelectItem value="custom">Personalizado</SelectItem>
+          </SelectContent>
+        </Select>
+        {periodo === 'custom' && <>
+          <DateField label="De" value={de} onChange={setDe} />
+          <DateField label="Até" value={ate} onChange={setAte} />
+        </>}
+      </div>
+      {periodo === 'custom' && de && ate && de > ate && <p className="mt-2 text-sm text-destructive">A data "De" deve ser anterior ou igual à data "Até".</p>}
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
         <SectionCard><p className="text-xs text-muted-foreground">Notas válidas</p><p className="text-xl font-bold tabular-nums">{validas.length}</p></SectionCard>
         <SectionCard><p className="text-xs text-muted-foreground">Valor total</p><p className="text-xl font-bold tabular-nums break-words">{brl(total)}</p></SectionCard>
       </div>
       <Input className="mt-3 h-11" placeholder={tab === 'recebidas' ? 'Buscar por número ou emitente' : 'Buscar por número'} value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar notas" />
-      <SectionCard className="mt-3"><NotasList notas={list} showEmitter={tab === 'recebidas'} /></SectionCard>
+      <SectionCard className="mt-3">{loadingN ? <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p> : !range ? <p className="text-sm text-muted-foreground py-6 text-center">Escolha as datas De e Até.</p> : <NotasList notas={list} showEmitter={tab === 'recebidas'} />}</SectionCard>
     </Tabs>
   );
 }
@@ -307,7 +371,7 @@ export default function Portal() {
             </TabsContent>
           </Tabs>
         ) : view === 'notas' ? (
-          <NotasView emitidas={emitidas} recebidas={recebidas} />
+          activeId ? <NotasView clientId={activeId} /> : null
         ) : view === 'pessoal' ? (
           activeId ? <PortalPersonnel clientId={activeId} /> : null
         ) : (
