@@ -174,7 +174,7 @@ export function RecentDocuments({ docs, onOpen, onSeeAll, limit = 3 }: { docs: D
   );
 }
 
-export function UpcomingDues({ items, onSeeAll, limit = 3 }: { items: DueItem[]; onSeeAll?: () => void; limit?: number }) {
+export function UpcomingDues({ items, onSeeAll, limit = 3, onOpen }: { items: DueItem[]; onSeeAll?: () => void; limit?: number; onOpen?: (i: DueItem, download: boolean) => void }) {
   return (
     <SectionCard>
       <div className="flex items-center justify-between mb-2"><h2 className="text-lg sm:text-xl font-bold text-portal-ink">Vencimentos Próximos</h2>{onSeeAll && <button className="text-sm font-medium text-portal-blue" onClick={onSeeAll}>Ver todos</button>}</div>
@@ -191,6 +191,12 @@ export function UpcomingDues({ items, onSeeAll, limit = 3 }: { items: DueItem[];
               <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-portal-ink truncate">{i.name}</p><p className="text-xs text-muted-foreground truncate">{i.competencia}</p>{(i as any).done && <span className="mt-1 inline-block rounded-full bg-portal-blue-soft px-2 py-0.5 text-[10px] font-medium text-portal-blue">Guia disponível</span>}</div>
               <span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap', b.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning')}>{b.label}</span>
               <span className="text-sm font-semibold text-portal-ink tabular-nums whitespace-nowrap">{i.valor != null ? brl(i.valor) : '—'}</span>
+              {onOpen && (i as any).file_url && (
+                <span className="flex shrink-0 gap-1">
+                  <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Visualizar guia" onClick={() => onOpen(i, false)}><Eye className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Baixar guia" onClick={() => onOpen(i, true)}><Download className="h-4 w-4" /></Button>
+                </span>
+              )}
             </div>
           );
         })}

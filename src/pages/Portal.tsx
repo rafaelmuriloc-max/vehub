@@ -227,7 +227,7 @@ export default function Portal() {
   const totalAno = Array.from({ length: today.getMonth() + 1 }, (_, i) => monthSum(-i)).reduce((a, b) => a + b, 0);
 
   const dues: DueItem[] = useMemo(() => {
-    const list: DueItem[] = obrig.filter((o: any) => isTaxDue(o.name)).map((o: any) => ({ id: o.id, name: o.name, due: o.due_date, competencia: o.due_date ? `Competência ${competenciaFromDue(o.due_date)}` : '', valor: null, done: o.status === 'done' } as any));
+    const list: DueItem[] = obrig.filter((o: any) => isTaxDue(o.name)).map((o: any) => ({ id: o.id, name: o.name, due: o.due_date, competencia: o.due_date ? `Competência ${competenciaFromDue(o.due_date)}` : '', valor: null, done: o.status === 'done', file_url: o.file_url, file_name: o.file_name } as any));
     simples.forEach((s: any) => { if (s.data_vencimento) list.push({ id: 'sn' + s.id, name: 'DAS', due: s.data_vencimento, competencia: `Simples Nacional · ${s.competencia}`, valor: s.valor_das != null ? Number(s.valor_das) : null }); });
     return list.sort((a, b) => a.due.localeCompare(b.due));
   }, [obrig, simples]);
@@ -353,12 +353,12 @@ export default function Portal() {
             <FiscalCalendar items={dues} month={calMonth} onMonth={setCalMonth} />
             <RevenueChart data={chart} total={periodTotal} pct={pctChange(periodTotal, prevYearTotal)} range={range} onRange={setRange} />
             <RecentDocuments docs={docs} onOpen={openDoc} onSeeAll={() => setView('documentos')} />
-            <UpcomingDues items={upcoming} onSeeAll={() => setView('calendario')} />
+            <UpcomingDues items={upcoming} onOpen={(i: any, dl) => openDoc(i, dl)} onSeeAll={() => setView('calendario')} />
           </>
         ) : view === 'calendario' ? (
           <>
             <FiscalCalendar items={dues} month={calMonth} onMonth={setCalMonth} />
-            <UpcomingDues items={upcoming} limit={50} />
+            <UpcomingDues items={upcoming} limit={50} onOpen={(i: any, dl) => openDoc(i, dl)} />
           </>
         ) : view === 'documentos' ? (
           <Tabs defaultValue="docs">
