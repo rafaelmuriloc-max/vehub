@@ -1,9 +1,9 @@
 /** Regras de exibição do painel do Portal do Cliente. */
-export type TagKey = 'das' | 'fgts' | 'inss' | 'iss' | 'folha' | 'darf' | 'outro';
+export type TagKey = 'das' | 'fgts' | 'inss' | 'iss' | 'folha' | 'darf' | 'pis_cofins' | 'irpj_csll' | 'outro';
 
 export const TAGS: { key: Exclude<TagKey, 'outro'>; label: string }[] = [
   { key: 'das', label: 'DAS' }, { key: 'fgts', label: 'FGTS' }, { key: 'inss', label: 'INSS' },
-  { key: 'iss', label: 'ISS' }, { key: 'folha', label: 'Folha' }, { key: 'darf', label: 'DARF' },
+  { key: 'iss', label: 'ISS' }, { key: 'folha', label: 'Folha' }, { key: 'pis_cofins', label: 'PIS/COFINS' }, { key: 'irpj_csll', label: 'IRPJ/CSLL' }, { key: 'darf', label: 'DARF' },
 ];
 
 export function tagFor(name: string | null | undefined): TagKey {
@@ -13,7 +13,9 @@ export function tagFor(name: string | null | undefined): TagKey {
   if (/INSS|DCTFWEB|ESOCIAL|PREVID/.test(n)) return 'inss';
   if (/\bISS\b|ISSQN|NFS/.test(n)) return 'iss';
   if (/FOLHA|SALARIO|PRO.?LABORE/.test(n)) return 'folha';
-  if (/DARF|IRPJ|CSLL|PIS|COFINS|IRRF/.test(n)) return 'darf';
+  if (/\bPIS\b|COFINS/.test(n)) return 'pis_cofins';
+  if (/IRPJ|CSLL/.test(n)) return 'irpj_csll';
+  if (/DARF|IRRF/.test(n)) return 'darf';
   return 'outro';
 }
 

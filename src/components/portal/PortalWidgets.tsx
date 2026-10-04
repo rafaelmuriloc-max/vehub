@@ -14,7 +14,7 @@ const WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 export type DueItem = { id: string; name: string; due: string; competencia: string; valor: number | null };
 export type DocItem = { id: string; label: string; area: string; ref: string | null; file_url: string; file_name: string; created_at: string };
 
-const TAG_BG: Record<TagKey, string> = { das: 'bg-tag-das', fgts: 'bg-tag-fgts', inss: 'bg-tag-inss', iss: 'bg-tag-iss', folha: 'bg-tag-folha', darf: 'bg-tag-darf', outro: 'bg-tag-outro' };
+const TAG_BG: Record<TagKey, string> = { das: 'bg-tag-das', fgts: 'bg-tag-fgts', inss: 'bg-tag-inss', iss: 'bg-tag-iss', folha: 'bg-tag-folha', darf: 'bg-tag-darf', pis_cofins: 'bg-tag-pis_cofins', irpj_csll: 'bg-tag-irpj_csll', outro: 'bg-tag-outro' };
 
 export function SectionCard({ className, children }: { className?: string; children: React.ReactNode }) {
   return <section className={cn('rounded-2xl bg-card shadow-sm border border-border/60 p-4 sm:p-5', className)}>{children}</section>;

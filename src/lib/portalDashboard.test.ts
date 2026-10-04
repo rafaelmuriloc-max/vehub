@@ -23,3 +23,11 @@ describe('portal dashboard', () => {
   });
   it('valor curto', () => { expect(brlShort(124500)).toBe('R$ 125 mil'); });
 });
+
+import { tagFor as tagFor2 } from './portalDashboard';
+import { describe as d2, it as i2, expect as e2 } from 'vitest';
+d2('tagFor PIS/COFINS e IRPJ/CSLL', () => {
+  i2('PIS e COFINS', () => { e2(tagFor2('PIS')).toBe('pis_cofins'); e2(tagFor2('COFINS')).toBe('pis_cofins'); });
+  i2('IRPJ e CSLL', () => { e2(tagFor2('IRPJ')).toBe('irpj_csll'); e2(tagFor2('CSLL Trimestral')).toBe('irpj_csll'); });
+  i2('IRRF continua DARF', () => { e2(tagFor2('IRRF')).toBe('darf'); });
+});
