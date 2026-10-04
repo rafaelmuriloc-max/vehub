@@ -52,3 +52,13 @@ describe('groupByTax', () => {
   it('mais recente primeiro', () => expect(g[1].items[0].due).toBe('2026-10-09'));
   it('omite abas vazias', () => expect(g.find(x => x.label === 'ICMS')).toBeUndefined());
 });
+import { paymentFor } from './portalDashboard';
+describe('paymentFor', () => {
+  const pays: any[] = [
+    { fonte: 'SN', competencia: '2026-09', status: 'pago', data_pagamento: '2026-10-15' },
+    { fonte: 'DCTFWEB', competencia: '2026-09', status: 'vencido' },
+  ];
+  it('DAS de 20/10 pago (competência 09)', () => expect(paymentFor({ name: 'DAS - Simples Nacional', due: '2026-10-20' }, pays)?.state).toBe('paga'));
+  it('INSS vem da DCTFWeb', () => expect(paymentFor({ name: 'Darf Previdenciário', due: '2026-10-20' }, pays)?.state).toBe('vencida'));
+  it('ISS sem status', () => expect(paymentFor({ name: 'ISS', due: '2026-10-09' }, pays)).toBeNull());
+});
