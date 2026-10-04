@@ -112,18 +112,22 @@ function NotasView({ clientId }: { clientId: string }) {
     if (!range) { setBase([]); return; }
     let alive = true; setLoadingN(true);
     const sel = (t: string) => db.from(t).select('id, invoice_number, issue_date, total_value, status, emitter_name').eq('client_id', clientId).eq('direction', tab === 'emitidas' ? 'saida' : 'entrada').gte('issue_date', range[0]).lte('issue_date', range[1] + 'T23:59:59').order('issue_date', { ascending: false }).limit(1000);
-    Promise.all([sel('nfe_invoices'), sel('nfce_invoices')]).then(([a, b]: any[]) => {
+    const dir = tab === 'emitidas' ? 'saida' : 'entrada';
+    Promise.all([sel('nfe_invoices'), sel('nfce_invoices'), db.rpc('portal_nfse', { _client_id: clientId, _from: range[0], _to: range[1] })]).then(([a, b, s]: any[]) => {
       if (!alive) return;
-      setBase([...(a.data || []).map((n: any) => ({ ...n, kind: 'NF-e' })), ...(b.data || []).map((n: any) => ({ ...n, kind: 'NFC-e' }))].sort((x, y) => (y.issue_date || '').localeCompare(x.issue_date || '')));
+      const nfse = ((s.data as any[]) || []).filter(n => n.direction === dir).map(n => ({ id: n.id, invoice_number: n.invoice_number, issue_date: n.issue_date, total_value: n.gross_value, status: n.status, emitter_name: n.counterpart_name || n.counterpart_cnpj, kind: 'NFS-e' as const }));
+      setBase([...(a.data || []).map((n: any) => ({ ...n, kind: 'NF-e' })), ...(b.data || []).map((n: any) => ({ ...n, kind: 'NFC-e' })), ...nfse].sort((x, y) => (y.issue_date || '').localeCompare(x.issue_date || '')));
       setLoadingN(false);
     });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, tab, rKey]);
+  const [tipo, setTipo] = useState<'todas' | 'produtos' | 'servicos'>('todas');
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? base.filter(n => String(n.invoice_number || '').toLowerCase().includes(s) || (n.emitter_name || '').toLowerCase().includes(s)) : base;
-  }, [base, q]);
+    const byTipo = tipo === 'todas' ? base : base.filter(n => (n.kind === 'NFS-e') === (tipo === 'servicos'));
+    return s ? byTipo.filter(n => String(n.invoice_number || '').toLowerCase().includes(s) || (n.emitter_name || '').toLowerCase().includes(s)) : byTipo;
+  }, [base, q, tipo]);
   const validas = list.filter(n => !isCancelled(n.status));
   const total = validas.reduce((a, n) => a + (Number(n.total_value) || 0), 0);
   return (
@@ -141,6 +145,14 @@ function NotasView({ clientId }: { clientId: string }) {
             <SelectItem value="3m">Últimos 3 meses</SelectItem>
             <SelectItem value="ano">Este ano</SelectItem>
             <SelectItem value="custom">Personalizado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={tipo} onValueChange={v => setTipo(v as any)}>
+          <SelectTrigger className="h-11 w-full sm:w-40" aria-label="Tipo de nota"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas</SelectItem>
+            <SelectItem value="produtos">Produtos</SelectItem>
+            <SelectItem value="servicos">Serviços</SelectItem>
           </SelectContent>
         </Select>
         {periodo === 'custom' && <>
