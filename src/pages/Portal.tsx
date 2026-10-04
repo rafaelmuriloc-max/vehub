@@ -19,7 +19,7 @@ import PortalImpostos from '@/components/portal/PortalImpostos';
 import PortalPersonnel from '@/components/portal/PortalPersonnel';
 import { modulesFor } from '@/lib/portal';
 import { limiteAnual, faixaDe } from '@/lib/meiLimit';
-import { pctChange, isTaxDue, competenciaFromDue } from '@/lib/portalDashboard';
+import { pctChange, isTaxDue, competenciaFromDue, paymentFor } from '@/lib/portalDashboard';
 import { cn } from '@/lib/utils';
 import { brl, MONTHS, DueItem, DocItem, SectionCard, KpiCard, Trend, FiscalCalendar, RevenueChart, RecentDocuments, UpcomingDues } from '@/components/portal/PortalWidgets';
 
@@ -214,7 +214,7 @@ export default function Portal() {
     const from = iso(new Date(today.getFullYear() - 2, today.getMonth(), 1));
     loadNotas(activeId, 'saida', from).then(setEmitidas);
     loadNotas(activeId, 'entrada', from).then(setRecebidas);
-    db.from('simples_nacional_competencias').select('id, competencia, valor_das, data_vencimento, status, das_pdf_base64').eq('client_id', activeId).gte('ano', ano - 1).order('competencia', { ascending: false }).then(({ data }: any) => setSimples(data || []));
+    db.rpc('portal_tax_payments', { _client_id: activeId, _from: `${ano - 1}-01-01`, _to: iso(new Date(today.getFullYear(), today.getMonth() + 4, 0)) }).then(({ data }: any) => setSimples(((data as any[]) || []).sort((a, b) => b.competencia.localeCompare(a.competencia))));
     db.rpc('portal_due_dates', { _client_id: activeId, _from: iso(new Date(today.getFullYear(), today.getMonth() - 3, 1)), _to: iso(new Date(today.getFullYear(), today.getMonth() + 4, 0)) }).then(({ data }: any) => setObrig(data || []));
     db.rpc('portal_documents', { _client_id: activeId }).then(({ data }: any) => setDocs(((data as any[]) || []).map(d => ({ id: d.id, label: d.label, area: d.area, ref: d.reference_month, file_url: d.file_url, file_name: d.file_name || d.file_url?.split('/').pop() || 'arquivo', created_at: d.created_at }))));
   }, [activeId, today, ano]);
@@ -229,11 +229,12 @@ export default function Portal() {
 
   const dues: DueItem[] = useMemo(() => {
     const list: DueItem[] = obrig.filter((o: any) => isTaxDue(o.name)).map((o: any) => ({ id: o.id, name: o.name, due: o.due_date, competencia: o.due_date ? `Competência ${competenciaFromDue(o.due_date)}` : '', valor: null, done: o.status === 'done', file_url: o.file_url, file_name: o.file_name } as any));
-    simples.forEach((s: any) => { if (s.data_vencimento) list.push({ id: 'sn' + s.id, name: 'DAS', due: s.data_vencimento, competencia: `Simples Nacional · ${s.competencia}`, valor: s.valor_das != null ? Number(s.valor_das) : null }); });
+    list.forEach((d: any) => { const p = paymentFor(d, simples); if (p) { d.pay = p; if (p.valor != null) d.valor = Number(p.valor); } });
+    simples.forEach((s: any) => { if (s.fonte !== 'SN' || !s.data_vencimento || list.some((d: any) => d.pay === s || (d.pay && d.pay.competencia === s.competencia && d.pay.fonte === 'SN'))) return; const [y, m] = s.competencia.split('-'); list.push({ id: 'sn' + s.competencia, name: 'DAS', due: s.data_vencimento, competencia: `Competência ${m}/${y}`, valor: s.valor != null ? Number(s.valor) : null, pay: { ...s, state: (s.status || '').startsWith('pag') ? 'paga' : (s.status || '').startsWith('venc') ? 'vencida' : 'aberto' } } as any); });
     return list.sort((a, b) => a.due.localeCompare(b.due));
   }, [obrig, simples]);
   const in30 = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30));
-  const upcoming = dues.filter(d => d.due >= iso(today) && d.due <= in30);
+  const upcoming = dues.filter(d => d.due >= iso(today) && d.due <= in30 && (d as any).pay?.state !== 'paga');
 
   const myAvisos = avisos.filter(a => a.audience === 'all' || (a.audience === 'client' && a.client_id === activeId) || (a.audience === 'regime' && a.tax_regime === company?.tax_regime));
   const initials = (profile?.full_name || user?.email || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((s: string) => s[0]?.toUpperCase()).join('');
@@ -371,12 +372,12 @@ export default function Portal() {
             <TabsContent value="docs" className="mt-4"><RecentDocuments docs={docs} onOpen={openDoc} limit={200} /></TabsContent>
             <TabsContent value="guias" className="mt-4">
               <SectionCard className="divide-y divide-border/70">
-                {simples.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma guia disponibilizada pelo escritório.</p>}
-                {simples.map(s => (
-                  <div key={s.id} className="flex items-center gap-2 sm:gap-3 py-2 text-sm">
+                {simples.filter(x => x.fonte === 'SN').length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma guia disponibilizada pelo escritório.</p>}
+                {simples.filter(x => x.fonte === 'SN').map(s => (
+                  <div key={s.fonte + s.competencia} className="flex items-center gap-2 sm:gap-3 py-2 text-sm">
                     <div className="flex-1 min-w-0"><p className="truncate font-medium">{s.competencia}</p><p className="text-xs text-muted-foreground">{s.data_vencimento ? `Vence ${s.data_vencimento.split('-').reverse().join('/')}` : ''} · {s.status}</p></div>
-                    <span className="tabular-nums shrink-0">{s.valor_das != null ? brl(Number(s.valor_das)) : '—'}</span>
-                    {s.das_pdf_base64 && <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0" aria-label="Baixar DAS" onClick={() => openPdf(s.das_pdf_base64, `DAS_${s.competencia}.pdf`)}><FileDown className="h-4 w-4" /></Button>}
+                    <span className="tabular-nums shrink-0">{s.valor != null ? brl(Number(s.valor)) : '—'}</span>
+                    {s.pdf_b64 && <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0" aria-label="Baixar DAS" onClick={() => openPdf(s.pdf_b64, `DAS_${s.competencia}.pdf`)}><FileDown className="h-4 w-4" /></Button>}
                   </div>
                 ))}
               </SectionCard>
